@@ -1,0 +1,57 @@
+# MedicBolivia Backend — Dependencias Python
+# Instalar con: pip install -r requirements.txt
+
+# ── Framework principal ──────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.30.1        # Servidor ASGI con WebSocket support
+python-multipart==0.0.9          # Para subida de archivos
+
+# ── Base de datos ────────────────────────────────────
+sqlalchemy==2.0.31               # ORM
+alembic==1.13.1                  # Migraciones de BD
+asyncpg==0.29.0                  # Driver PostgreSQL async
+psycopg2-binary==2.9.9           # Driver PostgreSQL sync (para Alembic)
+
+# ── Redis ────────────────────────────────────────────
+redis==5.0.6                     # Cliente Redis async
+hiredis==2.3.2                   # Parser Redis más rápido
+
+# ── Autenticación y seguridad ────────────────────────
+python-jose[cryptography]==3.3.0 # JWT tokens
+passlib[bcrypt]==1.7.4           # Hash de contraseñas
+bcrypt==4.1.3
+
+# ── Validación ───────────────────────────────────────
+pydantic==2.7.3                  # Validación de datos
+pydantic-settings==2.3.1         # Variables de entorno tipadas
+email-validator==2.1.1
+
+# ── IA y Agentes ─────────────────────────────────────
+anthropic==0.28.0                # Claude API
+elevenlabs==1.2.0                # Voz del agente
+
+# ── Comunicación ─────────────────────────────────────
+twilio==9.2.1                    # Llamadas y SMS
+httpx==0.27.0                    # HTTP client async
+
+# ── Storage ──────────────────────────────────────────
+boto3==1.34.131                  # AWS S3 para documentos médicos
+
+# ── Tareas en background ─────────────────────────────
+celery==5.4.0                    # Tareas asíncronas (liberación de pagos, etc.)
+flower==2.0.1                    # Monitor de Celery (opcional)
+
+# ── Utils ────────────────────────────────────────────
+python-dotenv==1.0.1             # Variables de entorno
+aiofiles==23.2.1                 # Manejo async de archivos
+pillow==10.3.0                   # Procesamiento de imágenes (documentos)
+cryptography==42.0.8             # Hash para recetas digitales
+qrcode==7.4.2                    # Generación de QR para recetas
+
+# ── Logging ──────────────────────────────────────────
+loguru==0.7.2                    # Logging elegante
+
+# ── Testing (dev) ────────────────────────────────────
+pytest==8.2.2
+pytest-asyncio==0.23.7
+httpx==0.27.0                    # Para tests de API

@@ -1,0 +1,667 @@
+# MedicBolivia — Guía completa desde cero
+# Sigue cada paso EN ORDEN. No saltes ninguno.
+
+═══════════════════════════════════════════════════════════
+  FASE 1 — PREPARAR TU COMPUTADORA (una sola vez)
+═══════════════════════════════════════════════════════════
+
+────────────────────────────────────────────
+PASO 1: Instalar VS Code (editor de código)
+────────────────────────────────────────────
+1. Ve a: https://code.visualstudio.com
+2. Descarga para Windows o Mac
+3. Instala con todas las opciones por defecto
+4. Abre VS Code
+5. Instala estas extensiones (clic en el ícono de cuadraditos de la izquierda):
+   - Python
+   - Pylance
+   - ES7+ React/Redux/React-Native snippets
+   - Tailwind CSS IntelliSense
+   - Prettier - Code formatter
+
+────────────────────────────────────────────
+PASO 2: Instalar Python 3.11
+────────────────────────────────────────────
+Windows:
+  1. Ve a: https://www.python.org/downloads/
+  2. Descarga Python 3.11.x (NO la 3.12 o 3.13)
+  3. En la instalación: MARCA "Add Python to PATH" ← MUY IMPORTANTE
+  4. Instala
+
+Mac:
+  1. Abre Terminal
+  2. Instala Homebrew: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  3. Luego: brew install python@3.11
+
+Verificar (abrir Terminal o PowerShell):
+  python --version
+  → Debe mostrar: Python 3.11.x
+
+────────────────────────────────────────────
+PASO 3: Instalar Node.js 20
+────────────────────────────────────────────
+1. Ve a: https://nodejs.org
+2. Descarga la versión LTS (20.x)
+3. Instala con todas las opciones por defecto
+
+Verificar:
+  node --version    → v20.x.x
+  npm --version     → 10.x.x
+
+Instalar pnpm (manejador de paquetes más rápido):
+  npm install -g pnpm
+  pnpm --version    → 9.x.x
+
+────────────────────────────────────────────
+PASO 4: Instalar PostgreSQL (base de datos)
+────────────────────────────────────────────
+Windows:
+  1. Ve a: https://www.postgresql.org/download/windows/
+  2. Descarga el instalador
+  3. Durante la instalación:
+     - Puerto: 5432 (dejar por defecto)
+     - Contraseña del superusuario: escribe "postgres123" y ANÓTALA
+     - Instala también pgAdmin 4 (viene incluido)
+
+Mac:
+  brew install postgresql@15
+  brew services start postgresql@15
+
+Verificar:
+  psql --version    → psql (PostgreSQL) 15.x
+
+────────────────────────────────────────────
+PASO 5: Instalar Redis (cache y tiempo real)
+────────────────────────────────────────────
+Windows:
+  1. Descarga desde: https://github.com/microsoftarchive/redis/releases
+  2. Descarga Redis-x64-3.0.504.msi
+  3. Instala y marca "Add to PATH"
+
+  O más fácil con WSL2 / Docker:
+  docker run -d -p 6379:6379 redis
+
+Mac:
+  brew install redis
+  brew services start redis
+
+Verificar:
+  redis-cli ping    → PONG
+
+────────────────────────────────────────────
+PASO 6: Instalar Git
+────────────────────────────────────────────
+1. Ve a: https://git-scm.com/downloads
+2. Descarga e instala para tu sistema operativo
+3. Durante la instalación deja todo por defecto
+
+Verificar:
+  git --version     → git version 2.x.x
+
+Configurar tu identidad (una sola vez):
+  git config --global user.name "Tu Nombre"
+  git config --global user.email "tu@email.com"
+
+
+═══════════════════════════════════════════════════════════
+  FASE 2 — OBTENER LAS CLAVES API NECESARIAS
+═══════════════════════════════════════════════════════════
+
+Necesitas crear cuentas en estos servicios.
+Son gratuitos para empezar (tienen planes free).
+
+────────────────────────────────────────────
+CLAVE 1: Anthropic (Claude — cerebro del agente)
+────────────────────────────────────────────
+1. Ve a: https://console.anthropic.com
+2. Crea una cuenta
+3. Ve a "API Keys" → "Create Key"
+4. Copia la clave: sk-ant-api03-...
+5. GUÁRDALA en un lugar seguro
+
+────────────────────────────────────────────
+CLAVE 2: ElevenLabs (voz del agente)
+────────────────────────────────────────────
+1. Ve a: https://elevenlabs.io
+2. Crea una cuenta gratuita
+3. Ve a "Profile" → copia tu API Key
+4. Ve a "Voice Library" → elige una voz en español
+5. Entra a la voz → copia el "Voice ID"
+   (Busca voces como "Valentina" o "Andrés" en español)
+
+────────────────────────────────────────────
+CLAVE 3: Twilio (llamadas y SMS)
+────────────────────────────────────────────
+1. Ve a: https://www.twilio.com
+2. Crea cuenta gratuita (te dan crédito inicial)
+3. En el Dashboard copia:
+   - Account SID: AC...
+   - Auth Token: (clic en "show")
+4. Ve a "Phone Numbers" → compra un número
+   (con el crédito gratuito puedes hacerlo)
+
+────────────────────────────────────────────
+CLAVE 4: AWS S3 (para guardar documentos médicos)
+────────────────────────────────────────────
+1. Ve a: https://aws.amazon.com
+2. Crea cuenta (pide tarjeta pero el tier gratuito es suficiente)
+3. Ve a IAM → Users → Create User
+4. Asígnale permisos: AmazonS3FullAccess
+5. Crea Access Key → copia Access Key ID y Secret
+6. Ve a S3 → Create Bucket:
+   - Nombre: medicbolivia-docs
+   - Región: sa-east-1 (São Paulo)
+   - Bloquear TODO acceso público ← MUY IMPORTANTE
+
+  ALTERNATIVA MÁS FÁCIL: usar Supabase Storage
+  → https://supabase.com (más simple para principiantes)
+
+
+═══════════════════════════════════════════════════════════
+  FASE 3 — CONFIGURAR EL PROYECTO EN TU COMPUTADORA
+═══════════════════════════════════════════════════════════
+
+────────────────────────────────────────────
+PASO 7: Crear la carpeta y poner los archivos
+────────────────────────────────────────────
+1. Crea una carpeta en tu computadora: C:\proyectos\medicbolivia (Windows)
+   o ~/proyectos/medicbolivia (Mac/Linux)
+
+2. Descarga todos los archivos que te entregué (medicbolivia_v2)
+   y colócalos dentro de esa carpeta
+
+   La estructura debe quedar así:
+   medicbolivia/
+   ├── backend/
+   ├── frontend/
+   ├── scripts/
+   └── README.md
+
+3. Abre VS Code → File → Open Folder → selecciona medicbolivia/
+
+────────────────────────────────────────────
+PASO 8: Crear la base de datos
+────────────────────────────────────────────
+Abre pgAdmin 4 (se instaló con PostgreSQL):
+
+1. Conecta al servidor local (contraseña: postgres123)
+2. Clic derecho en "Databases" → Create → Database
+3. Nombre: medicbolivia
+4. Clic en Save
+
+O por terminal:
+  psql -U postgres
+  CREATE DATABASE medicbolivia;
+  CREATE USER medicbolivia WITH PASSWORD 'mipassword123';
+  GRANT ALL PRIVILEGES ON DATABASE medicbolivia TO medicbolivia;
+  \q
+
+────────────────────────────────────────────
+PASO 9: Configurar el backend
+────────────────────────────────────────────
+Abre una terminal en VS Code (Terminal → New Terminal):
+
+  # Ir a la carpeta del backend
+  cd backend
+
+  # Crear entorno virtual de Python
+  python -m venv venv
+
+  # Activar el entorno virtual
+  # En Windows:
+  venv\Scripts\activate
+  # En Mac/Linux:
+  source venv/bin/activate
+
+  # Debes ver (venv) al inicio de la línea. Eso significa que está activo.
+
+  # Instalar todas las dependencias
+  pip install -r requirements.txt
+  # ← Esto tarda 2-5 minutos la primera vez
+
+  # Crear el archivo de configuración
+  # Windows:
+  copy .env.example .env
+  # Mac/Linux:
+  cp .env.example .env
+
+────────────────────────────────────────────
+PASO 10: Llenar el archivo .env del backend
+────────────────────────────────────────────
+Abre el archivo backend/.env en VS Code y llena CADA valor:
+
+  DATABASE_URL=postgresql+asyncpg://medicbolivia:mipassword123@localhost:5432/medicbolivia
+  DATABASE_URL_SYNC=postgresql://medicbolivia:mipassword123@localhost:5432/medicbolivia
+
+  # Genera un secreto aleatorio ejecutando en terminal:
+  # python -c "import secrets; print(secrets.token_urlsafe(32))"
+  SECRET_KEY=pega_aqui_el_resultado
+
+  ANTHROPIC_API_KEY=sk-ant-api03-tu-clave-aqui
+  ELEVENLABS_API_KEY=tu-clave-elevenlabs
+  ELEVENLABS_VOICE_ID=id-de-la-voz-elegida
+
+  TWILIO_ACCOUNT_SID=ACtu-account-sid
+  TWILIO_AUTH_TOKEN=tu-auth-token
+  TWILIO_PHONE_NUMBER=+1tu-numero
+
+  AWS_ACCESS_KEY_ID=tu-access-key
+  AWS_SECRET_ACCESS_KEY=tu-secret-key
+  AWS_BUCKET_NAME=medicbolivia-docs
+  AWS_REGION=sa-east-1
+
+  REDIS_URL=redis://localhost:6379
+  ENVIRONMENT=development
+  DEBUG=true
+
+────────────────────────────────────────────
+PASO 11: Arrancar el backend por primera vez
+────────────────────────────────────────────
+En la terminal (con el entorno virtual activo):
+
+  cd backend
+  # En Mac/Linux:
+  bash run.sh
+  # En Windows:
+  uvicorn app.main:app --reload --host 0.0.0.0 --port 4000
+
+  Debes ver:
+  ✅ INFO: Uvicorn running on http://0.0.0.0:4000
+  📦 Base de datos lista
+
+  Abre el navegador en: http://localhost:4000/docs
+  → Verás la documentación interactiva de la API (Swagger UI)
+  → Si la ves, el backend funciona ✅
+
+────────────────────────────────────────────
+PASO 12: Configurar el frontend
+────────────────────────────────────────────
+Abre UNA SEGUNDA terminal en VS Code (clic en el ícono "+"):
+
+  cd frontend
+
+  # Instalar dependencias Node
+  pnpm install
+  # ← Esto tarda 1-3 minutos
+
+  # Crear archivo de configuración
+  # Windows:
+  copy .env.example .env.local
+  # Mac/Linux:
+  cp .env.example .env.local
+
+  # El archivo .env.local ya está bien para desarrollo:
+  # NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+
+  # Arrancar el frontend
+  pnpm dev
+
+  Debes ver:
+  ▲ Next.js 14.x.x
+  - Local: http://localhost:3000
+
+  Abre el navegador en: http://localhost:3000
+  → Verás la página de login de MedicBolivia ✅
+
+────────────────────────────────────────────
+PASO 13: Crear el primer usuario admin
+────────────────────────────────────────────
+Con el backend corriendo, abre: http://localhost:4000/docs
+
+1. Busca el endpoint: POST /api/v1/auth/register/patient
+2. Clic en "Try it out"
+3. Llena los datos y clic en "Execute"
+
+O desde la app web, ve a http://localhost:3000/auth/register/patient
+y crea tu cuenta de prueba.
+
+¡Listo! Ya tienes el proyecto funcionando en tu computadora.
+
+
+═══════════════════════════════════════════════════════════
+  FASE 4 — SUBIR AL VPS DE HOSTINGER (producción)
+═══════════════════════════════════════════════════════════
+
+────────────────────────────────────────────
+PASO 14: Contratar el VPS en Hostinger
+────────────────────────────────────────────
+1. Ve a: https://www.hostinger.com/bo (versión Bolivia)
+2. Ve a "VPS Hosting"
+3. Elige el plan: KVM 2 (mínimo recomendado)
+   - 2 vCPU, 8GB RAM, 100GB SSD
+   - Precio aprox: $12-15 USD/mes
+4. Configuración:
+   - Sistema operativo: Ubuntu 22.04 LTS
+   - Región del servidor: São Paulo, Brasil (más cercano a Bolivia)
+5. Completa el pago
+
+Hostinger te enviará por email:
+   - IP del servidor: ej. 185.x.x.x
+   - Usuario: root
+   - Contraseña temporal
+
+────────────────────────────────────────────
+PASO 15: Conectarte al VPS por SSH
+────────────────────────────────────────────
+Windows: descarga PuTTY (https://putty.org)
+  - Host: 185.x.x.x (tu IP del VPS)
+  - Port: 22
+  - Clic Open
+  - Usuario: root
+  - Contraseña: la que te mandaron por email
+
+Mac/Linux (terminal):
+  ssh root@185.x.x.x
+  → Escribe la contraseña
+
+Cambia la contraseña por una segura:
+  passwd
+  → Escribe la nueva contraseña dos veces
+
+────────────────────────────────────────────
+PASO 16: Instalar todo en el VPS
+────────────────────────────────────────────
+Copia y pega este bloque completo en el terminal del VPS:
+
+  apt update -y && apt upgrade -y
+  apt install -y curl wget git unzip
+
+  # Python 3.11
+  add-apt-repository ppa:deadsnakes/ppa -y
+  apt install -y python3.11 python3.11-venv python3.11-dev python3-pip
+
+  # Node.js 20
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt install -y nodejs
+  npm install -g pnpm pm2
+
+  # PostgreSQL
+  apt install -y postgresql postgresql-contrib
+  systemctl enable postgresql && systemctl start postgresql
+
+  # Redis
+  apt install -y redis-server
+  systemctl enable redis-server && systemctl start redis-server
+
+  # Nginx
+  apt install -y nginx
+  systemctl enable nginx && systemctl start nginx
+
+  # Certbot (SSL gratis)
+  apt install -y certbot python3-certbot-nginx
+
+  echo "✅ Instalación completada"
+
+────────────────────────────────────────────
+PASO 17: Crear la base de datos en el VPS
+────────────────────────────────────────────
+  sudo -u postgres psql
+
+  # Dentro de psql, pega esto:
+  CREATE USER medicbolivia WITH PASSWORD 'TU_PASSWORD_SEGURA_AQUI';
+  CREATE DATABASE medicbolivia OWNER medicbolivia;
+  GRANT ALL PRIVILEGES ON DATABASE medicbolivia TO medicbolivia;
+  \q
+
+────────────────────────────────────────────
+PASO 18: Subir el código al VPS
+────────────────────────────────────────────
+OPCIÓN A — Con Git (recomendado):
+  1. Sube el código a GitHub (github.com → New Repository)
+  2. En tu computadora:
+     cd medicbolivia
+     git init
+     git add .
+     git commit -m "Primer commit MedicBolivia"
+     git remote add origin https://github.com/tu-usuario/medicbolivia.git
+     git push -u origin main
+
+  3. En el VPS:
+     cd /var/www
+     git clone https://github.com/tu-usuario/medicbolivia.git
+     cd medicbolivia
+
+OPCIÓN B — Con SFTP (más simple):
+  1. Descarga FileZilla: https://filezilla-project.org
+  2. Conecta con:
+     - Host: sftp://185.x.x.x
+     - Usuario: root
+     - Contraseña: tu contraseña del VPS
+  3. Sube la carpeta medicbolivia a /var/www/medicbolivia
+
+────────────────────────────────────────────
+PASO 19: Configurar el backend en el VPS
+────────────────────────────────────────────
+  cd /var/www/medicbolivia/backend
+
+  # Crear entorno virtual
+  python3.11 -m venv venv
+  source venv/bin/activate
+
+  # Instalar dependencias
+  pip install -r requirements.txt
+
+  # Crear y llenar el .env de PRODUCCIÓN
+  cp .env.example .env
+  nano .env
+
+  # Cambia estos valores:
+  # DATABASE_URL=postgresql+asyncpg://medicbolivia:TU_PASSWORD@localhost:5432/medicbolivia
+  # DATABASE_URL_SYNC=postgresql://medicbolivia:TU_PASSWORD@localhost:5432/medicbolivia
+  # ENVIRONMENT=production
+  # DEBUG=false
+  # ALLOWED_ORIGINS=["https://medicbolivia.bo","https://www.medicbolivia.bo"]
+  # (y el resto de claves API igual que en local)
+
+  # Ctrl+X → Y → Enter (para guardar en nano)
+
+  # Inicializar la base de datos
+  python3 -c "
+  import asyncio
+  from app.db.database import create_all_tables
+  asyncio.run(create_all_tables())
+  print('Base de datos lista')
+  "
+
+────────────────────────────────────────────
+PASO 20: Arrancar el backend con PM2
+────────────────────────────────────────────
+  cd /var/www/medicbolivia/backend
+
+  # Crear archivo de configuración PM2
+  cat > /var/www/medicbolivia/ecosystem.config.js << 'EOF'
+  module.exports = {
+    apps: [
+      {
+        name: "medicbolivia-backend",
+        cwd: "/var/www/medicbolivia/backend",
+        interpreter: "/var/www/medicbolivia/backend/venv/bin/python3",
+        script: "/var/www/medicbolivia/backend/venv/bin/uvicorn",
+        args: "app.main:app --host 0.0.0.0 --port 4000 --workers 2",
+        env: { ENVIRONMENT: "production" },
+        error_file: "/var/log/medicbolivia/backend-error.log",
+        out_file: "/var/log/medicbolivia/backend-out.log",
+      }
+    ]
+  }
+  EOF
+
+  mkdir -p /var/log/medicbolivia
+  pm2 start /var/www/medicbolivia/ecosystem.config.js
+  pm2 save
+  pm2 startup  # ← copia y pega el comando que te muestra
+
+  # Verificar que corre:
+  pm2 status
+  curl http://localhost:4000/health
+  # → {"status":"ok",...}  ✅
+
+────────────────────────────────────────────
+PASO 21: Build y arranque del frontend
+────────────────────────────────────────────
+  cd /var/www/medicbolivia/frontend
+
+  # Variables de producción
+  echo "NEXT_PUBLIC_API_URL=https://medicbolivia.bo/api/v1" > .env.production
+  echo "NEXT_PUBLIC_WS_URL=wss://medicbolivia.bo" >> .env.production
+
+  # Instalar y construir
+  pnpm install
+  pnpm build
+
+  # Arrancar con PM2
+  pm2 start npm --name "medicbolivia-frontend" -- start -- -p 3000
+  pm2 save
+
+  # Verificar:
+  curl http://localhost:3000
+  # → Responde con HTML ✅
+
+────────────────────────────────────────────
+PASO 22: Configurar Nginx (el servidor web)
+────────────────────────────────────────────
+  # Copiar la configuración que ya tienes en el proyecto
+  cp /var/www/medicbolivia/scripts/medicbolivia.nginx \
+     /etc/nginx/sites-available/medicbolivia
+
+  # Editar y poner tu dominio real
+  nano /etc/nginx/sites-available/medicbolivia
+  # Cambia "medicbolivia.bo" por tu dominio real
+
+  # Activar el sitio
+  ln -s /etc/nginx/sites-available/medicbolivia \
+        /etc/nginx/sites-enabled/medicbolivia
+
+  # Quitar el sitio por defecto
+  rm -f /etc/nginx/sites-enabled/default
+
+  # Verificar que la configuración esté bien
+  nginx -t
+  # → nginx: configuration file ...syntax is ok ✅
+
+  # Recargar Nginx
+  systemctl reload nginx
+
+────────────────────────────────────────────
+PASO 23: Apuntar tu dominio al VPS
+────────────────────────────────────────────
+En el panel de tu proveedor de dominio (Hostinger, GoDaddy, etc.):
+
+  1. Ve a "DNS" o "Gestión de DNS"
+  2. Edita el registro A:
+     Tipo: A
+     Nombre: @ (o medicbolivia.bo)
+     Valor: 185.x.x.x (tu IP del VPS)
+     TTL: 300
+
+  3. Agrega otro registro A para www:
+     Tipo: A
+     Nombre: www
+     Valor: 185.x.x.x
+     TTL: 300
+
+  4. Espera 5-15 minutos a que se propague
+
+────────────────────────────────────────────
+PASO 24: Activar HTTPS (certificado SSL gratis)
+────────────────────────────────────────────
+  certbot --nginx -d medicbolivia.bo -d www.medicbolivia.bo
+
+  # Sigue las instrucciones:
+  # → Escribe tu email
+  # → Acepta los términos (Y)
+  # → Certbot configura HTTPS automáticamente
+
+  # Verificar renovación automática:
+  certbot renew --dry-run
+  # → Congratulations, all simulated renewals succeeded ✅
+
+────────────────────────────────────────────
+PASO 25: Verificación final
+────────────────────────────────────────────
+Abre en el navegador: https://medicbolivia.bo
+
+  ✅ Ves la página de login
+  ✅ El candado verde (HTTPS) está activo
+  ✅ Puedes registrarte y hacer login
+  ✅ El agente IA responde
+  ✅ Los pagos QR se generan
+
+  Si algo falla, revisar logs:
+  pm2 logs medicbolivia-backend    # logs del backend
+  pm2 logs medicbolivia-frontend   # logs del frontend
+  tail -f /var/log/nginx/medicbolivia_error.log  # logs de Nginx
+
+
+═══════════════════════════════════════════════════════════
+  FASE 5 — MANTENIMIENTO Y ACTUALIZACIONES
+═══════════════════════════════════════════════════════════
+
+Para actualizar el código después de hacer cambios:
+
+  cd /var/www/medicbolivia
+  git pull                              # Bajar cambios
+
+  # Reiniciar backend
+  cd backend
+  source venv/bin/activate
+  pip install -r requirements.txt       # Solo si cambiaron dependencias
+  pm2 restart medicbolivia-backend
+
+  # Reiniciar frontend
+  cd ../frontend
+  pnpm install                          # Solo si cambiaron dependencias
+  pnpm build
+  pm2 restart medicbolivia-frontend
+
+Comandos útiles:
+  pm2 status                            # Ver estado de los procesos
+  pm2 logs                              # Ver todos los logs
+  pm2 restart all                       # Reiniciar todo
+  systemctl status nginx                # Estado de Nginx
+  systemctl status postgresql           # Estado de PostgreSQL
+
+
+═══════════════════════════════════════════════════════════
+  RESUMEN DE TIEMPOS ESTIMADOS
+═══════════════════════════════════════════════════════════
+
+  Fase 1 (instalar herramientas):     ~45 minutos
+  Fase 2 (obtener claves API):        ~30 minutos
+  Fase 3 (configurar en local):       ~30 minutos
+  Fase 4 (deploy en VPS):             ~60 minutos
+  ─────────────────────────────────────────────
+  Total primera vez:                  ~2.5 horas
+
+Una vez que lo tienes listo, actualizar el código
+toma menos de 5 minutos.
+
+
+═══════════════════════════════════════════════════════════
+  AYUDA — ERRORES COMUNES
+═══════════════════════════════════════════════════════════
+
+Error: "python: command not found"
+→ Solución: reinstalar Python y marcar "Add to PATH"
+
+Error: "pip install falla en bcrypt o psycopg2"
+→ Windows: instalar Visual C++ Build Tools
+  https://visualstudio.microsoft.com/visual-cpp-build-tools/
+
+Error: "connection refused" en la base de datos
+→ Verificar que PostgreSQL esté corriendo:
+  Windows: Servicios → postgresql → Iniciar
+  Mac: brew services start postgresql@15
+
+Error: "Module not found" en el frontend
+→ Ejecutar: pnpm install (dentro de la carpeta frontend)
+
+Error: "502 Bad Gateway" en Nginx
+→ El backend o frontend no están corriendo:
+  pm2 status (verifica que aparezcan como "online")
+
+Error: el QR de pago no funciona
+→ Es normal en desarrollo. El webhook bancario
+  necesita una URL pública. En local usa ngrok:
+  ngrok http 4000
+  → Te da una URL pública para pruebas
