@@ -44,9 +44,9 @@ flower==2.0.1                    # Monitor de Celery (opcional)
 # ── Utils ────────────────────────────────────────────
 python-dotenv==1.0.1             # Variables de entorno
 aiofiles==23.2.1                 # Manejo async de archivos
-pillow==10.3.0                   # Procesamiento de imágenes (documentos)
+# pillow==10.3.0                   # Procesamiento de imágenes (documentos)
 cryptography==42.0.8             # Hash para recetas digitales
-qrcode==7.4.2                    # Generación de QR para recetas
+# qrcode==7.4.2                    # Generación de QR para recetas
 
 # ── Logging ──────────────────────────────────────────
 loguru==0.7.2                    # Logging elegante
