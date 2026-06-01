@@ -4,7 +4,7 @@ Punto de entrada principal de la aplicación FastAPI MedicBolivia.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-Sfrom contextlib import asynccontextmanager
+from contextlib import asynccontextmanager
 from loguru import logger
 import sys
 
