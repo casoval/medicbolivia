@@ -19,3 +19,4 @@ python-dotenv
 aiofiles
 cryptography
 loguru
+bcrypt==4.0.1
