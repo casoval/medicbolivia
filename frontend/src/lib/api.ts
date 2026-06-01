@@ -59,7 +59,7 @@ export const authAPI = {
   registerProfessional: (data: {
     phone: string; email: string; password: string
     first_name: string; last_name: string; ci: string; specialty: string
-    languages?: string[]
+    languages?: string[]; birth_date?: string; department?: string; gender?: string
   }) => api.post<AuthResponse>('/auth/register/professional', data),
 
   login: (phone: string, password: string) =>
