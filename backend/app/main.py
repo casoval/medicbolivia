@@ -4,8 +4,7 @@ Punto de entrada principal de la aplicación FastAPI MedicBolivia.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from contextlib import asynccontextmanager
+Sfrom contextlib import asynccontextmanager
 from loguru import logger
 import sys
 
@@ -39,9 +38,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"🚀 Iniciando {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"🌍 Entorno: {settings.ENVIRONMENT}")
 
-    if settings.ENVIRONMENT == "development":
-        await create_all_tables()
-        logger.info("📦 Base de datos lista")
+    await create_all_tables()
+    logger.info("📦 Base de datos lista")
 
     yield
 
@@ -68,8 +66,8 @@ app = FastAPI(
     Usar `Bearer <token>` en el header `Authorization`.
     """,
     version=settings.APP_VERSION,
-    docs_url="/docs" if settings.DEBUG else None,   # Swagger solo en dev
-    redoc_url="/redoc" if settings.DEBUG else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan,
 )
 
@@ -84,13 +82,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
-# Hosts confiables en producción
-if settings.ENVIRONMENT == "production":
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=["medicbolivia.bo", "*.medicbolivia.bo", "localhost"]
-    )
 
 
 # ── Routers ───────────────────────────────────────────
@@ -120,5 +111,5 @@ async def health_check():
 async def root():
     return {
         "message": f"Bienvenido a {settings.APP_NAME} API",
-        "docs": "/docs" if settings.DEBUG else "Deshabilitado en producción",
+        "docs": "/docs",
     }
