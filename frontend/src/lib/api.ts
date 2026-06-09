@@ -1,6 +1,4 @@
 // src/lib/api.ts
-// Cliente HTTP centralizado para todas las llamadas al backend FastAPI
-
 import axios, { AxiosError } from 'axios'
 import type {
   AuthResponse, User, Professional, Consultation,
@@ -9,14 +7,12 @@ import type {
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'
 
-// ── Instancia Axios ───────────────────────────────────
 export const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 20000,
+  timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Adjuntar token automáticamente en cada request
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('mb_token')
@@ -25,7 +21,6 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Manejar errores globales
 api.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
@@ -38,7 +33,6 @@ api.interceptors.response.use(
   }
 )
 
-// ── Helper para extraer mensaje de error ─────────────
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     return error.response?.data?.detail || 'Error de conexión. Intenta de nuevo.'
@@ -46,9 +40,6 @@ export function getErrorMessage(error: unknown): string {
   return 'Error inesperado.'
 }
 
-// ─────────────────────────────────────────────────────
-// AUTH
-// ─────────────────────────────────────────────────────
 export const authAPI = {
   registerPatient: (data: {
     phone: string; password: string; first_name: string
@@ -69,9 +60,6 @@ export const authAPI = {
   logout: () => api.post('/auth/logout'),
 }
 
-// ─────────────────────────────────────────────────────
-// PROFESIONALES
-// ─────────────────────────────────────────────────────
 export const professionalsAPI = {
   list: (params?: { specialty?: string; available_now?: boolean; search?: string }) =>
     api.get<Professional[]>('/professionals', { params }),
@@ -94,14 +82,13 @@ export const professionalsAPI = {
     })
   },
 
-  // Admin
+  getMyProfile: () =>
+    api.get("/professionals/me").then(r => r.data),
+
   verify: (id: string, status: string, note?: string) =>
     api.patch(`/professionals/${id}/verify`, null, { params: { new_status: status, review_note: note } }),
 }
 
-// ─────────────────────────────────────────────────────
-// CONSULTAS
-// ─────────────────────────────────────────────────────
 export const consultationsAPI = {
   create: (data: {
     professional_id: string
@@ -118,11 +105,20 @@ export const consultationsAPI = {
 
   updateStatus: (id: string, status: string) =>
     api.patch(`/consultations/${id}/status`, null, { params: { new_status: status } }),
+
+  cancel: (consultationId: string) =>
+    api.post(`/consultations/${consultationId}/cancel`),
+
+  acceptConsultation: (consultationId: string) =>
+    api.post(`/consultations/${consultationId}/accept`),
+
+  rejectConsultation: (consultationId: string) =>
+    api.post(`/consultations/${consultationId}/reject`),
+
+  simulatePayment: (consultationId: string) =>
+    api.post(`/consultations/${consultationId}/simulate-payment`),
 }
 
-// ─────────────────────────────────────────────────────
-// AGENTE IA
-// ─────────────────────────────────────────────────────
 export const agentAPI = {
   chat: (message: string, sessionId?: string) =>
     api.post<AgentResponse>('/agent/chat', { message, session_id: sessionId }),
@@ -132,11 +128,18 @@ export const agentAPI = {
 
   getHistory: (sessionId: string) =>
     api.get(`/agent/history/${sessionId}`),
+
+  // ── Nuevos: voz ──────────────────────────────────
+  tts: (text: string) =>
+    api.post('/agent/tts', null, { params: { text } }),
+
+  voiceChat: (formData: FormData) =>
+    api.post('/agent/voice-chat', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000,
+    }),
 }
 
-// ─────────────────────────────────────────────────────
-// RECETAS
-// ─────────────────────────────────────────────────────
 export const prescriptionsAPI = {
   create: (data: {
     consultation_id: string
@@ -151,9 +154,6 @@ export const prescriptionsAPI = {
     api.get(`/prescriptions/verify/${code}`),
 }
 
-// ─────────────────────────────────────────────────────
-// CALIFICACIONES
-// ─────────────────────────────────────────────────────
 export const ratingsAPI = {
   create: (consultationId: string, score: number, comment?: string) =>
     api.post<Rating>('/ratings', { consultation_id: consultationId, score, comment }),

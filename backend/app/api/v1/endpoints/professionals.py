@@ -35,14 +35,9 @@ async def list_professionals(
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Retorna el directorio de profesionales aprobados.
-    El paciente puede filtrar por especialidad y disponibilidad.
-    """
     conditions = [Professional.status == ProfessionalStatus.APPROVED]
 
     if specialty:
-        # Búsqueda case-insensitive
         from sqlalchemy import func
         conditions.append(
             func.lower(Professional.specialty).contains(specialty.lower())
@@ -63,7 +58,6 @@ async def list_professionals(
             )
         )
 
-    # Ordenar: primero los disponibles, luego por calificación
     query = query.order_by(
         Professional.availability.desc(),
         Professional.average_rating.desc()
@@ -75,32 +69,8 @@ async def list_professionals(
     return [ProfessionalPublicResponse.model_validate(p) for p in professionals]
 
 
-# ── GET /api/v1/professionals/{id} ──────────────────
-@router.get(
-    "/{professional_id}",
-    response_model=ProfessionalPublicResponse,
-    summary="Perfil público de un profesional"
-)
-async def get_professional(
-    professional_id: str,
-    db: AsyncSession = Depends(get_db)
-):
-    result = await db.execute(
-        select(Professional).where(
-            and_(
-                Professional.id == professional_id,
-                Professional.status == ProfessionalStatus.APPROVED
-            )
-        )
-    )
-    professional = result.scalar_one_or_none()
-    if not professional:
-        raise HTTPException(status_code=404, detail="Profesional no encontrado")
-
-    return ProfessionalPublicResponse.model_validate(professional)
-
-
 # ── PATCH /api/v1/professionals/availability ────────
+# ⚠️ DEBE ir ANTES de /{professional_id} para que FastAPI no lo confunda con un ID
 @router.patch(
     "/availability",
     summary="Actualizar disponibilidad del profesional"
@@ -131,6 +101,7 @@ async def update_availability(
 
 
 # ── PATCH /api/v1/professionals/prices ──────────────
+# ⚠️ DEBE ir ANTES de /{professional_id}
 @router.patch("/prices", summary="Actualizar precios de consulta")
 async def update_prices(
     data: PriceUpdateRequest,
@@ -156,6 +127,7 @@ async def update_prices(
 
 
 # ── POST /api/v1/professionals/documents ────────────
+# ⚠️ DEBE ir ANTES de /{professional_id}
 @router.post(
     "/documents",
     status_code=status.HTTP_201_CREATED,
@@ -167,12 +139,6 @@ async def upload_document(
     current_user: User = Depends(get_current_professional),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Sube un documento de verificación al S3.
-    Tipos: CI_FRONT, CI_BACK, PROFESSIONAL_TITLE,
-           SEDES_REGISTRATION, CMB_MATRICULA, SPECIALTY_CERT, SELFIE_WITH_CI
-    """
-    # Validar tipo de archivo
     allowed_types = ["image/jpeg", "image/png", "application/pdf"]
     if file.content_type not in allowed_types:
         raise HTTPException(
@@ -180,7 +146,6 @@ async def upload_document(
             detail="Solo se aceptan archivos JPG, PNG o PDF"
         )
 
-    # Validar tamaño (máx 10MB)
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="El archivo no puede superar 10MB")
@@ -192,7 +157,6 @@ async def upload_document(
     if not professional:
         raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
 
-    # Subir a S3 con ruta cifrada
     file_url = await upload_document_to_s3(
         file_content=content,
         file_name=file.filename,
@@ -201,7 +165,6 @@ async def upload_document(
         content_type=file.content_type
     )
 
-    # Guardar registro en BD
     doc = ProfessionalDoc(
         professional_id=professional.id,
         doc_type=doc_type,
@@ -219,7 +182,34 @@ async def upload_document(
     }
 
 
-# ── GET /api/v1/professionals/documents (admin) ─────
+# ── GET /api/v1/professionals/me ────────────────────
+# ⚠️ DEBE ir ANTES de /{professional_id}
+@router.get(
+    "/me",
+    summary="Perfil propio del profesional autenticado"
+)
+async def get_my_profile(
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Professional).where(Professional.user_id == current_user.id)
+    )
+    professional = result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
+
+    return {
+        "availability": professional.availability,
+        "price_general": professional.price_general,
+        "price_urgent": professional.price_urgent,
+        "price_follow_up": professional.price_follow_up,
+        "status": professional.status,
+    }
+
+
+# ── GET /api/v1/professionals/admin/pending-docs ────
+# ⚠️ DEBE ir ANTES de /{professional_id}
 @router.get(
     "/admin/pending-docs",
     summary="[Admin] Documentos pendientes de revisión"
@@ -234,6 +224,32 @@ async def get_pending_docs(
         .where(ProfessionalDoc.status == DocStatus.PENDING)
     )
     return result.all()
+
+
+# ── GET /api/v1/professionals/{id} ──────────────────
+# ⚠️ Esta ruta dinámica va AL FINAL para no capturar rutas estáticas
+@router.get(
+    "/{professional_id}",
+    response_model=ProfessionalPublicResponse,
+    summary="Perfil público de un profesional"
+)
+async def get_professional(
+    professional_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Professional).where(
+            and_(
+                Professional.id == professional_id,
+                Professional.status == ProfessionalStatus.APPROVED
+            )
+        )
+    )
+    professional = result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
+    return ProfessionalPublicResponse.model_validate(professional)
 
 
 # ── PATCH /api/v1/professionals/{id}/verify (admin) ─
@@ -257,7 +273,6 @@ async def verify_professional(
 
     professional.status = new_status
 
-    # Si se aprueba, activar el usuario también
     if new_status == ProfessionalStatus.APPROVED:
         user_result = await db.execute(
             select(User).where(User.id == professional.user_id)

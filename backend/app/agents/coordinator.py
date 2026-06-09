@@ -1,21 +1,25 @@
 """
 app/agents/coordinator.py
 Agente Coordinador — cerebro principal del sistema de IA.
-Usa Claude (Anthropic) para orientar al paciente y coordinar consultas.
+Usa Gemini 2.5 Flash (Google) con el SDK google-genai.
 """
 import json
-import uuid
+import re
+import time
 from typing import Optional
-import anthropic
+
+from google import genai
+from google.genai import types
 from loguru import logger
 
 from app.core.config import settings
 
-# Cliente Anthropic
-client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+# Cliente Gemini
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+GEMINI_MODEL = "gemini-2.5-flash"
 
 # ── Almacén de conversaciones en memoria ──────────────
-# En producción migrar a Redis para persistencia entre reinicios
 _conversation_store: dict[str, list] = {}
 
 
@@ -110,6 +114,59 @@ Tono: cálido, breve, sin ser invasivo."""
 
 
 # ─────────────────────────────────────────────────────
+# HELPERS INTERNOS
+# ─────────────────────────────────────────────────────
+
+def _build_contents(history: list, new_message: str) -> list:
+    """Convierte el historial al formato de google-genai."""
+    contents = []
+    for msg in history:
+        role = "model" if msg["role"] == "assistant" else "user"
+        contents.append(types.Content(
+            role=role,
+            parts=[types.Part(text=msg["content"])]
+        ))
+    contents.append(types.Content(
+        role="user",
+        parts=[types.Part(text=new_message)]
+    ))
+    return contents
+
+
+def _parse_action(reply: str) -> dict:
+    """Extrae acciones del texto del agente. Formato: [ACTION:TIPO:parámetro]"""
+    action = None
+    clean = reply
+
+    match = re.search(r'\[ACTION:(\w+):([^\]]*)\]', reply)
+    if match:
+        action_type = match.group(1)
+        action_param = match.group(2)
+        action = {"type": action_type, "param": action_param}
+        clean = re.sub(r'\[ACTION:[^\]]*\]', '', reply).strip()
+
+    return {
+        "message": clean,
+        "action": action,
+        "tokens_used": 0
+    }
+
+
+def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> str:
+    """Llama a Gemini con el nuevo SDK google-genai y retorna el texto."""
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            max_output_tokens=max_tokens,
+            temperature=0.7,
+        ),
+    )
+    return response.text
+
+
+# ─────────────────────────────────────────────────────
 # FUNCIONES PRINCIPALES
 # ─────────────────────────────────────────────────────
 
@@ -121,42 +178,28 @@ async def run_coordinator(
     available_professionals: Optional[list] = None,
     db=None
 ) -> dict:
-    """
-    Ejecuta el Agente Coordinador.
-    Retorna: { message, action, available_professionals }
-    """
-    import time
+    """Ejecuta el Agente Coordinador."""
     start = time.time()
-
     history = _conversation_store.get(session_id, [])
 
-    # Enriquecer el prompt con contexto del paciente
     system = COORDINATOR_SYSTEM
     if patient_context:
         system += f"\n\nPERFIL DEL PACIENTE:\n{json.dumps(patient_context, ensure_ascii=False)}"
     if available_professionals:
         system += f"\n\nPROFESIONALES DISPONIBLES AHORA:\n{json.dumps(available_professionals, ensure_ascii=False, default=str)}"
 
-    messages = history + [{"role": "user", "content": message}]
+    contents = _build_contents(history, message)
 
     try:
-        response = client.messages.create(
-            model=settings.CLAUDE_MODEL,
-            max_tokens=settings.CLAUDE_MAX_TOKENS,
-            system=system,
-            messages=messages,
-        )
-        reply = response.content[0].text
+        reply = _call_gemini(system, contents, max_tokens=1000)
         latency_ms = int((time.time() - start) * 1000)
 
-        # Guardar en historial (máx 20 mensajes)
         history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": reply})
         if len(history) > 20:
             history = history[-20:]
         _conversation_store[session_id] = history
 
-        # Guardar log en BD si tenemos sesión
         if db:
             from app.models.models import AgentLog, AgentType
             log = AgentLog(
@@ -165,21 +208,20 @@ async def run_coordinator(
                 session_id=session_id,
                 user_message=message,
                 agent_response=reply,
-                tokens_used=response.usage.input_tokens + response.usage.output_tokens,
+                tokens_used=0,
                 latency_ms=latency_ms,
             )
             db.add(log)
             await db.commit()
 
-        # Parsear acciones en la respuesta
-        return _parse_action(reply, response.usage)
+        return _parse_action(reply)
 
     except Exception as e:
-        logger.error(f"Error en agente coordinador: {e}")
+        logger.error(f"Error en agente coordinador (Gemini): {e}")
         return {
             "message": "Disculpa, tuve un problema técnico. Por favor intenta de nuevo en un momento.",
             "action": None,
-            "available_professionals": None
+            "tokens_used": 0
         }
 
 
@@ -193,16 +235,10 @@ async def run_onboarding(
     """Ejecuta el Agente de Onboarding para primer registro."""
     system = ONBOARDING_PATIENT_SYSTEM if user_role == "PATIENT" else ONBOARDING_PROFESSIONAL_SYSTEM
     history = _conversation_store.get(session_id, [])
-    messages = history + [{"role": "user", "content": message}]
+    contents = _build_contents(history, message)
 
     try:
-        response = client.messages.create(
-            model=settings.CLAUDE_MODEL,
-            max_tokens=800,
-            system=system,
-            messages=messages,
-        )
-        reply = response.content[0].text
+        reply = _call_gemini(system, contents, max_tokens=800)
 
         history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": reply})
@@ -210,7 +246,6 @@ async def run_onboarding(
             history = history[-30:]
         _conversation_store[session_id] = history
 
-        # Detectar fin de onboarding
         onboarding_done = "[ONBOARDING_COMPLETE]" in reply
         clean_reply = reply.replace("[ONBOARDING_COMPLETE]", "").strip()
 
@@ -231,7 +266,7 @@ async def run_onboarding(
         }
 
     except Exception as e:
-        logger.error(f"Error en agente onboarding: {e}")
+        logger.error(f"Error en agente onboarding (Gemini): {e}")
         return {"message": "Disculpa, ocurrió un error. Intenta de nuevo.", "onboarding_completed": False}
 
 
@@ -248,52 +283,19 @@ Paciente: {patient_name}
 Profesional: {professional_name}
 Receta emitida: {"Sí" if has_prescription else "No"}"""
 
+    contents = _build_contents([], context)
+
     try:
-        response = client.messages.create(
-            model=settings.CLAUDE_MODEL,
-            max_tokens=400,
-            system=POST_CONSULTATION_SYSTEM,
-            messages=[{"role": "user", "content": context}],
-        )
-        return response.content[0].text
+        return _call_gemini(POST_CONSULTATION_SYSTEM, contents, max_tokens=400)
     except Exception as e:
-        logger.error(f"Error en agente post-consulta: {e}")
+        logger.error(f"Error en agente post-consulta (Gemini): {e}")
         return f"Tu consulta con {professional_name} ha finalizado. ¡Gracias por usar MedicBolivia!"
 
 
 def get_conversation_history(session_id: str) -> list:
-    """Retorna el historial de conversación de una sesión."""
     return _conversation_store.get(session_id, [])
 
 
 def clear_conversation(session_id: str) -> None:
-    """Limpia el historial de una sesión al terminar la consulta."""
     if session_id in _conversation_store:
         del _conversation_store[session_id]
-
-
-# ─────────────────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────────────────
-
-def _parse_action(reply: str, usage) -> dict:
-    """
-    Extrae acciones del texto del agente.
-    Formato: [ACTION:TIPO:parámetro]
-    """
-    import re
-    action = None
-    clean = reply
-
-    match = re.search(r'\[ACTION:(\w+):([^\]]*)\]', reply)
-    if match:
-        action_type = match.group(1)
-        action_param = match.group(2)
-        action = {"type": action_type, "param": action_param}
-        clean = re.sub(r'\[ACTION:[^\]]*\]', '', reply).strip()
-
-    return {
-        "message": clean,
-        "action": action,
-        "tokens_used": usage.input_tokens + usage.output_tokens if usage else 0
-    }

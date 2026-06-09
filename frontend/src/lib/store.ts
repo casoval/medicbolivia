@@ -1,6 +1,4 @@
 // src/lib/store.ts
-// Estado global con Zustand: autenticación y usuario actual
-
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User } from '@/types'
@@ -11,8 +9,6 @@ interface AuthState {
   token: string | null
   isAuthenticated: boolean
   isLoading: boolean
-
-  // Acciones
   login: (phone: string, password: string) => Promise<void>
   logout: () => void
   loadUser: () => Promise<void>
@@ -65,21 +61,28 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'mb-auth',
-      // Solo persistir el token, nunca datos sensibles completos
       partialize: (state) => ({ token: state.token }),
     }
   )
 )
 
 // ── Store del agente IA ──────────────────────────────
+interface AgentMessage {
+  role: 'user' | 'agent'
+  text: string
+  timestamp: Date
+  audioBase64?: string   // audio de respuesta del agente (Google TTS)
+  isVoice?: boolean      // true si el usuario envió un mensaje de voz
+}
+
 interface AgentState {
   sessionId: string | null
-  messages: { role: 'user' | 'agent'; text: string; timestamp: Date }[]
+  messages: AgentMessage[]
   isTyping: boolean
   availableProfessionals: any[]
 
   setSessionId: (id: string) => void
-  addMessage: (role: 'user' | 'agent', text: string) => void
+  addMessage: (role: 'user' | 'agent', text: string, audioBase64?: string, isVoice?: boolean) => void
   setTyping: (v: boolean) => void
   setAvailableProfessionals: (pros: any[]) => void
   clearSession: () => void
@@ -92,10 +95,15 @@ export const useAgentStore = create<AgentState>((set) => ({
   availableProfessionals: [],
 
   setSessionId: (id) => set({ sessionId: id }),
-  addMessage: (role, text) =>
+
+  addMessage: (role, text, audioBase64, isVoice) =>
     set((state) => ({
-      messages: [...state.messages, { role, text, timestamp: new Date() }],
+      messages: [
+        ...state.messages,
+        { role, text, timestamp: new Date(), audioBase64, isVoice }
+      ],
     })),
+
   setTyping: (v) => set({ isTyping: v }),
   setAvailableProfessionals: (pros) => set({ availableProfessionals: pros }),
   clearSession: () => set({ sessionId: null, messages: [], availableProfessionals: [] }),

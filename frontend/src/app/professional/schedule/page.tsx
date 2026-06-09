@@ -1,12 +1,11 @@
 'use client'
 // src/app/professional/schedule/page.tsx
-// Horarios con rangos de tiempo + precios con opciones activables
 
-import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Alert, SectionTitle } from '@/components/ui'
 import { professionalsAPI, getErrorMessage } from '@/lib/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 const IconGrid  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
 const IconUsers = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
@@ -27,7 +26,6 @@ const NAV = [
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const SLOT_DURATIONS = [15, 20, 30, 45, 60]
 
-// Genera slots de tiempo según la duración elegida
 function generateTimeSlots(durationMin: number): string[] {
   const slots: string[] = []
   for (let h = 7; h < 21; h++) {
@@ -91,22 +89,40 @@ function Toggle({ on, onChange, disabled }: { on: boolean; onChange?: (v: boolea
 export default function SchedulePage() {
   const [success, setSuccess] = useState('')
   const [error, setError]     = useState('')
+  const [initialized, setInitialized] = useState(false)
 
   // ── Disponibilidad ───────────────────────────────
   const [availMode, setAvailMode] = useState<'ONLINE_NOW' | 'SCHEDULED_ONLY' | 'OFFLINE'>('OFFLINE')
 
   // ── Precios ──────────────────────────────────────
-  const [priceGeneral, setPriceGeneral]     = useState(100)
-  const [priceUrgent, setPriceUrgent]       = useState(150)
-  const [priceFollowUp, setPriceFollowUp]   = useState(80)
-  const [urgentEnabled, setUrgentEnabled]   = useState(false)
+  const [priceGeneral, setPriceGeneral]       = useState(100)
+  const [priceUrgent, setPriceUrgent]         = useState(150)
+  const [priceFollowUp, setPriceFollowUp]     = useState(80)
+  const [urgentEnabled, setUrgentEnabled]     = useState(false)
   const [followUpEnabled, setFollowUpEnabled] = useState(false)
 
   // ── Horario ──────────────────────────────────────
   const [duration, setDuration] = useState(30)
   const [grid, setGrid]         = useState<SlotGrid>(() => buildGrid(30))
 
-  // Cuando cambia la duración, regenerar la grilla
+  // ── Cargar datos actuales desde la API ───────────
+  const { data: myProfile } = useQuery({
+    queryKey: ['professional-me'],
+    queryFn: () => professionalsAPI.getMyProfile(),
+    retry: false,
+    staleTime: 0,
+  })
+
+  // Cuando llegan los datos, sincronizar el estado local (solo una vez)
+  useEffect(() => {
+    if (!myProfile || initialized) return
+    if (myProfile.availability) setAvailMode(myProfile.availability)
+    if (myProfile.price_general) setPriceGeneral(myProfile.price_general)
+    if (myProfile.price_urgent    && myProfile.price_urgent    > 0) { setPriceUrgent(myProfile.price_urgent);     setUrgentEnabled(true)   }
+    if (myProfile.price_follow_up && myProfile.price_follow_up > 0) { setPriceFollowUp(myProfile.price_follow_up); setFollowUpEnabled(true) }
+    setInitialized(true)
+  }, [myProfile, initialized])
+
   function handleDurationChange(newDur: number) {
     setDuration(newDur)
     setGrid(buildGrid(newDur))
@@ -117,27 +133,46 @@ export default function SchedulePage() {
     setGrid((prev) => ({ ...prev, [key]: SLOT_NEXT[prev[key]] }))
   }
 
+  const queryClient = useQueryClient()
+
   const availMutation = useMutation({
-    mutationFn: (mode: string) => professionalsAPI.updateAvailability(mode),
-    onSuccess: (_, mode) => {
-      setAvailMode(mode as any)
-      setSuccess('Disponibilidad actualizada')
-      setTimeout(() => setSuccess(''), 2500)
+      mutationFn: (mode: string) => professionalsAPI.updateAvailability(mode),
+      onSuccess: (data, mode) => {
+        setAvailMode(mode as any)
+        queryClient.setQueryData(['professional-me'], (old: any) => ({
+          ...old,
+          availability: mode,
+        }))
+        setSuccess('Disponibilidad actualizada')
+        setError('')
+        setTimeout(() => setSuccess(''), 2500)
+      },
+    onError: (err) => {
+      setError(getErrorMessage(err))
+      setTimeout(() => setError(''), 4000)
     },
-    onError: (err) => setError(getErrorMessage(err)),
   })
 
   const priceMutation = useMutation({
     mutationFn: () => professionalsAPI.updatePrices({
-      price_general: priceGeneral,
-      price_urgent:  urgentEnabled  ? priceUrgent  : undefined,
-      price_follow_up: followUpEnabled ? priceFollowUp : undefined,
+      price_general:   priceGeneral,
+      price_urgent:    urgentEnabled   ? priceUrgent   : 0,
+      price_follow_up: followUpEnabled ? priceFollowUp : 0,
     }),
     onSuccess: () => {
+      queryClient.setQueryData(['professional-me'], (old: any) => ({
+        ...old,
+        price_urgent:    urgentEnabled   ? priceUrgent   : 0,
+        price_follow_up: followUpEnabled ? priceFollowUp : 0,
+      }))
       setSuccess('Precios guardados correctamente')
+      setError('')
       setTimeout(() => setSuccess(''), 2500)
     },
-    onError: (err) => setError(getErrorMessage(err)),
+    onError: (err) => {
+      setError(getErrorMessage(err))
+      setTimeout(() => setError(''), 4000)
+    },
   })
 
   const timeSlots = generateTimeSlots(duration)
@@ -180,8 +215,11 @@ export default function SchedulePage() {
                   <p className="text-sm font-medium">{label}</p>
                   <p className="text-xs text-[#6B738A]">{desc}</p>
                 </div>
-                {availMode === mode && (
+                {availMutation.isPending && availMode !== mode ? null : availMode === mode && (
                   <span className="ml-auto text-xs font-medium text-[#0F6E56] bg-[#E1F5EE] px-2 py-0.5 rounded-full">Activo</span>
+                )}
+                {availMutation.isPending && (
+                  <span className="ml-auto text-xs text-[#A0A8BF]">Guardando...</span>
                 )}
               </button>
             ))}
@@ -192,7 +230,6 @@ export default function SchedulePage() {
         <div className="card mb-4">
           <SectionTitle>Precios de consulta (Bs.)</SectionTitle>
 
-          {/* Consulta general — OBLIGATORIA */}
           <div className="flex items-center gap-4 py-3 border-b border-[#DDE1EE]">
             <div className="flex-1">
               <p className="text-sm font-medium">Consulta general</p>
@@ -207,7 +244,6 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* Consulta urgente — OPCIONAL */}
           <div className={`flex items-center gap-4 py-3 border-b border-[#DDE1EE] transition-opacity ${!urgentEnabled ? 'opacity-60' : ''}`}>
             <div className="flex-1">
               <p className="text-sm font-medium">Consulta urgente</p>
@@ -227,7 +263,6 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* Consulta de control — OPCIONAL */}
           <div className={`flex items-center gap-4 py-3 transition-opacity ${!followUpEnabled ? 'opacity-60' : ''}`}>
             <div className="flex-1">
               <p className="text-sm font-medium">Consulta de control</p>
@@ -265,7 +300,6 @@ export default function SchedulePage() {
             <SectionTitle>Horario semanal</SectionTitle>
           </div>
 
-          {/* Selector de duración de consulta */}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <p className="text-xs font-medium text-[#6B738A] flex-shrink-0">Duración por consulta:</p>
             <div className="flex gap-1.5 flex-wrap">
@@ -296,13 +330,11 @@ export default function SchedulePage() {
               gap: '2px',
               minWidth: '520px'
             }}>
-              {/* Header días */}
               <div />
               {DAYS.map((d, i) => (
                 <div key={i} className="text-center text-xs font-medium text-[#6B738A] py-1.5">{d}</div>
               ))}
 
-              {/* Filas de tiempo */}
               {timeSlots.map((time) => (
                 <>
                   <div key={`t-${time}`} className="text-xs text-[#A0A8BF] flex items-center justify-end pr-1.5 text-right leading-tight">
@@ -324,7 +356,6 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* Leyenda */}
           <div className="flex gap-4 mt-3 flex-wrap">
             {(Object.keys(SLOT_STYLES) as SlotState[]).map((state) => (
               <div key={state} className="flex items-center gap-1.5">

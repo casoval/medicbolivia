@@ -1,7 +1,5 @@
 """
 app/core/config.py
-Configuración central de la aplicación usando Pydantic Settings.
-Lee automáticamente desde el archivo .env
 """
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
@@ -10,64 +8,58 @@ import secrets
 
 
 class Settings(BaseSettings):
-    # ── App ─────────────────────────────────────────
     APP_NAME: str = "MedicBolivia"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
-    ENVIRONMENT: str = "development"  # development | production
+    ENVIRONMENT: str = "development"
 
-    # ── API ─────────────────────────────────────────
     API_V1_PREFIX: str = "/api/v1"
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
-        "https://medicbolivia.bo",
+        "https://medicbolivia.com",
     ]
 
-    # ── Seguridad ────────────────────────────────────
     SECRET_KEY: str = secrets.token_urlsafe(32)
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 días
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
     ALGORITHM: str = "HS256"
 
-    # ── Base de datos PostgreSQL ──────────────────────
     DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5432/medicbolivia"
     DATABASE_URL_SYNC: str = "postgresql://user:password@localhost:5432/medicbolivia"
 
-    # ── Redis ────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379"
 
-    # ── IA — Anthropic ───────────────────────────────
-    ANTHROPIC_API_KEY: str = ""
-    CLAUDE_MODEL: str = "claude-sonnet-4-6"
-    CLAUDE_MAX_TOKENS: int = 1000
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
 
-    # ── IA — ElevenLabs ──────────────────────────────
+    # ── Google Cloud TTS ─────────────────────────────
+    GOOGLE_TTS_API_KEY: str = ""
+    GOOGLE_TTS_VOICE: str = "es-US-Neural2-C"
+    GOOGLE_TTS_LANGUAGE: str = "es-US"
+
+    # ── ElevenLabs (reemplazado por Google TTS) ──────
     ELEVENLABS_API_KEY: str = ""
-    ELEVENLABS_VOICE_ID: str = ""      # ID de la voz del agente "Medi"
+    ELEVENLABS_VOICE_ID: str = ""
     ELEVENLABS_MODEL_ID: str = "eleven_multilingual_v2"
 
-    # ── Twilio (llamadas y SMS) ───────────────────────
+    # ── Twilio ───────────────────────────────────────
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
-    TWILIO_PHONE_NUMBER: str = ""      # Número boliviano o +1 para pruebas
+    TWILIO_PHONE_NUMBER: str = ""
 
-    # ── AWS S3 (documentos médicos) ───────────────────
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_BUCKET_NAME: str = "medicbolivia-docs"
-    AWS_REGION: str = "sa-east-1"      # São Paulo — más cercano a Bolivia
+    AWS_REGION: str = "sa-east-1"
 
-    # ── Pagos QR Bolivia ─────────────────────────────
-    QR_EXPIRY_MINUTES: int = 5         # El QR expira en 5 minutos
-    PLATFORM_FEE_PERCENT: float = 0.15 # 15% comisión de la plataforma
-    PAYMENT_RELEASE_MINUTES: int = 15  # Liberar pago al profesional tras 15 min
+    QR_EXPIRY_MINUTES: int = 5
+    PLATFORM_FEE_PERCENT: float = 0.15
+    PAYMENT_RELEASE_MINUTES: int = 15
 
-    # ── Agente IA ────────────────────────────────────
-    AGENT_WAIT_SECONDS: int = 60       # Espera antes de derivar a otro profesional
-    AGENT_MAX_DERIVATIONS: int = 3     # Máximo de derivaciones por consulta
+    AGENT_WAIT_SECONDS: int = 60
+    AGENT_MAX_DERIVATIONS: int = 3
 
-    # ── Videollamadas (Daily.co) ──────────────────────
     DAILY_API_KEY: str = ""
-    DAILY_DOMAIN: str = ""             # ej: medicbolivia.daily.co
+    DAILY_DOMAIN: str = ""
 
     @field_validator("DATABASE_URL")
     @classmethod
@@ -81,5 +73,4 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
-# Instancia global — importar desde aquí en todo el proyecto
 settings = Settings()

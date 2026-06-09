@@ -12,7 +12,7 @@ bcrypt
 pydantic
 pydantic-settings
 email-validator
-anthropic
+google-genai
 httpx
 boto3
 python-dotenv

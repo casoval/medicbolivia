@@ -1,6 +1,5 @@
 'use client'
 // src/app/patient/search/page.tsx
-// Búsqueda de profesionales con filtros conectada a la API
 
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
@@ -18,34 +17,28 @@ const IconClock  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="n
 const IconFile   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
 
 const NAV = [
-  { label: 'Inicio',        href: '/patient/dashboard',    icon: <IconHome /> },
-  { label: 'Buscar médico', href: '/patient/search',       icon: <IconSearch /> },
-  { label: 'Agente IA',     href: '/patient/agent',        icon: <IconBot /> },
-  { label: 'Sala de espera',href: '/patient/waiting-room', icon: <IconClock /> },
-  { label: 'Mis consultas', href: '/patient/history',      icon: <IconFile /> },
+  { label: 'Inicio',         href: '/patient/dashboard',    icon: <IconHome /> },
+  { label: 'Buscar médico',  href: '/patient/search',       icon: <IconSearch /> },
+  { label: 'Agente IA',      href: '/patient/agent',        icon: <IconBot /> },
+  { label: 'Sala de espera', href: '/patient/waiting-room', icon: <IconClock /> },
+  { label: 'Mis consultas',  href: '/patient/history',      icon: <IconFile /> },
 ]
 
 const SPECIALTIES = [
-  'Todos',
-  'Medicina General',
-  'Cardiología',
-  'Psicología',
-  'Pediatría',
-  'Nutrición',
-  'Ginecología',
-  'Traumatología',
-  'Dermatología',
+  'Todos', 'Medicina General', 'Cardiología', 'Psicología',
+  'Pediatría', 'Nutrición', 'Ginecología', 'Traumatología', 'Dermatología',
 ]
 
 export default function SearchPage() {
   const router = useRouter()
-  const [search, setSearch]         = useState('')
-  const [specialty, setSpecialty]   = useState('Todos')
+  const [search, setSearch]           = useState('')
+  const [specialty, setSpecialty]     = useState('Todos')
   const [availableNow, setAvailableNow] = useState(false)
   const [consultingId, setConsultingId] = useState<string | null>(null)
-  const [error, setError]           = useState('')
+  const [error, setError]             = useState('')
+  const [hasActiveConsultation, setHasActiveConsultation] = useState(false)
+  const [activeConsultationId, setActiveConsultationId]   = useState<string | null>(null)
 
-  // Query de profesionales con filtros
   const { data: professionals = [], isLoading } = useQuery({
     queryKey: ['professionals', specialty, availableNow, search],
     queryFn: () => professionalsAPI.list({
@@ -56,7 +49,6 @@ export default function SearchPage() {
     staleTime: 30_000,
   })
 
-  // Mutación para crear consulta
   const createConsultation = useMutation({
     mutationFn: (pro: Professional) =>
       consultationsAPI.create({
@@ -64,13 +56,26 @@ export default function SearchPage() {
         consultation_type: 'IMMEDIATE',
         specialty: pro.specialty,
       }),
-    onMutate: (pro) => setConsultingId(pro.id),
+    onMutate: (pro) => {
+      setConsultingId(pro.id)
+      setError('')
+      setHasActiveConsultation(false)
+    },
     onSuccess: (res) => {
       router.push(`/patient/waiting-room?consultationId=${res.data.id}`)
     },
-    onError: (err) => {
-      setError(getErrorMessage(err))
+    onError: (err: any) => {
       setConsultingId(null)
+      const detail = err?.response?.data?.detail || ''
+      // Detectar error de consulta activa (409)
+      if (err?.response?.status === 409) {
+        // Extraer el ID del mensaje si viene
+        const match = detail.match(/ID: ([a-f0-9-]+)/)
+        if (match) setActiveConsultationId(match[1])
+        setHasActiveConsultation(true)
+      } else {
+        setError(detail || 'Error al crear la consulta')
+      }
     },
   })
 
@@ -78,23 +83,44 @@ export default function SearchPage() {
     <DashboardLayout navItems={NAV} activeHref="/patient/search" role="PATIENT">
       <div className="max-w-3xl">
 
-        {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div>
             <h1 className="text-base font-semibold">Profesionales disponibles</h1>
             <p className="text-xs text-[#6B738A] mt-0.5">Consulta inmediata o agenda una cita</p>
           </div>
-          <a
-            href="/patient/agent"
-            className="text-xs bg-[#E6F1FB] text-[#185FA5] border border-[#85B7EB] px-3 py-1.5 rounded-lg hover:bg-[#B5D4F4] transition-colors"
-          >
+          <a href="/patient/agent" className="text-xs bg-[#E6F1FB] text-[#185FA5] border border-[#85B7EB] px-3 py-1.5 rounded-lg hover:bg-[#B5D4F4] transition-colors">
             No sé qué especialista →
           </a>
         </div>
 
+        {/* Error genérico */}
         {error && (
           <div className="mb-4">
             <Alert type="error" message={error} />
+          </div>
+        )}
+
+        {/* Banner consulta activa — amigable */}
+        {hasActiveConsultation && (
+          <div className="mb-4 bg-[#FAEEDA] border border-[#FAC775] rounded-xl p-4">
+            <p className="text-sm font-semibold text-[#854F0B] mb-1">Ya tienes una consulta en curso</p>
+            <p className="text-xs text-[#854F0B] mb-3">
+              Debes finalizar o cancelar tu consulta actual antes de iniciar una nueva.
+            </p>
+            <div className="flex gap-2">
+              <a
+                href={activeConsultationId ? `/patient/waiting-room?consultationId=${activeConsultationId}` : '/patient/waiting-room'}
+                className="text-xs bg-[#854F0B] text-white px-3 py-1.5 rounded-lg hover:bg-[#6b3e08] transition-colors"
+              >
+                Ir a mi consulta →
+              </a>
+              <button
+                onClick={() => setHasActiveConsultation(false)}
+                className="text-xs text-[#854F0B] hover:underline"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         )}
 
@@ -111,7 +137,7 @@ export default function SearchPage() {
           </div>
         </div>
 
-        {/* Filtros de especialidad */}
+        {/* Filtros especialidad */}
         <div className="flex gap-2 flex-wrap mb-3">
           {SPECIALTIES.map((sp) => (
             <button
@@ -128,7 +154,7 @@ export default function SearchPage() {
           ))}
         </div>
 
-        {/* Toggle disponibles ahora */}
+        {/* Toggle disponibles */}
         <div className="flex items-center gap-2 mb-4">
           <button
             onClick={() => setAvailableNow(!availableNow)}

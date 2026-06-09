@@ -5,7 +5,7 @@ Maneja generación de QR, confirmación de pago vía webhook y liberación al pr
 """
 import uuid
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from loguru import logger
 
