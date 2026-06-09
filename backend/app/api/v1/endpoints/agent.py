@@ -339,3 +339,33 @@ async def get_history(
 ):
     history = get_conversation_history(session_id)
     return {"session_id": session_id, "messages": history, "count": len(history)}
+
+# ── POST /api/v1/agent/vapi-tts ─────────────────────
+@router.post(
+    "/vapi-tts",
+    summary="TTS para Vapi (sin autenticación)"
+)
+async def vapi_tts(request: dict):
+    """
+    Endpoint TTS compatible con Vapi Custom Voice.
+    Vapi envía: {"message": {"content": "texto a convertir"}}
+    Retorna: audio MP3 en base64
+    """
+    try:
+        text = request.get("message", {}).get("content", "")
+        if not text:
+            raise HTTPException(status_code=400, detail="No text provided")
+
+        audio_b64 = await _text_to_speech(text)
+        if not audio_b64:
+            raise HTTPException(status_code=500, detail="TTS failed")
+
+        # Decodificar base64 y devolver audio binario
+        import base64
+        audio_bytes = base64.b64decode(audio_b64)
+        
+        from fastapi.responses import Response
+        return Response(content=audio_bytes, media_type="audio/mpeg")
+    except Exception as e:
+        logger.error(f"Vapi TTS error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
