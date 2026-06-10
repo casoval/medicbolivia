@@ -354,12 +354,15 @@ async def vapi_tts(request: Request):
         body = await request.json()
         logger.info(f"Vapi TTS body: {body}")
 
-        # Vapi envía el texto en body["text"] directamente (voice-request)
-        text = body.get("text", "")
-        if not text and isinstance(body.get("message"), dict):
-            text = body["message"].get("content", "")
-        if not text and isinstance(body.get("message"), str):
-            text = body["message"]
+        # Vapi envía el texto dentro de body["message"]["text"]
+        msg = body.get("message", {})
+        text = ""
+        if isinstance(msg, dict):
+            text = msg.get("text", "") or msg.get("content", "")
+        elif isinstance(msg, str):
+            text = msg
+        if not text:
+            text = body.get("text", "")
 
         if not text:
             raise HTTPException(status_code=400, detail="No text provided")
