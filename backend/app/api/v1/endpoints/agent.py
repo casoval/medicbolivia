@@ -60,6 +60,20 @@ async def _search_professionals(db: AsyncSession, specialty: str) -> list:
     return [ProfessionalPublicResponse.model_validate(p) for p in profs[:5]]
 
 
+# Cliente HTTP persistente para Google TTS (evita reconexión TCP/TLS por cada llamada)
+_tts_client: httpx.AsyncClient | None = None
+
+async def _get_tts_client() -> httpx.AsyncClient:
+    global _tts_client
+    if _tts_client is None or _tts_client.is_closed:
+        _tts_client = httpx.AsyncClient(
+            timeout=10.0,
+            http2=True,  # HTTP/2 reduce latencia
+            limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30)
+        )
+    return _tts_client
+
+
 async def _text_to_speech(text: str) -> str | None:
     """
     Convierte texto a audio usando Google Cloud TTS Neural2.
@@ -97,14 +111,14 @@ async def _text_to_speech(text: str) -> str | None:
     }
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(url, json=payload)
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("audioContent")  # ya viene en base64
-            else:
-                logger.warning(f"Google TTS error {response.status_code}: {response.text}")
-                return None
+        client = await _get_tts_client()
+        response = await client.post(url, json=payload)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("audioContent")  # ya viene en base64
+        else:
+            logger.warning(f"Google TTS error {response.status_code}: {response.text}")
+            return None
     except Exception as e:
         logger.error(f"Google TTS exception: {e}")
         return None
@@ -375,7 +389,7 @@ async def vapi_tts(request: Request):
         audio_bytes = base64.b64decode(audio_b64)
         
         from fastapi.responses import Response
-        return Response(content=audio_bytes, media_type="audio/wav")
+        return Response(content=audio_bytes, media_type="audio/mpeg")
     except Exception as e:
         logger.error(f"Vapi TTS error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
