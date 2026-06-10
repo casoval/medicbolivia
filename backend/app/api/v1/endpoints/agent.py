@@ -5,7 +5,7 @@ Endpoints del agente IA: chat, onboarding, historial, TTS, voice-chat.
 import uuid
 import base64
 import httpx
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -369,3 +369,72 @@ async def vapi_tts(request: dict):
     except Exception as e:
         logger.error(f"Vapi TTS error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ── POST /api/v1/agent/vapi-llm/chat/completions ────
+from fastapi.responses import StreamingResponse
+import json
+
+@router.post("/vapi-llm/chat/completions")
+async def vapi_llm_completions(request: Request):
+    from google import genai as genai_client
+    from google.genai import types as genai_types
+
+    body = await request.json()
+    messages = body.get("messages", [])
+    stream = body.get("stream", False)
+
+    system_prompt = ""
+    last_user_msg = ""
+
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if role == "system":
+            system_prompt = content
+        elif role == "user":
+            last_user_msg = content
+
+    client = genai_client.Client(api_key=settings.GEMINI_API_KEY)
+
+    if stream:
+        async def generate():
+            try:
+                response = client.models.generate_content_stream(
+                    model="gemini-2.5-flash",
+                    contents=last_user_msg,
+                    config=genai_types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                    )
+                )
+                for chunk in response:
+                    text = chunk.text if hasattr(chunk, 'text') and chunk.text else ""
+                    if text:
+                        data = {
+                            "id": "chatcmpl-vapi",
+                            "object": "chat.completion.chunk",
+                            "choices": [{"delta": {"content": text}, "index": 0, "finish_reason": None}]
+                        }
+                        yield f"data: {json.dumps(data)}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                logger.error(f"Vapi LLM stream error: {e}")
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(generate(), media_type="text/event-stream")
+    else:
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=last_user_msg,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                )
+            )
+            return {
+                "id": "chatcmpl-vapi",
+                "object": "chat.completion",
+                "choices": [{"message": {"role": "assistant", "content": response.text}, "index": 0, "finish_reason": "stop"}]
+            }
+        except Exception as e:
+            logger.error(f"Vapi LLM error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
