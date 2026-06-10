@@ -89,9 +89,10 @@ async def _text_to_speech(text: str) -> str | None:
             "ssmlGender": "MALE"
         },
         "audioConfig": {
-            "audioEncoding": "MP3",
+            "audioEncoding": "LINEAR16",
             "speakingRate": 1.0,
             "pitch": 0.0,
+            "sampleRateHertz": 16000,
         }
     }
 
@@ -374,7 +375,7 @@ async def vapi_tts(request: Request):
         audio_bytes = base64.b64decode(audio_b64)
         
         from fastapi.responses import Response
-        return Response(content=audio_bytes, media_type="audio/mpeg")
+        return Response(content=audio_bytes, media_type="audio/wav")
     except Exception as e:
         logger.error(f"Vapi TTS error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
