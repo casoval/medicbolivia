@@ -9,19 +9,20 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@hookform/resolvers": "^3.6.0",
+    "@tanstack/react-query": "^5.45.0",
+    "@vapi-ai/web": "^2.5.2",
+    "axios": "^1.7.2",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "lucide-react": "^0.400.0",
     "next": "14.2.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "@tanstack/react-query": "^5.45.0",
-    "axios": "^1.7.2",
-    "zustand": "^4.5.2",
     "react-hook-form": "^7.52.0",
-    "zod": "^3.23.8",
-    "@hookform/resolvers": "^3.6.0",
-    "clsx": "^2.1.1",
     "tailwind-merge": "^2.3.0",
-    "lucide-react": "^0.400.0",
-    "date-fns": "^3.6.0"
+    "zod": "^3.23.8",
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
     "@types/node": "^20.14.2",

@@ -31,6 +31,9 @@ const QUICK_REPLIES = [
   'Dolor en la espalda',
 ]
 
+const VAPI_PUBLIC_KEY = 'c2254888-a3e4-4cb4-b3d6-4c6fd4587aa3' // ← reemplazar
+const VAPI_ASSISTANT_ID = 'c4486bba-1e29-44be-b3df-1149a6fef00d'
+
 // ── Reproductor de audio estilo WhatsApp ─────────────
 function AudioBubble({ audioBase64, isUser }: { audioBase64: string; isUser: boolean }) {
   const [playing, setPlaying] = useState(false)
@@ -94,7 +97,6 @@ function AudioBubble({ audioBase64, isUser }: { audioBase64: string; isUser: boo
 
   return (
     <div className="flex items-center gap-2 min-w-[180px]">
-      {/* Botón play/pause */}
       <button
         onClick={togglePlay}
         className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${c.btn}`}
@@ -110,9 +112,7 @@ function AudioBubble({ audioBase64, isUser }: { audioBase64: string; isUser: boo
         )}
       </button>
 
-      {/* Onda + barra de progreso */}
       <div className="flex-1 flex flex-col gap-1">
-        {/* Onda animada estilo WhatsApp */}
         <div className="flex items-center gap-[2px] h-5">
           {Array.from({ length: 20 }).map((_, i) => {
             const filled = progress > (i / 20) * 100
@@ -126,7 +126,6 @@ function AudioBubble({ audioBase64, isUser }: { audioBase64: string; isUser: boo
             )
           })}
         </div>
-        {/* Tiempo */}
         <span className={`text-[10px] ${c.time}`}>
           {playing ? formatTime(currentTime) : formatTime(duration)}
         </span>
@@ -180,9 +179,13 @@ export default function AgentPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const holdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Llamada Vapi
+  const [callStatus, setCallStatus] = useState<'idle' | 'connecting' | 'active'>('idle')
+  const vapiRef = useRef<any>(null)
+
   useEffect(() => {
     if (messages.length === 0) {
-      addMessage('agent', '¡Hola! Soy Medi, tu agente de orientación médica de MedicBolivia. Cuéntame, ¿cómo te sientes hoy? Puedes escribirme o enviarme un mensaje de voz 🎤')
+      addMessage('agent', '¡Hola! Soy Medi, tu agente de orientación médica de MedicBolivia. Cuéntame, ¿cómo te sientes hoy? Puedes escribirme, enviarme un mensaje de voz 🎤 o hacer una llamada 📞')
     }
   }, [])
 
@@ -190,9 +193,52 @@ export default function AgentPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
+  // ── Llamada Vapi ─────────────────────────────────
+  async function startCall() {
+    if (callStatus !== 'idle') return
+    setCallStatus('connecting')
+
+    try {
+      // Carga dinámica del SDK de Vapi
+      const { default: Vapi } = await import('@vapi-ai/web')
+      const vapi = new Vapi(VAPI_PUBLIC_KEY)
+      vapiRef.current = vapi
+
+      vapi.on('call-start', () => {
+        setCallStatus('active')
+        addMessage('agent', '📞 Llamada iniciada. Ahora puedes hablar directamente con Medi.')
+      })
+
+      vapi.on('call-end', () => {
+        setCallStatus('idle')
+        vapiRef.current = null
+        addMessage('agent', '📞 Llamada finalizada. ¿Hay algo más en lo que pueda ayudarte?')
+      })
+
+      vapi.on('error', (e: any) => {
+        console.error('Vapi error:', e)
+        setCallStatus('idle')
+        vapiRef.current = null
+        addMessage('agent', 'No se pudo iniciar la llamada. Verifica tu micrófono y vuelve a intentar.')
+      })
+
+      await vapi.start(VAPI_ASSISTANT_ID)
+    } catch (err) {
+      console.error('Vapi load error:', err)
+      setCallStatus('idle')
+      addMessage('agent', 'No se pudo cargar el servicio de llamadas. Intenta de nuevo.')
+    }
+  }
+
+  function endCall() {
+    if (vapiRef.current) {
+      vapiRef.current.stop()
+    }
+    setCallStatus('idle')
+  }
+
   // ── Grabación: mantener presionado ───────────────
   function onMicPointerDown() {
-    // Pequeño delay para distinguir tap de hold
     holdTimeoutRef.current = setTimeout(() => startRecording(), 150)
   }
 
@@ -238,7 +284,7 @@ export default function AgentPage() {
 
   function stopRecording() {
     if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.requestData() // ← fuerza flush de datos
+      mediaRecorderRef.current.requestData()
       mediaRecorderRef.current.stop()
     }
     setIsRecording(false)
@@ -250,7 +296,6 @@ export default function AgentPage() {
     setProcessingVoice(true)
     setTyping(true)
 
-    // Convertir blob a base64 para mostrar la burbuja de audio del usuario
     const userAudioB64 = await new Promise<string>((resolve) => {
       const reader = new FileReader()
       reader.onload = () => {
@@ -273,7 +318,6 @@ export default function AgentPage() {
 
       if (!sessionId) setSessionId(session_id)
 
-      // Si el backend devuelve audio → burbuja de voz; si no → texto
       if (audio_base64) {
         addMessage('agent', message, audio_base64, true)
       } else {
@@ -301,7 +345,7 @@ export default function AgentPage() {
       const { session_id, message, action, available_professionals } = res.data
 
       if (!sessionId) setSessionId(session_id)
-      addMessage('agent', message)  // texto plano — sin audio
+      addMessage('agent', message)
 
       if (available_professionals && available_professionals.length > 0) {
         setAvailableProfessionals(available_professionals)
@@ -360,8 +404,47 @@ export default function AgentPage() {
                 <p className="text-xs text-[#22C27A]">En línea</p>
               </div>
             </div>
-            <span className="ml-auto badge-red">No diagnostica</span>
+
+            {/* Botón de llamada Vapi */}
+            <div className="ml-auto flex items-center gap-2">
+              {callStatus === 'active' ? (
+                <button
+                  onClick={endCall}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#E24B4A] text-white rounded-full text-xs font-medium hover:bg-red-600 transition-colors animate-pulse"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
+                  </svg>
+                  Colgar
+                </button>
+              ) : callStatus === 'connecting' ? (
+                <button disabled className="flex items-center gap-1.5 px-3 py-1.5 bg-[#6B738A] text-white rounded-full text-xs font-medium">
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  Conectando...
+                </button>
+              ) : (
+                <button
+                  onClick={startCall}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#22C27A] text-white rounded-full text-xs font-medium hover:bg-green-600 transition-colors"
+                  title="Hablar con Medi por llamada"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
+                  </svg>
+                  Llamar a Medi
+                </button>
+              )}
+              <span className="badge-red">No diagnostica</span>
+            </div>
           </div>
+
+          {/* Llamada activa — indicador visual */}
+          {callStatus === 'active' && (
+            <div className="px-4 py-2 bg-[#E8F8F0] border-b border-[#22C27A]/30 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#22C27A] animate-pulse flex-shrink-0" />
+              <span className="text-xs text-[#15803d] font-medium">Llamada activa — Medi te está escuchando</span>
+            </div>
+          )}
 
           {/* Mensajes */}
           <div className="flex-1 overflow-y-auto p-4 bg-[#F5F6FA] flex flex-col gap-3">
@@ -372,7 +455,6 @@ export default function AgentPage() {
                     ? 'bg-[#185FA5] text-white rounded-br-sm'
                     : 'bg-white border border-[#DDE1EE] text-[#141820] rounded-bl-sm'
                 }`}>
-                  {/* Burbuja de voz */}
                   {msg.isVoice && msg.audioBase64 ? (
                     <AudioBubble audioBase64={msg.audioBase64} isUser={msg.role === 'user'} />
                   ) : (
@@ -382,7 +464,6 @@ export default function AgentPage() {
               </div>
             ))}
 
-            {/* Typing / procesando voz */}
             {(isTyping || processingVoice) && (
               <div className="flex justify-start">
                 <div className="bg-white border border-[#DDE1EE] px-3.5 py-2.5 rounded-xl rounded-bl-sm flex gap-1 items-center">
@@ -394,7 +475,6 @@ export default function AgentPage() {
               </div>
             )}
 
-            {/* Profesionales */}
             {availableProfessionals.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs text-[#6B738A] font-medium">Profesionales disponibles ahora:</p>
@@ -425,7 +505,6 @@ export default function AgentPage() {
           {/* Input + micrófono */}
           <div className="px-3 py-2.5 bg-white border-t border-[#DDE1EE] flex gap-2 items-center">
 
-            {/* Grabando — muestra indicador y botón soltar */}
             {isRecording ? (
               <>
                 <div className="flex-1 flex items-center gap-3 bg-[#FCEBEB] border border-[#F09595] rounded-full px-4 py-2">
@@ -446,17 +525,15 @@ export default function AgentPage() {
               </>
             ) : (
               <>
-                {/* Input de texto */}
                 <input
                   className="flex-1 px-3.5 py-2 border border-[#DDE1EE] rounded-full text-sm bg-[#F5F6FA] focus:outline-none focus:border-[#185FA5] text-[#141820] placeholder-[#A0A8BF]"
                   placeholder="Escribe o mantén 🎤 para grabar..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                  disabled={isTyping || processingVoice || creatingConsultation}
+                  disabled={isTyping || processingVoice || creatingConsultation || callStatus === 'active'}
                 />
 
-                {/* Botón enviar texto (si hay texto) o micrófono (si está vacío) */}
                 {input.trim() ? (
                   <button
                     onClick={() => sendMessage()}
@@ -472,7 +549,7 @@ export default function AgentPage() {
                     onPointerDown={onMicPointerDown}
                     onPointerUp={onMicPointerUp}
                     onPointerLeave={onMicPointerUp}
-                    disabled={isTyping || processingVoice || creatingConsultation}
+                    disabled={isTyping || processingVoice || creatingConsultation || callStatus === 'active'}
                     className="w-10 h-10 rounded-full bg-[#185FA5] text-white flex items-center justify-center hover:bg-[#0C447C] active:bg-[#E24B4A] active:scale-110 transition-all disabled:opacity-50 flex-shrink-0 select-none"
                     title="Mantén presionado para grabar"
                   >
