@@ -345,14 +345,24 @@ async def get_history(
     "/vapi-tts",
     summary="TTS para Vapi (sin autenticación)"
 )
-async def vapi_tts(request: dict):
+async def vapi_tts(request: Request):
     """
     Endpoint TTS compatible con Vapi Custom Voice.
-    Vapi envía: {"message": {"content": "texto a convertir"}}
-    Retorna: audio MP3 en base64
+    Retorna: audio MP3 binario
     """
     try:
-        text = request.get("message", {}).get("content", "")
+        body = await request.json()
+        logger.info(f"Vapi TTS body: {body}")
+
+        # Vapi puede enviar el texto en varios formatos
+        text = ""
+        if isinstance(body.get("message"), dict):
+            text = body["message"].get("content", "")
+        elif isinstance(body.get("message"), str):
+            text = body["message"]
+        elif isinstance(body.get("text"), str):
+            text = body["text"]
+
         if not text:
             raise HTTPException(status_code=400, detail="No text provided")
 
@@ -360,8 +370,6 @@ async def vapi_tts(request: dict):
         if not audio_b64:
             raise HTTPException(status_code=500, detail="TTS failed")
 
-        # Decodificar base64 y devolver audio binario
-        import base64
         audio_bytes = base64.b64decode(audio_b64)
         
         from fastapi.responses import Response
