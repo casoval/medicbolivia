@@ -56,17 +56,22 @@ export function PhoneInput({ value, onChange, required, placeholder = '72345678'
       <select
         value={countryCode}
         onChange={handleCountryChange}
-        className="input w-[150px] sm:w-[172px] flex-shrink-0"
+        className="input w-[104px] flex-shrink-0"
         aria-label="Código de país"
       >
         {COUNTRY_CODES.map((c) => (
           // El `code` (código de marcado) no es único por sí solo —
           // varios países comparten el mismo código (+1 para EEUU,
           // Canadá, República Dominicana, Puerto Rico) — así que la key
-          // de React combina code+name aunque el `value` siga siendo
+          // de React combina code+iso aunque el `value` siga siendo
           // solo el código (es lo único que le importa al backend).
-          <option key={`${c.code}-${c.name}`} value={c.code}>
-            {c.flag} {c.name} +{c.code}
+          //
+          // Se muestra bandera + iniciales ISO (ej. "🇧🇴 BO +591") en vez
+          // del nombre completo del país: así el selector queda angosto
+          // y prolijo, como en la mayoría de los sitios (Stripe, WhatsApp,
+          // etc.), sin cortar texto ni empujar el input de al lado.
+          <option key={`${c.code}-${c.iso}`} value={c.code} title={c.name}>
+            {c.flag} {c.iso} +{c.code}
           </option>
         ))}
       </select>
