@@ -1,0 +1,19 @@
+{
+  "name": "medicbolivia-whatsapp-service",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Microservicio que mantiene la sesión de WhatsApp (whatsapp-web.js, no oficial) y hace de puente entre el número real y el backend FastAPI de MedicBolivia. Migrado desde Baileys en julio 2026 por el problema de resolución de identificadores @lid.",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.34.6",
+    "express": "^4.19.2",
+    "pino": "^9.2.0",
+    "qrcode": "^1.5.3",
+    "dotenv": "^16.4.5"
+  }
+}

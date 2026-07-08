@@ -1,0 +1,694 @@
+'use client'
+// src/app/admin/professionals/page.tsx — con filtro ciudad, contadores en tabs, mas datos y documentos de verificación
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { ADMIN_NAV as NAV } from '@/lib/nav'
+import { StatusBadge, LoadingScreen, Alert } from '@/components/ui'
+import { api, getErrorMessage } from '@/lib/api'
+import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
+
+const DEPARTMENTS = ['Todos','La Paz','Santa Cruz','Cochabamba','Oruro','Potosi','Tarija','Beni','Pando','Chuquisaca']
+
+const DOC_LABELS: Record<string, string> = {
+  CI_FRONT: 'Cédula (frente)',
+  CI_BACK: 'Cédula (dorso)',
+  PROFESSIONAL_TITLE: 'Título profesional',
+  ACADEMIC_DIPLOMA: 'Diploma académico',
+  HEALTH_MINISTRY: 'Registro Min. Salud',
+  SEDES_REGISTRATION: 'Registro SEDES',
+  CMB_MATRICULA: 'Matrícula CMB',
+  SPECIALTY_CERT: 'Respaldo de Especialidad y/o Subespecialidad',
+  SELFIE_WITH_CI: 'Selfie con cédula',
+}
+
+const REQUIRED_DOC_TYPES = ['CI_FRONT', 'CI_BACK', 'PROFESSIONAL_TITLE', 'SEDES_REGISTRATION', 'CMB_MATRICULA', 'SPECIALTY_CERT']
+
+interface ProfessionalDocItem {
+  id: string
+  doc_type: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  url: string
+  review_note?: string | null
+  reviewed_at?: string | null
+  created_at: string
+}
+
+function isPdfUrl(url: string): boolean {
+  return url.toLowerCase().split('?')[0].endsWith('.pdf')
+}
+
+interface DocCounts {
+  pending: number
+  approved: number
+  rejected: number
+  total: number
+}
+
+interface PenaltyBreakdown {
+  no_show: number
+  immediate_rejected: number
+  late_cancel: number
+  missing_clinical_note: number
+  low_rating: number
+}
+
+interface PenaltyInfo {
+  score: number
+  color: 'yellow' | 'orange' | 'red' | null
+  breakdown: PenaltyBreakdown
+  since: string | null   // null = cuenta todo el historial; si no, fecha del último reset
+}
+
+const PENALTY_META: Record<'yellow' | 'orange' | 'red', { label: string; dot: string; badge: string }> = {
+  yellow: { label: 'Leve',     dot: 'bg-[#EAB308]', badge: 'bg-[#FEF9E7] text-[#8A6D0B] border-[#F0D88A]' },
+  orange: { label: 'Moderado', dot: 'bg-[#F97316]', badge: 'bg-[#FFF1E6] text-[#9A4E13] border-[#F5B885]' },
+  red:    { label: 'Grave',    dot: 'bg-[#DC2626]', badge: 'bg-[#FCEBEB] text-[#A32D2D] border-[#F09595]' },
+}
+
+const PENALTY_LABELS: Record<keyof PenaltyBreakdown, string> = {
+  no_show:               'Inasistencias a consultas programadas',
+  immediate_rejected:    'Consultas inmediatas rechazadas o expiradas',
+  late_cancel:           'Cancelaciones tardías con reembolso',
+  missing_clinical_note: 'Consultas sin historia clínica',
+  low_rating:            'Calificaciones de 1-2 estrellas',
+}
+
+interface Professional {
+  id: string; name: string; specialty: string; status: string; availability: string
+  rating: number; total_ratings: number; total_consultations: number; created_at: string
+  bio?: string; languages?: string[]; years_experience?: number; cmb_matricula?: string
+  sedes_number?: string; price_general?: number; price_urgent?: number; price_follow_up?: number
+  phone?: string; email?: string; ci?: string; birth_date?: string; department?: string; gender?: string
+  user_status?: string; photo_url?: string | null; sub_specialties?: string[]; doc_counts?: DocCounts
+  penalty?: PenaltyInfo
+}
+
+function getAge(birthDate?: string): number | null {
+  if (!birthDate) return null
+  return Math.floor((Date.now() - new Date(birthDate).getTime()) / (365.25*24*60*60*1000))
+}
+
+function DocBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    PENDING:  'bg-[#FEF3E0] text-[#854F0B] border-[#F2D49A]',
+    APPROVED: 'bg-[#E1F5EE] text-[#0F6E56] border-[#9FE1CB]',
+    REJECTED: 'bg-[#FCEBEB] text-[#A32D2D] border-[#F09595]',
+  }
+  const text: Record<string, string> = { PENDING: 'Pendiente', APPROVED: 'Aprobado', REJECTED: 'Rechazado' }
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${map[status] || map.PENDING}`}>
+      {text[status] || status}
+    </span>
+  )
+}
+
+function isRecentlyUploaded(createdAt: string): boolean {
+  const hoursSince = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60)
+  return hoursSince < 24
+}
+
+function DocThumbnail({ doc, onExpand, onReview, reviewing }: {
+  doc: ProfessionalDocItem
+  onExpand: () => void
+  onReview: (status: 'APPROVED' | 'REJECTED') => void
+  reviewing: boolean
+}) {
+  const pdf = isPdfUrl(doc.url)
+  const isNew = doc.status === 'PENDING' && isRecentlyUploaded(doc.created_at)
+  return (
+    <div className={`border rounded-xl p-2.5 flex flex-col gap-2 relative ${
+      isNew ? 'border-[#185FA5] ring-1 ring-[#85B7EB]' : 'border-[#DDE1EE]'
+    }`}>
+      {isNew && (
+        <span className="absolute -top-2 -right-2 bg-[#185FA5] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+          Nuevo
+        </span>
+      )}
+      <button
+        onClick={onExpand}
+        className="w-full h-24 rounded-lg overflow-hidden bg-[#F5F6FA] flex items-center justify-center group relative"
+      >
+        {pdf ? (
+          <div className="flex flex-col items-center gap-1 text-[#6B738A]">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+            <span className="text-[10px] font-medium">PDF</span>
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={doc.url} alt={DOC_LABELS[doc.doc_type] || doc.doc_type} className="w-full h-full object-cover" />
+        )}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+          <span className="opacity-0 group-hover:opacity-100 text-white text-[10px] font-medium transition-opacity">Ver completo</span>
+        </div>
+      </button>
+      <div>
+        <p className="text-xs font-medium leading-tight">{DOC_LABELS[doc.doc_type] || doc.doc_type}</p>
+        <div className="mt-1"><DocBadge status={doc.status} /></div>
+        {doc.status === 'REJECTED' && doc.review_note && (
+          <p className="text-[10px] text-[#A32D2D] mt-1 leading-tight">{doc.review_note}</p>
+        )}
+      </div>
+      {doc.status !== 'APPROVED' && (
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => onReview('APPROVED')}
+            disabled={reviewing}
+            className="flex-1 bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] py-1 rounded-md text-[10px] font-medium disabled:opacity-50"
+          >
+            Aprobar
+          </button>
+          <button
+            onClick={() => onReview('REJECTED')}
+            disabled={reviewing}
+            className="flex-1 bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] py-1 rounded-md text-[10px] font-medium disabled:opacity-50"
+          >
+            Rechazar
+          </button>
+        </div>
+      )}
+      {doc.status === 'APPROVED' && (
+        <button
+          onClick={() => onReview('REJECTED')}
+          disabled={reviewing}
+          className="text-[10px] text-[#A0A8BF] hover:text-[#A32D2D] disabled:opacity-50"
+        >
+          Revertir aprobación
+        </button>
+      )}
+    </div>
+  )
+}
+
+function DocViewerModal({ doc, onClose }: { doc: ProfessionalDocItem; onClose: () => void }) {
+  const pdf = isPdfUrl(doc.url)
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-[#DDE1EE]">
+          <p className="text-sm font-semibold">{DOC_LABELS[doc.doc_type] || doc.doc_type}</p>
+          <button onClick={onClose} className="text-[#6B738A] hover:text-[#141820] text-xl">✕</button>
+        </div>
+        <div className="flex-1 overflow-auto bg-[#F5F6FA] flex items-center justify-center p-4">
+          {pdf ? (
+            <iframe src={doc.url} className="w-full h-[70vh] rounded-lg bg-white" title={doc.doc_type} />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={doc.url} alt={doc.doc_type} className="max-w-full max-h-[70vh] object-contain rounded-lg" />
+          )}
+        </div>
+        <div className="p-3 border-t border-[#DDE1EE] flex justify-end">
+          <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#185FA5] hover:underline">
+            Abrir en pestaña nueva ↗
+          </a>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface PenaltyDetailItem {
+  consultation_id: string
+  date: string
+  patient_name: string
+  reason: keyof PenaltyBreakdown
+  reason_label: string
+  weight: number
+}
+
+function PenaltyDetailSection({ professionalId, penalty }: { professionalId: string; penalty: PenaltyInfo }) {
+  const qc = useQueryClient()
+  const [expanded, setExpanded] = useState(false)
+  const [confirmingReset, setConfirmingReset] = useState(false)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin', 'professionals', professionalId, 'penalty-detail'],
+    queryFn: () => api.get(`/admin/professionals/${professionalId}/penalty-detail`).then(r => r.data as { since: string | null; items: PenaltyDetailItem[] }),
+    enabled: expanded,
+  })
+
+  const resetMutation = useMutation({
+    mutationFn: () => api.post(`/admin/professionals/${professionalId}/reset-penalties`),
+    onSuccess: () => {
+      setConfirmingReset(false)
+      qc.invalidateQueries({ queryKey: ['admin', 'professionals', 'all'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'professionals', professionalId, 'penalty-detail'] })
+    },
+  })
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">
+          Penalizaciones {penalty.since ? `· desde ${new Date(penalty.since).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}` : '· historial completo'}
+        </p>
+      </div>
+
+      <div className={`rounded-xl p-3 border ${PENALTY_META[penalty.color!].badge}`}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-semibold flex items-center gap-1.5">
+            <span className={`w-2.5 h-2.5 rounded-full ${PENALTY_META[penalty.color!].dot}`} />
+            {PENALTY_META[penalty.color!].label}
+          </span>
+          <span className="text-sm font-bold">{penalty.score} pts</span>
+        </div>
+        <ul className="space-y-1 mb-2">
+          {(Object.keys(PENALTY_LABELS) as (keyof PenaltyBreakdown)[])
+            .filter((k) => penalty.breakdown[k] > 0)
+            .map((k) => (
+              <li key={k} className="text-xs flex items-center justify-between">
+                <span>{PENALTY_LABELS[k]}</span>
+                <span className="font-medium">×{penalty.breakdown[k]}</span>
+              </li>
+            ))}
+        </ul>
+
+        <div className="flex items-center gap-2 pt-2 border-t border-black/10">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-xs font-medium underline underline-offset-2 hover:opacity-70"
+          >
+            {expanded ? 'Ocultar detalle' : 'Ver qué consultas la generan'}
+          </button>
+          <span className="flex-1" />
+          {!confirmingReset ? (
+            <button
+              type="button"
+              onClick={() => setConfirmingReset(true)}
+              className="text-xs font-medium px-2.5 py-1 rounded-lg bg-white/70 hover:bg-white transition-colors"
+            >
+              🧹 Limpiar penalizaciones
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs">¿Seguro?</span>
+              <button
+                type="button"
+                onClick={() => resetMutation.mutate()}
+                disabled={resetMutation.isPending}
+                className="text-xs font-medium px-2 py-1 rounded-lg bg-[#0F6E56] text-white hover:bg-[#0B5643] transition-colors"
+              >
+                {resetMutation.isPending ? 'Limpiando...' : 'Sí, limpiar'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingReset(false)}
+                className="text-xs font-medium px-2 py-1 rounded-lg bg-white/70 hover:bg-white transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="mt-2 space-y-1.5 max-h-64 overflow-y-auto">
+          {isLoading && <p className="text-xs text-[#6B738A] text-center py-3">Cargando detalle...</p>}
+          {!isLoading && data?.items.length === 0 && (
+            <p className="text-xs text-[#6B738A] text-center py-3">No hay consultas penalizadas en este período.</p>
+          )}
+          {!isLoading && data?.items.map((item, i) => (
+            <div key={`${item.consultation_id}-${item.reason}-${i}`} className="bg-[#F5F6FA] rounded-lg p-2 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-medium truncate">{item.patient_name}</p>
+                <p className="text-[10px] text-[#6B738A]">
+                  {new Date(item.date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })} · {item.reason_label}
+                </p>
+              </div>
+              <span className="text-[10px] font-semibold text-[#A32D2D] flex-shrink-0">+{item.weight} pts</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ProfessionalDocsSection({ professionalId }: { professionalId: string }) {
+  const qc = useQueryClient()
+  const [expandedDoc, setExpandedDoc] = useState<ProfessionalDocItem | null>(null)
+  const [docError, setDocError] = useState('')
+
+  const { data: docs = [], isLoading } = useQuery({
+    queryKey: ['admin', 'professionals', professionalId, 'documents'],
+    queryFn: () => api.get(`/admin/professionals/${professionalId}/documents`).then(r => r.data as ProfessionalDocItem[]),
+    refetchInterval: 12000, // así el admin ve sin recargar cuando el profesional sube/reemplaza un doc
+  })
+
+  const reviewMutation = useMutation({
+    mutationFn: ({ docId, status }: { docId: string; status: 'APPROVED' | 'REJECTED' }) => {
+      const review_note = status === 'REJECTED' ? window.prompt('Motivo del rechazo (visible para el profesional):') || '' : null
+      return api.patch(`/admin/documents/${docId}/review`, { status, review_note })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'professionals', professionalId, 'documents'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'professionals', 'all'] })
+    },
+    onError: (err) => setDocError(getErrorMessage(err)),
+  })
+
+  if (isLoading) {
+    return <p className="text-xs text-[#6B738A] py-4 text-center">Cargando documentos...</p>
+  }
+
+  const missing = REQUIRED_DOC_TYPES.filter((t) => !docs.some((d) => d.doc_type === t))
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Documentos de verificación</p>
+        <span className="text-[10px] text-[#A0A8BF]">{docs.length} subido{docs.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {docError && <div className="mb-2"><Alert type="error" message={docError} /></div>}
+
+      {docs.length === 0 ? (
+        <p className="text-sm text-[#6B738A] bg-[#F5F6FA] rounded-xl p-3 text-center">
+          Este profesional todavía no subió ningún documento
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          {docs.map((doc) => (
+            <DocThumbnail
+              key={doc.id}
+              doc={doc}
+              onExpand={() => setExpandedDoc(doc)}
+              onReview={(status) => reviewMutation.mutate({ docId: doc.id, status })}
+              reviewing={reviewMutation.isPending}
+            />
+          ))}
+        </div>
+      )}
+
+      {missing.length > 0 && (
+        <p className="text-[10px] text-[#A0A8BF] mt-2">
+          Falta subir: {missing.map((t) => DOC_LABELS[t] || t).join(', ')}
+        </p>
+      )}
+
+      {expandedDoc && <DocViewerModal doc={expandedDoc} onClose={() => setExpandedDoc(null)} />}
+    </div>
+  )
+}
+function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
+  professional: Professional; onClose: () => void
+  onAction: (id: string, status: string) => void; loading: boolean
+}) {
+  const age = getAge(pro.birth_date)
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-[#DDE1EE]">
+          <div className="flex items-center gap-3">
+            {pro.photo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={pro.photo_url}
+                alt={pro.name}
+                className="w-12 h-12 rounded-full object-cover border border-[#DDE1EE]"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-[#E1F5EE] text-[#0F6E56] flex items-center justify-center text-base font-bold">
+                {pro.name.split(' ').map((n:string)=>n[0]).join('').slice(0,2)}
+              </div>
+            )}
+            <div>
+              <h3 className="text-base font-semibold">{pro.name}</h3>
+              <p className="text-xs text-[#6B738A]">{pro.specialty}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-[#6B738A] hover:text-[#141820] text-xl">✕</button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
+              <StatusBadge status={pro.status} />
+              <p className="text-xs text-[#6B738A] mt-1">Estado</p>
+            </div>
+            <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-[#EF9F27]">{Number(pro.rating).toFixed(1)} ★</p>
+              <p className="text-xs text-[#6B738A]">{pro.total_ratings} calificaciones</p>
+            </div>
+            <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-[#185FA5]">{pro.total_consultations}</p>
+              <p className="text-xs text-[#6B738A]">Consultas</p>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Datos personales</p>
+            <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-2 gap-3">
+              <div><p className="text-xs text-[#A0A8BF]">Telefono</p><p className="text-sm font-medium">{pro.phone || 'No disponible'}</p></div>
+              <div><p className="text-xs text-[#A0A8BF]">Email</p><p className="text-sm font-medium truncate">{pro.email || 'No especificado'}</p></div>
+              <div><p className="text-xs text-[#A0A8BF]">Cedula</p><p className="text-sm font-medium">{pro.ci || 'No disponible'}</p></div>
+              <div><p className="text-xs text-[#A0A8BF]">Edad</p><p className="text-sm font-medium">{age ? `${age} anios` : 'No especificada'}</p></div>
+              <div><p className="text-xs text-[#A0A8BF]">Ciudad / Departamento</p><p className="text-sm font-medium">{pro.department || 'No especificado'}</p></div>
+              <div><p className="text-xs text-[#A0A8BF]">Genero</p><p className="text-sm font-medium">{pro.gender || 'No especificado'}</p></div>
+              <div><p className="text-xs text-[#A0A8BF]">Experiencia</p><p className="text-sm font-medium">{pro.years_experience ? `${pro.years_experience} anios` : 'No especificada'}</p></div>
+              <div><p className="text-xs text-[#A0A8BF]">Idiomas</p><p className="text-sm font-medium">{pro.languages?.join(', ') || 'Espanol'}</p></div>
+              <div><p className="text-xs text-[#A0A8BF]">Sub-especialidades</p><p className="text-sm font-medium">{pro.sub_specialties?.length ? pro.sub_specialties.join(', ') : 'No especificadas'}</p></div>
+              <div><p className="text-xs text-[#A0A8BF]">Registrado el</p><p className="text-sm font-medium">{new Date(pro.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+              <div><p className="text-xs text-[#A0A8BF]">Estado de cuenta</p><p className="text-sm font-medium">{pro.user_status === 'ACTIVE' ? 'Activa' : pro.user_status === 'SUSPENDED' ? 'Suspendida' : (pro.user_status || 'No disponible')}</p></div>
+            </div>
+          </div>
+
+          {pro.penalty && pro.penalty.color && (
+            <PenaltyDetailSection professionalId={pro.id} penalty={pro.penalty} />
+          )}
+
+          <div>
+            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Precios de consulta</p>
+            <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-3 gap-3">
+              <div className="text-center"><p className="text-sm font-bold text-[#185FA5]">Bs. {pro.price_general || 0}</p><p className="text-xs text-[#6B738A]">General</p></div>
+              <div className="text-center"><p className="text-sm font-bold text-[#A32D2D]">Bs. {pro.price_urgent || 0}</p><p className="text-xs text-[#6B738A]">Urgente</p></div>
+              <div className="text-center"><p className="text-sm font-bold text-[#0F6E56]">Bs. {pro.price_follow_up || 0}</p><p className="text-xs text-[#6B738A]">Seguimiento</p></div>
+            </div>
+          </div>
+          {pro.bio && (
+            <div>
+              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Presentacion</p>
+              <p className="text-sm text-[#3A4155] bg-[#F5F6FA] rounded-xl p-3 leading-relaxed">{pro.bio}</p>
+            </div>
+          )}
+          <div className="pt-2 border-t border-[#DDE1EE]">
+            <ProfessionalDocsSection professionalId={pro.id} />
+          </div>
+          <div className="pt-2 border-t border-[#DDE1EE]">
+            <ConsultationHistorySection endpoint={`/admin/professionals/${pro.id}/history`} counterpartField="patient_name" />
+          </div>
+          <div className="pt-2 border-t border-[#DDE1EE]">
+            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-3">Acciones</p>
+            <div className="flex gap-2 flex-wrap">
+              {(pro.status === 'PENDING_DOCS' || pro.status === 'UNDER_REVIEW') && (<>
+                <button onClick={() => onAction(pro.id,'APPROVED')} disabled={loading}
+                  className="flex-1 bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] py-2 rounded-lg text-xs font-medium disabled:opacity-50">Aprobar</button>
+                <button onClick={() => onAction(pro.id,'REJECTED')} disabled={loading}
+                  className="flex-1 bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] py-2 rounded-lg text-xs font-medium disabled:opacity-50">Rechazar</button>
+              </>)}
+              {pro.status === 'APPROVED' && (
+                <button onClick={() => onAction(pro.id,'SUSPENDED')} disabled={loading}
+                  className="bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">Suspender cuenta</button>
+              )}
+              {pro.status === 'SUSPENDED' && (
+                <button onClick={() => onAction(pro.id,'APPROVED')} disabled={loading}
+                  className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">Reactivar cuenta</button>
+              )}
+              <button onClick={onClose} className="btn-secondary text-xs px-4 py-2">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function AdminProfessionalsPage() {
+  const qc = useQueryClient()
+  const [tab, setTab]           = useState<'APPROVED'|'PENDING_DOCS'|'SUSPENDED'>('APPROVED')
+  const [success, setSuccess]   = useState('')
+  const [error, setError]       = useState('')
+  const [selected, setSelected] = useState<Professional|null>(null)
+  const [search, setSearch]     = useState('')
+  const [department, setDepartment] = useState('Todos')
+  const [penaltyFilter, setPenaltyFilter] = useState<'Todos' | 'yellow' | 'orange' | 'red'>('Todos')
+
+  const { data: allPros = [], isLoading } = useQuery({
+    queryKey: ['admin', 'professionals', 'all'],
+    queryFn: () => api.get('/admin/professionals').then(r => r.data),
+    refetchInterval: 15000,
+  })
+
+  // Counts for each tab
+  const counts = {
+    APPROVED:    allPros.filter((p:Professional) => p.status === 'APPROVED').length,
+    PENDING_DOCS: allPros.filter((p:Professional) => ['PENDING_DOCS','UNDER_REVIEW'].includes(p.status)).length,
+    SUSPENDED:   allPros.filter((p:Professional) => p.status === 'SUSPENDED').length,
+  }
+
+  // Filter by tab + search + department
+  const filtered = allPros.filter((p: Professional) => {
+    const matchTab = tab === 'APPROVED'
+      ? p.status === 'APPROVED'
+      : tab === 'PENDING_DOCS'
+      ? ['PENDING_DOCS','UNDER_REVIEW'].includes(p.status)
+      : p.status === 'SUSPENDED'
+    const matchSearch = !search ||
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.specialty.toLowerCase().includes(search.toLowerCase()) ||
+      p.phone?.includes(search)
+    const matchDept = department === 'Todos' || p.department === department
+    const matchPenalty = penaltyFilter === 'Todos' || p.penalty?.color === penaltyFilter
+    return matchTab && matchSearch && matchDept && matchPenalty
+  })
+
+  const verifyMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      api.patch(`/professionals/${id}/verify`, null, { params: { new_status: status } }),
+    onSuccess: (_, { status }) => {
+      const msgs: Record<string,string> = { APPROVED:'Profesional aprobado', REJECTED:'Profesional rechazado', SUSPENDED:'Profesional suspendido' }
+      setSuccess(msgs[status] || 'Estado actualizado')
+      setSelected(null)
+      qc.invalidateQueries({ queryKey: ['admin','professionals'] })
+      setTimeout(() => setSuccess(''), 3000)
+    },
+    onError: (err) => setError(getErrorMessage(err)),
+  })
+
+  return (
+    <DashboardLayout navItems={NAV} activeHref="/admin/professionals" role="ADMIN">
+      <div className="max-w-4xl">
+        <div className="mb-4">
+          <h1 className="text-base font-semibold">Gestion de profesionales</h1>
+          <p className="text-xs text-[#6B738A] mt-0.5">Clic en un profesional para ver su detalle completo</p>
+        </div>
+
+        {success && <div className="mb-4"><Alert type="success" message={success} /></div>}
+        {error   && <div className="mb-4"><Alert type="error"   message={error} /></div>}
+
+        {/* Tabs con contadores */}
+        <div className="flex gap-1 bg-[#F5F6FA] p-1 rounded-xl mb-4 w-fit">
+          {([
+            { key: 'APPROVED',    label: 'Activos' },
+            { key: 'PENDING_DOCS',label: 'Pendientes' },
+            { key: 'SUSPENDED',   label: 'Suspendidos' },
+          ] as const).map(({ key, label }) => (
+            <button key={key} onClick={() => setTab(key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                tab === key ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#6B738A]'
+              }`}>
+              {label}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                tab === key ? 'bg-[#185FA5] text-white' : 'bg-[#DDE1EE] text-[#6B738A]'
+              }`}>
+                {counts[key]}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Filtros */}
+        <div className="flex gap-2 mb-3 flex-wrap">
+          <div className="relative flex-1 min-w-48">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A0A8BF]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input className="w-full pl-8 pr-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
+              placeholder="Buscar por nombre, especialidad o celular..."
+              value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <select className="px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
+            value={department} onChange={(e) => setDepartment(e.target.value)}>
+            {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select className="px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
+            value={penaltyFilter} onChange={(e) => setPenaltyFilter(e.target.value as typeof penaltyFilter)}>
+            <option value="Todos">Todas las penalizaciones</option>
+            <option value="yellow">🟡 Leve</option>
+            <option value="orange">🟠 Moderado</option>
+            <option value="red">🔴 Grave</option>
+          </select>
+        </div>
+
+        {isLoading ? <LoadingScreen /> : (
+          <div className="card">
+            {filtered.length === 0 ? (
+              <p className="text-sm text-[#6B738A] text-center py-8">No hay profesionales en este estado</p>
+            ) : (
+              <div className="divide-y divide-[#DDE1EE]">
+                {filtered.map((pro: Professional) => {
+                  const age = getAge(pro.birth_date)
+                  const pendingDocs = pro.doc_counts?.pending || 0
+                  return (
+                    <div key={pro.id}
+                      className="py-3 flex items-center gap-3 hover:bg-[#F5F6FA] -mx-4 px-4 cursor-pointer transition-colors rounded-lg"
+                      onClick={() => setSelected(pro)}>
+                      <div className="relative flex-shrink-0">
+                        {pro.photo_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={pro.photo_url}
+                            alt={pro.name}
+                            className="w-10 h-10 rounded-full object-cover border border-[#DDE1EE]"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-[#E1F5EE] text-[#0F6E56] flex items-center justify-center text-xs font-bold">
+                            {pro.name.split(' ').map((n:string)=>n[0]).join('').slice(0,2)}
+                          </div>
+                        )}
+                        {pendingDocs > 0 && (
+                          <span
+                            className="absolute -top-1 -right-1 bg-[#185FA5] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white"
+                            title={`${pendingDocs} documento${pendingDocs > 1 ? 's' : ''} sin revisar`}
+                          >
+                            {pendingDocs}
+                          </span>
+                        )}
+                        {pro.penalty?.color && (
+                          <span
+                            className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${PENALTY_META[pro.penalty.color].dot}`}
+                            title={`Penalización: ${PENALTY_META[pro.penalty.color].label} (${pro.penalty.score} pts)`}
+                          />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{pro.name}</p>
+                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                          <span className="text-xs text-[#6B738A]">{pro.specialty}</span>
+                          {pro.department && <span className="text-xs text-[#A0A8BF]">· {pro.department}</span>}
+                          {age && <span className="text-xs text-[#A0A8BF]">· {age} años</span>}
+                          {pro.phone && <span className="text-xs text-[#A0A8BF]">· {pro.phone}</span>}
+                        </div>
+                      </div>
+                      {pendingDocs > 0 && (
+                        <span className="text-[10px] px-2 py-1 rounded-full border font-medium bg-[#E6F1FB] text-[#185FA5] border-[#85B7EB] flex-shrink-0 whitespace-nowrap">
+                          📄 {pendingDocs} por revisar
+                        </span>
+                      )}
+                      {pro.penalty?.color && (
+                        <span className={`text-[10px] px-2 py-1 rounded-full border font-medium flex-shrink-0 whitespace-nowrap ${PENALTY_META[pro.penalty.color].badge}`}>
+                          ⚠ {PENALTY_META[pro.penalty.color].label} · {pro.penalty.score} pts
+                        </span>
+                      )}
+                      {pro.rating > 0 && (
+                        <span className="text-xs text-[#EF9F27] flex-shrink-0">★ {Number(pro.rating).toFixed(1)}</span>
+                      )}
+                      <StatusBadge status={pro.status} />
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A0A8BF" strokeWidth="2" className="flex-shrink-0">
+                        <path d="M9 18l6-6-6-6"/>
+                      </svg>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {selected && (
+        <ProfessionalModal professional={selected} onClose={() => setSelected(null)}
+          onAction={(id, status) => verifyMutation.mutate({ id, status })}
+          loading={verifyMutation.isPending} />
+      )}
+    </DashboardLayout>
+  )
+}

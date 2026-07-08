@@ -1,0 +1,94 @@
+# /etc/nginx/sites-available/medicbolivia
+# Configuración Nginx para MedicBolivia
+# 
+# Instalación:
+#   sudo cp medicbolivia.nginx /etc/nginx/sites-available/medicbolivia
+#   sudo ln -s /etc/nginx/sites-available/medicbolivia /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#   sudo certbot --nginx -d medicbolivia.bo -d www.medicbolivia.bo
+
+# Redirigir HTTP → HTTPS
+server {
+    listen 80;
+    server_name medicbolivia.bo www.medicbolivia.bo;
+    return 301 https://$host$request_uri;
+}
+
+# Servidor principal HTTPS
+server {
+    listen 443 ssl http2;
+    server_name medicbolivia.bo www.medicbolivia.bo;
+
+    # SSL (Certbot los llenará automáticamente)
+    # ssl_certificate     /etc/letsencrypt/live/medicbolivia.bo/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/medicbolivia.bo/privkey.pem;
+
+    # Seguridad
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # Tamaño máximo de upload (documentos médicos)
+    client_max_body_size 15M;
+
+    # ── API Backend (FastAPI) ──────────────────────────
+    location /api/ {
+        proxy_pass         http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 10s;
+
+        # Rate limiting para la API
+        limit_req zone=api burst=20 nodelay;
+    }
+
+    # ── WebSocket (Socket.io / tiempo real) ───────────
+    location /socket.io/ {
+        proxy_pass         http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection "Upgrade";
+        proxy_set_header   Host $host;
+        proxy_read_timeout 86400;
+    }
+
+    # ── Health check (sin rate limit) ─────────────────
+    location /health {
+        proxy_pass http://127.0.0.1:4000;
+        access_log off;
+    }
+
+    # ── Frontend Next.js ──────────────────────────────
+    location / {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+    }
+
+    # ── Archivos estáticos Next.js ────────────────────
+    location /_next/static/ {
+        proxy_pass http://127.0.0.1:3000;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Logs
+    access_log /var/log/nginx/medicbolivia_access.log;
+    error_log  /var/log/nginx/medicbolivia_error.log;
+}
+
+# Rate limiting (agregar en /etc/nginx/nginx.conf dentro de http{})
+# limit_req_zone $binary_remote_addr zone=api:10m rate=30r/m;

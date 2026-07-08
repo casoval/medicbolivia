@@ -1,0 +1,33 @@
+# Normaliza los saltos de línea de todo archivo de texto a LF al
+# guardarlo en el repo, sin importar el sistema operativo o la
+# configuración local de git (core.autocrlf) de quien clona.
+#
+# Esto elimina los warnings de "LF will be replaced by CRLF" /
+# "CRLF will be replaced by LF" que aparecían en cada git diff/add,
+# y evita que un commit hecho desde Windows introduzca CRLF en
+# archivos que en Linux (donde corre el backend) deben mantenerse
+# en LF — algo especialmente importante para scripts de shell.
+* text=auto eol=lf
+
+# Binarios: se dejan tal cual, sin ningún intento de normalización
+# de line endings ni diffs en texto (git los trata como blobs opacos).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.zip binary
+*.gz binary
+*.mp4 binary
+*.mp3 binary
+*.wav binary
+
+# Scripts de shell: siempre LF, para que no se rompan al ejecutarse
+# en Linux si alguien los edita o commitea desde Windows.
+*.sh text eol=lf
