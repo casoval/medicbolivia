@@ -104,6 +104,9 @@ export interface Consultation {
   professional_photo_url?: string
   professional_department?: string
   professional_sub_specialties?: string[]
+  // Duración (minutos) que el profesional configuró en /professional/schedule
+  // para sus citas — usada por el calendario para dibujar bloques a tamaño real.
+  professional_appointment_duration_minutes?: number
   patient_first_name?: string
   patient_last_name?: string
   payment_status?: 'PENDING' | 'CONFIRMED' | 'RELEASED_TO_PROFESSIONAL' | 'REFUNDED_PARTIAL' | 'REFUNDED_FULL' | 'DISPUTED' | 'CANCELLED_NO_CHARGE'

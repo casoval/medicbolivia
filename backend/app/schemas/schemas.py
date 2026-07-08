@@ -327,6 +327,10 @@ class ConsultationResponse(BaseModel):
     professional_photo_url: Optional[str] = None
     professional_department: Optional[str] = None
     professional_sub_specialties: Optional[List[str]] = None
+    # Duración (en minutos) que el profesional configuró para sus citas en
+    # /professional/schedule. Se usa en el calendario para dibujar el bloque
+    # de cada cita con el tamaño real, no un valor fijo asumido.
+    professional_appointment_duration_minutes: Optional[int] = None
     # Datos del paciente (enriquecidos en el endpoint con JOIN, para que el
     # profesional tenga un buen registro de quién fue cada consulta)
     patient_first_name: Optional[str] = None

@@ -599,7 +599,7 @@ export default function HistoryPage() {
 
   return (
     <DashboardLayout navItems={NAV} activeHref="/patient/history" role="PATIENT">
-      <div className="max-w-2xl">
+      <div className={activeTab === 'calendar' ? 'max-w-5xl' : 'max-w-2xl'}>
         <div className="mb-4">
           <h1 className="text-base font-semibold">Mis consultas</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">Todas tus consultas y citas agendadas, en un solo lugar</p>

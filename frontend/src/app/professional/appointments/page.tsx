@@ -128,7 +128,7 @@ export default function ProfessionalAppointmentsPage() {
 
   return (
     <DashboardLayout navItems={NAV} activeHref="/professional/appointments" role="PROFESSIONAL">
-      <div className="max-w-3xl">
+      <div className={activeTab === 'calendar' ? 'max-w-5xl' : 'max-w-3xl'}>
         <div className="mb-4">
           <h1 className="text-base font-semibold">Citas agendadas</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">Todas tus citas con horario fijo, pasadas y futuras</p>

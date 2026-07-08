@@ -1026,6 +1026,7 @@ async def get_my_consultations(
         Professional.first_name.label("prof_first_name"),
         Professional.last_name.label("prof_last_name"),
         Professional.photo_url.label("prof_photo_url"),
+        Professional.appointment_duration_minutes.label("prof_duration_minutes"),
         Patient.first_name.label("pat_first_name"),
         Patient.last_name.label("pat_last_name"),
         Payment.status.label("pay_status"),
@@ -1067,13 +1068,14 @@ async def get_my_consultations(
 
     rows = result.all()
     responses = []
-    for (consultation, prof_first_name, prof_last_name, prof_photo_url,
+    for (consultation, prof_first_name, prof_last_name, prof_photo_url, prof_duration_minutes,
          pat_first_name, pat_last_name, pay_status, pay_paid_at,
          pay_refunded_at, pay_refund_note) in rows:
         item = ConsultationResponse.model_validate(consultation)
         item.professional_first_name = prof_first_name
         item.professional_last_name = prof_last_name
         item.professional_photo_url = prof_photo_url
+        item.professional_appointment_duration_minutes = prof_duration_minutes
         item.patient_first_name = pat_first_name
         item.patient_last_name = pat_last_name
         item.payment_status = pay_status.value if pay_status else None
