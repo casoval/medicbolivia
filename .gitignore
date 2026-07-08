@@ -230,7 +230,7 @@ frontend/.env.production.local
 *.patch 
 frontend/tsconfig.tsbuildinfo 
 
-# whatsapp-service (Baileys)
-whatsapp-service/node_modules/
-whatsapp-service/auth_info/
-whatsapp-service/.env
+# whatsapp-service (cualquier variante: whatsapp-service, backups, etc.)
+**/node_modules/
+**/auth_info/
+**/.wwebjs_cache/
