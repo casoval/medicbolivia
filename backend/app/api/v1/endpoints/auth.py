@@ -111,11 +111,15 @@ async def register_professional(
             detail="Verificá tu número de WhatsApp antes de registrarte."
         )
 
-    result = await db.execute(
-        select(User).where(
-            or_(User.phone == data.phone, User.email == data.email)
-        )
-    )
+    # Verificar si ya existe el teléfono o email (el email es opcional
+    # acá — si no vino, solo chequeamos el teléfono; comparar
+    # User.email == None matchearía por error a cualquier otro usuario
+    # que tampoco tenga email cargado, vía IS NULL)
+    conditions = [User.phone == data.phone]
+    if data.email:
+        conditions.append(User.email == data.email)
+
+    result = await db.execute(select(User).where(or_(*conditions)))
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

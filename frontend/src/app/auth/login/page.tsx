@@ -8,6 +8,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useAuthStore } from '@/lib/store'
 import { getErrorMessage } from '@/lib/api'
+import { PhoneInput } from '@/components/ui/PhoneInput'
 
 // Puntos clave reutilizados del material de marca (afiches)
 const FEATURES = [
@@ -234,14 +235,10 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="label">Número de celular</label>
-                <input
-                  type="tel"
-                  className="input"
-                  placeholder="72345678"
+                <PhoneInput
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={setPhone}
                   required
-                  autoFocus
                 />
               </div>
 

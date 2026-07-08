@@ -56,18 +56,23 @@ export function PhoneInput({ value, onChange, required, placeholder = '72345678'
       <select
         value={countryCode}
         onChange={handleCountryChange}
-        className="input w-[128px] flex-shrink-0"
+        className="input w-[150px] sm:w-[172px] flex-shrink-0"
         aria-label="Código de país"
       >
         {COUNTRY_CODES.map((c) => (
-          <option key={c.code} value={c.code}>
-            {c.flag} +{c.code}
+          // El `code` (código de marcado) no es único por sí solo —
+          // varios países comparten el mismo código (+1 para EEUU,
+          // Canadá, República Dominicana, Puerto Rico) — así que la key
+          // de React combina code+name aunque el `value` siga siendo
+          // solo el código (es lo único que le importa al backend).
+          <option key={`${c.code}-${c.name}`} value={c.code}>
+            {c.flag} {c.name} +{c.code}
           </option>
         ))}
       </select>
       <input
         type="tel"
-        className="input flex-1"
+        className="input flex-1 min-w-0"
         placeholder={placeholder}
         value={localNumber}
         onChange={handleNumberChange}

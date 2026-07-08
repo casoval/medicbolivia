@@ -43,7 +43,7 @@ class PatientRegisterRequest(BaseModel):
 
 class ProfessionalRegisterRequest(BaseModel):
     phone: str = Field(..., min_length=8, max_length=17, description="Código de país + número, ej: 59172345678")
-    email: EmailStr
+    email: Optional[EmailStr] = None
     password: str = Field(..., min_length=8)
     first_name: str = Field(..., min_length=2, max_length=100)
     last_name: str = Field(..., min_length=2, max_length=100)
@@ -71,13 +71,18 @@ class LoginRequest(BaseModel):
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, v: str) -> str:
-        # Login no debe romperse si alguien todavía tiene un número viejo
-        # sin normalizar guardado en su dispositivo/autocompletado: si no
-        # matchea el formato boliviano, se deja pasar tal cual y que el
-        # login falle por "credenciales inválidas" en vez de por un 422
-        # confuso de formato.
+        # El frontend ahora manda código de país + número (mismo selector
+        # que en el registro), por eso se normaliza con
+        # normalize_intl_phone en vez de asumir siempre Bolivia. Esa misma
+        # función igual asume Bolivia como fallback si vienen solo 6-8
+        # dígitos sueltos, así que un login viejo guardado sin código de
+        # país (autocompletado del navegador, etc.) sigue andando.
+        #
+        # Si el string no matchea ningún formato válido, se deja pasar
+        # tal cual y que el login falle por "credenciales inválidas" en
+        # vez de por un 422 confuso de formato.
         try:
-            return normalize_bo_phone(v)
+            return normalize_intl_phone(v)
         except InvalidPhoneError:
             return v
 

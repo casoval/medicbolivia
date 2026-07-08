@@ -150,7 +150,7 @@ export const authAPI = {
   }) => api.post<AuthResponse>('/auth/register/patient', data),
 
   registerProfessional: (data: {
-    phone: string; email: string; password: string
+    phone: string; email?: string; password: string
     first_name: string; last_name: string; ci: string; specialty: string
     sub_specialties?: string[]
     languages?: string[]; birth_date?: string; department?: string; gender?: string

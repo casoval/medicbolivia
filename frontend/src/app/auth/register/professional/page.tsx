@@ -143,7 +143,7 @@ export default function RegisterProfessionalPage() {
     try {
       const res = await authAPI.registerProfessional({
         phone: form.phone,
-        email: form.email,
+        email: form.email || undefined,
         password: form.password,
         first_name: form.first_name,
         last_name: form.last_name,
@@ -418,20 +418,21 @@ export default function RegisterProfessionalPage() {
               )}
             </div>
 
-            {/* Teléfono y email */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Celular <span className="text-[#E24B4A]">*</span></label>
-                <PhoneInput
-                  value={form.phone}
-                  onChange={(phone) => setForm((prev) => ({ ...prev, phone }))}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Email profesional <span className="text-[#E24B4A]">*</span></label>
-                <input name="email" type="email" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="dr@email.com" value={form.email} onChange={handleChange} required />
-              </div>
+            {/* Teléfono */}
+            <div>
+              <label className="block text-xs font-medium text-[#6B738A] mb-1">Celular <span className="text-[#E24B4A]">*</span></label>
+              <PhoneInput
+                value={form.phone}
+                onChange={(phone) => setForm((prev) => ({ ...prev, phone }))}
+                required
+              />
+            </div>
+
+            {/* Email — opcional para profesionales, el celular ya es el
+                canal principal de contacto (WhatsApp) */}
+            <div>
+              <label className="block text-xs font-medium text-[#6B738A] mb-1">Email profesional (opcional)</label>
+              <input name="email" type="email" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="dr@email.com" value={form.email} onChange={handleChange} />
             </div>
 
             {/* Contraseñas */}
