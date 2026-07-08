@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { authAPI, specialtiesAPI, getErrorMessage } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { PhoneInput } from '@/components/ui/PhoneInput'
 
 const NOT_LISTED = '__NOT_LISTED__'
 
@@ -421,7 +422,11 @@ export default function RegisterProfessionalPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-[#6B738A] mb-1">Celular <span className="text-[#E24B4A]">*</span></label>
-                <input name="phone" type="tel" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="72345678" value={form.phone} onChange={handleChange} required />
+                <PhoneInput
+                  value={form.phone}
+                  onChange={(phone) => setForm((prev) => ({ ...prev, phone }))}
+                  required
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#6B738A] mb-1">Email profesional <span className="text-[#E24B4A]">*</span></label>

@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr, field_validator, model_validator, Fiel
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
-from app.core.phone import normalize_bo_phone, InvalidPhoneError
+from app.core.phone import normalize_bo_phone, normalize_intl_phone, InvalidPhoneError
 from app.models.models import (
     UserRole, UserStatus, ProfessionalStatus, AvailabilityMode,
     ConsultationStatus, ConsultationType, PaymentStatus, DocType, DocStatus,
@@ -19,7 +19,10 @@ from app.models.models import (
 # ─────────────────────────────────────────────────────
 
 class PatientRegisterRequest(BaseModel):
-    phone: str = Field(..., min_length=8, max_length=15, description="Número boliviano ej: 72345678")
+    # El frontend ya concatena código de país + número (selector de país,
+    # Bolivia +591 por default) antes de mandarlo — por eso se valida con
+    # normalize_intl_phone en vez de normalize_bo_phone. Ver app/core/phone.py.
+    phone: str = Field(..., min_length=8, max_length=17, description="Código de país + número, ej: 59172345678")
     email: Optional[EmailStr] = None
     password: str = Field(..., min_length=8, description="Mínimo 8 caracteres")
     first_name: str = Field(..., min_length=2, max_length=100)
@@ -33,13 +36,13 @@ class PatientRegisterRequest(BaseModel):
     @classmethod
     def validate_phone(cls, v: str) -> str:
         try:
-            return normalize_bo_phone(v)
+            return normalize_intl_phone(v)
         except InvalidPhoneError as e:
             raise ValueError(str(e))
 
 
 class ProfessionalRegisterRequest(BaseModel):
-    phone: str = Field(..., min_length=8, max_length=15)
+    phone: str = Field(..., min_length=8, max_length=17, description="Código de país + número, ej: 59172345678")
     email: EmailStr
     password: str = Field(..., min_length=8)
     first_name: str = Field(..., min_length=2, max_length=100)
@@ -56,7 +59,7 @@ class ProfessionalRegisterRequest(BaseModel):
     @classmethod
     def validate_phone(cls, v: str) -> str:
         try:
-            return normalize_bo_phone(v)
+            return normalize_intl_phone(v)
         except InvalidPhoneError as e:
             raise ValueError(str(e))
 

@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { authAPI, getErrorMessage } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { PhoneInput } from '@/components/ui/PhoneInput'
 
 const DEPARTMENTS = [
   'La Paz', 'Santa Cruz', 'Cochabamba', 'Oruro', 'Potosí',
@@ -131,7 +132,11 @@ export default function RegisterPatientPage() {
 
             <div>
               <label className="label">Número de celular <span className="text-[#E24B4A]">*</span></label>
-              <input name="phone" type="tel" className="input" placeholder="72345678" value={form.phone} onChange={handleChange} required />
+              <PhoneInput
+                value={form.phone}
+                onChange={(phone) => setForm((prev) => ({ ...prev, phone }))}
+                required
+              />
             </div>
 
             <div>
