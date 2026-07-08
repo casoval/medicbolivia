@@ -13,6 +13,7 @@ import { consultationsAPI, getErrorMessage } from '@/lib/api'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, wasActuallyRefunded } from '@/lib/consultationHistory'
 import { PatientHistoryPanel } from '@/components/professional/PatientHistoryPanel'
 import { SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
+import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
 
 function patientNameOf(c: any): string | null {
   return c.patient_first_name ? `${c.patient_first_name} ${c.patient_last_name || ''}`.trim() : null
@@ -68,7 +69,7 @@ export default function ProfessionalAppointmentsPage() {
   const qc = useQueryClient()
   const router = useRouter()
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming')
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'history' | 'calendar'>('upcoming')
   const [reschedulingId, setReschedulingId] = useState<string | null>(null)
   const [newDateTime, setNewDateTime] = useState('')
 
@@ -164,6 +165,16 @@ export default function ProfessionalAppointmentsPage() {
                 {past.length}
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab('calendar')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              activeTab === 'calendar'
+                ? 'bg-white text-[#141820] border border-[#DDE1EE]'
+                : 'text-[#6B738A]'
+            }`}
+          >
+            🗓 Calendario
           </button>
         </div>
 
@@ -320,7 +331,7 @@ export default function ProfessionalAppointmentsPage() {
               </div>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'history' ? (
           <div className="card">
             <SectionTitle>Historial de citas agendadas ({past.length})</SectionTitle>
             {past.length === 0 ? (
@@ -378,6 +389,11 @@ export default function ProfessionalAppointmentsPage() {
                   })}
                 </div>
             )}
+          </div>
+        ) : (
+          <div className="card">
+            <SectionTitle>Calendario de citas agendadas</SectionTitle>
+            <AppointmentsCalendar consultations={scheduled} role="PROFESSIONAL" />
           </div>
         )}
       </div>

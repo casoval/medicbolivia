@@ -11,6 +11,7 @@ import { consultationsAPI, ratingsAPI, prescriptionsAPI, clinicalNotesAPI, getEr
 import type { ClinicalNote, DisputeCategory } from '@/lib/api'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, fmtHora, wasActuallyRefunded } from '@/lib/consultationHistory'
 import type { Consultation, Rating } from '@/types'
+import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
 
 const IconClose  = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
 
@@ -493,7 +494,7 @@ export default function HistoryPage() {
   const [localRated, setLocalRated]                     = useState<Record<string, Rating>>({})
   const [success, setSuccess] = useState('')
   const [error, setError]     = useState('')
-  const [activeTab, setActiveTab] = useState<'active' | 'history' | 'cancelled'>('active')
+  const [activeTab, setActiveTab] = useState<'active' | 'history' | 'cancelled' | 'calendar'>('active')
 
   const { data: consultations = [], isLoading } = useQuery({
     queryKey: ['consultations', 'patient'],
@@ -666,6 +667,16 @@ export default function HistoryPage() {
                 {cancelledOrRefunded.length}
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab('calendar')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              activeTab === 'calendar'
+                ? 'bg-white text-[#141820] border border-[#DDE1EE]'
+                : 'text-[#6B738A]'
+            }`}
+          >
+            🗓 Calendario
           </button>
         </div>
 
@@ -867,7 +878,7 @@ export default function HistoryPage() {
               </div>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'cancelled' ? (
           <div className="card">
             <SectionTitle>Canceladas o reembolsadas</SectionTitle>
             {cancelledOrRefunded.length === 0 ? (
@@ -918,6 +929,11 @@ export default function HistoryPage() {
                   })}
               </div>
             )}
+          </div>
+        ) : (
+          <div className="card">
+            <SectionTitle>Calendario de citas</SectionTitle>
+            <AppointmentsCalendar consultations={consultations} role="PATIENT" />
           </div>
         )}
       </div>
