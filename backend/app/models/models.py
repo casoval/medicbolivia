@@ -360,6 +360,12 @@ class Consultation(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     platform_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     professional_earning: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # % de comisión efectivamente aplicado a esta consulta, guardado como foto
+    # fija en el momento del cobro. Si más adelante cambia la comisión global
+    # o la del profesional, esta consulta NO se recalcula — queda con el %
+    # que estaba vigente cuando se generó. Sirve también para que admin y
+    # profesional vean con transparencia qué % se cobró en cada caso.
+    commission_percent_applied: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -395,6 +401,9 @@ class Payment(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     platform_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     professional_net: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # Copia del % aplicado en la Consultation asociada, para no tener que
+    # hacer join solo para mostrar transparencia en reportes de pagos.
+    commission_percent_applied: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
     qr_code: Mapped[Optional[str]] = mapped_column(Text)
     qr_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     bank_tx_id: Mapped[Optional[str]] = mapped_column(String(100))
@@ -627,6 +636,48 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="notifications")
+
+
+class CommissionScope(str, enum.Enum):
+    GLOBAL = "GLOBAL"              # aplica a todos los profesionales
+    PROFESSIONAL = "PROFESSIONAL"  # aplica solo a un profesional puntual
+
+
+class CommissionPeriod(Base):
+    """
+    Vigencia de un porcentaje de comisión, con fecha de inicio y (opcional)
+    fecha de fin. Permite promociones temporales ("10% este mes, 15% el
+    próximo") y comisiones individuales por profesional (por ejemplo, una
+    tarifa reducida para nuevos profesionales).
+
+    Resolución de "¿qué % aplica ahora para este profesional?" (ver
+    app/services/commission.py):
+      1. Período PROFESSIONAL activo y vigente para ese profesional.
+      2. Período GLOBAL activo y vigente (el más reciente que cubra "ahora").
+      3. PlatformSettings.commission_percent (valor simple de respaldo).
+
+    Las consultas ya creadas NUNCA se recalculan: el % resuelto se guarda
+    como foto fija en Consultation/Payment en el momento del cobro.
+    """
+    __tablename__ = "commission_periods"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    scope: Mapped[CommissionScope] = mapped_column(SAEnum(CommissionScope), nullable=False)
+    professional_id: Mapped[Optional[str]] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("professionals.id", ondelete="CASCADE"), nullable=True
+    )
+    percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)  # 10.00 = 10%
+    label: Mapped[Optional[str]] = mapped_column(String(150))  # ej. "Promo lanzamiento julio"
+    starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # Si es NULL, el período queda vigente indefinidamente hasta que se
+    # desactive o se cree otro período más reciente que lo reemplace.
+    ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow, default=datetime.utcnow)
+
+    professional: Mapped[Optional["Professional"]] = relationship()
 
 
 class PlatformSettings(Base):

@@ -578,6 +578,23 @@ export default function ProfessionalDashboard() {
           </a>
         </div>
 
+        {/* Acceso directo al calendario de citas agendadas */}
+        <a
+          href="/professional/appointments?tab=calendar"
+          className="flex items-center justify-between bg-white border border-[#DDE1EE] rounded-xl p-3 mb-5 hover:bg-[#F9FAFC] transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-full bg-[#E6F1FB] flex items-center justify-center text-base flex-shrink-0">
+              🗓️
+            </span>
+            <div>
+              <p className="text-xs font-semibold text-[#141820]">Calendario de citas agendadas</p>
+              <p className="text-[11px] text-[#6B738A]">Mira tu agenda por día, semana o mes</p>
+            </div>
+          </div>
+          <span className="text-[#185FA5] text-xs font-medium">Abrir →</span>
+        </a>
+
         {/* ── Solicitudes entrantes INMEDIATAS — requieren aceptar/rechazar en 2 min ── */}
         {incomingImmediate.length > 0 && (
           <div className="card mb-4" style={{ borderColor: '#E24B4A', borderWidth: 2 }}>

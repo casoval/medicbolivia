@@ -28,6 +28,11 @@ def generate_qr_data(
 
     expiry_minutes: tiempo de vida del QR. Si no se indica, usa QR_EXPIRY_MINUTES
     de la config (5 min para inmediatas). Para citas agendadas pasar 30.
+
+    Nota: el monto de la comisión NO se calcula aquí — ya viene resuelto y
+    guardado en la Consultation desde que se creó (ver
+    app.services.commission.resolve_commission_percent). Este QR solo
+    representa el cobro del monto total al paciente.
     """
     minutes = expiry_minutes if expiry_minutes is not None else settings.QR_EXPIRY_MINUTES
     expires_at = datetime.utcnow() + timedelta(minutes=minutes)
@@ -39,28 +44,33 @@ def generate_qr_data(
     # URL de imagen QR usando API pública (en producción: QR del banco)
     qr_image_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={qr_content}&format=png"
 
-    platform_fee = amount * Decimal(str(settings.PLATFORM_FEE_PERCENT))
-    professional_net = amount - platform_fee
-
     return {
         "qr_code": qr_content,
         "qr_image_url": qr_image_url,
         "tx_id": tx_id,
         "expires_at": expires_at,
         "amount": amount,
-        "platform_fee": platform_fee,
-        "professional_net": professional_net,
     }
 
 
-def calculate_amounts(consultation_amount: Decimal) -> dict:
-    """Calcula la distribución del pago."""
-    platform_fee = consultation_amount * Decimal(str(settings.PLATFORM_FEE_PERCENT))
+def calculate_amounts(consultation_amount: Decimal, commission_percent: Decimal) -> dict:
+    """
+    Calcula la distribución del pago dado un % de comisión ya resuelto
+    (en formato 0-100, ej. Decimal("10.00") = 10%).
+
+    El % debe venir de app.services.commission.resolve_commission_percent —
+    esta función ya no decide el %, solo hace la aritmética, para que el
+    mismo cálculo sirva tanto para la comisión global por defecto como
+    para promociones por período o comisiones individuales por profesional.
+    """
+    fraction = commission_percent / Decimal("100")
+    platform_fee = consultation_amount * fraction
     professional_net = consultation_amount - platform_fee
     return {
         "amount": consultation_amount,
         "platform_fee": platform_fee.quantize(Decimal("0.01")),
         "professional_net": professional_net.quantize(Decimal("0.01")),
+        "commission_percent": commission_percent,
     }
 
 async def process_refund(

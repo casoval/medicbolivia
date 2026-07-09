@@ -377,6 +377,23 @@ export default function PatientDashboard() {
           </div>
         )}
 
+        {/* Acceso directo al calendario de citas */}
+        <Link
+          href="/patient/history?tab=calendar"
+          className="flex items-center justify-between bg-white border border-[#DDE1EE] rounded-xl p-3 mb-5 hover:bg-[#F9FAFC] transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-full bg-[#E6F1FB] flex items-center justify-center text-base flex-shrink-0">
+              🗓️
+            </span>
+            <div>
+              <p className="text-xs font-semibold text-[#141820]">Calendario de citas agendadas</p>
+              <p className="text-[11px] text-[#6B738A]">Mira tus citas agendadas por día, semana o mes</p>
+            </div>
+          </div>
+          <span className="text-[#185FA5] text-xs font-medium">Abrir →</span>
+        </Link>
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">

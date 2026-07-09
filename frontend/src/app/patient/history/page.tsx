@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
@@ -494,7 +495,10 @@ export default function HistoryPage() {
   const [localRated, setLocalRated]                     = useState<Record<string, Rating>>({})
   const [success, setSuccess] = useState('')
   const [error, setError]     = useState('')
-  const [activeTab, setActiveTab] = useState<'active' | 'history' | 'cancelled' | 'calendar'>('active')
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState<'active' | 'history' | 'cancelled' | 'calendar'>(
+    searchParams.get('tab') === 'calendar' ? 'calendar' : 'active'
+  )
 
   const { data: consultations = [], isLoading } = useQuery({
     queryKey: ['consultations', 'patient'],
@@ -932,7 +936,7 @@ export default function HistoryPage() {
           </div>
         ) : (
           <div className="card">
-            <SectionTitle>Calendario de citas</SectionTitle>
+            <SectionTitle>Calendario de citas agendadas</SectionTitle>
             <AppointmentsCalendar consultations={consultations} role="PATIENT" />
           </div>
         )}

@@ -45,6 +45,49 @@ export interface PlatformSettingsUpdate {
   alert_new_professional?: boolean
 }
 
+// ── Comisión por período / por profesional ──
+// Complementa a PlatformSettings.commission_percent: permite promociones
+// con fecha de inicio/fin (scope GLOBAL) y comisiones individuales por
+// profesional (scope PROFESSIONAL), por ejemplo un % reducido de
+// bienvenida para profesionales nuevos.
+export type CommissionScope = 'GLOBAL' | 'PROFESSIONAL'
+
+export interface CommissionPeriod {
+  id: string
+  scope: CommissionScope
+  professional_id: string | null
+  percent: number
+  label: string | null
+  starts_at: string
+  ends_at: string | null
+  active: boolean
+  created_at: string
+}
+
+export interface CommissionPeriodCreate {
+  scope: CommissionScope
+  professional_id?: string | null
+  percent: number
+  label?: string
+  starts_at: string
+  ends_at?: string | null
+}
+
+export interface CommissionPeriodUpdate {
+  percent?: number
+  label?: string
+  starts_at?: string
+  ends_at?: string | null
+  active?: boolean
+}
+
+export interface CurrentCommission {
+  percent: number
+  source: 'PROFESSIONAL' | 'GLOBAL_PROMO' | 'DEFAULT'
+  label: string | null
+  ends_at: string | null
+}
+
 // ── Disputas de pago ──────────────────────────────────
 export type DisputeCategory = 'NO_SHOW' | 'MALA_CALIDAD' | 'TECNICO' | 'OTRO'
 export type DisputeResolution = 'RELEASE' | 'REFUND_FULL' | 'REFUND_PARTIAL'
@@ -781,6 +824,24 @@ export const adminAPI = {
 
   updateSettings: (data: PlatformSettingsUpdate) =>
     api.put<PlatformSettings>('/admin/settings', data).then(r => r.data),
+
+  // Períodos/promociones de comisión (globales o por profesional)
+  listCommissionPeriods: (params?: { professional_id?: string; scope?: CommissionScope }) =>
+    api.get<CommissionPeriod[]>('/admin/commission-periods', { params }).then(r => r.data),
+
+  createCommissionPeriod: (data: CommissionPeriodCreate) =>
+    api.post<CommissionPeriod>('/admin/commission-periods', data).then(r => r.data),
+
+  updateCommissionPeriod: (id: string, data: CommissionPeriodUpdate) =>
+    api.put<CommissionPeriod>(`/admin/commission-periods/${id}`, data).then(r => r.data),
+
+  deactivateCommissionPeriod: (id: string) =>
+    api.delete(`/admin/commission-periods/${id}`),
+
+  getCurrentCommission: (professionalId?: string) =>
+    api.get<CurrentCommission>('/admin/commission-periods/current', {
+      params: professionalId ? { professional_id: professionalId } : undefined,
+    }).then(r => r.data),
 
   // Cola de pagos congelados por reclamo del paciente, pendientes de que
   // un admin decida si se liberan al profesional o se reembolsan.

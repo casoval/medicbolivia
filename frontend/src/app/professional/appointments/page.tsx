@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, SectionTitle, Alert } from '@/components/ui'
@@ -68,8 +68,11 @@ function ScheduledAcceptDeadlineTimer({ createdAt, scheduledAt }: { createdAt: s
 export default function ProfessionalAppointmentsPage() {
   const qc = useQueryClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'history' | 'calendar'>('upcoming')
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'history' | 'calendar'>(
+    searchParams.get('tab') === 'calendar' ? 'calendar' : 'upcoming'
+  )
   const [reschedulingId, setReschedulingId] = useState<string | null>(null)
   const [newDateTime, setNewDateTime] = useState('')
 

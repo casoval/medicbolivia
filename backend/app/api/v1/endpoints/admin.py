@@ -16,14 +16,18 @@ from pydantic import BaseModel, Field
 from app.db.database import get_db
 from app.core.dependencies import get_current_admin
 from app.core.maintenance import is_maintenance_active, set_platform_flags
+from decimal import Decimal
+
 from app.models.models import (
     User, Patient, Professional, Consultation, Payment,
     ProfessionalDoc, AuditLog, AgentLog, Notification, PlatformSettings,
     ProfessionalStatus, ConsultationStatus, ConsultationType, PaymentStatus, DocStatus, UserStatus,
-    Rating, ClinicalNote, ProfessionalPenaltyReset, Earning, Prescription
+    Rating, ClinicalNote, ProfessionalPenaltyReset, Earning, Prescription,
+    CommissionPeriod, CommissionScope,
 )
 from app.schemas.schemas import DocReviewRequest, RefundRequest, DisputeResolveRequest
 from app.services.payment import process_refund
+from app.services.commission import get_professional_commission_summary
 from app.core.config import settings
 
 router = APIRouter()
@@ -1162,6 +1166,213 @@ async def update_settings(
 
     logger.info(f"Configuración actualizada por admin {current_user.id}: {changes}")
     return _settings_to_dict(row)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Comisión por período y por profesional
+#
+# Complementa a PlatformSettings.commission_percent (que sigue siendo el
+# valor de respaldo simple). Un CommissionPeriod define un % con vigencia
+# (starts_at → ends_at), de alcance GLOBAL (toda la plataforma, para
+# promociones tipo "10% este mes, 15% el próximo") o PROFESSIONAL (un
+# profesional puntual, ej. tarifa reducida de bienvenida). Si hay un
+# período individual vigente, gana sobre cualquier período global.
+#
+# Las consultas ya cobradas nunca se recalculan: guardan el % aplicado
+# como foto fija (Consultation.commission_percent_applied). Cambiar o
+# borrar un período acá solo afecta consultas futuras.
+# ══════════════════════════════════════════════════════════════════════
+
+class CommissionPeriodCreate(BaseModel):
+    scope: str = Field(..., description="GLOBAL o PROFESSIONAL")
+    professional_id: Optional[str] = Field(None, description="Requerido si scope=PROFESSIONAL")
+    percent: Decimal = Field(..., ge=0, le=100)
+    label: Optional[str] = Field(None, max_length=150)
+    starts_at: datetime
+    ends_at: Optional[datetime] = None
+
+
+class CommissionPeriodUpdate(BaseModel):
+    percent: Optional[Decimal] = Field(None, ge=0, le=100)
+    label: Optional[str] = Field(None, max_length=150)
+    starts_at: Optional[datetime] = None
+    ends_at: Optional[datetime] = None
+    active: Optional[bool] = None
+
+
+def _commission_period_to_dict(p: CommissionPeriod) -> dict:
+    return {
+        "id": p.id,
+        "scope": p.scope,
+        "professional_id": p.professional_id,
+        "percent": p.percent,
+        "label": p.label,
+        "starts_at": p.starts_at.isoformat() if p.starts_at else None,
+        "ends_at": p.ends_at.isoformat() if p.ends_at else None,
+        "active": p.active,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+    }
+
+
+# ── GET /api/v1/admin/commission-periods ─────────────
+@router.get("/commission-periods", summary="Listar períodos de comisión (globales y por profesional)")
+async def list_commission_periods(
+    professional_id: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None),
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(CommissionPeriod).order_by(CommissionPeriod.starts_at.desc())
+    if professional_id:
+        query = query.where(CommissionPeriod.professional_id == professional_id)
+    if scope:
+        query = query.where(CommissionPeriod.scope == scope)
+    rows = (await db.execute(query)).scalars().all()
+    return [_commission_period_to_dict(p) for p in rows]
+
+
+# ── POST /api/v1/admin/commission-periods ────────────
+@router.post("/commission-periods", summary="Crear un período/promoción de comisión")
+async def create_commission_period(
+    data: CommissionPeriodCreate,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if data.scope not in (CommissionScope.GLOBAL.value, CommissionScope.PROFESSIONAL.value):
+        raise HTTPException(status_code=400, detail="scope debe ser GLOBAL o PROFESSIONAL")
+
+    if data.scope == CommissionScope.PROFESSIONAL.value:
+        if not data.professional_id:
+            raise HTTPException(status_code=400, detail="professional_id es requerido cuando scope=PROFESSIONAL")
+        exists = (await db.execute(
+            select(Professional.id).where(Professional.id == data.professional_id)
+        )).scalar_one_or_none()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
+    if data.ends_at and data.ends_at <= data.starts_at:
+        raise HTTPException(status_code=400, detail="ends_at debe ser posterior a starts_at")
+
+    period = CommissionPeriod(
+        scope=data.scope,
+        professional_id=data.professional_id if data.scope == CommissionScope.PROFESSIONAL.value else None,
+        percent=data.percent,
+        label=data.label,
+        starts_at=data.starts_at,
+        ends_at=data.ends_at,
+        created_by=current_user.id,
+    )
+    db.add(period)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="COMMISSION_PERIOD_CREATED",
+        entity_type="CommissionPeriod",
+        entity_id=period.id,
+        metadata_={
+            "scope": data.scope,
+            "professional_id": data.professional_id,
+            "percent": str(data.percent),
+            "starts_at": data.starts_at.isoformat(),
+            "ends_at": data.ends_at.isoformat() if data.ends_at else None,
+        },
+    ))
+
+    await db.commit()
+    await db.refresh(period)
+    logger.info(f"Período de comisión creado por admin {current_user.id}: {data.scope} {data.percent}%")
+    return _commission_period_to_dict(period)
+
+
+# ── PUT /api/v1/admin/commission-periods/{id} ────────
+@router.put("/commission-periods/{period_id}", summary="Editar un período de comisión")
+async def update_commission_period(
+    period_id: str,
+    data: CommissionPeriodUpdate,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    period = (await db.execute(
+        select(CommissionPeriod).where(CommissionPeriod.id == period_id)
+    )).scalar_one_or_none()
+    if not period:
+        raise HTTPException(status_code=404, detail="Período no encontrado")
+
+    changes = data.model_dump(exclude_unset=True)
+    if not changes:
+        return _commission_period_to_dict(period)
+
+    new_starts = changes.get("starts_at", period.starts_at)
+    new_ends = changes.get("ends_at", period.ends_at)
+    if new_ends and new_ends <= new_starts:
+        raise HTTPException(status_code=400, detail="ends_at debe ser posterior a starts_at")
+
+    for field, value in changes.items():
+        setattr(period, field, value)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="COMMISSION_PERIOD_UPDATED",
+        entity_type="CommissionPeriod",
+        entity_id=period.id,
+        metadata_={k: str(v) for k, v in changes.items()},
+    ))
+
+    await db.commit()
+    await db.refresh(period)
+    return _commission_period_to_dict(period)
+
+
+# ── DELETE /api/v1/admin/commission-periods/{id} ─────
+# Borrado lógico (active=False): así el historial de auditoría y las
+# consultas que ya usaron este % no se ven afectadas — solo deja de
+# aplicar hacia adelante.
+@router.delete("/commission-periods/{period_id}", summary="Desactivar un período de comisión")
+async def delete_commission_period(
+    period_id: str,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    period = (await db.execute(
+        select(CommissionPeriod).where(CommissionPeriod.id == period_id)
+    )).scalar_one_or_none()
+    if not period:
+        raise HTTPException(status_code=404, detail="Período no encontrado")
+
+    period.active = False
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="COMMISSION_PERIOD_DEACTIVATED",
+        entity_type="CommissionPeriod",
+        entity_id=period.id,
+        metadata_={},
+    ))
+
+    await db.commit()
+    return {"message": "Período desactivado", "id": period_id}
+
+
+# ── GET /api/v1/admin/commission-periods/current ─────
+# Ayuda al admin a previsualizar qué % aplicaría ahora mismo para un
+# profesional (o el global si no se pasa professional_id), antes de crear
+# un nuevo período — evita promociones que se pisen sin darse cuenta.
+@router.get("/commission-periods/current", summary="Ver qué % de comisión aplica ahora mismo")
+async def get_current_commission(
+    professional_id: Optional[str] = Query(None),
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if professional_id:
+        info = await get_professional_commission_summary(db, professional_id)
+    else:
+        info = await get_professional_commission_summary(db, professional_id=None)
+    return {
+        "percent": info["percent"],
+        "source": info["source"],
+        "label": info["label"],
+        "ends_at": info["ends_at"].isoformat() if info["ends_at"] else None,
+    }
 
 
 # ── GET /api/v1/admin/maintenance-status ─────────────

@@ -86,6 +86,19 @@ export default function ProfilePage() {
   const [viewingDoc, setViewingDoc] = useState<{ label: string; url: string } | null>(null)
   const [showNotifs, setShowNotifs] = useState(false)
 
+  // % de comisión vigente ahora mismo (individual > promo global > default)
+  // y cuánto le llegaría neto por cada tipo de consulta con los precios
+  // actuales — para mostrar transparencia total antes de que se cobre nada.
+  const [commission, setCommission] = useState<{
+    percent: number
+    source: 'PROFESSIONAL' | 'GLOBAL_PROMO' | 'DEFAULT'
+    label: string | null
+    ends_at: string | null
+    net_price_general: number | null
+    net_price_urgent: number | null
+    net_price_follow_up: number | null
+  } | null>(null)
+
   // Datos de registro — solo lectura, para que el profesional recuerde qué colocó
   const [registrationData, setRegistrationData] = useState<{
     first_name?: string; last_name?: string; ci?: string; birth_date?: string
@@ -145,6 +158,7 @@ export default function ProfilePage() {
         Number(data.price_general) === Number(data.price_urgent) &&
         Number(data.price_general) === Number(data.price_follow_up)
       ) setSamePriceAll(true)
+      if (data.commission) setCommission(data.commission)
       setRegistrationData(data)
     }).catch(() => {/* silencioso — el perfil puede estar vacío */})
   }, [])
@@ -229,6 +243,16 @@ export default function ProfilePage() {
     if (value === '') return false
     const n = Number(value)
     return Number.isInteger(n) && n > 0
+  }
+
+  // Cuánto le llegaría neto al profesional por un precio dado, usando el %
+  // de comisión vigente ahora mismo. Se recalcula en vivo mientras escribe,
+  // así ve el efecto de cada cambio de precio antes de guardar.
+  function netOfPrice(value: string): string | null {
+    if (!commission || !priceIsValid(value)) return null
+    const price = Number(value)
+    const net = price - (price * commission.percent) / 100
+    return net.toFixed(2)
   }
 
   function handleGeneralPriceChange(value: string) {
@@ -521,6 +545,24 @@ export default function ProfilePage() {
             {pricesError   && <div className="mb-3"><Alert type="error"   message={pricesError} /></div>}
             {pricesSuccess && <div className="mb-3"><Alert type="success" message={pricesSuccess} /></div>}
 
+            {commission && (
+              <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-4">
+                <p className="text-xs text-[#185FA5]">
+                  Comisión de la plataforma: <span className="font-semibold">{commission.percent}%</span>
+                  {' '}— recibes el <span className="font-semibold">{(100 - commission.percent).toFixed(2)}%</span> de cada consulta.
+                  {commission.source === 'PROFESSIONAL' && (
+                    <> Tarifa promocional exclusiva para ti{commission.label ? ` (${commission.label})` : ''}.</>
+                  )}
+                  {commission.source === 'GLOBAL_PROMO' && (
+                    <> Promoción activa en toda la plataforma{commission.label ? ` (${commission.label})` : ''}.</>
+                  )}
+                  {commission.ends_at && (
+                    <> Vigente hasta el {new Date(commission.ends_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}.</>
+                  )}
+                </p>
+              </div>
+            )}
+
             <label className="flex items-center gap-2 mb-4 cursor-pointer">
               <input
                 type="checkbox"
@@ -543,6 +585,9 @@ export default function ProfilePage() {
                   value={priceGeneral}
                   onChange={(e) => handleGeneralPriceChange(e.target.value)}
                 />
+                {netOfPrice(priceGeneral) && (
+                  <p className="text-xs text-[#0F6E56] mt-1 font-medium">Recibes Bs. {netOfPrice(priceGeneral)}</p>
+                )}
                 {!samePriceAll && (
                   <p className="text-xs text-[#A0A8BF] mt-1">El paciente agenda una cita para más adelante</p>
                 )}
@@ -561,6 +606,9 @@ export default function ProfilePage() {
                       value={priceUrgent}
                       onChange={(e) => setPriceUrgent(e.target.value.replace(/[^\d]/g, ''))}
                     />
+                    {netOfPrice(priceUrgent) && (
+                      <p className="text-xs text-[#0F6E56] mt-1 font-medium">Recibes Bs. {netOfPrice(priceUrgent)}</p>
+                    )}
                     <p className="text-xs text-[#A0A8BF] mt-1">El paciente entra ahora mismo, sin cita previa</p>
                   </div>
 
@@ -575,6 +623,9 @@ export default function ProfilePage() {
                       value={priceFollowUp}
                       onChange={(e) => setPriceFollowUp(e.target.value.replace(/[^\d]/g, ''))}
                     />
+                    {netOfPrice(priceFollowUp) && (
+                      <p className="text-xs text-[#0F6E56] mt-1 font-medium">Recibes Bs. {netOfPrice(priceFollowUp)}</p>
+                    )}
                     <p className="text-xs text-[#A0A8BF] mt-1">
                       Solo la ven pacientes que ya tuvieron una consulta completada contigo, y también se agenda con fecha y hora
                     </p>

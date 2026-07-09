@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import Optional, List
+from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from loguru import logger
@@ -24,6 +25,7 @@ from app.schemas.schemas import (
     ScheduleSetRequest, ScheduleResponse
 )
 from app.services.storage import upload_document_to_r2, upload_photo_to_r2
+from app.services.commission import get_professional_commission_summary
 
 router = APIRouter()
 
@@ -389,6 +391,18 @@ async def get_my_profile(
     if not professional:
         raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
 
+    # % de comisión vigente ahora mismo para este profesional (individual >
+    # promo global > default) — para que el profesional vea con total
+    # transparencia cuánto le llega neto por cada tipo de consulta antes de
+    # que se le cobre nada. Ver app/services/commission.py.
+    commission_info = await get_professional_commission_summary(db, professional.id)
+    commission_percent = commission_info["percent"]
+
+    def _net(price):
+        if price is None:
+            return None
+        return (price - (price * commission_percent / 100)).quantize(Decimal("0.01"))
+
     return {
         "first_name": professional.first_name,
         "last_name": professional.last_name,
@@ -407,6 +421,19 @@ async def get_my_profile(
         "price_general": professional.price_general,
         "price_urgent": professional.price_urgent,
         "price_follow_up": professional.price_follow_up,
+        # Transparencia de comisión: % vigente ahora mismo y cuánto le
+        # llegaría neto por cada tipo de consulta con los precios actuales.
+        # source: "PROFESSIONAL" (promo individual), "GLOBAL_PROMO"
+        # (promo de toda la plataforma) o "DEFAULT" (comisión estándar).
+        "commission": {
+            "percent": commission_info["percent"],
+            "source": commission_info["source"],
+            "label": commission_info["label"],
+            "ends_at": commission_info["ends_at"].isoformat() if commission_info["ends_at"] else None,
+            "net_price_general": _net(professional.price_general),
+            "net_price_urgent": _net(professional.price_urgent),
+            "net_price_follow_up": _net(professional.price_follow_up),
+        },
         "photo_url": professional.photo_url,
         "bio": professional.bio,
         "languages": ", ".join(professional.languages) if professional.languages else "Español",

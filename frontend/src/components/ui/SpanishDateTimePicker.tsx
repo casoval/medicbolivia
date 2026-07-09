@@ -127,3 +127,96 @@ export function SpanishDateTimePicker({ value, onChange }: { value: string; onCh
     </div>
   )
 }
+
+// ── SpanishDatePicker: mismo calendario en español (lunes primero), pero solo
+// fecha (sin hora). Reemplaza <input type="date">, cuyo selector nativo del
+// navegador sale en el idioma/orden del sistema operativo (en Chrome suele
+// salir en inglés con domingo primero) y no se puede forzar desde CSS/JS. ──
+export function SpanishDatePicker({ value, onChange }: { value: Date; onChange: (d: Date) => void }) {
+  const [open, setOpen] = useState(false)
+  const [viewYear, setViewYear] = useState(value.getFullYear())
+  const [viewMonth, setViewMonth] = useState(value.getMonth())
+
+  function openPicker() {
+    setViewYear(value.getFullYear())
+    setViewMonth(value.getMonth())
+    setOpen(true)
+  }
+
+  const firstDay = new Date(viewYear, viewMonth, 1)
+  const leadingBlanks = (firstDay.getDay() + 6) % 7 // lunes primero
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const selectedDay =
+    value.getFullYear() === viewYear && value.getMonth() === viewMonth ? value.getDate() : null
+
+  function pickDay(day: number) {
+    onChange(new Date(viewYear, viewMonth, day))
+    setOpen(false)
+  }
+
+  const displayLabel = `${String(value.getDate()).padStart(2, '0')}/${String(value.getMonth() + 1).padStart(2, '0')}/${value.getFullYear()}`
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => (open ? setOpen(false) : openPicker())}
+        className="text-xs border border-[#DDE1EE] rounded-lg px-2 py-1 text-[#6B738A] bg-white hover:bg-[#F4F6FB]"
+        aria-label="Ir a una fecha"
+      >
+        🗓 {displayLabel}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 top-full right-0 mt-1 bg-white border border-[#DDE1EE] rounded-xl shadow-lg p-3 w-64">
+            <div className="flex items-center justify-between mb-2">
+              <button
+                type="button"
+                onClick={() => { const d = new Date(viewYear, viewMonth - 1); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()) }}
+                className="text-xs px-2 py-1 text-[#6B738A] hover:text-[#185FA5]"
+              >‹</button>
+              <span className="text-xs font-semibold capitalize">{MESES_ES[viewMonth]} {viewYear}</span>
+              <button
+                type="button"
+                onClick={() => { const d = new Date(viewYear, viewMonth + 1); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()) }}
+                className="text-xs px-2 py-1 text-[#6B738A] hover:text-[#185FA5]"
+              >›</button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {DIAS_ES.map((d) => (
+                <div key={d} className="text-[10px] text-center text-[#A0A8BF] font-medium">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: leadingBlanks }).map((_, i) => <div key={`b${i}`} />)}
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => pickDay(day)}
+                  className={`text-xs rounded-full py-1 ${
+                    selectedDay === day ? 'bg-[#185FA5] text-white' : 'hover:bg-[#F5F6FA] text-[#141820]'
+                  }`}
+                >
+                  {day}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-2 flex justify-between">
+              <button type="button" onClick={() => { onChange(new Date()); setOpen(false) }} className="text-xs text-[#185FA5] font-medium">
+                Hoy
+              </button>
+              <button type="button" onClick={() => setOpen(false)} className="text-xs text-[#6B738A]">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

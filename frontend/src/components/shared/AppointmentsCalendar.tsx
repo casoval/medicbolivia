@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { StatusBadge } from '@/components/ui'
+import { SpanishDatePicker } from '@/components/ui/SpanishDateTimePicker'
 import { fmtFechaHoraLocal } from '@/lib/consultationHistory'
 import type { Consultation, ConsultationStatus } from '@/types'
 
@@ -90,16 +91,6 @@ function startOfWeek(d: Date) {
   const offset = (d.getDay() + 6) % 7 // lunes = 0
   return addDays(d, -offset)
 }
-function toInputDate(d: Date) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-function fromInputDate(s: string) {
-  const [y, m, d] = s.split('-').map(Number)
-  return new Date(y, m - 1, d)
-}
 function fmtLongDate(d: Date) {
   return `${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`
 }
@@ -115,11 +106,31 @@ function plannedDuration(c: Consultation) {
   return c.professional_appointment_duration_minutes || DEFAULT_SLOT_MIN
 }
 
-// Rango horario visible en las vistas Día/Semana.
-const DAY_START_HOUR = 7
-const DAY_END_HOUR = 20
+// Rango horario por defecto de las vistas Día/Semana. Es solo un punto de
+// partida: si hay citas fuera de este rango (madrugada, noche), la grilla se
+// expande automáticamente para que ninguna cita quede oculta — ver hourRangeFor().
+const DEFAULT_DAY_START_HOUR = 7
+const DEFAULT_DAY_END_HOUR = 20
 const ROW_PX = 22 // px por cada 15 minutos
 const HOUR_PX = ROW_PX * 4
+
+// Calcula el rango de horas [inicio, fin] que debe cubrir la grilla para que
+// todas las citas recibidas (de uno o varios días) queden visibles, ampliando
+// el rango por defecto 7-20 hacia abajo y/o hacia arriba según haga falta.
+function hourRangeFor(apptsGroups: Consultation[][]): [number, number] {
+  let start = DEFAULT_DAY_START_HOUR
+  let end = DEFAULT_DAY_END_HOUR
+  for (const appts of apptsGroups) {
+    for (const c of appts) {
+      const d = new Date(c.scheduled_at as string)
+      const startMin = d.getHours() * 60 + d.getMinutes()
+      const endMin = startMin + plannedDuration(c)
+      start = Math.min(start, Math.floor(startMin / 60))
+      end = Math.max(end, Math.ceil(endMin / 60))
+    }
+  }
+  return [Math.max(0, start), Math.min(24, end)]
+}
 
 type ViewMode = 'agenda' | 'day' | 'week' | 'month'
 
@@ -248,13 +259,9 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
           >
             ›
           </button>
-          <input
-            type="date"
-            value={toInputDate(cursor)}
-            onChange={(e) => e.target.value && setCursor(fromInputDate(e.target.value))}
-            className="ml-1 text-xs border border-[#DDE1EE] rounded-lg px-1.5 py-1 text-[#6B738A]"
-            aria-label="Ir a una fecha"
-          />
+          <span className="ml-1">
+            <SpanishDatePicker value={cursor} onChange={setCursor} />
+          </span>
         </div>
         <label className="flex items-center gap-1.5 text-xs text-[#6B738A]">
           <input
@@ -408,9 +415,9 @@ function AgendaView({
 // ─────────────────────────────────────────────────────
 // Grilla horaria (usada por Día y por cada columna de Semana)
 // ─────────────────────────────────────────────────────
-function hourLabels() {
+function hourLabels(startHour: number, endHour: number) {
   const labels: string[] = []
-  for (let h = DAY_START_HOUR; h <= DAY_END_HOUR; h++) {
+  for (let h = startHour; h <= endHour; h++) {
     labels.push(`${String(h).padStart(2, '0')}:00`)
   }
   return labels
@@ -470,14 +477,15 @@ function DayGrid({
   onSelect: (c: Consultation) => void
   compact?: boolean
 }) {
-  const labels = hourLabels()
-  const totalMin = (DAY_END_HOUR - DAY_START_HOUR) * 60
+  const [startHour, endHour] = hourRangeFor([appts])
+  const labels = hourLabels(startHour, endHour)
+  const totalMin = (endHour - startHour) * 60
   const gridHeight = (totalMin / 15) * ROW_PX
   const layout = layoutOverlaps(appts)
   const now = new Date()
   const nowOffset =
-    isToday && now.getHours() >= DAY_START_HOUR && now.getHours() <= DAY_END_HOUR
-      ? ((now.getHours() * 60 + now.getMinutes() - DAY_START_HOUR * 60) / 15) * ROW_PX
+    isToday && now.getHours() >= startHour && now.getHours() <= endHour
+      ? ((now.getHours() * 60 + now.getMinutes() - startHour * 60) / 15) * ROW_PX
       : null
 
   return (
@@ -512,7 +520,7 @@ function DayGrid({
             )}
             {layout.map(({ c, col, cols }) => {
               const start = new Date(c.scheduled_at as string)
-              const startMin = start.getHours() * 60 + start.getMinutes() - DAY_START_HOUR * 60
+              const startMin = start.getHours() * 60 + start.getMinutes() - startHour * 60
               const dur = plannedDuration(c)
               const top = (startMin / 15) * ROW_PX
               const height = Math.max((dur / 15) * ROW_PX - 2, 18)
@@ -562,8 +570,10 @@ function WeekView({
 }) {
   const start = startOfWeek(cursor)
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i))
-  const labels = hourLabels()
-  const totalMin = (DAY_END_HOUR - DAY_START_HOUR) * 60
+  const weekAppts = days.map((d) => apptsOn(d))
+  const [startHour, endHour] = hourRangeFor(weekAppts)
+  const labels = hourLabels(startHour, endHour)
+  const totalMin = (endHour - startHour) * 60
   const gridHeight = (totalMin / 15) * ROW_PX
   // 44px para la columna de horas + 7 columnas de mínimo 64px cada una.
   // En pantallas angostas la grilla completa no entra y aparece scroll
@@ -599,14 +609,14 @@ function WeekView({
                 </div>
               ))}
             </div>
-            {days.map((d) => (
+            {days.map((d, di) => (
               <div key={d.toISOString()} className="relative border-l border-[#ECEEF5]">
                 {labels.map((_, i) => (
                   <div key={i} className="absolute left-0 right-0 border-t border-[#ECEEF5]" style={{ top: i * HOUR_PX }} />
                 ))}
-                {layoutOverlaps(apptsOn(d)).map(({ c, col, cols: nCols }) => {
+                {layoutOverlaps(weekAppts[di]).map(({ c, col, cols: nCols }) => {
                   const s = new Date(c.scheduled_at as string)
-                  const startMin = s.getHours() * 60 + s.getMinutes() - DAY_START_HOUR * 60
+                  const startMin = s.getHours() * 60 + s.getMinutes() - startHour * 60
                   const dur = plannedDuration(c)
                   const top = (startMin / 15) * ROW_PX
                   const height = Math.max((dur / 15) * ROW_PX - 2, 16)
@@ -687,8 +697,6 @@ function MonthView({
             const inMonth = d.getMonth() === month
             const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
             const dayAppts = byDay.get(key) || []
-            const visible = dayAppts.slice(0, 3)
-            const overflow = dayAppts.length - visible.length
             return (
               <div
                 key={i}
@@ -704,7 +712,7 @@ function MonthView({
                   {d.getDate()}
                 </span>
                 <div className="flex flex-col gap-0.5">
-                  {visible.map((c) => (
+                  {dayAppts.map((c) => (
                     <button
                       key={c.id}
                       onClick={() => onSelect(c)}
@@ -717,7 +725,6 @@ function MonthView({
                       {timeOf(c.scheduled_at as string)} {nameOf(c)}
                     </button>
                   ))}
-                  {overflow > 0 && <span className="text-[10px] text-[#6B738A] px-1">+{overflow} más</span>}
                 </div>
               </div>
             )

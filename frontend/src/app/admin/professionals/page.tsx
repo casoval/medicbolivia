@@ -1,11 +1,11 @@
 'use client'
 // src/app/admin/professionals/page.tsx — con filtro ciudad, contadores en tabs, mas datos y documentos de verificación
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, Alert } from '@/components/ui'
-import { api, getErrorMessage } from '@/lib/api'
+import { api, adminAPI, getErrorMessage, type CommissionPeriod } from '@/lib/api'
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
 
 const DEPARTMENTS = ['Todos','La Paz','Santa Cruz','Cochabamba','Oruro','Potosi','Tarija','Beni','Pando','Chuquisaca']
@@ -392,6 +392,198 @@ function ProfessionalDocsSection({ professionalId }: { professionalId: string })
     </div>
   )
 }
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// Comisión INDIVIDUAL para este profesional puntual: puede ser PERMANENTE
+// (ej. "este profesional siempre paga 20%, sin importar la comisión global")
+// o una PROMOCIÓN con fecha de inicio/fin (ej. "5% los primeros 3 meses").
+// Si no hay ninguna activa, se le aplica la comisión global de la plataforma
+// (o la promo global vigente, si hay una).
+function ProfessionalCommissionSection({ professionalId }: { professionalId: string }) {
+  const [periods, setPeriods] = useState<CommissionPeriod[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  const [mode, setMode] = useState<'permanent' | 'promo'>('permanent')
+  const [percent, setPercent] = useState('20')
+  const [label, setLabel] = useState('')
+  const [startsAt, setStartsAt] = useState('')
+  const [endsAt, setEndsAt] = useState('')
+
+  function load() {
+    setLoading(true)
+    adminAPI.listCommissionPeriods({ professional_id: professionalId, scope: 'PROFESSIONAL' })
+      .then(setPeriods)
+      .catch((err) => setError(getErrorMessage(err)))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(load, [professionalId])
+
+  async function createPeriod() {
+    setError('')
+    const p = Number(percent)
+    if (Number.isNaN(p) || p < 0 || p > 100) {
+      setError('El porcentaje debe estar entre 0 y 100')
+      return
+    }
+    // Permanente: arranca hoy y no tiene fecha de fin.
+    // Promoción: el admin elige desde/hasta explícitamente.
+    if (mode === 'promo' && !startsAt) {
+      setError('Indica la fecha de inicio de la promoción')
+      return
+    }
+    const effectiveStartsAt = mode === 'permanent'
+      ? new Date().toISOString()
+      : new Date(startsAt).toISOString()
+    const effectiveEndsAt = mode === 'permanent'
+      ? null
+      : (endsAt ? new Date(endsAt).toISOString() : null)
+
+    setCreating(true)
+    try {
+      await adminAPI.createCommissionPeriod({
+        scope: 'PROFESSIONAL',
+        professional_id: professionalId,
+        percent: p,
+        label: label || (mode === 'permanent' ? 'Comisión fija' : undefined),
+        starts_at: effectiveStartsAt,
+        ends_at: effectiveEndsAt,
+      })
+      setLabel(''); setStartsAt(''); setEndsAt('')
+      load()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function deactivate(id: string) {
+    try {
+      await adminAPI.deactivateCommissionPeriod(id)
+      load()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    }
+  }
+
+  const now = Date.now()
+  const current = periods.find((p) => {
+    if (!p.active) return false
+    const started = new Date(p.starts_at).getTime()
+    const ended = p.ends_at ? new Date(p.ends_at).getTime() : null
+    return started <= now && (!ended || ended > now)
+  })
+  const currentIsPermanent = !!current && !current.ends_at
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Comisión individual</p>
+        <button onClick={() => setOpen((v) => !v)} className="text-xs text-[#185FA5] hover:underline">
+          {open ? 'Ocultar' : current ? 'Editar' : 'Configurar'}
+        </button>
+      </div>
+
+      {current ? (
+        <div className="bg-[#E1F5EE] rounded-lg px-3 py-2 mb-2">
+          <p className="text-xs text-[#0F6E56]">
+            Este profesional tiene una comisión {currentIsPermanent ? 'fija (permanente)' : 'promocional'} del{' '}
+            <span className="font-semibold">{current.percent}%</span>
+            {current.label ? ` (${current.label})` : ''}
+            {currentIsPermanent ? '.' : current.ends_at ? ` vigente hasta el ${fmtDate(current.ends_at)}.` : ' vigente.'}
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-[#A0A8BF] mb-2">Sin comisión individual — usa la comisión general de la plataforma.</p>
+      )}
+
+      {open && (
+        <div className="bg-[#F5F6FA] rounded-lg p-3 space-y-2">
+          {error && <div><Alert type="error" message={error} /></div>}
+
+          <div className="flex rounded-lg overflow-hidden border border-[#DDE1EE] text-xs">
+            <button
+              onClick={() => setMode('permanent')}
+              className={`flex-1 py-1.5 ${mode === 'permanent' ? 'bg-[#185FA5] text-white' : 'bg-white text-[#6B738A]'}`}
+            >
+              Permanente
+            </button>
+            <button
+              onClick={() => setMode('promo')}
+              className={`flex-1 py-1.5 ${mode === 'promo' ? 'bg-[#185FA5] text-white' : 'bg-white text-[#6B738A]'}`}
+            >
+              Promoción con fecha
+            </button>
+          </div>
+          <p className="text-[10px] text-[#A0A8BF]">
+            {mode === 'permanent'
+              ? 'Aplica desde hoy y no tiene fecha de fin. Reemplaza la comisión general para este profesional hasta que la desactives.'
+              : 'Aplica solo entre las fechas indicadas (ej. "5% los primeros 3 meses"). Al terminar, vuelve a aplicarse la comisión permanente o la general.'}
+          </p>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-[#6B738A] mb-1">% comisión</label>
+              <input type="number" min={0} max={100} value={percent}
+                onChange={(e) => setPercent(e.target.value)}
+                className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-[#6B738A] mb-1">Etiqueta (opcional)</label>
+              <input value={label} onChange={(e) => setLabel(e.target.value)}
+                placeholder={mode === 'permanent' ? 'Comisión fija' : 'Bienvenida'}
+                className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+            </div>
+            {mode === 'promo' && (
+              <>
+                <div>
+                  <label className="block text-xs text-[#6B738A] mb-1">Desde</label>
+                  <input type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)}
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#6B738A] mb-1">Hasta (opcional)</label>
+                  <input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)}
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
+              </>
+            )}
+          </div>
+          <button onClick={createPeriod} disabled={creating}
+            className="btn-primary text-xs py-1.5 px-3 disabled:opacity-60">
+            {creating ? 'Guardando…' : mode === 'permanent' ? 'Fijar comisión permanente' : 'Crear promoción individual'}
+          </button>
+
+          {!loading && periods.length > 0 && (
+            <div className="pt-2 border-t border-[#DDE1EE] space-y-1">
+              {periods.map((p) => (
+                <div key={p.id} className="flex items-center justify-between text-xs">
+                  <span>
+                    {p.percent}% {p.label && `— ${p.label}`} · desde {fmtDate(p.starts_at)}
+                    {p.ends_at ? ` hasta ${fmtDate(p.ends_at)}` : ' · permanente'}
+                    {!p.active && ' (desactivada)'}
+                  </span>
+                  {p.active && (
+                    <button onClick={() => deactivate(p.id)} className="text-[#A32D2D] hover:underline">
+                      Desactivar
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   professional: Professional; onClose: () => void
   onAction: (id: string, status: string) => void; loading: boolean
@@ -464,6 +656,10 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
               <div className="text-center"><p className="text-sm font-bold text-[#A32D2D]">Bs. {pro.price_urgent || 0}</p><p className="text-xs text-[#6B738A]">Urgente</p></div>
               <div className="text-center"><p className="text-sm font-bold text-[#0F6E56]">Bs. {pro.price_follow_up || 0}</p><p className="text-xs text-[#6B738A]">Seguimiento</p></div>
             </div>
+          </div>
+
+          <div className="pt-2 border-t border-[#DDE1EE]">
+            <ProfessionalCommissionSection professionalId={pro.id} />
           </div>
           {pro.bio && (
             <div>

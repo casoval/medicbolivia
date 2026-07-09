@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { Alert, SectionTitle } from '@/components/ui'
-import { adminAPI, getErrorMessage, type PlatformSettings, type PlatformSettingsUpdate } from '@/lib/api'
+import {
+  adminAPI, getErrorMessage,
+  type PlatformSettings, type PlatformSettingsUpdate, type CommissionPeriod,
+} from '@/lib/api'
 
 function Toggle({ on, onChange, disabled }: { on: boolean; onChange?: (v: boolean) => void; disabled?: boolean }) {
   return (
@@ -77,6 +80,183 @@ function toApiPayload(state: {
     alert_low_rating: state.alerts.lowRating,
     alert_new_professional: state.alerts.newProfessional,
   }
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// Gestión de promociones de comisión a nivel de TODA la plataforma
+// (scope=GLOBAL). Para comisiones individuales por profesional, ver el
+// perfil de cada profesional en Admin → Profesionales.
+function CommissionPeriodsSection() {
+  const [periods, setPeriods] = useState<CommissionPeriod[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  const [percent, setPercent] = useState('10')
+  const [label, setLabel] = useState('')
+  const [startsAt, setStartsAt] = useState('')
+  const [endsAt, setEndsAt] = useState('')
+
+  function load() {
+    setLoading(true)
+    adminAPI.listCommissionPeriods({ scope: 'GLOBAL' })
+      .then(setPeriods)
+      .catch((err) => setError(getErrorMessage(err)))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(load, [])
+
+  async function createPeriod() {
+    setError('')
+    const p = Number(percent)
+    if (Number.isNaN(p) || p < 0 || p > 100) {
+      setError('El porcentaje debe estar entre 0 y 100')
+      return
+    }
+    if (!startsAt) {
+      setError('Indica la fecha de inicio de la promoción')
+      return
+    }
+    setCreating(true)
+    try {
+      await adminAPI.createCommissionPeriod({
+        scope: 'GLOBAL',
+        percent: p,
+        label: label || undefined,
+        starts_at: new Date(startsAt).toISOString(),
+        ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+      })
+      setLabel('')
+      setStartsAt('')
+      setEndsAt('')
+      load()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function deactivate(id: string) {
+    try {
+      await adminAPI.deactivateCommissionPeriod(id)
+      load()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    }
+  }
+
+  const now = Date.now()
+
+  return (
+    <div className="card lg:col-span-2">
+      <SectionTitle>Promociones de comisión (toda la plataforma)</SectionTitle>
+      <p className="text-xs text-[#6B738A] mb-3">
+        Crea periodos con % distinto al de la comisión por defecto de arriba — por ejemplo, 10% este mes y 15% el próximo.
+        Las consultas ya cobradas conservan el % que estaba vigente cuando se generaron, nunca se recalculan.
+        Para dar un % distinto a un profesional puntual (ej. promo de bienvenida), hazlo desde su perfil en{' '}
+        <span className="font-medium">Profesionales</span>.
+      </p>
+
+      {error && <div className="mb-3"><Alert type="error" message={error} /></div>}
+
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end mb-4 bg-[#F5F6FA] rounded-lg p-3">
+        <div>
+          <label className="block text-xs font-medium text-[#6B738A] mb-1">% comisión</label>
+          <input
+            type="number" min={0} max={100}
+            className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
+            value={percent}
+            onChange={(e) => setPercent(e.target.value)}
+          />
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <label className="block text-xs font-medium text-[#6B738A] mb-1">Etiqueta (opcional)</label>
+          <input
+            className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
+            placeholder="Promo julio"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-[#6B738A] mb-1">Desde</label>
+          <input
+            type="date"
+            className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
+            value={startsAt}
+            onChange={(e) => setStartsAt(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-[#6B738A] mb-1">Hasta (opcional)</label>
+          <input
+            type="date"
+            className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
+            value={endsAt}
+            onChange={(e) => setEndsAt(e.target.value)}
+          />
+        </div>
+        <button
+          onClick={createPeriod}
+          disabled={creating}
+          className="btn-primary text-xs py-1.5 px-3 disabled:opacity-60"
+        >
+          {creating ? 'Creando…' : 'Crear promoción'}
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="h-16 animate-pulse bg-[#F5F6FA] rounded-lg" />
+      ) : periods.length === 0 ? (
+        <p className="text-xs text-[#A0A8BF]">No hay promociones globales configuradas. Se usa la comisión por defecto.</p>
+      ) : (
+        <div className="space-y-2">
+          {periods.map((p) => {
+            const started = new Date(p.starts_at).getTime()
+            const ended = p.ends_at ? new Date(p.ends_at).getTime() : null
+            const isCurrent = p.active && started <= now && (!ended || ended > now)
+            const isFuture = p.active && started > now
+            return (
+              <div key={p.id} className="flex items-center justify-between bg-[#F5F6FA] rounded-lg px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium">
+                    {p.percent}% {p.label && <span className="text-[#6B738A] font-normal">— {p.label}</span>}
+                  </p>
+                  <p className="text-xs text-[#A0A8BF]">
+                    Desde {fmtDate(p.starts_at)} {p.ends_at ? `hasta ${fmtDate(p.ends_at)}` : '· sin fecha de fin'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!p.active ? (
+                    <span className="text-xs text-[#A0A8BF]">Desactivada</span>
+                  ) : isCurrent ? (
+                    <span className="text-xs text-[#0F6E56] font-medium">● Vigente ahora</span>
+                  ) : isFuture ? (
+                    <span className="text-xs text-[#185FA5] font-medium">Programada</span>
+                  ) : (
+                    <span className="text-xs text-[#A0A8BF]">Finalizada</span>
+                  )}
+                  {p.active && (
+                    <button
+                      onClick={() => deactivate(p.id)}
+                      className="text-xs text-[#A32D2D] hover:underline"
+                    >
+                      Desactivar
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function AdminSettingsPage() {
@@ -259,6 +439,9 @@ export default function AdminSettingsPage() {
               </div>
             </>
           )}
+
+          {/* Promociones de comisión global */}
+          <CommissionPeriodsSection />
 
           {/* Info del sistema */}
           <div className="card lg:col-span-2">

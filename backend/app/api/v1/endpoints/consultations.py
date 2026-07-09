@@ -24,6 +24,7 @@ from app.schemas.schemas import (
     DisputeCreateRequest
 )
 from app.services.payment import generate_qr_data, calculate_amounts
+from app.services.commission import resolve_commission_percent
 from app.core.config import settings
 from livekit import api as lk
 
@@ -480,7 +481,11 @@ async def create_consultation(
         amount = professional.price_urgent
     elif data.consultation_type == ConsultationType.FOLLOW_UP:
         amount = professional.price_follow_up
-    amounts = calculate_amounts(amount)
+    # Resuelve el % vigente AHORA para este profesional (individual > promo
+    # global > default). Queda como foto fija — no se recalcula si el %
+    # cambia después.
+    commission_percent = await resolve_commission_percent(db, professional.id)
+    amounts = calculate_amounts(amount, commission_percent)
 
     # ── Flujo según tipo de consulta ──────────────────────────────────────────
     # INMEDIATA          : empieza en WAITING_PROFESSIONAL — el profesional acepta
@@ -507,6 +512,7 @@ async def create_consultation(
         amount=amounts["amount"],
         platform_fee=amounts["platform_fee"],
         professional_earning=amounts["professional_net"],
+        commission_percent_applied=amounts["commission_percent"],
     )
     db.add(consultation)
     await db.flush()
@@ -820,6 +826,7 @@ async def generate_payment_qr(
         patient_id=patient.id,
         amount=consultation.amount,
         platform_fee=consultation.platform_fee,
+        commission_percent_applied=consultation.commission_percent_applied,
         professional_net=consultation.professional_earning,
         qr_code=qr_data["qr_code"],
         qr_expires_at=qr_data["expires_at"],
@@ -1198,6 +1205,7 @@ async def simulate_payment(
                 amount=consultation.amount,
                 platform_fee=consultation.platform_fee,
                 professional_net=consultation.professional_earning,
+                commission_percent_applied=consultation.commission_percent_applied,
                 qr_code=f"SIM-{consultation_id[:8].upper()}",
                 status=PaymentStatus.CONFIRMED,
                 bank_tx_id=f"SIM-{consultation_id[:8].upper()}",
