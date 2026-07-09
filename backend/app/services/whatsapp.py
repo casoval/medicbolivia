@@ -1,7 +1,14 @@
 """
 app/services/whatsapp.py
-Envío de mensajes vía WhatsApp Cloud API (Meta) para verificación
-de teléfono mediante código OTP en el registro de MedicBolivia.
+Envío del código OTP (verificación de teléfono / recuperación de
+contraseña) a través de whatsapp-service (whatsapp-web.js) — el mismo
+microservicio Node que usa el resto de la app para recordatorios y
+respuestas del agente. Ya NO se usa WhatsApp Cloud API (Meta) para esto:
+mandar mensajes de negocio vía Cloud API requiere una plantilla
+"Authentication" pre-aprobada por Meta, lo cual agregaba una dependencia
+externa frágil (ver historial: fallaba con 132001 "template name does
+not exist") para algo que whatsapp-web.js ya resuelve sin plantillas,
+porque manda texto libre desde un número real conectado por QR.
 """
 import httpx
 from loguru import logger
@@ -10,62 +17,34 @@ from app.core.config import settings
 from app.core.phone import normalize_bo_phone
 
 
-def _whatsapp_api_url() -> str:
-    return (
-        f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}"
-        f"/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
-    )
-
-
-def _to_e164(phone: str) -> str:
-    """
-    Delega en app.core.phone.normalize_bo_phone — antes esta función
-    tenía su propia normalización duplicada (y más laxa: no forzaba el
-    código de país). Ver ese módulo para el porqué del formato canónico.
-    """
-    return normalize_bo_phone(phone)
-
-
 async def send_whatsapp_otp(phone: str, code: str) -> bool:
     """
-    Envía el código OTP usando una plantilla de mensajes (categoría
-    "Authentication") previamente aprobada en Meta Business Manager.
+    Envía el código OTP como mensaje de texto plano vía whatsapp-service.
 
-    IMPORTANTE: la Cloud API NO permite mandar texto libre a un número
-    que nunca te escribió primero (o que no escribió en las últimas 24h).
-    Para mensajes iniciados por el negocio (como un OTP) es obligatorio
-    usar una plantilla aprobada. Creála en:
-    business.facebook.com -> WhatsApp Manager -> Plantillas de mensajes
-    -> categoría "Autenticación", con una variable {{1}} para el código.
-
-    Ajustá WHATSAPP_OTP_TEMPLATE_NAME / WHATSAPP_OTP_TEMPLATE_LANG en el
-    .env para que coincidan exactamente con el nombre e idioma de tu
-    plantilla aprobada.
+    Requiere que el microservicio Node (whatsapp-service/) esté corriendo
+    y con la sesión de WhatsApp conectada (ver GET /status). Si no lo
+    está, whatsapp-service devuelve 503 y acá lo tratamos como fallo,
+    igual que cualquier otro error de envío.
     """
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": _to_e164(phone),
-        "type": "template",
-        "template": {
-            "name": settings.WHATSAPP_OTP_TEMPLATE_NAME,
-            "language": {"code": settings.WHATSAPP_OTP_TEMPLATE_LANG},
-            "components": [
-                {
-                    "type": "body",
-                    "parameters": [{"type": "text", "text": code}],
-                }
-            ],
-        },
-    }
+    try:
+        to = normalize_bo_phone(phone)
+    except Exception as exc:
+        logger.error(f"Teléfono inválido, no se puede enviar OTP: {phone} ({exc})")
+        return False
 
-    headers = {
-        "Authorization": f"Bearer {settings.WHATSAPP_TOKEN}",
-        "Content-Type": "application/json",
-    }
+    message = (
+        f"Tu código de verificación de MedicBolivia es: *{code}*\n\n"
+        f"Expira en {settings.OTP_EXPIRE_MINUTES} minutos. "
+        "No lo compartas con nadie."
+    )
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(_whatsapp_api_url(), json=payload, headers=headers)
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{settings.WHATSAPP_SERVICE_URL}/send",
+                json={"to": to, "message": message},
+                headers={"X-Internal-Secret": settings.WHATSAPP_SERVICE_INTERNAL_SECRET},
+            )
     except httpx.RequestError as exc:
         logger.error(f"Error de red enviando OTP por WhatsApp a {phone}: {exc}")
         return False
@@ -73,9 +52,9 @@ async def send_whatsapp_otp(phone: str, code: str) -> bool:
     if resp.status_code >= 400:
         logger.error(
             f"Error enviando OTP por WhatsApp a {phone}: "
-            f"{resp.status_code} {resp.text}"
+            f"whatsapp-service {resp.status_code} {resp.text[:250]}"
         )
         return False
 
-    logger.info(f"OTP WhatsApp enviado a {phone}")
+    logger.info(f"OTP WhatsApp enviado a {phone} vía whatsapp-service")
     return True
