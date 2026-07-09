@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { authAPI, getErrorMessage } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { PhoneInput } from '@/components/ui/PhoneInput'
+import { PhoneVerification } from '@/components/ui/PhoneVerification'
 
 const DEPARTMENTS = [
   'La Paz', 'Santa Cruz', 'Cochabamba', 'Oruro', 'Potosí',
@@ -26,6 +27,7 @@ export default function RegisterPatientPage() {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [phoneVerified, setPhoneVerified] = useState(false)
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -34,6 +36,11 @@ export default function RegisterPatientPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+
+    if (!phoneVerified) {
+      setError('Verificá tu número de celular por WhatsApp antes de continuar')
+      return
+    }
 
     if (form.password !== form.confirm_password) {
       setError('Las contraseñas no coinciden')
@@ -134,9 +141,16 @@ export default function RegisterPatientPage() {
               <label className="label">Número de celular <span className="text-[#E24B4A]">*</span></label>
               <PhoneInput
                 value={form.phone}
-                onChange={(phone) => setForm((prev) => ({ ...prev, phone }))}
+                onChange={(phone) => { setForm((prev) => ({ ...prev, phone })); setPhoneVerified(false) }}
                 required
               />
+              <div className="mt-2">
+                <PhoneVerification
+                  phone={form.phone}
+                  verified={phoneVerified}
+                  onVerified={() => setPhoneVerified(true)}
+                />
+              </div>
             </div>
 
             <div>
@@ -147,11 +161,11 @@ export default function RegisterPatientPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Contraseña <span className="text-[#E24B4A]">*</span></label>
-                <input name="password" type="password" className="input" placeholder="Mínimo 8 caracteres" value={form.password} onChange={handleChange} required minLength={8} />
+                <input name="password" type="password" autoComplete="new-password" className="input" placeholder="Mínimo 8 caracteres" value={form.password} onChange={handleChange} required minLength={8} />
               </div>
               <div>
                 <label className="label">Confirmar contraseña <span className="text-[#E24B4A]">*</span></label>
-                <input name="confirm_password" type="password" className="input" placeholder="Repetir contraseña" value={form.confirm_password} onChange={handleChange} required />
+                <input name="confirm_password" type="password" autoComplete="new-password" className="input" placeholder="Repetir contraseña" value={form.confirm_password} onChange={handleChange} required />
               </div>
             </div>
 
@@ -159,7 +173,7 @@ export default function RegisterPatientPage() {
               <span className="text-[#E24B4A]">*</span> Campos obligatorios
             </p>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
+            <button type="submit" disabled={loading || !phoneVerified} className="btn-primary w-full flex items-center justify-center gap-2">
               {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />}
               {loading ? 'Registrando...' : 'Crear cuenta'}
             </button>

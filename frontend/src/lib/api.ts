@@ -206,6 +206,29 @@ export const authAPI = {
   logout: () => api.post('/auth/logout'),
 }
 
+// ── Verificación de teléfono por WhatsApp (OTP) ──────
+export interface OTPSendResponse {
+  message: string
+  expires_in_minutes: number
+}
+
+export const otpAPI = {
+  send: (phone: string) =>
+    api.post<OTPSendResponse>('/auth/otp/send', { phone }),
+
+  verify: (phone: string, code: string) =>
+    api.post<{ message: string; verified: boolean }>('/auth/otp/verify', { phone, code }),
+}
+
+// ── Recuperación de contraseña vía código de WhatsApp ─
+export const passwordResetAPI = {
+  forgot: (phone: string) =>
+    api.post<OTPSendResponse>('/auth/password/forgot', { phone }),
+
+  reset: (phone: string, code: string, new_password: string) =>
+    api.post<{ message: string }>('/auth/password/reset', { phone, code, new_password }),
+}
+
 export const professionalsAPI = {
   list: (params?: { specialty?: string; available_now?: boolean; search?: string }) =>
     api.get<Professional[]>('/professionals', { params }),

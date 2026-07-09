@@ -12,7 +12,7 @@ from loguru import logger
 
 from app.db.database import get_db
 from app.core.config import settings
-from app.core.redis_client import redis_client
+from app.core.redis_client import security_redis_client as redis_client
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.dependencies import get_current_user
 from app.models.models import User, Patient, Professional, UserRole, UserStatus
@@ -240,32 +240,48 @@ async def verify_otp(data: OTPVerifyRequest):
 )
 async def forgot_password(
     data: ForgotPasswordRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
-    # Respuesta genérica siempre igual, exista o no el número: si
-    # devolviéramos un mensaje distinto cuando el teléfono no está
-    # registrado, cualquiera podría usar este endpoint para averiguar
-    # qué números tienen cuenta en la plataforma.
-    generic_response = {
-        "message": "Si el número está registrado, te enviamos un código por WhatsApp."
-    }
+    # DECISIÓN DE PRODUCTO (no la default de seguridad): este endpoint
+    # revela explícitamente si el número está registrado o no, para que
+    # la persona sepa de una si se equivocó de número — a costa de
+    # permitir enumeración de cuentas por teléfono. Como contrapeso,
+    # se limita cuántos números puede consultar una misma IP en la
+    # ventana de tiempo definida en settings, para que no sea viable
+    # escanear números en masa.
+    client_ip = request.client.host if request.client else "unknown"
+    ip_key = f"forgot_pwd_ip:{client_ip}"
+    ip_attempts = await redis_client.incr(ip_key)
+    if ip_attempts == 1:
+        await redis_client.expire(ip_key, settings.FORGOT_PASSWORD_IP_WINDOW_MINUTES * 60)
+    if ip_attempts > settings.FORGOT_PASSWORD_IP_MAX_ATTEMPTS:
+        logger.warning(f"Rate limit de IP alcanzado en /password/forgot: {client_ip}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiadas solicitudes desde esta conexión. Probá de nuevo más tarde."
+        )
 
     cooldown_key = f"otp_pwd_cooldown:{data.phone}"
     if await redis_client.get(cooldown_key):
-        return generic_response
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Esperá {settings.OTP_RESEND_COOLDOWN_SECONDS} segundos antes de pedir otro código."
+        )
 
     result = await db.execute(select(User).where(User.phone == data.phone))
     user = result.scalar_one_or_none()
     if not user:
         logger.info(f"Reseteo de password solicitado para teléfono no registrado: {data.phone}")
-        return generic_response
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ese número no está registrado en MedicBolivia."
+        )
 
     code = "".join(secrets.choice("0123456789") for _ in range(settings.OTP_LENGTH))
 
     sent = await send_whatsapp_otp(data.phone, code)
     if not sent:
-        # Acá sí conviene avisar del error real: si no explota, el usuario
-        # se queda pensando que le va a llegar un código que nunca sale.
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="No se pudo enviar el código por WhatsApp. Probá de nuevo en un momento."
@@ -276,7 +292,10 @@ async def forgot_password(
     await redis_client.set(cooldown_key, "1", ex=settings.OTP_RESEND_COOLDOWN_SECONDS)
 
     logger.info(f"OTP de reseteo de password enviado a {data.phone}")
-    return generic_response
+    return {
+        "message": "Código enviado por WhatsApp",
+        "expires_in_minutes": settings.OTP_EXPIRE_MINUTES
+    }
 
 
 # ── POST /api/v1/auth/password/reset ─────────────────

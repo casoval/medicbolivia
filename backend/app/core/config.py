@@ -107,9 +107,28 @@ class Settings(BaseSettings):
     WHATSAPP_OTP_TEMPLATE_NAME: str = "otp_verification"
     WHATSAPP_OTP_TEMPLATE_LANG: str = "es"
     OTP_LENGTH: int = 6
-    OTP_EXPIRE_MINUTES: int = 5
+    # Subido de 5 a 20: 5 minutos resultaba muy ajustado para el flujo real
+    # (salir de la app, abrir WhatsApp, copiar el código, volver) y generaba
+    # códigos "expirados" de forma seguida sin que la persona hiciera nada mal.
+    OTP_EXPIRE_MINUTES: int = 20
     OTP_MAX_ATTEMPTS: int = 5
     OTP_RESEND_COOLDOWN_SECONDS: int = 60
+
+    # ── Redis dedicado a seguridad (OTP + bloqueo de login) ──────────
+    # Instancia separada del Redis compartido con Celery (REDIS_URL). En
+    # producción corre en el puerto 6380 con su propia password (ver
+    # scripts/setup_redis_security.sh); en desarrollo, si no se define,
+    # cae al mismo REDIS_URL de siempre (el namespacing de keys evita
+    # colisiones con Celery).
+    AUTH_REDIS_URL: str = ""
+
+    # ── Rate limit por IP en "olvidé mi contraseña" ──────────────────
+    # Ahora que ese endpoint revela explícitamente si el número está
+    # registrado (ver auth.py), una IP sola no puede usarlo para escanear
+    # números sin límite — a partir de este umbral se bloquea la IP,
+    # independientemente del número que esté consultando.
+    FORGOT_PASSWORD_IP_MAX_ATTEMPTS: int = 10
+    FORGOT_PASSWORD_IP_WINDOW_MINUTES: int = 15
 
     DAILY_API_KEY: str = ""
     DAILY_DOMAIN: str = ""

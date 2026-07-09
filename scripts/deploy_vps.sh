@@ -64,6 +64,13 @@ echo "" >> /root/.medicbolivia_redis_url.txt
 echo "REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:6379" >> /root/.medicbolivia_redis_url.txt
 echo "(También quedó guardada en /root/.medicbolivia_redis_url.txt por si la perdés de la pantalla)"
 
+# ── 5b. Redis de seguridad (OTP WhatsApp / login) ─────
+# Segunda instancia separada, solo para AUTH_REDIS_URL — ver
+# setup_redis_security.sh para el detalle. No toca el Redis
+# compartido de arriba (que sigue siendo el broker/backend de Celery).
+echo "[5b/9] Configurando Redis de seguridad (OTP/login)..."
+bash "$(dirname "$0")/setup_redis_security.sh"
+
 # ── 6. Instalar Nginx ─────────────────────────────────
 echo "[6/9] Instalando Nginx..."
 apt install -y nginx

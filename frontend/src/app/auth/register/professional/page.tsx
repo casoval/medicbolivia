@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { authAPI, specialtiesAPI, getErrorMessage } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { PhoneInput } from '@/components/ui/PhoneInput'
+import { PhoneVerification } from '@/components/ui/PhoneVerification'
 
 const NOT_LISTED = '__NOT_LISTED__'
 
@@ -55,6 +56,7 @@ export default function RegisterProfessionalPage() {
   const [subSpecialtyProposal, setSubSpecialtyProposal] = useState('')
 
   const [error, setError]   = useState('')
+  const [phoneVerified, setPhoneVerified] = useState(false)
   const [loading, setLoading] = useState(false)
 
   // Carga el catálogo de especialidades al montar
@@ -108,6 +110,7 @@ export default function RegisterProfessionalPage() {
     e.preventDefault()
     setError('')
 
+    if (!phoneVerified) { setError('Verificá tu número de celular por WhatsApp antes de continuar'); return }
     if (form.password !== form.confirm_password) { setError('Las contraseñas no coinciden'); return }
     if (!form.department) { setError('Selecciona tu departamento'); return }
     if (!form.birth_date) { setError('Ingresa tu fecha de nacimiento'); return }
@@ -423,9 +426,16 @@ export default function RegisterProfessionalPage() {
               <label className="block text-xs font-medium text-[#6B738A] mb-1">Celular <span className="text-[#E24B4A]">*</span></label>
               <PhoneInput
                 value={form.phone}
-                onChange={(phone) => setForm((prev) => ({ ...prev, phone }))}
+                onChange={(phone) => { setForm((prev) => ({ ...prev, phone })); setPhoneVerified(false) }}
                 required
               />
+              <div className="mt-2">
+                <PhoneVerification
+                  phone={form.phone}
+                  verified={phoneVerified}
+                  onVerified={() => setPhoneVerified(true)}
+                />
+              </div>
             </div>
 
             {/* Email — opcional para profesionales, el celular ya es el
@@ -439,11 +449,11 @@ export default function RegisterProfessionalPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-[#6B738A] mb-1">Contraseña <span className="text-[#E24B4A]">*</span></label>
-                <input name="password" type="password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="Mínimo 8 caracteres" value={form.password} onChange={handleChange} required minLength={8} />
+                <input name="password" type="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="Mínimo 8 caracteres" value={form.password} onChange={handleChange} required minLength={8} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#6B738A] mb-1">Confirmar <span className="text-[#E24B4A]">*</span></label>
-                <input name="confirm_password" type="password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="Repetir" value={form.confirm_password} onChange={handleChange} required />
+                <input name="confirm_password" type="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="Repetir" value={form.confirm_password} onChange={handleChange} required />
               </div>
             </div>
 
@@ -451,7 +461,7 @@ export default function RegisterProfessionalPage() {
               <span className="text-[#E24B4A]">*</span> Campos obligatorios
             </p>
 
-            <button type="submit" disabled={loading}
+            <button type="submit" disabled={loading || !phoneVerified}
               className="w-full bg-[#0F6E56] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#085041] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
               {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />}
               {loading ? 'Registrando...' : 'Crear cuenta profesional'}

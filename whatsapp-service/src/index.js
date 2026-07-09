@@ -229,6 +229,24 @@ app.post('/send', requireInternalSecret, async (req, res) => {
     res.json({ status: 'sent' })
   } catch (err) {
     logger.error(`Error enviando mensaje a ${to}: ${err.message}`)
+
+    // whatsapp-web.js a veces deja el cliente "CONNECTED" en el estado
+    // interno aunque la página de Puppeteer ya haya muerto (frame
+    // detached / target closed) — el evento 'disconnected' no siempre
+    // se dispara en ese caso, así que el servicio queda "zombie": acepta
+    // pedidos, responde 503... no, en realidad ni eso: pasa el chequeo
+    // de connectionState !== 'CONNECTED' porque el estado sigue diciendo
+    // CONNECTED, y el intento de mandar explota siempre igual. Si
+    // detectamos ese patrón de error puntual, forzamos la reconexión acá
+    // mismo en vez de esperar a que alguien reinicie el proceso a mano.
+    const isDeadFrame = /detached frame/i.test(err.message) || /target closed/i.test(err.message)
+    if (isDeadFrame && connectionState === 'CONNECTED') {
+      logger.warn('Frame de Puppeteer muerto — forzando reconexión del cliente de WhatsApp')
+      connectionState = 'DOWN'
+      try { await client.destroy() } catch (_) { /* noop */ }
+      setTimeout(connectToWhatsApp, 2000)
+    }
+
     res.status(502).json({ error: err.message })
   }
 })
