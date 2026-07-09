@@ -24,7 +24,7 @@ from sqlalchemy import select, and_
 from loguru import logger
 
 from app.core.celery_app import celery_app
-from app.db.database import AsyncSessionLocal
+from app.db.database import AsyncSessionLocal, engine
 from app.models.models import (
     ReminderRule, ReminderLog, Consultation, ConsultationType, ConsultationStatus,
     Patient, Professional, WhatsAppAudience,
@@ -96,7 +96,14 @@ def notify_professional_patient_waiting(consultation_id: str):
     consultations.py::create_consultation (mismo lugar donde hoy se
     dispara `auto_cancel_expired`).
     """
+    # asyncio.run() crea un event loop nuevo en cada llamada, pero el
+    # pool de conexiones de `engine` es un singleton de módulo pensado
+    # para el loop único y persistente de FastAPI. Sin este dispose(),
+    # una conexión del pool creada en un loop anterior (ya cerrado)
+    # puede reusarse acá y asyncpg tira "attached to a different loop".
+    # Ver mismo fix en check_scheduled_appointment_reminders más abajo.
     asyncio.run(_notify_professional_patient_waiting(consultation_id))
+    asyncio.run(engine.dispose())
 
 
 # ── 2. Cron: recordatorios de citas agendadas ──
@@ -213,3 +220,4 @@ async def _send_reminder_for_rule(db, rule: ReminderRule, consultation: Consulta
 @celery_app.task(name="app.tasks.reminder_tasks.check_scheduled_appointment_reminders")
 def check_scheduled_appointment_reminders():
     asyncio.run(_check_scheduled_appointment_reminders())
+    asyncio.run(engine.dispose())

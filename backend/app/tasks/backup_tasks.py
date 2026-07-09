@@ -25,7 +25,7 @@ from loguru import logger
 
 from app.core.celery_app import celery_app
 from app.core.config import settings
-from app.db.database import AsyncSessionLocal
+from app.db.database import AsyncSessionLocal, engine
 from app.models.models import DBBackupConfig, DBBackupLog
 
 
@@ -137,6 +137,7 @@ async def _run_backup() -> None:
 def run_backup_now():
     """Disparo manual — botón 'Enviar backup ahora' en la pestaña 4."""
     asyncio.run(_run_backup())
+    asyncio.run(engine.dispose())
 
 
 async def _check_and_run_backup() -> None:
@@ -167,3 +168,4 @@ async def _check_and_run_backup() -> None:
 @celery_app.task(name="app.tasks.backup_tasks.check_and_run_backup")
 def check_and_run_backup():
     asyncio.run(_check_and_run_backup())
+    asyncio.run(engine.dispose())

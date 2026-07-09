@@ -18,7 +18,7 @@ from sqlalchemy import select
 from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.core.phone import normalize_bo_phone, InvalidPhoneError
-from app.db.database import AsyncSessionLocal
+from app.db.database import AsyncSessionLocal, engine
 from app.models.models import WhatsAppConversation, WhatsAppMessage, WhatsAppAudience
 
 
@@ -126,3 +126,4 @@ def send_whatsapp_message(
         related_entity_id=related_entity_id,
         sent_by=sent_by,
     ))
+    asyncio.run(engine.dispose())
