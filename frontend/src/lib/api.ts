@@ -859,6 +859,19 @@ export const adminAPI = {
       note,
       ...(amount !== undefined ? { amount } : {}),
     }),
+
+  // Edición de datos por el admin (paciente / profesional). Devuelve
+  // changed_fields y, si tocó teléfono/email, warnings explicando que el
+  // usuario ya no podrá loguearse con el dato anterior.
+  updatePatient: (userId: string, data: Record<string, unknown>) =>
+    api.patch<{ message: string; changed_fields: string[]; warnings: string[] }>(
+      `/admin/patients/${userId}`, data
+    ).then(r => r.data),
+
+  updateProfessional: (professionalId: string, data: Record<string, unknown>) =>
+    api.patch<{ message: string; changed_fields: string[]; warnings: string[] }>(
+      `/admin/professionals/${professionalId}`, data
+    ).then(r => r.data),
 }
 
 export const maintenanceAPI = {

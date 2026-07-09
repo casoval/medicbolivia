@@ -584,31 +584,126 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
   )
 }
 
+const PRO_SPECIALTIES = [
+  'Medicina General', 'Cardiología', 'Psicología', 'Pediatría',
+  'Nutrición y Dietética', 'Ginecología y Obstetricia',
+  'Traumatología y Ortopedia', 'Dermatología',
+]
+
 function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   professional: Professional; onClose: () => void
   onAction: (id: string, status: string) => void; loading: boolean
 }) {
-  const age = getAge(pro.birth_date)
+  const qc = useQueryClient()
+  const [local, setLocal] = useState(pro) // copia mostrada, se actualiza tras guardar
+  const [editing, setEditing] = useState(false)
+  const [confirmLogin, setConfirmLogin] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([])
+
+  const nameParts = local.name.split(' ')
+  const emptyForm = {
+    first_name: nameParts[0] || '',
+    last_name: nameParts.slice(1).join(' ') || '',
+    ci: local.ci || '',
+    birth_date: local.birth_date ? local.birth_date.slice(0, 10) : '',
+    department: local.department || 'La Paz',
+    gender: local.gender || '',
+    phone: local.phone || '',
+    email: local.email || '',
+    specialty: local.specialty,
+    sub_specialties: local.sub_specialties?.join(', ') || '',
+    bio: local.bio || '',
+    languages: local.languages?.join(', ') || 'Español',
+    years_experience: String(local.years_experience ?? 0),
+    price_general: String(local.price_general ?? 0),
+    price_urgent: String(local.price_urgent ?? 0),
+    price_follow_up: String(local.price_follow_up ?? 0),
+    cmb_matricula: local.cmb_matricula || '',
+    sedes_number: local.sedes_number || '',
+  }
+  const [form, setForm] = useState(emptyForm)
+
+  const loginFieldChanged = form.phone !== (local.phone || '') || form.email !== (local.email || '')
+
+  const saveMutation = useMutation({
+    mutationFn: () => adminAPI.updateProfessional(local.id, {
+      first_name: form.first_name,
+      last_name: form.last_name,
+      ci: form.ci,
+      birth_date: form.birth_date || undefined,
+      department: form.department,
+      gender: form.gender || undefined,
+      phone: form.phone || undefined,
+      email: form.email || undefined,
+      specialty: form.specialty,
+      sub_specialties: form.sub_specialties.split(',').map((s) => s.trim()).filter(Boolean),
+      bio: form.bio || undefined,
+      languages: form.languages.split(',').map((s) => s.trim()).filter(Boolean),
+      years_experience: Number(form.years_experience) || 0,
+      price_general: Number(form.price_general) || undefined,
+      price_urgent: Number(form.price_urgent) || undefined,
+      price_follow_up: Number(form.price_follow_up) || undefined,
+      cmb_matricula: form.cmb_matricula || undefined,
+      sedes_number: form.sedes_number || undefined,
+    }),
+    onSuccess: (res) => {
+      setLocal((prev) => ({
+        ...prev,
+        name: `${form.first_name} ${form.last_name}`.trim(),
+        ci: form.ci,
+        birth_date: form.birth_date,
+        department: form.department,
+        gender: form.gender,
+        phone: form.phone,
+        email: form.email,
+        specialty: form.specialty,
+        sub_specialties: form.sub_specialties.split(',').map((s) => s.trim()).filter(Boolean),
+        bio: form.bio,
+        languages: form.languages.split(',').map((s) => s.trim()).filter(Boolean),
+        years_experience: Number(form.years_experience) || 0,
+        price_general: Number(form.price_general) || 0,
+        price_urgent: Number(form.price_urgent) || 0,
+        price_follow_up: Number(form.price_follow_up) || 0,
+        cmb_matricula: form.cmb_matricula,
+        sedes_number: form.sedes_number,
+      }))
+      setSaveWarnings(res.warnings || [])
+      setEditing(false)
+      setSaveError('')
+      qc.invalidateQueries({ queryKey: ['admin', 'professionals'] })
+    },
+    onError: (err) => setSaveError(getErrorMessage(err)),
+  })
+
+  function startEdit() {
+    setForm(emptyForm)
+    setConfirmLogin(false)
+    setSaveError('')
+    setEditing(true)
+  }
+
+  const age = getAge(local.birth_date)
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-[#DDE1EE]">
           <div className="flex items-center gap-3">
-            {pro.photo_url ? (
+            {local.photo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={pro.photo_url}
-                alt={pro.name}
+                src={local.photo_url}
+                alt={local.name}
                 className="w-12 h-12 rounded-full object-cover border border-[#DDE1EE]"
               />
             ) : (
               <div className="w-12 h-12 rounded-full bg-[#E1F5EE] text-[#0F6E56] flex items-center justify-center text-base font-bold">
-                {pro.name.split(' ').map((n:string)=>n[0]).join('').slice(0,2)}
+                {local.name.split(' ').map((n:string)=>n[0]).join('').slice(0,2)}
               </div>
             )}
             <div>
-              <h3 className="text-base font-semibold">{pro.name}</h3>
-              <p className="text-xs text-[#6B738A]">{pro.specialty}</p>
+              <h3 className="text-base font-semibold">{local.name}</h3>
+              <p className="text-xs text-[#6B738A]">{local.specialty}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#141820] text-xl">✕</button>
@@ -616,78 +711,240 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
-              <StatusBadge status={pro.status} />
+              <StatusBadge status={local.status} />
               <p className="text-xs text-[#6B738A] mt-1">Estado</p>
             </div>
             <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
-              <p className="text-lg font-bold text-[#EF9F27]">{Number(pro.rating).toFixed(1)} ★</p>
-              <p className="text-xs text-[#6B738A]">{pro.total_ratings} calificaciones</p>
+              <p className="text-lg font-bold text-[#EF9F27]">{Number(local.rating).toFixed(1)} ★</p>
+              <p className="text-xs text-[#6B738A]">{local.total_ratings} calificaciones</p>
             </div>
             <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
-              <p className="text-lg font-bold text-[#185FA5]">{pro.total_consultations}</p>
+              <p className="text-lg font-bold text-[#185FA5]">{local.total_consultations}</p>
               <p className="text-xs text-[#6B738A]">Consultas</p>
             </div>
           </div>
-          <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Datos personales</p>
-            <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-2 gap-3">
-              <div><p className="text-xs text-[#A0A8BF]">Telefono</p><p className="text-sm font-medium">{pro.phone || 'No disponible'}</p></div>
-              <div><p className="text-xs text-[#A0A8BF]">Email</p><p className="text-sm font-medium truncate">{pro.email || 'No especificado'}</p></div>
-              <div><p className="text-xs text-[#A0A8BF]">Cedula</p><p className="text-sm font-medium">{pro.ci || 'No disponible'}</p></div>
-              <div><p className="text-xs text-[#A0A8BF]">Edad</p><p className="text-sm font-medium">{age ? `${age} anios` : 'No especificada'}</p></div>
-              <div><p className="text-xs text-[#A0A8BF]">Ciudad / Departamento</p><p className="text-sm font-medium">{pro.department || 'No especificado'}</p></div>
-              <div><p className="text-xs text-[#A0A8BF]">Genero</p><p className="text-sm font-medium">{pro.gender || 'No especificado'}</p></div>
-              <div><p className="text-xs text-[#A0A8BF]">Experiencia</p><p className="text-sm font-medium">{pro.years_experience ? `${pro.years_experience} anios` : 'No especificada'}</p></div>
-              <div><p className="text-xs text-[#A0A8BF]">Idiomas</p><p className="text-sm font-medium">{pro.languages?.join(', ') || 'Espanol'}</p></div>
-              <div><p className="text-xs text-[#A0A8BF]">Sub-especialidades</p><p className="text-sm font-medium">{pro.sub_specialties?.length ? pro.sub_specialties.join(', ') : 'No especificadas'}</p></div>
-              <div><p className="text-xs text-[#A0A8BF]">Registrado el</p><p className="text-sm font-medium">{new Date(pro.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
-              <div><p className="text-xs text-[#A0A8BF]">Estado de cuenta</p><p className="text-sm font-medium">{pro.user_status === 'ACTIVE' ? 'Activa' : pro.user_status === 'SUSPENDED' ? 'Suspendida' : (pro.user_status || 'No disponible')}</p></div>
-            </div>
-          </div>
 
-          {pro.penalty && pro.penalty.color && (
-            <PenaltyDetailSection professionalId={pro.id} penalty={pro.penalty} />
+          {saveWarnings.length > 0 && (
+            <div className="bg-[#FAEEDA] border border-[#FAC775] rounded-xl p-3">
+              {saveWarnings.map((w, i) => (
+                <p key={i} className="text-xs text-[#854F0B]">⚠ {w}</p>
+              ))}
+            </div>
           )}
 
           <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Precios de consulta</p>
-            <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-3 gap-3">
-              <div className="text-center"><p className="text-sm font-bold text-[#185FA5]">Bs. {pro.price_general || 0}</p><p className="text-xs text-[#6B738A]">General</p></div>
-              <div className="text-center"><p className="text-sm font-bold text-[#A32D2D]">Bs. {pro.price_urgent || 0}</p><p className="text-xs text-[#6B738A]">Urgente</p></div>
-              <div className="text-center"><p className="text-sm font-bold text-[#0F6E56]">Bs. {pro.price_follow_up || 0}</p><p className="text-xs text-[#6B738A]">Seguimiento</p></div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Datos personales y profesionales</p>
+              {!editing && (
+                <button onClick={startEdit} className="text-xs text-[#185FA5] hover:underline">Editar</button>
+              )}
             </div>
+
+            {!editing ? (
+              <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-2 gap-3">
+                <div><p className="text-xs text-[#A0A8BF]">Telefono</p><p className="text-sm font-medium">{local.phone || 'No disponible'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Email</p><p className="text-sm font-medium truncate">{local.email || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Cedula</p><p className="text-sm font-medium">{local.ci || 'No disponible'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Edad</p><p className="text-sm font-medium">{age ? `${age} anios` : 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Ciudad / Departamento</p><p className="text-sm font-medium">{local.department || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Genero</p><p className="text-sm font-medium">{local.gender || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Especialidad</p><p className="text-sm font-medium">{local.specialty}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Experiencia</p><p className="text-sm font-medium">{local.years_experience ? `${local.years_experience} anios` : 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Idiomas</p><p className="text-sm font-medium">{local.languages?.join(', ') || 'Espanol'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Sub-especialidades</p><p className="text-sm font-medium">{local.sub_specialties?.length ? local.sub_specialties.join(', ') : 'No especificadas'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Matrícula CMB</p><p className="text-sm font-medium">{local.cmb_matricula || 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Registro SEDES</p><p className="text-sm font-medium">{local.sedes_number || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Registrado el</p><p className="text-sm font-medium">{new Date(local.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Estado de cuenta</p><p className="text-sm font-medium">{local.user_status === 'ACTIVE' ? 'Activa' : local.user_status === 'SUSPENDED' ? 'Suspendida' : (local.user_status || 'No disponible')}</p></div>
+              </div>
+            ) : (
+              <div className="bg-[#F5F6FA] rounded-xl p-3 space-y-3">
+                {saveError && <Alert type="error" message={saveError} />}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Nombre</label>
+                    <input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Apellido</label>
+                    <input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">CI</label>
+                    <input value={form.ci} onChange={(e) => setForm({ ...form, ci: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Fecha de nacimiento</label>
+                    <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Departamento</label>
+                    <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
+                      {DEPARTMENTS.filter((d) => d !== 'Todos').map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Género</label>
+                    <input value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Especialidad</label>
+                    <select value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
+                      {PRO_SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Años de experiencia</label>
+                    <input type="number" min={0} max={80} value={form.years_experience}
+                      onChange={(e) => setForm({ ...form, years_experience: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Sub-especialidades (coma)</label>
+                    <input value={form.sub_specialties} onChange={(e) => setForm({ ...form, sub_specialties: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Idiomas (coma)</label>
+                    <input value={form.languages} onChange={(e) => setForm({ ...form, languages: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Matrícula CMB</label>
+                    <input value={form.cmb_matricula} onChange={(e) => setForm({ ...form, cmb_matricula: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Registro SEDES</label>
+                    <input value={form.sedes_number} onChange={(e) => setForm({ ...form, sedes_number: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-[#6B738A] mb-1">Presentación / bio</label>
+                  <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} rows={3}
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white resize-none" />
+                </div>
+
+                {/* Precios */}
+                <div>
+                  <p className="text-xs text-[#6B738A] mb-1">Precios de consulta (Bs.)</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-[#A0A8BF] mb-1">General</label>
+                      <input type="number" min={0} value={form.price_general}
+                        onChange={(e) => setForm({ ...form, price_general: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-[#A0A8BF] mb-1">Urgente</label>
+                      <input type="number" min={0} value={form.price_urgent}
+                        onChange={(e) => setForm({ ...form, price_urgent: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-[#A0A8BF] mb-1">Seguimiento</label>
+                      <input type="number" min={0} value={form.price_follow_up}
+                        onChange={(e) => setForm({ ...form, price_follow_up: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Teléfono / email — afectan el login, advertencia siempre visible */}
+                <div className="bg-[#FAEEDA] border border-[#FAC775] rounded-lg p-2.5 space-y-2">
+                  <p className="text-[11px] text-[#854F0B]">
+                    ⚠ Teléfono y email se usan para iniciar sesión. Si los cambias, el profesional ya no podrá
+                    entrar con el dato anterior — asegúrate de avisarle.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs text-[#6B738A] mb-1">Teléfono</label>
+                      <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#6B738A] mb-1">Email</label>
+                      <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                    </div>
+                  </div>
+                  {loginFieldChanged && (
+                    <label className="flex items-start gap-2 text-[11px] text-[#854F0B]">
+                      <input type="checkbox" checked={confirmLogin} onChange={(e) => setConfirmLogin(e.target.checked)}
+                        className="mt-0.5" />
+                      Entiendo que esto cambia cómo el profesional inicia sesión.
+                    </label>
+                  )}
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs py-1.5 px-3">Cancelar</button>
+                  <button
+                    onClick={() => saveMutation.mutate()}
+                    disabled={saveMutation.isPending || (loginFieldChanged && !confirmLogin)}
+                    className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50"
+                  >
+                    {saveMutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
+          {local.penalty && local.penalty.color && (
+            <PenaltyDetailSection professionalId={local.id} penalty={local.penalty} />
+          )}
+
+          {!editing && (
+            <div>
+              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Precios de consulta</p>
+              <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-3 gap-3">
+                <div className="text-center"><p className="text-sm font-bold text-[#185FA5]">Bs. {local.price_general || 0}</p><p className="text-xs text-[#6B738A]">General</p></div>
+                <div className="text-center"><p className="text-sm font-bold text-[#A32D2D]">Bs. {local.price_urgent || 0}</p><p className="text-xs text-[#6B738A]">Urgente</p></div>
+                <div className="text-center"><p className="text-sm font-bold text-[#0F6E56]">Bs. {local.price_follow_up || 0}</p><p className="text-xs text-[#6B738A]">Seguimiento</p></div>
+              </div>
+            </div>
+          )}
+
           <div className="pt-2 border-t border-[#DDE1EE]">
-            <ProfessionalCommissionSection professionalId={pro.id} />
+            <ProfessionalCommissionSection professionalId={local.id} />
           </div>
-          {pro.bio && (
+          {!editing && local.bio && (
             <div>
               <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Presentacion</p>
-              <p className="text-sm text-[#3A4155] bg-[#F5F6FA] rounded-xl p-3 leading-relaxed">{pro.bio}</p>
+              <p className="text-sm text-[#3A4155] bg-[#F5F6FA] rounded-xl p-3 leading-relaxed">{local.bio}</p>
             </div>
           )}
           <div className="pt-2 border-t border-[#DDE1EE]">
-            <ProfessionalDocsSection professionalId={pro.id} />
+            <ProfessionalDocsSection professionalId={local.id} />
           </div>
           <div className="pt-2 border-t border-[#DDE1EE]">
-            <ConsultationHistorySection endpoint={`/admin/professionals/${pro.id}/history`} counterpartField="patient_name" />
+            <ConsultationHistorySection endpoint={`/admin/professionals/${local.id}/history`} counterpartField="patient_name" />
           </div>
           <div className="pt-2 border-t border-[#DDE1EE]">
             <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-3">Acciones</p>
             <div className="flex gap-2 flex-wrap">
-              {(pro.status === 'PENDING_DOCS' || pro.status === 'UNDER_REVIEW') && (<>
-                <button onClick={() => onAction(pro.id,'APPROVED')} disabled={loading}
+              {(local.status === 'PENDING_DOCS' || local.status === 'UNDER_REVIEW') && (<>
+                <button onClick={() => onAction(local.id,'APPROVED')} disabled={loading}
                   className="flex-1 bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] py-2 rounded-lg text-xs font-medium disabled:opacity-50">Aprobar</button>
-                <button onClick={() => onAction(pro.id,'REJECTED')} disabled={loading}
+                <button onClick={() => onAction(local.id,'REJECTED')} disabled={loading}
                   className="flex-1 bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] py-2 rounded-lg text-xs font-medium disabled:opacity-50">Rechazar</button>
               </>)}
-              {pro.status === 'APPROVED' && (
-                <button onClick={() => onAction(pro.id,'SUSPENDED')} disabled={loading}
+              {local.status === 'APPROVED' && (
+                <button onClick={() => onAction(local.id,'SUSPENDED')} disabled={loading}
                   className="bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">Suspender cuenta</button>
               )}
-              {pro.status === 'SUSPENDED' && (
-                <button onClick={() => onAction(pro.id,'APPROVED')} disabled={loading}
+              {local.status === 'SUSPENDED' && (
+                <button onClick={() => onAction(local.id,'APPROVED')} disabled={loading}
                   className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">Reactivar cuenta</button>
               )}
               <button onClick={onClose} className="btn-secondary text-xs px-4 py-2">Cerrar</button>

@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { LoadingScreen, EmptyState, SectionTitle, Alert } from '@/components/ui'
-import { api, getErrorMessage } from '@/lib/api'
+import { api, adminAPI, getErrorMessage } from '@/lib/api'
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
 
 const DEPARTMENTS = [
@@ -36,8 +36,65 @@ interface Patient {
 
 // Modal de detalle del paciente
 function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: Patient; onClose: () => void; onSuspend: (userId: string) => void; onReactivate: (userId: string) => void }) {
-  const age = patient.birth_date
-    ? Math.floor((Date.now() - new Date(patient.birth_date).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [local, setLocal] = useState(patient) // copia mostrada en pantalla, se actualiza tras guardar
+  const [form, setForm] = useState({
+    first_name: patient.first_name,
+    last_name: patient.last_name,
+    ci: patient.ci,
+    birth_date: patient.birth_date ? patient.birth_date.slice(0, 10) : '',
+    department: patient.department,
+    gender: patient.gender || '',
+    phone: patient.phone || '',
+    email: patient.email || '',
+  })
+  const [confirmLogin, setConfirmLogin] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([])
+
+  const loginFieldChanged =
+    form.phone !== (patient.phone || '') || form.email !== (patient.email || '')
+
+  const saveMutation = useMutation({
+    mutationFn: () => adminAPI.updatePatient(local.user_id, {
+      first_name: form.first_name,
+      last_name: form.last_name,
+      ci: form.ci,
+      birth_date: form.birth_date || undefined,
+      department: form.department,
+      gender: form.gender || undefined,
+      phone: form.phone || undefined,
+      email: form.email || undefined,
+    }),
+    onSuccess: (res) => {
+      setLocal((prev) => ({ ...prev, ...form }))
+      setSaveWarnings(res.warnings || [])
+      setEditing(false)
+      setSaveError('')
+      qc.invalidateQueries({ queryKey: ['admin', 'patients'] })
+    },
+    onError: (err) => setSaveError(getErrorMessage(err)),
+  })
+
+  function startEdit() {
+    setForm({
+      first_name: local.first_name,
+      last_name: local.last_name,
+      ci: local.ci,
+      birth_date: local.birth_date ? local.birth_date.slice(0, 10) : '',
+      department: local.department,
+      gender: local.gender || '',
+      phone: local.phone || '',
+      email: local.email || '',
+    })
+    setConfirmLogin(false)
+    setSaveError('')
+    setEditing(true)
+  }
+
+  const age = local.birth_date
+    ? Math.floor((Date.now() - new Date(local.birth_date).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
     : null
 
   return (
@@ -48,11 +105,11 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
         <div className="flex items-center justify-between p-5 border-b border-[#DDE1EE]">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-base font-bold">
-              {patient.first_name[0]}{patient.last_name[0]}
+              {local.first_name[0]}{local.last_name[0]}
             </div>
             <div>
-              <h3 className="text-base font-semibold">{patient.first_name} {patient.last_name}</h3>
-              <p className="text-xs text-[#6B738A]">CI: {patient.ci} · {patient.department}</p>
+              <h3 className="text-base font-semibold">{local.first_name} {local.last_name}</h3>
+              <p className="text-xs text-[#6B738A]">CI: {local.ci} · {local.department}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#141820] text-xl font-light">✕</button>
@@ -60,39 +117,131 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
 
         <div className="p-5 space-y-4">
 
+          {saveWarnings.length > 0 && (
+            <div className="bg-[#FAEEDA] border border-[#FAC775] rounded-xl p-3">
+              {saveWarnings.map((w, i) => (
+                <p key={i} className="text-xs text-[#854F0B]">⚠ {w}</p>
+              ))}
+            </div>
+          )}
+
           {/* Datos personales */}
           <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Datos personales</p>
-            <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-[#A0A8BF]">Edad</p>
-                <p className="text-sm font-medium">{age ? `${age} años` : 'No especificada'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[#A0A8BF]">Género</p>
-                <p className="text-sm font-medium">{patient.gender || 'No especificado'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[#A0A8BF]">Teléfono</p>
-                <p className="text-sm font-medium">{patient.phone || 'No disponible'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[#A0A8BF]">Email</p>
-                <p className="text-sm font-medium truncate">{patient.email || 'No especificado'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[#A0A8BF]">Departamento</p>
-                <p className="text-sm font-medium">{patient.department}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[#A0A8BF]">Registrado</p>
-                <p className="text-sm font-medium">
-                  {new Date(patient.created_at).toLocaleDateString('es-BO', {
-                    day: 'numeric', month: 'short', year: 'numeric'
-                  })}
-                </p>
-              </div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Datos personales</p>
+              {!editing && (
+                <button onClick={startEdit} className="text-xs text-[#185FA5] hover:underline">Editar</button>
+              )}
             </div>
+
+            {!editing ? (
+              <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-[#A0A8BF]">Edad</p>
+                  <p className="text-sm font-medium">{age ? `${age} años` : 'No especificada'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#A0A8BF]">Género</p>
+                  <p className="text-sm font-medium">{local.gender || 'No especificado'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#A0A8BF]">Teléfono</p>
+                  <p className="text-sm font-medium">{local.phone || 'No disponible'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#A0A8BF]">Email</p>
+                  <p className="text-sm font-medium truncate">{local.email || 'No especificado'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#A0A8BF]">Departamento</p>
+                  <p className="text-sm font-medium">{local.department}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#A0A8BF]">Registrado</p>
+                  <p className="text-sm font-medium">
+                    {new Date(local.created_at).toLocaleDateString('es-BO', {
+                      day: 'numeric', month: 'short', year: 'numeric'
+                    })}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-[#F5F6FA] rounded-xl p-3 space-y-3">
+                {saveError && <Alert type="error" message={saveError} />}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Nombre</label>
+                    <input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Apellido</label>
+                    <input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">CI</label>
+                    <input value={form.ci} onChange={(e) => setForm({ ...form, ci: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Fecha de nacimiento</label>
+                    <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Departamento</label>
+                    <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
+                      {DEPARTMENTS.filter((d) => d !== 'Todos').map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Género</label>
+                    <input value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                </div>
+
+                {/* Teléfono / email — afectan el login, advertencia siempre visible */}
+                <div className="bg-[#FAEEDA] border border-[#FAC775] rounded-lg p-2.5 space-y-2">
+                  <p className="text-[11px] text-[#854F0B]">
+                    ⚠ Teléfono y email se usan para iniciar sesión. Si los cambias, el paciente ya no podrá
+                    entrar con el dato anterior — asegúrate de avisarle.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs text-[#6B738A] mb-1">Teléfono</label>
+                      <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#6B738A] mb-1">Email</label>
+                      <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                    </div>
+                  </div>
+                  {loginFieldChanged && (
+                    <label className="flex items-start gap-2 text-[11px] text-[#854F0B]">
+                      <input type="checkbox" checked={confirmLogin} onChange={(e) => setConfirmLogin(e.target.checked)}
+                        className="mt-0.5" />
+                      Entiendo que esto cambia cómo el paciente inicia sesión.
+                    </label>
+                  )}
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs py-1.5 px-3">Cancelar</button>
+                  <button
+                    onClick={() => saveMutation.mutate()}
+                    disabled={saveMutation.isPending || (loginFieldChanged && !confirmLogin)}
+                    className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50"
+                  >
+                    {saveMutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Historial médico */}
@@ -103,9 +252,9 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
               {/* Alergias */}
               <div className="bg-[#FCEBEB] rounded-xl p-3">
                 <p className="text-xs font-medium text-[#A32D2D] mb-1">⚠ Alergias</p>
-                {patient.allergies && patient.allergies.length > 0 ? (
+                {local.allergies && local.allergies.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
-                    {patient.allergies.map((a, i) => (
+                    {local.allergies.map((a, i) => (
                       <span key={i} className="bg-[#F7C1C1] text-[#A32D2D] text-xs px-2 py-0.5 rounded-full">
                         {a}
                       </span>
@@ -119,9 +268,9 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
               {/* Condiciones crónicas */}
               <div className="bg-[#FAEEDA] rounded-xl p-3">
                 <p className="text-xs font-medium text-[#854F0B] mb-1">🏥 Condiciones crónicas</p>
-                {patient.chronic_conditions && patient.chronic_conditions.length > 0 ? (
+                {local.chronic_conditions && local.chronic_conditions.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
-                    {patient.chronic_conditions.map((c, i) => (
+                    {local.chronic_conditions.map((c, i) => (
                       <span key={i} className="bg-[#FAD89A] text-[#854F0B] text-xs px-2 py-0.5 rounded-full">
                         {c}
                       </span>
@@ -135,9 +284,9 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
               {/* Medicación actual */}
               <div className="bg-[#E6F1FB] rounded-xl p-3">
                 <p className="text-xs font-medium text-[#185FA5] mb-1">💊 Medicación actual</p>
-                {patient.current_medications && patient.current_medications.length > 0 ? (
+                {local.current_medications && local.current_medications.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
-                    {patient.current_medications.map((m, i) => (
+                    {local.current_medications.map((m, i) => (
                       <span key={i} className="bg-[#B5D4F4] text-[#0C447C] text-xs px-2 py-0.5 rounded-full">
                         {m}
                       </span>
@@ -155,13 +304,13 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
             <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Actividad</p>
             <div className="bg-[#F5F6FA] rounded-xl p-3 flex gap-4">
               <div className="text-center flex-1">
-                <p className="text-xl font-bold text-[#185FA5]">{patient.total_consultations || 0}</p>
+                <p className="text-xl font-bold text-[#185FA5]">{local.total_consultations || 0}</p>
                 <p className="text-xs text-[#6B738A]">Consultas</p>
               </div>
               <div className="w-px bg-[#DDE1EE]" />
               <div className="text-center flex-1">
                 <p className="text-xs font-medium text-[#0F6E56] mt-1">
-                  {patient.status === 'ACTIVE' ? '✓ Activo' : '✗ Inactivo'}
+                  {local.status === 'ACTIVE' ? '✓ Activo' : '✗ Inactivo'}
                 </p>
                 <p className="text-xs text-[#6B738A]">Estado</p>
               </div>
@@ -170,22 +319,22 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
 
           {/* Historial detallado de consultas */}
           <div className="pt-2 border-t border-[#DDE1EE]">
-            <ConsultationHistorySection endpoint={`/admin/patients/${patient.id}/history`} counterpartField="professional_name" />
+            <ConsultationHistorySection endpoint={`/admin/patients/${local.id}/history`} counterpartField="professional_name" />
           </div>
         </div>
 
         <div className="p-4 border-t border-[#DDE1EE] flex items-center justify-between gap-2">
           <div className="flex gap-2">
-            {patient.status === 'ACTIVE' ? (
+            {local.status === 'ACTIVE' ? (
               <button
-                onClick={() => onSuspend(patient.user_id)}
+                onClick={() => onSuspend(local.user_id)}
                 className="bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-[#F7C1C1] transition-colors"
               >
                 Suspender cuenta
               </button>
-            ) : patient.status === 'SUSPENDED' ? (
+            ) : local.status === 'SUSPENDED' ? (
               <button
-                onClick={() => onReactivate(patient.user_id)}
+                onClick={() => onReactivate(local.user_id)}
                 className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-[#9FE1CB] transition-colors"
               >
                 Reactivar cuenta

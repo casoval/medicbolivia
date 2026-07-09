@@ -79,13 +79,17 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
   }
 
   return (
-    <div
-      className="card hover:border-[#185FA5] transition-colors cursor-pointer group"
-      onClick={() => setShowDetail(true)}
-    >
+    <div className="card hover:border-[#185FA5] transition-colors">
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
-        <PhotoAvatar size="lg" />
+        <button
+          type="button"
+          onClick={() => setShowDetail(true)}
+          className="rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-[#185FA5] focus:ring-offset-2"
+          aria-label={`Ver perfil de ${pro.first_name} ${pro.last_name}`}
+        >
+          <PhotoAvatar size="lg" />
+        </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div>
@@ -179,7 +183,7 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
           professional={pro}
           onClose={() => setShowDetail(false)}
           onBook={() => { setShowDetail(false); setShowBooking(true) }}
-          onConsult={onConsult}
+          onConsult={onConsult ? () => { setShowDetail(false); onConsult(pro) } : undefined}
           consultLoading={loading}
         />
       )}

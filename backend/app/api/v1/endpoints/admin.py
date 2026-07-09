@@ -1120,6 +1120,218 @@ async def reactivate_patient(
     return {"message": "Cuenta reactivada", "user_id": user_id}
 
 
+# ── Edición de datos por el admin (paciente / profesional) ──────────
+# El admin puede corregir cualquier dato mal ingresado en el registro,
+# incluido teléfono/email (usados para iniciar sesión). Cada cambio se
+# guarda en AuditLog con el valor anterior y el nuevo para trazabilidad,
+# y el frontend muestra una advertencia extra antes de tocar teléfono/email.
+class AdminPatientUpdate(BaseModel):
+    first_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    ci: Optional[str] = Field(None, min_length=1, max_length=20)
+    birth_date: Optional[str] = None  # ISO date, ej. "1990-05-20"
+    department: Optional[str] = Field(None, min_length=1, max_length=50)
+    gender: Optional[str] = Field(None, max_length=20)
+    phone: Optional[str] = Field(None, min_length=6, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
+
+
+class AdminProfessionalUpdate(BaseModel):
+    first_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    ci: Optional[str] = Field(None, min_length=1, max_length=20)
+    birth_date: Optional[str] = None
+    department: Optional[str] = Field(None, min_length=1, max_length=50)
+    gender: Optional[str] = Field(None, max_length=20)
+    phone: Optional[str] = Field(None, min_length=6, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
+    specialty: Optional[str] = Field(None, min_length=1, max_length=100)
+    sub_specialties: Optional[list[str]] = None
+    bio: Optional[str] = None
+    languages: Optional[list[str]] = None
+    years_experience: Optional[int] = Field(None, ge=0, le=80)
+    price_general: Optional[Decimal] = Field(None, gt=0)
+    price_urgent: Optional[Decimal] = Field(None, gt=0)
+    price_follow_up: Optional[Decimal] = Field(None, gt=0)
+    cmb_matricula: Optional[str] = Field(None, max_length=50)
+    sedes_number: Optional[str] = Field(None, max_length=50)
+
+
+# Campos "sensibles": si cambian, el usuario ya no podrá loguearse con el
+# dato anterior — se marcan aparte en la respuesta para que el frontend
+# pueda mostrar una advertencia explícita antes/después de guardar.
+_LOGIN_FIELDS = {"phone", "email"}
+
+
+@router.patch("/patients/{user_id}", summary="Editar datos de un paciente")
+async def update_patient_admin(
+    user_id: str,
+    payload: AdminPatientUpdate,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    result = await db.execute(select(Patient).where(Patient.user_id == user_id))
+    patient = result.scalar_one_or_none()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+
+    data = payload.dict(exclude_unset=True)
+    changes: dict = {}
+    warnings: list[str] = []
+
+    # Unicidad: CI, teléfono y email no pueden chocar con otro usuario.
+    if "ci" in data and data["ci"] != patient.ci:
+        dup = await db.execute(select(Patient).where(Patient.ci == data["ci"], Patient.id != patient.id))
+        if dup.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail=f"El CI {data['ci']} ya está registrado por otro paciente")
+
+    if "phone" in data and data["phone"] != user.phone:
+        dup = await db.execute(select(User).where(User.phone == data["phone"], User.id != user.id))
+        if dup.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail=f"El teléfono {data['phone']} ya está en uso por otra cuenta")
+
+    if "email" in data and data["email"] and data["email"] != user.email:
+        dup = await db.execute(select(User).where(User.email == data["email"], User.id != user.id))
+        if dup.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail=f"El email {data['email']} ya está en uso por otra cuenta")
+
+    # Campos que viven en Patient
+    for field in ["first_name", "last_name", "ci", "department", "gender"]:
+        if field in data and data[field] != getattr(patient, field):
+            changes[field] = {"old": getattr(patient, field), "new": data[field]}
+            setattr(patient, field, data[field])
+
+    if "birth_date" in data and data["birth_date"]:
+        try:
+            new_birth = datetime.fromisoformat(data["birth_date"])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de fecha de nacimiento inválido")
+        if new_birth.date() != patient.birth_date.date():
+            changes["birth_date"] = {"old": patient.birth_date.isoformat(), "new": new_birth.isoformat()}
+            patient.birth_date = new_birth
+
+    # Campos que viven en User (login)
+    for field in ["phone", "email"]:
+        if field in data and data[field] != getattr(user, field):
+            changes[field] = {"old": getattr(user, field), "new": data[field]}
+            setattr(user, field, data[field])
+            warnings.append(
+                f"El {'teléfono' if field == 'phone' else 'email'} de inicio de sesión cambió: "
+                f"el usuario ya no podrá entrar con el dato anterior."
+            )
+
+    if not changes:
+        return {"message": "No hay cambios que aplicar", "warnings": []}
+
+    log = AuditLog(
+        user_id=current_user.id,
+        action="PATIENT_UPDATED",
+        entity_type="Patient",
+        entity_id=patient.id,
+        metadata_={"changes": changes, "target_user_id": user_id},
+    )
+    db.add(log)
+    await db.commit()
+    logger.info(f"Paciente editado por admin {current_user.id}: {list(changes.keys())} (patient {patient.id})")
+    return {"message": "Datos actualizados correctamente", "changed_fields": list(changes.keys()), "warnings": warnings}
+
+
+@router.patch("/professionals/{professional_id}", summary="Editar datos de un profesional")
+async def update_professional_admin(
+    professional_id: str,
+    payload: AdminProfessionalUpdate,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Professional).where(Professional.id == professional_id))
+    professional = result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
+    result = await db.execute(select(User).where(User.id == professional.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    data = payload.dict(exclude_unset=True)
+    changes: dict = {}
+    warnings: list[str] = []
+
+    if "ci" in data and data["ci"] != professional.ci:
+        dup = await db.execute(
+            select(Professional).where(Professional.ci == data["ci"], Professional.id != professional.id)
+        )
+        if dup.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail=f"El CI {data['ci']} ya está registrado por otro profesional")
+
+    if "phone" in data and data["phone"] != user.phone:
+        dup = await db.execute(select(User).where(User.phone == data["phone"], User.id != user.id))
+        if dup.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail=f"El teléfono {data['phone']} ya está en uso por otra cuenta")
+
+    if "email" in data and data["email"] and data["email"] != user.email:
+        dup = await db.execute(select(User).where(User.email == data["email"], User.id != user.id))
+        if dup.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail=f"El email {data['email']} ya está en uso por otra cuenta")
+
+    simple_fields = [
+        "first_name", "last_name", "ci", "department", "gender", "specialty",
+        "sub_specialties", "bio", "languages", "years_experience",
+        "price_general", "price_urgent", "price_follow_up",
+        "cmb_matricula", "sedes_number",
+    ]
+    for field in simple_fields:
+        if field in data and data[field] != getattr(professional, field):
+            old_val = getattr(professional, field)
+            changes[field] = {
+                "old": str(old_val) if old_val is not None else None,
+                "new": str(data[field]) if data[field] is not None else None,
+            }
+            setattr(professional, field, data[field])
+
+    if "birth_date" in data and data["birth_date"]:
+        try:
+            new_birth = datetime.fromisoformat(data["birth_date"])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de fecha de nacimiento inválido")
+        old_birth = professional.birth_date
+        if not old_birth or new_birth.date() != old_birth.date():
+            changes["birth_date"] = {
+                "old": old_birth.isoformat() if old_birth else None,
+                "new": new_birth.isoformat(),
+            }
+            professional.birth_date = new_birth
+
+    for field in ["phone", "email"]:
+        if field in data and data[field] != getattr(user, field):
+            changes[field] = {"old": getattr(user, field), "new": data[field]}
+            setattr(user, field, data[field])
+            warnings.append(
+                f"El {'teléfono' if field == 'phone' else 'email'} de inicio de sesión cambió: "
+                f"el usuario ya no podrá entrar con el dato anterior."
+            )
+
+    if not changes:
+        return {"message": "No hay cambios que aplicar", "warnings": []}
+
+    log = AuditLog(
+        user_id=current_user.id,
+        action="PROFESSIONAL_UPDATED",
+        entity_type="Professional",
+        entity_id=professional.id,
+        metadata_={"changes": changes},
+    )
+    db.add(log)
+    await db.commit()
+    logger.info(f"Profesional editado por admin {current_user.id}: {list(changes.keys())} (professional {professional.id})")
+    return {"message": "Datos actualizados correctamente", "changed_fields": list(changes.keys()), "warnings": warnings}
+
+
 # ── GET /api/v1/admin/settings ───────────────────────
 @router.get("/settings", summary="Obtener configuración de la plataforma")
 async def get_settings(
