@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, Alert } from '@/components/ui'
-import { api, adminAPI, getErrorMessage, type CommissionPeriod } from '@/lib/api'
+import { api, adminAPI, specialtiesAPI, getErrorMessage, type CommissionPeriod, type CatalogItem } from '@/lib/api'
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
 
 const DEPARTMENTS = ['Todos','La Paz','Santa Cruz','Cochabamba','Oruro','Potosi','Tarija','Beni','Pando','Chuquisaca']
@@ -584,12 +584,6 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
   )
 }
 
-const PRO_SPECIALTIES = [
-  'Medicina General', 'Cardiología', 'Psicología', 'Pediatría',
-  'Nutrición y Dietética', 'Ginecología y Obstetricia',
-  'Traumatología y Ortopedia', 'Dermatología',
-]
-
 function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   professional: Professional; onClose: () => void
   onAction: (id: string, status: string) => void; loading: boolean
@@ -600,6 +594,15 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   const [confirmLogin, setConfirmLogin] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [saveWarnings, setSaveWarnings] = useState<string[]>([])
+
+  // Catálogo real de especialidades/subespecialidades (el mismo que usa
+  // Admin → Especialidades), para que el selector no muestre una lista
+  // inventada aparte del resto de la plataforma.
+  const { data: specialtyCatalog = [] } = useQuery({
+    queryKey: ['specialties', 'catalog'],
+    queryFn: () => specialtiesAPI.list(),
+    staleTime: 60_000,
+  })
 
   const nameParts = local.name.split(' ')
   const emptyForm = {
@@ -612,7 +615,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
     phone: local.phone || '',
     email: local.email || '',
     specialty: local.specialty,
-    sub_specialties: local.sub_specialties?.join(', ') || '',
+    sub_specialties: local.sub_specialties || [] as string[],
     bio: local.bio || '',
     languages: local.languages?.join(', ') || 'Español',
     years_experience: String(local.years_experience ?? 0),
@@ -624,7 +627,26 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   }
   const [form, setForm] = useState(emptyForm)
 
-  const loginFieldChanged = form.phone !== (local.phone || '') || form.email !== (local.email || '')
+  const selectedSpecialtyId = specialtyCatalog.find((s: CatalogItem) => s.name === form.specialty)?.id
+  const { data: subSpecialtyCatalog = [] } = useQuery({
+    queryKey: ['specialties', 'sub', selectedSpecialtyId],
+    queryFn: () => specialtiesAPI.listSubSpecialties(selectedSpecialtyId as string),
+    enabled: !!selectedSpecialtyId,
+    staleTime: 60_000,
+  })
+
+  function toggleSubSpecialty(name: string) {
+    setForm((f) => ({
+      ...f,
+      sub_specialties: f.sub_specialties.includes(name)
+        ? f.sub_specialties.filter((s) => s !== name)
+        : [...f.sub_specialties, name],
+    }))
+  }
+
+  // El login es solo por número de celular (el email es solo dato de
+  // contacto), así que solo el teléfono dispara la advertencia.
+  const loginFieldChanged = form.phone !== (local.phone || '')
 
   const saveMutation = useMutation({
     mutationFn: () => adminAPI.updateProfessional(local.id, {
@@ -637,7 +659,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
       phone: form.phone || undefined,
       email: form.email || undefined,
       specialty: form.specialty,
-      sub_specialties: form.sub_specialties.split(',').map((s) => s.trim()).filter(Boolean),
+      sub_specialties: form.sub_specialties,
       bio: form.bio || undefined,
       languages: form.languages.split(',').map((s) => s.trim()).filter(Boolean),
       years_experience: Number(form.years_experience) || 0,
@@ -658,7 +680,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
         phone: form.phone,
         email: form.email,
         specialty: form.specialty,
-        sub_specialties: form.sub_specialties.split(',').map((s) => s.trim()).filter(Boolean),
+        sub_specialties: form.sub_specialties,
         bio: form.bio,
         languages: form.languages.split(',').map((s) => s.trim()).filter(Boolean),
         years_experience: Number(form.years_experience) || 0,
@@ -745,6 +767,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                 <div><p className="text-xs text-[#A0A8BF]">Telefono</p><p className="text-sm font-medium">{local.phone || 'No disponible'}</p></div>
                 <div><p className="text-xs text-[#A0A8BF]">Email</p><p className="text-sm font-medium truncate">{local.email || 'No especificado'}</p></div>
                 <div><p className="text-xs text-[#A0A8BF]">Cedula</p><p className="text-sm font-medium">{local.ci || 'No disponible'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">Fecha de nacimiento</p><p className="text-sm font-medium">{local.birth_date ? new Date(local.birth_date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' }) : 'No especificada'}</p></div>
                 <div><p className="text-xs text-[#A0A8BF]">Edad</p><p className="text-sm font-medium">{age ? `${age} anios` : 'No especificada'}</p></div>
                 <div><p className="text-xs text-[#A0A8BF]">Ciudad / Departamento</p><p className="text-sm font-medium">{local.department || 'No especificado'}</p></div>
                 <div><p className="text-xs text-[#A0A8BF]">Genero</p><p className="text-sm font-medium">{local.gender || 'No especificado'}</p></div>
@@ -795,20 +818,21 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                   </div>
                   <div>
                     <label className="block text-xs text-[#6B738A] mb-1">Especialidad</label>
-                    <select value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })}
+                    <select value={form.specialty}
+                      onChange={(e) => setForm({ ...form, specialty: e.target.value, sub_specialties: [] })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
-                      {PRO_SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      {!specialtyCatalog.some((s: CatalogItem) => s.name === form.specialty) && (
+                        <option value={form.specialty}>{form.specialty} (fuera de catálogo)</option>
+                      )}
+                      {specialtyCatalog.map((s: CatalogItem) => (
+                        <option key={s.id} value={s.name}>{s.name}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs text-[#6B738A] mb-1">Años de experiencia</label>
                     <input type="number" min={0} max={80} value={form.years_experience}
                       onChange={(e) => setForm({ ...form, years_experience: e.target.value })}
-                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Sub-especialidades (coma)</label>
-                    <input value={form.sub_specialties} onChange={(e) => setForm({ ...form, sub_specialties: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
@@ -826,6 +850,30 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                     <input value={form.sedes_number} onChange={(e) => setForm({ ...form, sedes_number: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-[#6B738A] mb-1">Sub-especialidades</label>
+                  {!selectedSpecialtyId ? (
+                    <p className="text-xs text-[#A0A8BF]">Elige una especialidad del catálogo para ver sus sub-especialidades.</p>
+                  ) : subSpecialtyCatalog.length === 0 ? (
+                    <p className="text-xs text-[#A0A8BF]">Esta especialidad no tiene sub-especialidades en el catálogo.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {subSpecialtyCatalog.map((s: CatalogItem) => (
+                        <label key={s.id} className="flex items-center gap-1.5 bg-white border border-[#DDE1EE] rounded-full px-2.5 py-1 text-xs cursor-pointer">
+                          <input type="checkbox" checked={form.sub_specialties.includes(s.name)}
+                            onChange={() => toggleSubSpecialty(s.name)} />
+                          {s.name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {form.sub_specialties.some((name) => !subSpecialtyCatalog.some((s: CatalogItem) => s.name === name)) && (
+                    <p className="text-[10px] text-[#A0A8BF] mt-1">
+                      También tiene guardadas: {form.sub_specialties.filter((name) => !subSpecialtyCatalog.some((s: CatalogItem) => s.name === name)).join(', ')} (fuera del catálogo actual de esta especialidad — se mantienen a menos que las quites de la lista de arriba).
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -859,23 +907,22 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                   </div>
                 </div>
 
-                {/* Teléfono / email — afectan el login, advertencia siempre visible */}
+                <div>
+                  <label className="block text-xs text-[#6B738A] mb-1">Email</label>
+                  <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                </div>
+
+                {/* Teléfono — es el único dato usado para iniciar sesión */}
                 <div className="bg-[#FAEEDA] border border-[#FAC775] rounded-lg p-2.5 space-y-2">
                   <p className="text-[11px] text-[#854F0B]">
-                    ⚠ Teléfono y email se usan para iniciar sesión. Si los cambias, el profesional ya no podrá
-                    entrar con el dato anterior — asegúrate de avisarle.
+                    ⚠ El profesional inicia sesión con su número de celular. Si lo cambias, ya no podrá
+                    entrar con el número anterior — asegúrate de avisarle.
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs text-[#6B738A] mb-1">Teléfono</label>
-                      <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-[#6B738A] mb-1">Email</label>
-                      <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
-                    </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Teléfono</label>
+                    <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   {loginFieldChanged && (
                     <label className="flex items-start gap-2 text-[11px] text-[#854F0B]">

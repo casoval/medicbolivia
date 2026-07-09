@@ -1157,10 +1157,10 @@ class AdminProfessionalUpdate(BaseModel):
     sedes_number: Optional[str] = Field(None, max_length=50)
 
 
-# Campos "sensibles": si cambian, el usuario ya no podrá loguearse con el
-# dato anterior — se marcan aparte en la respuesta para que el frontend
-# pueda mostrar una advertencia explícita antes/después de guardar.
-_LOGIN_FIELDS = {"phone", "email"}
+# El login se hace SOLO por número de celular (ver /auth/login), el email
+# es solo un dato de contacto. Por eso solo el teléfono dispara la
+# advertencia de "esto cambia cómo el usuario inicia sesión".
+_LOGIN_FIELDS = {"phone"}
 
 
 @router.patch("/patients/{user_id}", summary="Editar datos de un paciente")
@@ -1215,15 +1215,16 @@ async def update_patient_admin(
             changes["birth_date"] = {"old": patient.birth_date.isoformat(), "new": new_birth.isoformat()}
             patient.birth_date = new_birth
 
-    # Campos que viven en User (login)
+    # Campos que viven en User (teléfono = login, email = solo contacto)
     for field in ["phone", "email"]:
         if field in data and data[field] != getattr(user, field):
             changes[field] = {"old": getattr(user, field), "new": data[field]}
             setattr(user, field, data[field])
-            warnings.append(
-                f"El {'teléfono' if field == 'phone' else 'email'} de inicio de sesión cambió: "
-                f"el usuario ya no podrá entrar con el dato anterior."
-            )
+            if field in _LOGIN_FIELDS:
+                warnings.append(
+                    "El teléfono de inicio de sesión cambió: el paciente ya no podrá "
+                    "entrar con el número anterior."
+                )
 
     if not changes:
         return {"message": "No hay cambios que aplicar", "warnings": []}
@@ -1311,10 +1312,11 @@ async def update_professional_admin(
         if field in data and data[field] != getattr(user, field):
             changes[field] = {"old": getattr(user, field), "new": data[field]}
             setattr(user, field, data[field])
-            warnings.append(
-                f"El {'teléfono' if field == 'phone' else 'email'} de inicio de sesión cambió: "
-                f"el usuario ya no podrá entrar con el dato anterior."
-            )
+            if field in _LOGIN_FIELDS:
+                warnings.append(
+                    "El teléfono de inicio de sesión cambió: el profesional ya no podrá "
+                    "entrar con el número anterior."
+                )
 
     if not changes:
         return {"message": "No hay cambios que aplicar", "warnings": []}

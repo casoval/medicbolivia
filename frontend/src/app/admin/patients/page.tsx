@@ -53,8 +53,9 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
   const [saveError, setSaveError] = useState('')
   const [saveWarnings, setSaveWarnings] = useState<string[]>([])
 
-  const loginFieldChanged =
-    form.phone !== (patient.phone || '') || form.email !== (patient.email || '')
+  // El login es solo por número de celular (el email es solo dato de contacto,
+  // no se usa para entrar), así que solo el teléfono dispara la advertencia.
+  const loginFieldChanged = form.phone !== (patient.phone || '')
 
   const saveMutation = useMutation({
     mutationFn: () => adminAPI.updatePatient(local.user_id, {
@@ -137,6 +138,14 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
             {!editing ? (
               <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-2 gap-3">
                 <div>
+                  <p className="text-xs text-[#A0A8BF]">Fecha de nacimiento</p>
+                  <p className="text-sm font-medium">
+                    {local.birth_date
+                      ? new Date(local.birth_date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : 'No especificada'}
+                  </p>
+                </div>
+                <div>
                   <p className="text-xs text-[#A0A8BF]">Edad</p>
                   <p className="text-sm font-medium">{age ? `${age} años` : 'No especificada'}</p>
                 </div>
@@ -201,25 +210,23 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                     <input value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Email</label>
+                    <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
                 </div>
 
-                {/* Teléfono / email — afectan el login, advertencia siempre visible */}
+                {/* Teléfono — es el único dato usado para iniciar sesión */}
                 <div className="bg-[#FAEEDA] border border-[#FAC775] rounded-lg p-2.5 space-y-2">
                   <p className="text-[11px] text-[#854F0B]">
-                    ⚠ Teléfono y email se usan para iniciar sesión. Si los cambias, el paciente ya no podrá
-                    entrar con el dato anterior — asegúrate de avisarle.
+                    ⚠ El paciente inicia sesión con su número de celular. Si lo cambias, ya no podrá
+                    entrar con el número anterior — asegúrate de avisarle.
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs text-[#6B738A] mb-1">Teléfono</label>
-                      <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-[#6B738A] mb-1">Email</label>
-                      <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
-                    </div>
+                  <div>
+                    <label className="block text-xs text-[#6B738A] mb-1">Teléfono</label>
+                    <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   {loginFieldChanged && (
                     <label className="flex items-start gap-2 text-[11px] text-[#854F0B]">
