@@ -104,8 +104,8 @@ function VerifyPrescriptionSection() {
   return (
     <section className="bg-white border-t border-b border-[#DDE1EE]">
       <div className="max-w-3xl mx-auto px-4 py-14 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-[#E6F1FB] flex items-center justify-center mx-auto mb-4">
-          <QrCode className="w-6 h-6 text-[#185FA5]" aria-hidden="true" />
+        <div className="w-14 h-14 rounded-2xl bg-[#E7F8EF] flex items-center justify-center mx-auto mb-4">
+          <QrCode className="w-6 h-6 text-[#0F6E56]" aria-hidden="true" />
         </div>
         <h2 className="text-2xl font-bold text-[#141820] mb-2">Verificar una receta médica</h2>
         <p className="text-sm text-[#6B738A] mb-6 max-w-md mx-auto">
@@ -134,9 +134,9 @@ function VerifyPrescriptionSection() {
 function LandingHeader() {
   return (
     <header className="border-b border-[#DDE1EE] bg-white sticky top-0 z-10">
-      <div className="max-w-5xl mx-auto px-4 h-20 flex items-center justify-between">
+      <div className="max-w-5xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between">
         <div className="flex items-center">
-          <Image src="/logo.png" alt="MedicBolivia" width={472} height={128} className="h-32 w-auto" priority />
+          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-7 sm:h-11 w-auto" priority />
         </div>
         <nav className="hidden sm:flex items-center gap-6 text-sm text-[#6B738A]">
           <a href="#faq" className="hover:text-[#141820]">Preguntas frecuentes</a>
@@ -165,6 +165,10 @@ type HeroSlide = {
   focus: string
   badgeIcon: typeof MessageCircleHeart
   badgeText: string
+  // Acento opcional del badge: por defecto es un blanco translúcido; en el
+  // slide de la nueva función de voz usamos verde para que se note que es
+  // una novedad (y de paso suma un poco de verde a un hero muy azul).
+  accent?: 'green'
   title: string
   description: string
 }
@@ -186,9 +190,10 @@ const HERO_SLIDES: HeroSlide[] = [
     focus: 'object-center',
     badgeIcon: Mic,
     badgeText: 'Nuevo: consultá por voz',
+    accent: 'green',
     title: 'Llamá a Medi y contale tu consulta hablando',
     description:
-      'Sin escribir nada: llamá por voz a Medi, como una llamada normal, y contale qué te pasa desde donde estés en Bolivia — desde la orilla del lago Titicaca. Te escucha y te conecta al toque con el profesional indicado.',
+      'Sin escribir nada: llamá por voz a Medi, como una llamada normal, y contale qué te pasa desde donde estés en Bolivia — hasta desde la orilla del lago Titicaca. Te escucha y te conecta al toque con el profesional indicado.',
   },
   {
     image: '/hero-consulta2.jpg',
@@ -212,7 +217,9 @@ function HeroCopy({ slide }: { slide: HeroSlide }) {
   const Icon = slide.badgeIcon
   return (
     <>
-      <span className="inline-flex items-center gap-1.5 bg-white/15 text-white text-xs font-medium px-3 py-1 rounded-full mb-4 backdrop-blur-sm">
+      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full mb-4 backdrop-blur-sm ${
+        slide.accent === 'green' ? 'bg-[#11A15A]/25 text-white' : 'bg-white/15 text-white'
+      }`}>
         <Icon className="w-3.5 h-3.5" aria-hidden="true" />
         {slide.badgeText}
       </span>
@@ -376,6 +383,7 @@ function HowItWorksSection() {
       icon: FileCheck2,
       title: 'Recibí tu receta digital',
       text: 'Queda verificable con QR, lista para presentar en cualquier farmacia.',
+      done: true,
     },
   ]
 
@@ -388,10 +396,12 @@ function HowItWorksSection() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {steps.map((step, i) => (
           <div key={step.title} className="bg-white border border-[#DDE1EE] rounded-xl p-5 text-center">
-            <div className="w-11 h-11 rounded-full bg-[#E6F1FB] flex items-center justify-center mx-auto mb-3">
-              <step.icon className="w-5 h-5 text-[#185FA5]" aria-hidden="true" />
+            <div className={`w-11 h-11 rounded-full flex items-center justify-center mx-auto mb-3 ${
+              step.done ? 'bg-[#E7F8EF]' : 'bg-[#E6F1FB]'
+            }`}>
+              <step.icon className={`w-5 h-5 ${step.done ? 'text-[#0F6E56]' : 'text-[#185FA5]'}`} aria-hidden="true" />
             </div>
-            <p className="text-xs font-medium text-[#185FA5] mb-1">Paso {i + 1}</p>
+            <p className={`text-xs font-medium mb-1 ${step.done ? 'text-[#0F6E56]' : 'text-[#185FA5]'}`}>Paso {i + 1}</p>
             <p className="text-sm font-medium text-[#141820] mb-1">{step.title}</p>
             <p className="text-xs text-[#6B738A]">{step.text}</p>
           </div>
@@ -429,7 +439,7 @@ function AppointmentsSection() {
                 El profesional confirma o reprograma desde su panel
               </li>
               <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#185FA5]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#11A15A]" />
                 Ambos ven el mismo estado de la cita en tiempo real
               </li>
             </ul>
@@ -543,6 +553,7 @@ function TrustSection() {
       icon: FileCheck2,
       title: 'Recetas verificables',
       text: 'Cada receta digital tiene un código QR que cualquier farmacia puede validar.',
+      green: true,
     },
   ]
 
@@ -556,7 +567,7 @@ function TrustSection() {
           {points.map((point) => (
             <div key={point.title} className="flex items-start gap-3 bg-[#F5F6FA] rounded-xl p-4">
               <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0">
-                <point.icon className="w-5 h-5 text-[#185FA5]" aria-hidden="true" />
+                <point.icon className={`w-5 h-5 ${point.green ? 'text-[#0F6E56]' : 'text-[#185FA5]'}`} aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm font-medium text-[#141820] mb-1">{point.title}</p>
