@@ -3,14 +3,19 @@ app/api/v1/endpoints/contact.py
 Formulario público de "Contáctanos" de la landing (sin cuenta, sin login).
 
 Flujo:
-1. Rate-limit por IP (Redis) para frenar spam sin necesitar CAPTCHA.
-2. Se guarda la consulta en `contact_inquiries` ANTES de intentar el correo
+1. Honeypot: si el campo oculto `website` viene con algo, se descarta en
+   silencio (201 falso, no se guarda ni se avisa) — es un bot.
+2. Rate-limit por IP (Redis) para frenar spam sin necesitar CAPTCHA.
+3. Tope diario GLOBAL (Redis) como freno de emergencia contra spam
+   repartido entre muchas IPs distintas.
+4. Se guarda la consulta en `contact_inquiries` ANTES de intentar el correo
    — así, si el SMTP de Hostinger falla, la consulta no se pierde.
-3. Se intenta avisar por correo a info@medicbolivia.com. Si falla, se loguea
+5. Se intenta avisar por correo a info@medicbolivia.com. Si falla, se loguea
    el error pero la petición igual responde 201: para la persona que llenó
    el formulario, su consulta ya quedó registrada.
 """
 import smtplib
+from datetime import datetime
 from email.message import EmailMessage
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -87,6 +92,24 @@ async def create_contact_inquiry(
     Sin autenticación a propósito: lo llena cualquier visitante de la
     landing, con o sin cuenta.
     """
+    # Honeypot: un campo oculto que ninguna persona real completa. Si un
+    # bot lo llenó, respondemos 201 igual (para no delatar el truco y que
+    # el bot no "aprenda" a evitarlo) pero no guardamos nada ni mandamos
+    # correo — es puro descarte silencioso.
+    if data.website.strip():
+        logger.warning(f"Formulario de contacto descartado por honeypot (IP {request.client.host if request.client else 'unknown'})")
+        return ContactInquiryResponse(
+            id="00000000-0000-0000-0000-000000000000",
+            full_name=data.full_name,
+            city=data.city,
+            country=data.country,
+            phone=data.phone,
+            email=data.email,
+            inquiry_type=data.inquiry_type,
+            message=data.message,
+            created_at=datetime.utcnow(),
+        )
+
     client_ip = request.client.host if request.client else "unknown"
     rate_key = f"contact_form_ip:{client_ip}"
     attempts = await redis_client.incr(rate_key)
@@ -96,6 +119,19 @@ async def create_contact_inquiry(
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Enviaste demasiadas consultas en poco tiempo. Probá de nuevo en un rato.",
+        )
+
+    # Freno de emergencia global: protege contra spam repartido entre
+    # muchas IPs distintas, donde el límite de arriba (por IP) no alcanza.
+    daily_key = f"contact_form_daily:{datetime.utcnow().strftime('%Y-%m-%d')}"
+    daily_count = await redis_client.incr(daily_key)
+    if daily_count == 1:
+        await redis_client.expire(daily_key, 86400)
+    if daily_count > settings.CONTACT_FORM_MAX_PER_DAY:
+        logger.warning(f"Tope diario global de consultas de contacto alcanzado ({settings.CONTACT_FORM_MAX_PER_DAY})")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Estamos recibiendo muchas consultas ahora mismo. Probá de nuevo más tarde o escribinos directo a info@medicbolivia.com.",
         )
 
     inquiry = ContactInquiry(

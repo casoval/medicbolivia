@@ -676,6 +676,11 @@ class ContactInquiryCreateRequest(BaseModel):
     email: Optional[EmailStr] = None
     inquiry_type: str = Field(..., description="PACIENTE | PROFESIONAL | SOPORTE | FACTURACION | OTRO")
     message: str = Field(..., min_length=5, max_length=3000)
+    # Honeypot anti-spam: campo oculto en el frontend que una persona real
+    # nunca completa (no lo ve). Los bots que autorellenan formularios sí
+    # suelen llenarlo. Si llega con algo, el endpoint corta silenciosamente
+    # (ver contact.py) sin guardar ni avisar por correo.
+    website: str = Field(default="", max_length=200)
 
     @field_validator("phone")
     @classmethod

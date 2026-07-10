@@ -181,6 +181,11 @@ class Settings(BaseSettings):
     # Tope de envíos del formulario por IP por hora, para frenar spam/bots
     # sin necesitar CAPTCHA.
     CONTACT_FORM_MAX_PER_HOUR: int = 5
+    # Freno de emergencia adicional: tope GLOBAL de consultas por día, sin
+    # importar la IP. Protege contra spam distribuido desde muchas IPs
+    # distintas (proxies/botnets), donde el límite por IP de arriba no
+    # alcanza porque cada una arranca su propio contador.
+    CONTACT_FORM_MAX_PER_DAY: int = 100
 
     @field_validator("SECRET_KEY")
     @classmethod

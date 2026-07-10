@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { PhoneInput } from '@/components/ui/PhoneInput'
 import { Reveal } from '@/components/ui/Reveal'
 import { contactAPI, getErrorMessage, type ContactInquiryType } from '@/lib/api'
-import { Send, User, Mail, MapPin, MessageSquare, CheckCircle2, Bot } from 'lucide-react'
+import { Send, User, Mail, MapPin, MessageSquare, CheckCircle2 } from 'lucide-react'
 
 // Ciudades capitales de los 9 departamentos de Bolivia. El valor especial
 // OTHER_COUNTRY_VALUE dispara el campo libre de "país" en vez de la lista.
@@ -36,10 +36,13 @@ const INITIAL_FORM = {
   email: '',
   inquiry_type: '' as ContactInquiryType | '',
   message: '',
+  // Honeypot: campo trampa oculto, ver más abajo en el <input name="website">.
+  website: '',
 }
 
 // Tres puntitos animados, el mismo lenguaje visual que el "escribiendo..."
-// de WhatsApp — se muestran mientras la persona está tipeando el mensaje.
+// de WhatsApp — aparecen pegados al label de "Mensaje" mientras la persona
+// tipea, como una pequeña confirmación de que el formulario está "vivo".
 function TypingDots() {
   return (
     <span className="inline-flex items-center gap-0.5">
@@ -50,50 +53,10 @@ function TypingDots() {
   )
 }
 
-// Mockup decorativo tipo chat de WhatsApp: mientras la persona escribe su
-// mensaje en el formulario de al lado, esta "burbuja" cobra vida con los
-// puntitos de "escribiendo..." — igual que el equipo lo vería llegar.
-function LiveChatMockup({ isTyping, preview }: { isTyping: boolean; preview: string }) {
-  return (
-    <div className="bg-[#E7F8EF] border border-[#DDE1EE] rounded-2xl p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-7 h-7 rounded-full bg-[#25D366] flex items-center justify-center">
-          <Bot className="w-3.5 h-3.5 text-white" aria-hidden="true" />
-        </div>
-        <div>
-          <p className="text-xs font-medium text-[#141820]">Equipo MedicBolivia</p>
-          <p className="text-[10px] text-[#6B738A]">
-            {isTyping ? 'en línea' : 'responde a la brevedad'}
-          </p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl rounded-tl-none px-3 py-2.5 text-xs text-[#141820] mb-2 max-w-[90%]">
-        Hola 👋 contanos en qué te podemos ayudar y te respondemos por correo o WhatsApp.
-      </div>
-
-      {/* Vista previa en vivo de lo que la persona está escribiendo */}
-      <div
-        className={`ml-auto max-w-[85%] rounded-xl rounded-tr-none px-3 py-2.5 text-xs text-[#141820] text-right transition-colors duration-300 ${
-          preview ? 'bg-[#DCF8C6]' : 'bg-white/60 border border-dashed border-[#C7E9DA]'
-        }`}
-      >
-        {preview ? (
-          <span className="whitespace-pre-wrap break-words">{preview}</span>
-        ) : (
-          <span className="text-[#6B738A]">Tu mensaje va a aparecer acá…</span>
-        )}
-      </div>
-
-      {isTyping && (
-        <div className="flex items-center gap-1.5 mt-2 ml-auto w-fit bg-white rounded-full px-2.5 py-1 animate-fade-up">
-          <TypingDots />
-          <span className="text-[10px] text-[#6B738A]">escribiendo…</span>
-        </div>
-      )}
-    </div>
-  )
-}
+// Clase común para los inputs: agrega una sombra sutil y un leve "levante"
+// al enfocarlos, para que el formulario se sienta más vivo sin exagerar.
+const FIELD_TRANSITION =
+  'transition-shadow duration-200 focus:shadow-[0_0_0_4px_rgba(17,161,90,0.12)]'
 
 export function ContactSection() {
   const [form, setForm] = useState(INITIAL_FORM)
@@ -108,6 +71,17 @@ export function ContactSection() {
       if (typingTimeout.current) clearTimeout(typingTimeout.current)
     }
   }, [])
+
+  // Progreso del formulario: cuántos de los 5 campos obligatorios ya están
+  // completos. Alimenta la barra animada de arriba del formulario.
+  const requiredDone = [
+    form.full_name.trim().length > 0,
+    form.isOtherCountry ? form.otherCountry.trim().length > 0 : form.city.trim().length > 0,
+    form.phone.length > 0,
+    form.inquiry_type.length > 0,
+    form.message.trim().length > 0,
+  ].filter(Boolean).length
+  const progressPct = Math.round((requiredDone / 5) * 100)
 
   function handleMessageChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setForm((prev) => ({ ...prev, message: e.target.value }))
@@ -153,6 +127,7 @@ export function ContactSection() {
         email: form.email.trim() || undefined,
         inquiry_type: form.inquiry_type,
         message: form.message.trim(),
+        website: form.website,
       })
       setSuccess(true)
       setForm(INITIAL_FORM)
@@ -164,7 +139,7 @@ export function ContactSection() {
   }
 
   return (
-    <section id="contacto" className="max-w-5xl mx-auto px-4 py-16">
+    <section id="contacto" className="max-w-2xl mx-auto px-4 py-16">
       <Reveal className="text-center mb-10">
         <h2 className="text-2xl font-bold text-[#141820] mb-2">Contáctanos</h2>
         <div className="w-10 h-1 rounded-full bg-gradient-to-r from-[#185FA5] to-[#11A15A] mx-auto mb-3" />
@@ -177,144 +152,172 @@ export function ContactSection() {
         </p>
       </Reveal>
 
-      <div className="grid sm:grid-cols-2 gap-8 items-start">
-        <Reveal className="order-2 sm:order-1 sm:sticky sm:top-24">
-          <LiveChatMockup isTyping={isTyping} preview={form.message} />
-        </Reveal>
-
-        <Reveal delayMs={100} className="order-1 sm:order-2">
-          {success ? (
-            <div className="bg-white border border-[#9FE1CB] rounded-xl p-6 text-center animate-fade-up">
-              <div className="w-12 h-12 rounded-full bg-[#E1F5EE] flex items-center justify-center mx-auto mb-3">
-                <CheckCircle2 className="w-6 h-6 text-[#0F6E56]" aria-hidden="true" />
-              </div>
-              <p className="text-sm font-medium text-[#141820] mb-1">¡Consulta enviada!</p>
-              <p className="text-xs text-[#6B738A] mb-4">
-                Gracias por escribirnos. Te vamos a responder a la brevedad.
-              </p>
-              <button
-                type="button"
-                onClick={() => setSuccess(false)}
-                className="text-xs font-medium text-[#0F6E56] hover:underline"
-              >
-                Enviar otra consulta
-              </button>
+      <Reveal>
+        {success ? (
+          <div className="bg-white border border-[#9FE1CB] rounded-xl p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-[#E1F5EE] flex items-center justify-center mx-auto mb-3 opacity-0 animate-pop-in">
+              <CheckCircle2 className="w-6 h-6 text-[#0F6E56]" aria-hidden="true" />
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="bg-white border border-[#DDE1EE] rounded-xl p-5 space-y-4">
-              <div>
-                <label className="label flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5" aria-hidden="true" /> Nombre completo
-                </label>
+            <p className="text-sm font-medium text-[#141820] mb-1">¡Consulta enviada!</p>
+            <p className="text-xs text-[#6B738A] mb-4">
+              Gracias por escribirnos. Te vamos a responder a la brevedad.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSuccess(false)}
+              className="text-xs font-medium text-[#0F6E56] hover:underline"
+            >
+              Enviar otra consulta
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="bg-white border border-[#DDE1EE] rounded-xl p-5 space-y-4">
+            {/* Honeypot anti-spam: invisible y fuera del flujo de tabulación
+                para una persona real, pero un bot que autorellena todos los
+                inputs del formulario sí suele completarlo. Si llega con
+                algo, el backend descarta la consulta en silencio. */}
+            <div className="absolute left-[-9999px] w-px h-px overflow-hidden" aria-hidden="true">
+              <label htmlFor="website">No completar este campo</label>
+              <input
+                type="text"
+                id="website"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                value={form.website}
+                onChange={handleChange}
+              />
+            </div>
+
+            {/* Barra de progreso: se llena a medida que se completan los
+                campos obligatorios, degradado azul -> verde de la marca. */}
+            <div className="h-1.5 w-full bg-[#EEF1F8] rounded-full overflow-hidden -mt-1 mb-1">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#185FA5] to-[#11A15A] transition-[width] duration-500 ease-out"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+
+            <Reveal delayMs={0}>
+              <label className="label flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5" aria-hidden="true" /> Nombre completo
+              </label>
+              <input
+                className={`input ${FIELD_TRANSITION}`}
+                name="full_name"
+                value={form.full_name}
+                onChange={handleChange}
+                placeholder="Ej: María Fernández"
+                required
+              />
+            </Reveal>
+
+            <Reveal delayMs={60}>
+              <label className="label flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5" aria-hidden="true" /> Ciudad
+              </label>
+              <select
+                className={`input ${FIELD_TRANSITION}`}
+                value={form.isOtherCountry ? OTHER_COUNTRY_VALUE : form.city}
+                onChange={handleCitySelect}
+                required
+              >
+                {BOLIVIA_CITIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+                <option value={OTHER_COUNTRY_VALUE}>Estoy en otro país…</option>
+              </select>
+              {form.isOtherCountry && (
                 <input
-                  className="input"
-                  name="full_name"
-                  value={form.full_name}
+                  className={`input mt-2 animate-fade-up ${FIELD_TRANSITION}`}
+                  name="otherCountry"
+                  value={form.otherCountry}
                   onChange={handleChange}
-                  placeholder="Ej: María Fernández"
+                  placeholder="¿Desde qué país nos escribís?"
                   required
                 />
-              </div>
+              )}
+            </Reveal>
 
-              <div>
-                <label className="label flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5" aria-hidden="true" /> Ciudad
-                </label>
-                <select
-                  className="input"
-                  value={form.isOtherCountry ? OTHER_COUNTRY_VALUE : form.city}
-                  onChange={handleCitySelect}
-                  required
-                >
-                  {BOLIVIA_CITIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                  <option value={OTHER_COUNTRY_VALUE}>Estoy en otro país…</option>
-                </select>
-                {form.isOtherCountry && (
-                  <input
-                    className="input mt-2 animate-fade-up"
-                    name="otherCountry"
-                    value={form.otherCountry}
-                    onChange={handleChange}
-                    placeholder="¿Desde qué país nos escribís?"
-                    required
-                  />
-                )}
-              </div>
+            <Reveal delayMs={120}>
+              <label className="label">Teléfono</label>
+              <PhoneInput value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} required />
+            </Reveal>
 
-              <div>
-                <label className="label">Teléfono</label>
-                <PhoneInput value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} required />
-              </div>
+            <Reveal delayMs={180}>
+              <label className="label flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5" aria-hidden="true" /> Correo <span className="text-[#A0A8BF]">(opcional)</span>
+              </label>
+              <input
+                className={`input ${FIELD_TRANSITION}`}
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="tucorreo@ejemplo.com"
+              />
+            </Reveal>
 
-              <div>
-                <label className="label flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5" aria-hidden="true" /> Correo <span className="text-[#A0A8BF]">(opcional)</span>
-                </label>
-                <input
-                  className="input"
-                  type="email"
-                  name="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  placeholder="tucorreo@ejemplo.com"
-                />
-              </div>
+            <Reveal delayMs={240}>
+              <label className="label">Tipo de consulta</label>
+              <select
+                className={`input ${FIELD_TRANSITION}`}
+                name="inquiry_type"
+                value={form.inquiry_type}
+                onChange={handleChange}
+                required
+              >
+                <option value="" disabled>Elegí una opción…</option>
+                {INQUIRY_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </Reveal>
 
-              <div>
-                <label className="label">Tipo de consulta</label>
-                <select
-                  className="input"
-                  name="inquiry_type"
-                  value={form.inquiry_type}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="" disabled>Elegí una opción…</option>
-                  {INQUIRY_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label flex items-center gap-1.5">
+            <Reveal delayMs={300}>
+              <div className="flex items-center gap-2 mb-0">
+                <label className="label flex items-center gap-1.5 mb-0">
                   <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" /> Mensaje
                 </label>
-                <textarea
-                  className="input resize-none"
-                  rows={4}
-                  value={form.message}
-                  onChange={handleMessageChange}
-                  placeholder="Contanos en qué te podemos ayudar…"
-                  required
-                />
-              </div>
-
-              {error && <p className="text-xs text-[#A32D2D] bg-[#FCEBEB] border border-[#F09595] rounded-lg px-3 py-2">{error}</p>}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-[#11A15A] text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-[#0F6E56] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />
-                    Enviando…
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" aria-hidden="true" />
-                    Enviar consulta
-                  </>
+                {isTyping && (
+                  <span className="flex items-center gap-1 animate-fade-up">
+                    <TypingDots />
+                    <span className="text-[10px] text-[#6B738A]">escribiendo…</span>
+                  </span>
                 )}
-              </button>
-            </form>
-          )}
-        </Reveal>
-      </div>
+              </div>
+              <textarea
+                className={`input resize-none ${FIELD_TRANSITION}`}
+                rows={4}
+                value={form.message}
+                onChange={handleMessageChange}
+                placeholder="Contanos en qué te podemos ayudar…"
+                required
+              />
+            </Reveal>
+
+            {error && <p className="text-xs text-[#A32D2D] bg-[#FCEBEB] border border-[#F09595] rounded-lg px-3 py-2 animate-fade-up">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="group w-full bg-[#11A15A] text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-[#0F6E56] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />
+                  Enviando…
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
+                  Enviar consulta
+                </>
+              )}
+            </button>
+          </form>
+        )}
+      </Reveal>
     </section>
   )
 }

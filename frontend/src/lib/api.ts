@@ -926,6 +926,10 @@ export interface ContactInquiryPayload {
   email?: string
   inquiry_type: ContactInquiryType
   message: string
+  // Honeypot anti-spam: campo trampa, invisible para una persona real.
+  // Se manda siempre vacío desde acá; solo un bot que autorellena todos
+  // los inputs del formulario terminaría completándolo.
+  website?: string
 }
 
 export interface ContactInquiryResponse {

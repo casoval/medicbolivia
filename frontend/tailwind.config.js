@@ -30,11 +30,17 @@ module.exports = {
         'pulse-dot':   'pulse 1.5s ease-in-out infinite',
         'fade-up':     'fadeUp 0.3s ease forwards',
         'bounce-dot':  'bounce 1s infinite',
+        'pop-in':      'popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
       },
       keyframes: {
         fadeUp: {
           '0%':   { opacity: '0', transform: 'translateY(10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        popIn: {
+          '0%':   { opacity: '0', transform: 'scale(0.5)' },
+          '70%':  { opacity: '1', transform: 'scale(1.1)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
       },
     },
