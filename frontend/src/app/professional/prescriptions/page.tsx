@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { Alert, SectionTitle } from '@/components/ui'
+import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { prescriptionsAPI, consultationsAPI, getErrorMessage, buildPrescriptionVerifyUrl } from '@/lib/api'
 import type { Medication, Prescription } from '@/types'
 
@@ -217,7 +218,7 @@ function PrescriptionCard({
 function PatientRxGroup({
   group, alreadyReplacedIds, onVoid, onReissue, isVoiding,
 }: {
-  group: { patientCi: string; patientName: string; items: Prescription[] }
+  group: { patientCi: string; patientName: string; photoUrl: string | null; items: Prescription[] }
   alreadyReplacedIds: Set<string>
   onVoid: (id: string, reason: string) => void
   onReissue: (rx: Prescription) => void
@@ -232,9 +233,13 @@ function PatientRxGroup({
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-4 py-3 bg-[#F5F6FA] hover:bg-[#EEF0F6] transition-colors text-left"
       >
-        <div className="w-9 h-9 rounded-full bg-[#185FA5] text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-          {group.patientName.charAt(0).toUpperCase()}
-        </div>
+        <PatientAvatar
+          firstName={group.patientName.split(' ')[0]}
+          lastName={group.patientName.split(' ').slice(1).join(' ')}
+          photoUrl={group.photoUrl}
+          colorClasses="bg-[#185FA5] text-white"
+          textSize="text-sm"
+        />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-[#1A1F2E] truncate">{group.patientName}</p>
           <p className="text-xs text-[#6B738A]">
@@ -363,11 +368,14 @@ export default function PrescriptionsPage() {
   const rxBeingReplaced = replacesId ? myPrescriptions.find(p => p.id === replacesId) : null
 
   // Agrupar por paciente (CI) para la vista "por paciente"
-  type Group = { patientCi: string; patientName: string; items: Prescription[] }
+  type Group = { patientCi: string; patientName: string; photoUrl: string | null; items: Prescription[] }
   const groupedByPatient: Group[] = Object.values(
     myPrescriptions.reduce((acc: Record<string, Group>, rx) => {
       if (!acc[rx.patient_ci]) {
-        acc[rx.patient_ci] = { patientCi: rx.patient_ci, patientName: rx.patient_name, items: [] }
+        acc[rx.patient_ci] = { patientCi: rx.patient_ci, patientName: rx.patient_name, photoUrl: rx.patient_photo_url || null, items: [] }
+      }
+      if (!acc[rx.patient_ci].photoUrl && rx.patient_photo_url) {
+        acc[rx.patient_ci].photoUrl = rx.patient_photo_url
       }
       acc[rx.patient_ci].items.push(rx)
       return acc

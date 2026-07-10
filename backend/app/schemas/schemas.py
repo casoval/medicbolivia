@@ -335,6 +335,7 @@ class ConsultationResponse(BaseModel):
     # profesional tenga un buen registro de quién fue cada consulta)
     patient_first_name: Optional[str] = None
     patient_last_name: Optional[str] = None
+    patient_photo_url: Optional[str] = None
     # Datos del pago (enriquecidos en el endpoint con JOIN), para que el
     # historial muestre cuándo se pagó/reembolsó y por qué.
     payment_status: Optional[str] = None
@@ -401,6 +402,7 @@ class PrescriptionResponse(BaseModel):
     patient_name: str
     patient_ci: str
     patient_age: int
+    patient_photo_url: Optional[str] = None
     medications: List[dict]
     instructions: Optional[str]
     digital_hash: str
@@ -482,6 +484,7 @@ class ClinicalNoteResponse(BaseModel):
     professional_name: Optional[str] = None
     professional_specialty: Optional[str] = None
     patient_name: Optional[str] = None
+    patient_photo_url: Optional[str] = None
     is_editable: Optional[bool] = None
     edit_window_expires_at: Optional[datetime] = None
     addenda: list[ClinicalNoteAddendumResponse] = []

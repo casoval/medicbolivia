@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, SectionTitle } from '@/components/ui'
+import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { professionalsAPI, getErrorMessage } from '@/lib/api'
 import type { ProfessionalEarningItem } from '@/lib/api'
 
@@ -28,7 +29,6 @@ function fmtFecha(iso?: string | null): string {
     day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/La_Paz',
   })
 }
-
 const CONSULTATION_TYPE_LABELS: Record<string, string> = {
   IMMEDIATE:  'Consulta inmediata',
   SCHEDULED:  'Cita agendada',
@@ -84,14 +84,6 @@ const STATUS_TABS: { key: string; label: string }[] = [
   { key: 'REFUNDED_FULL',             label: 'Reembolsados' },
 ]
 
-function PatientAvatar({ firstName, lastName }: { firstName?: string | null; lastName?: string | null }) {
-  const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || '?'
-  return (
-    <div className="w-10 h-10 rounded-full bg-[#0F6E56]/10 text-[#0F6E56] text-sm font-semibold flex items-center justify-center flex-shrink-0">
-      {initials}
-    </div>
-  )
-}
 
 export default function ProfessionalEarningsPage() {
   const [statusFilter, setStatusFilter] = useState('')
@@ -205,7 +197,14 @@ export default function ProfessionalEarningsPage() {
                           onClick={() => setExpandedId(isOpen ? null : p.id)}
                           className="w-full flex items-start gap-3 text-left"
                         >
-                          <PatientAvatar firstName={p.patient_first_name} lastName={p.patient_last_name} />
+                          <PatientAvatar
+                            firstName={p.patient_first_name}
+                            lastName={p.patient_last_name}
+                            photoUrl={p.patient_photo_url}
+                            size="w-10 h-10"
+                            colorClasses="bg-[#0F6E56]/10 text-[#0F6E56]"
+                            textSize="text-sm"
+                          />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-medium truncate">{patientName}</p>

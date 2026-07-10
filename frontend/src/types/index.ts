@@ -109,6 +109,7 @@ export interface Consultation {
   professional_appointment_duration_minutes?: number
   patient_first_name?: string
   patient_last_name?: string
+  patient_photo_url?: string
   payment_status?: 'PENDING' | 'CONFIRMED' | 'RELEASED_TO_PROFESSIONAL' | 'REFUNDED_PARTIAL' | 'REFUNDED_FULL' | 'DISPUTED' | 'CANCELLED_NO_CHARGE'
   payment_paid_at?: string
   payment_refunded_at?: string
@@ -145,6 +146,7 @@ export interface Prescription {
   patient_name: string
   patient_ci: string
   patient_age: number
+  patient_photo_url?: string | null
   medications: Medication[]
   instructions?: string
   digital_hash: string

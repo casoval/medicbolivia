@@ -363,6 +363,7 @@ export interface ProfessionalEarningItem {
   patient_id: string | null
   patient_first_name: string | null
   patient_last_name: string | null
+  patient_photo_url: string | null
   specialty: string | null
   consultation_type: string | null
   consultation_status: string | null
@@ -380,6 +381,13 @@ export const patientsAPI = {
     api.get('/patients/me').then(r => r.data),
   updateMyProfile: (data: { allergies?: string[]; chronic_conditions?: string[]; current_medications?: string[]; department?: string }) =>
     api.patch('/patients/me', data).then(r => r.data),
+
+  // Sube o reemplaza la foto de perfil del paciente — retorna { photo_url: string }
+  uploadPhoto: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ photo_url: string; message: string }>('/patients/photo', form)
+  },
   // [Profesional] datos médicos básicos de un paciente con el que ya tuvo consultas
   getMedicalInfo: (patientId: string) =>
     api.get(`/patients/${patientId}/medical-info`).then(r => r.data as {
@@ -665,6 +673,7 @@ export interface ClinicalNote {
   professional_name?: string | null
   professional_specialty?: string | null
   patient_name?: string | null
+  patient_photo_url?: string | null
   edit_count?: number
   is_editable?: boolean | null
   edit_window_expires_at?: string | null

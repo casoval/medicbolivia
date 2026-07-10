@@ -1024,6 +1024,7 @@ async def list_patients(
             "birth_date":          patient.birth_date.isoformat() if patient.birth_date else None,
             "department":          patient.department,
             "gender":              patient.gender,
+            "photo_url":           patient.photo_url,
             "allergies":           patient.allergies or [],
             "chronic_conditions":  patient.chronic_conditions or [],
             "current_medications": patient.current_medications or [],

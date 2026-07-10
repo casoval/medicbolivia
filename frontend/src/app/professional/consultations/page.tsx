@@ -9,6 +9,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, SectionTitle, Alert } from '@/components/ui'
 import { PatientHistoryPanel } from '@/components/professional/PatientHistoryPanel'
+import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, getErrorMessage } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, fmtHora, wasActuallyRefunded } from '@/lib/consultationHistory'
@@ -17,11 +18,6 @@ import { useState, useEffect } from 'react'
 // Nombre e iniciales del paciente, para que el profesional tenga registro de quién fue cada consulta
 function patientNameOf(c: any): string | null {
   return c.patient_first_name ? `${c.patient_first_name} ${c.patient_last_name || ''}`.trim() : null
-}
-function patientInitials(c: any): string {
-  const fn = c.patient_first_name?.[0] || ''
-  const ln = c.patient_last_name?.[0] || ''
-  return (fn + ln).toUpperCase() || 'P'
 }
 
 const IconClose = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -337,9 +333,7 @@ export default function ConsultationsPage() {
                 <div className="divide-y divide-[#DDE1EE] mb-4">
                   {active.map((c) => (
                     <div key={c.id} className="py-3 flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                        {patientInitials(c)}
-                      </div>
+                      <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} />
                       <div className="flex-1">
                         <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
                         <p className="text-xs text-[#6B738A]">
@@ -369,9 +363,7 @@ export default function ConsultationsPage() {
                   {incomingImmediate.map((c) => (
                     <div key={c.id} className="py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#FCEBEB] text-[#E24B4A] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                          {patientInitials(c)}
-                        </div>
+                        <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} colorClasses="bg-[#FCEBEB] text-[#E24B4A]" />
                         <div className="flex-1">
                           <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
                           <p className="text-xs text-[#6B738A]">
@@ -423,9 +415,7 @@ export default function ConsultationsPage() {
                   {waitingPayment.map((c: any) => (
                     <div key={c.id} className="py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#F5E6C8] text-[#B97A00] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                          {patientInitials(c)}
-                        </div>
+                        <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} colorClasses="bg-[#F5E6C8] text-[#B97A00]" />
                         <div className="flex-1">
                           <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
                           <p className="text-xs text-[#6B738A]">
@@ -457,9 +447,7 @@ export default function ConsultationsPage() {
                   {readyImmediate.map((c) => (
                     <div key={c.id} className="py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                          {patientInitials(c)}
-                        </div>
+                        <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} />
                         <div className="flex-1">
                           <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
                           <p className="text-xs text-[#6B738A]">
@@ -515,9 +503,7 @@ export default function ConsultationsPage() {
                   const wasRefunded = wasActuallyRefunded(c)
                   return (
                     <div key={c.id} className="py-3 flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-full bg-[#F5F6FA] text-[#6B738A] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                        {patientInitials(c)}
-                      </div>
+                      <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} colorClasses="bg-[#F5F6FA] text-[#6B738A]" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{patientNameOf(c) || c.specialty || 'Consulta'}</p>
                         <p className="text-xs text-[#6B738A] truncate">

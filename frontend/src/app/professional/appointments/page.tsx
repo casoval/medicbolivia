@@ -12,16 +12,12 @@ import { StatusBadge, LoadingScreen, EmptyState, SectionTitle, Alert } from '@/c
 import { consultationsAPI, getErrorMessage } from '@/lib/api'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, wasActuallyRefunded } from '@/lib/consultationHistory'
 import { PatientHistoryPanel } from '@/components/professional/PatientHistoryPanel'
+import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
 
 function patientNameOf(c: any): string | null {
   return c.patient_first_name ? `${c.patient_first_name} ${c.patient_last_name || ''}`.trim() : null
-}
-function patientInitials(c: any): string {
-  const fn = c.patient_first_name?.[0] || ''
-  const ln = c.patient_last_name?.[0] || ''
-  return (fn + ln).toUpperCase() || 'P'
 }
 
 // Cuenta regresiva para aceptar/rechazar una cita agendada. El plazo real
@@ -200,9 +196,7 @@ export default function ProfessionalAppointmentsPage() {
                     return (
                       <div key={c.id} className="py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                            {patientInitials(c)}
-                          </div>
+                          <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
                             <p className="text-xs text-[#6B738A]">
@@ -347,9 +341,7 @@ export default function ProfessionalAppointmentsPage() {
                     const wasRefunded = wasActuallyRefunded(c)
                     return (
                       <div key={c.id} className="py-3 flex items-start gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#F5F6FA] text-[#6B738A] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                          {patientInitials(c)}
-                        </div>
+                        <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} colorClasses="bg-[#F5F6FA] text-[#6B738A]" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{patientNameOf(c) || c.specialty || 'Cita'}</p>
                           <p className="text-xs text-[#6B738A] truncate">

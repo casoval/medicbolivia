@@ -543,6 +543,7 @@ async def get_my_earnings(
             "patient_id": pat.id if pat else None,
             "patient_first_name": pat.first_name if pat else None,
             "patient_last_name": pat.last_name if pat else None,
+            "patient_photo_url": pat.photo_url if pat else None,
             "specialty": c.specialty if c else None,
             "consultation_type": c.consultation_type if c else None,
             "consultation_status": c.status if c else None,

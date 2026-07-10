@@ -13,6 +13,7 @@ import { professionalsAPI, consultationsAPI, ratingsAPI, prescriptionsAPI, clini
 import type { ClinicalNote } from '@/lib/api'
 import { getGreeting } from '@/lib/greeting'
 import { PatientRecordSummary } from '@/components/professional/PatientRecordSummary'
+import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, wasActuallyRefunded } from '@/lib/consultationHistory'
 import { SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
 import type { AvailabilityMode } from '@/types'
@@ -151,11 +152,6 @@ function AwaitingPatientPaymentTimer({ acceptedAt, isScheduled }: { acceptedAt: 
 // Nombre e iniciales del paciente, para que el profesional tenga registro de quién fue cada consulta
 function patientNameOf(c: any): string | null {
   return c.patient_first_name ? `${c.patient_first_name} ${c.patient_last_name || ''}`.trim() : null
-}
-function patientInitials(c: any): string {
-  const fn = c.patient_first_name?.[0] || ''
-  const ln = c.patient_last_name?.[0] || ''
-  return (fn + ln).toUpperCase() || 'P'
 }
 
 const IconClose = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -607,9 +603,7 @@ export default function ProfessionalDashboard() {
             {incomingImmediate.map((c: any) => (
               <div key={c.id} className="py-3 border-b border-[#DDE1EE] last:border-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[#FCEBEB] text-[#E24B4A] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    {patientInitials(c)}
-                  </div>
+                  <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#FCEBEB] text-[#E24B4A]" />
                   <div className="flex-1">
                     <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
                     <p className="text-xs text-[#6B738A]">
@@ -654,9 +648,7 @@ export default function ProfessionalDashboard() {
             {incomingScheduled.map((c: any) => (
               <div key={c.id} className="py-3 border-b border-[#DDE1EE] last:border-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    {patientInitials(c)}
-                  </div>
+                  <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#E6F1FB] text-[#185FA5]" />
                   <div className="flex-1">
                     <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
                     <p className="text-xs text-[#6B738A]">
@@ -711,9 +703,7 @@ export default function ProfessionalDashboard() {
             {waitingPayment.map((c: any) => (
               <div key={c.id} className="py-2.5 border-b border-[#DDE1EE] last:border-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="w-7 h-7 rounded-full bg-[#F5E6C8] flex items-center justify-center text-xs font-bold text-[#B97A00]">
-                    {patientInitials(c)}
-                  </div>
+                  <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-7 h-7" colorClasses="bg-[#F5E6C8] text-[#B97A00]" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[#1B2B5E] truncate">
                       {patientNameOf(c) || 'Paciente'}
@@ -760,9 +750,7 @@ export default function ProfessionalDashboard() {
                     </div>
                   )}
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {patientInitials(c)}
-                    </div>
+                    <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#E6F1FB] text-[#185FA5]" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
                       <p className="text-xs text-[#6B738A]">
@@ -808,9 +796,7 @@ export default function ProfessionalDashboard() {
               return (
                 <div key={c.id} className="py-3 border-b border-[#DDE1EE] last:border-0">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {patientInitials(c)}
-                    </div>
+                    <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#E6F1FB] text-[#185FA5]" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
                       <p className="text-xs text-[#6B738A]">
@@ -951,9 +937,7 @@ export default function ProfessionalDashboard() {
             <h2 className="text-sm font-semibold mb-3">En curso ahora</h2>
             {active.map((c: any) => (
               <div key={c.id} className="flex items-center gap-3 py-2.5 border-b border-[#DDE1EE] last:border-0">
-                <div className="w-9 h-9 rounded-full bg-[#E1F5EE] text-[#0F6E56] flex items-center justify-center text-xs font-bold">
-                  {patientInitials(c)}
-                </div>
+                <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#E1F5EE] text-[#0F6E56]" />
                 <div className="flex-1">
                   <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
                   <p className="text-xs text-[#6B738A]">
@@ -997,9 +981,7 @@ export default function ProfessionalDashboard() {
                 const wasRefunded = wasActuallyRefunded(c)
                 return (
                   <div key={c.id} className="py-2.5 flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#F5F6FA] text-[#6B738A] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {patientInitials(c)}
-                    </div>
+                    <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-8 h-8" colorClasses="bg-[#F5F6FA] text-[#6B738A]" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{patientNameOf(c) || c.specialty || 'Consulta'}</p>
                       <p className="text-xs text-[#6B738A] truncate">

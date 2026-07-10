@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { Alert } from '@/components/ui'
+import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { clinicalNotesAPI, consultationsAPI, getErrorMessage } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
 
@@ -261,7 +262,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
 function PatientGroup({
   group, onChanged
 }: {
-  group: { patientId: string; patientName: string; notes: ClinicalNote[] }
+  group: { patientId: string; patientName: string; photoUrl: string | null; notes: ClinicalNote[] }
   onChanged: () => void
 }) {
   const [open, setOpen] = useState(true) // abierto por defecto
@@ -278,9 +279,13 @@ function PatientGroup({
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-4 py-3 bg-[#F5F6FA] hover:bg-[#EEF0F6] transition-colors text-left"
       >
-        <div className="w-9 h-9 rounded-full bg-[#185FA5] text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-          {group.patientName.charAt(0).toUpperCase()}
-        </div>
+        <PatientAvatar
+          firstName={group.patientName.split(' ')[0]}
+          lastName={group.patientName.split(' ').slice(1).join(' ')}
+          photoUrl={group.photoUrl}
+          colorClasses="bg-[#185FA5] text-white"
+          textSize="text-sm"
+        />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-[#1A1F2E] truncate">{group.patientName}</p>
           <p className="text-xs text-[#6B738A]">
@@ -445,15 +450,19 @@ export default function ProfessionalClinicalNotesPage() {
   )
 
   // Agrupar por paciente
-  type PatientGroup = { patientId: string; patientName: string; notes: ClinicalNote[] }
+  type PatientGroup = { patientId: string; patientName: string; photoUrl: string | null; notes: ClinicalNote[] }
   const grouped: PatientGroup[] = Object.values(
     notes.reduce((acc: Record<string, PatientGroup>, n) => {
       if (!acc[n.patient_id]) {
         acc[n.patient_id] = {
           patientId: n.patient_id,
           patientName: n.patient_name || `Paciente · ${n.patient_id.slice(0, 8).toUpperCase()}`,
+          photoUrl: n.patient_photo_url || null,
           notes: [],
         }
+      }
+      if (!acc[n.patient_id].photoUrl && n.patient_photo_url) {
+        acc[n.patient_id].photoUrl = n.patient_photo_url
       }
       acc[n.patient_id].notes.push(n)
       return acc

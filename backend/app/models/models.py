@@ -170,6 +170,7 @@ class Patient(Base):
     allergies: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
     chronic_conditions: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
     current_medications: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
+    photo_url: Mapped[Optional[str]] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

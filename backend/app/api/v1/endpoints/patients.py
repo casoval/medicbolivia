@@ -2,7 +2,9 @@
 app/api/v1/endpoints/patients.py
 Endpoints de pacientes: perfil propio.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+import logging
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
@@ -11,8 +13,10 @@ from app.db.database import get_db
 from app.core.dependencies import get_current_patient, get_current_professional
 from app.models.models import User, Patient, Professional, Consultation, Payment, PaymentStatus
 from app.schemas.schemas import PatientUpdateRequest
+from app.services.storage import upload_photo_to_r2
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ── GET /api/v1/patients/me ──────────────────────────
@@ -35,10 +39,55 @@ async def get_my_profile(
         "birth_date": patient.birth_date.isoformat() if patient.birth_date else None,
         "department": patient.department,
         "gender": patient.gender,
+        "email": current_user.email,
+        "phone": current_user.phone,
+        "photo_url": patient.photo_url,
         "allergies": patient.allergies,
         "chronic_conditions": patient.chronic_conditions,
         "current_medications": patient.current_medications,
     }
+
+
+# ── POST /api/v1/patients/photo ──────────────────────
+# El paciente puede subir (o reemplazar) su foto de perfil, igual que el
+# profesional. Es opcional: si no la carga, se sigue mostrando el ícono
+# de silueta por defecto en el dashboard.
+@router.post("/photo", summary="Subir o actualizar foto de perfil del paciente")
+async def upload_patient_photo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_patient),
+    db: AsyncSession = Depends(get_db)
+):
+    allowed_types = ["image/jpeg", "image/png", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se aceptan imágenes JPG, PNG o WebP"
+        )
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="La foto no puede superar 5MB")
+
+    result = await db.execute(
+        select(Patient).where(Patient.user_id == current_user.id)
+    )
+    patient = result.scalar_one_or_none()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Perfil de paciente no encontrado")
+
+    photo_url = await upload_photo_to_r2(
+        file_content=content,
+        file_name=file.filename or "photo.jpg",
+        professional_id=str(patient.id),
+        content_type=file.content_type,
+    )
+
+    patient.photo_url = photo_url
+    await db.commit()
+
+    logger.info(f"Foto de perfil actualizada: paciente {patient.id}")
+    return {"photo_url": photo_url, "message": "Foto de perfil actualizada correctamente"}
 
 
 # ── PATCH /api/v1/patients/me ────────────────────────
@@ -77,6 +126,9 @@ async def update_my_profile(
         "birth_date": patient.birth_date.isoformat() if patient.birth_date else None,
         "department": patient.department,
         "gender": patient.gender,
+        "email": current_user.email,
+        "phone": current_user.phone,
+        "photo_url": patient.photo_url,
         "allergies": patient.allergies,
         "chronic_conditions": patient.chronic_conditions,
         "current_medications": patient.current_medications,

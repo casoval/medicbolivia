@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { LoadingScreen, EmptyState, SectionTitle, Alert } from '@/components/ui'
+import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { api, adminAPI, getErrorMessage } from '@/lib/api'
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
 
@@ -24,6 +25,7 @@ interface Patient {
   birth_date: string
   department: string
   gender?: string
+  photo_url?: string | null
   allergies: string[]
   chronic_conditions: string[]
   current_medications: string[]
@@ -105,9 +107,13 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-[#DDE1EE]">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-base font-bold">
-              {local.first_name[0]}{local.last_name[0]}
-            </div>
+            <PatientAvatar
+              firstName={local.first_name}
+              lastName={local.last_name}
+              photoUrl={local.photo_url}
+              size="w-12 h-12"
+              textSize="text-base"
+            />
             <div>
               <h3 className="text-base font-semibold">{local.first_name} {local.last_name}</h3>
               <p className="text-xs text-[#6B738A]">CI: {local.ci} · {local.department}</p>
@@ -476,9 +482,7 @@ export default function AdminPatientsPage() {
                     onClick={() => setSelected(p)}
                   >
                     {/* Avatar */}
-                    <div className="w-9 h-9 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {p.first_name[0]}{p.last_name[0]}
-                    </div>
+                    <PatientAvatar firstName={p.first_name} lastName={p.last_name} photoUrl={p.photo_url} />
 
                     {/* Info principal */}
                     <div className="flex-1 min-w-0">

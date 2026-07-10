@@ -13,7 +13,7 @@
 
 import {
   IconHome, IconSearch, IconBot, IconClock, IconFile, IconRx, IconNote,
-  IconStetho, IconPlus, IconGrid, IconUsers, IconCal, IconStar, IconUser,
+  IconStetho, IconGrid, IconUsers, IconCal, IconStar, IconUser,
   IconPatients, IconCard, IconLog, IconCog, IconTag,
 } from '@/components/nav-icons'
 
@@ -33,7 +33,7 @@ export const PATIENT_NAV: NavItem[] = [
   { label: 'Mis pagos',        href: '/patient/payments',         icon: <IconCard /> },
   { label: 'Mis recetas',      href: '/patient/prescriptions',    icon: <IconRx /> },
   { label: 'Historia clínica', href: '/patient/clinical-history', icon: <IconNote /> },
-  { label: 'Datos médicos',    href: '/patient/medical-profile',  icon: <IconPlus /> },
+  { label: 'Perfil',           href: '/patient/profile',          icon: <IconUser /> },
   { label: 'Mis profesionales',href: '/patient/professionals',    icon: <IconStetho /> },
 ]
 

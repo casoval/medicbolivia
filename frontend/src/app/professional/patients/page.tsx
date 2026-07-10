@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState } from '@/components/ui'
+import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { PatientRecordSummary } from '@/components/professional/PatientRecordSummary'
 import { consultationsAPI } from '@/lib/api'
 import { fmtFechaHora, fmtFechaHoraLocal } from '@/lib/consultationHistory'
@@ -30,6 +31,9 @@ const ACTIVE_STATUSES = new Set(['WAITING_PROFESSIONAL', 'PAYMENT_CONFIRMED', 'I
 interface PatientGroup {
   patientId: string
   name: string
+  firstName: string
+  lastName: string
+  photoUrl: string | null
   initials: string
   consultations: any[]
   total: number
@@ -58,6 +62,9 @@ function groupByPatient(consultations: any[]): PatientGroup[] {
       group = {
         patientId: c.patient_id,
         name,
+        firstName: c.patient_first_name || '',
+        lastName: c.patient_last_name || '',
+        photoUrl: c.patient_photo_url || null,
         initials,
         consultations: [],
         total: 0,
@@ -66,6 +73,11 @@ function groupByPatient(consultations: any[]): PatientGroup[] {
         lastAt: c.created_at,
       }
       map.set(c.patient_id, group)
+    }
+    // La foto es del paciente (no de la consulta), así que basta con
+    // quedarnos con la primera que venga con foto.
+    if (c.patient_photo_url && !group.photoUrl) {
+      group.photoUrl = c.patient_photo_url
     }
     group.consultations.push(c)
     group.total += 1
@@ -88,9 +100,13 @@ function PatientCard({ group }: { group: PatientGroup }) {
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#F5F6FA] transition-colors text-left"
       >
-        <div className="w-10 h-10 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-sm font-bold flex-shrink-0">
-          {group.initials}
-        </div>
+        <PatientAvatar
+          firstName={group.firstName}
+          lastName={group.lastName}
+          photoUrl={group.photoUrl}
+          size="w-10 h-10"
+          textSize="text-sm"
+        />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-medium truncate">{group.name}</p>

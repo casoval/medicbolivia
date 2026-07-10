@@ -32,7 +32,7 @@ def _generate_prescription_hash(data: dict) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
 
-def _enrich(prescription: Prescription, professional: Professional | None) -> PrescriptionResponse:
+def _enrich(prescription: Prescription, professional: Professional | None, patient: Patient | None = None) -> PrescriptionResponse:
     """Convierte Prescription ORM → PrescriptionResponse con datos del médico."""
     base = PrescriptionResponse.model_validate(prescription)
     if professional:
@@ -41,6 +41,8 @@ def _enrich(prescription: Prescription, professional: Professional | None) -> Pr
         base.professional_sub_specialties = professional.sub_specialties or []
         base.professional_department = professional.department
         base.cmb_matricula          = professional.cmb_matricula
+    if patient:
+        base.patient_photo_url = patient.photo_url
     return base
 
 
@@ -207,12 +209,14 @@ async def get_my_prescriptions(
         raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
 
     result = await db.execute(
-        select(Prescription)
+        select(Prescription, Patient)
+        .join(Consultation, Prescription.consultation_id == Consultation.id, isouter=True)
+        .join(Patient, Consultation.patient_id == Patient.id, isouter=True)
         .where(Prescription.professional_id == professional.id)
         .order_by(Prescription.created_at.desc())
     )
-    prescriptions = result.scalars().all()
-    return [_enrich(p, professional) for p in prescriptions]
+    rows = result.all()
+    return [_enrich(p, professional, pat) for p, pat in rows]
 
 
 # ── GET /prescriptions/patient/my ───────────────────
@@ -274,16 +278,17 @@ async def get_my_prescriptions_for_patient(
         raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
 
     result = await db.execute(
-        select(Prescription)
+        select(Prescription, Patient)
         .join(Consultation, Prescription.consultation_id == Consultation.id)
+        .join(Patient, Consultation.patient_id == Patient.id, isouter=True)
         .where(
             Prescription.professional_id == professional.id,
             Consultation.patient_id == patient_id,
         )
         .order_by(Prescription.created_at.desc())
     )
-    prescriptions = result.scalars().all()
-    return [_enrich(p, professional) for p in prescriptions]
+    rows = result.all()
+    return [_enrich(p, professional, pat) for p, pat in rows]
 
 
 # ── GET /prescriptions/consultation/{id} ────────────

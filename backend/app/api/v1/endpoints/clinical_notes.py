@@ -60,6 +60,7 @@ async def _enrich(
         base.professional_specialty = professional.specialty
     if patient:
         base.patient_name = f"{patient.first_name} {patient.last_name}"
+        base.patient_photo_url = patient.photo_url
 
     if consultation is None:
         cons_result = await db.execute(select(Consultation).where(Consultation.id == note.consultation_id))
