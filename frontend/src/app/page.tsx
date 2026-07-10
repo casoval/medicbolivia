@@ -22,6 +22,12 @@ const TABS: { key: FAQAudience; label: string }[] = [
   { key: 'PROFESSIONAL', label: 'Profesional' },
 ]
 
+// Barrita decorativa con degradado azul→verde, usada bajo algunos títulos
+// de sección como motivo repetido que amarra los dos colores de la marca.
+function SectionAccent() {
+  return <div className="w-10 h-1 rounded-full bg-gradient-to-r from-[#185FA5] to-[#11A15A] mx-auto" />
+}
+
 function FAQItem({ faq }: { faq: FAQ }) {
   const [open, setOpen] = useState(false)
   return (
@@ -56,7 +62,8 @@ function FAQSection() {
   return (
     <section id="faq" className="max-w-3xl mx-auto px-4 py-16">
       <h2 className="text-2xl font-bold text-center text-[#141820] mb-2">Preguntas frecuentes</h2>
-      <p className="text-sm text-center text-[#6B738A] mb-8">
+      <SectionAccent />
+      <p className="text-sm text-center text-[#6B738A] mt-3 mb-8">
         ¿Quiénes somos, cómo funciona la plataforma y qué necesitás saber antes de empezar.
       </p>
 
@@ -67,7 +74,7 @@ function FAQSection() {
             onClick={() => setTab(t.key)}
             className={`text-sm px-4 py-2 rounded-full border transition-colors ${
               tab === t.key
-                ? 'bg-[#185FA5] text-white border-[#185FA5]'
+                ? 'bg-[#11A15A] text-white border-[#11A15A]'
                 : 'bg-white text-[#6B738A] border-[#DDE1EE]'
             }`}
           >
@@ -114,16 +121,16 @@ function VerifyPrescriptionSection() {
         </p>
         <form onSubmit={goVerify} className="flex gap-2 max-w-sm mx-auto">
           <input
-            className="flex-1 rounded-lg border border-[#DDE1EE] px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#185FA5]"
+            className="flex-1 rounded-lg border border-[#DDE1EE] px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#11A15A]"
             placeholder="Ej: MB-RX-A1B2C3D4E5F6"
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
           />
-          <button type="submit" className="bg-[#185FA5] text-white text-sm font-medium px-4 py-2.5 rounded-lg whitespace-nowrap">
+          <button type="submit" className="bg-[#11A15A] text-white text-sm font-medium px-4 py-2.5 rounded-lg whitespace-nowrap hover:bg-[#0F6E56] transition-colors">
             Verificar
           </button>
         </form>
-        <Link href="/verificar-receta" className="text-xs text-[#185FA5] hover:underline mt-3 inline-block">
+        <Link href="/verificar-receta" className="text-xs text-[#0F6E56] hover:underline mt-3 inline-block">
           o abrir la página de verificación completa →
         </Link>
       </div>
@@ -143,7 +150,7 @@ function LandingHeader() {
           <Link href="/verificar-receta" className="hover:text-[#141820]">Verificar receta</Link>
         </nav>
         <div className="flex items-center gap-2">
-          <Link href="/auth/login" className="text-sm font-medium text-[#185FA5] px-3 py-2 hover:underline">
+          <Link href="/auth/login" className="text-sm font-medium text-[#0F6E56] border border-[#11A15A]/40 px-3 py-2 rounded-lg hover:bg-[#E7F8EF] transition-colors">
             Iniciar sesión
           </Link>
           <Link href="/auth/register/patient" className="bg-[#185FA5] text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#0C447C] transition-colors">
@@ -193,7 +200,7 @@ const HERO_SLIDES: HeroSlide[] = [
     accent: 'green',
     title: 'Llamá a Medi y contale tu consulta hablando',
     description:
-      'Sin escribir nada: llamá por voz a Medi, como una llamada normal, y contale qué te pasa desde donde estés en Bolivia — hasta desde la orilla del lago Titicaca. Te escucha y te conecta al toque con el profesional indicado.',
+      'Sin escribir nada: llamá por voz a Medi, como una llamada normal, y contale qué te pasa desde donde estés en Bolivia — desde la orilla del lago Titicaca. Te escucha y te conecta al toque con el profesional indicado.',
   },
   {
     image: '/hero-consulta2.jpg',
@@ -297,7 +304,7 @@ function Hero() {
             />
           ))}
         </div>
-        <div className="bg-gradient-to-b from-[#0C447C] to-[#185FA5] px-4 py-10">
+        <div className="bg-gradient-to-b from-[#0C447C] via-[#185FA5] to-[#0F6E56] px-4 py-10">
           <div className="max-w-lg mx-auto">
             <div key={active} style={{ animation: 'heroTextIn 0.6s ease-out' }}>
               <HeroCopy slide={slide} />
@@ -306,7 +313,7 @@ function Hero() {
               <Link href="/auth/register/patient" className="bg-white text-[#0C447C] font-medium px-6 py-3 rounded-lg hover:bg-[#E6F1FB] transition-colors">
                 Soy paciente — quiero consultar
               </Link>
-              <Link href="/auth/register/professional" className="bg-transparent text-white border border-white/50 font-medium px-6 py-3 rounded-lg hover:bg-white/10 transition-colors">
+              <Link href="/auth/register/professional" className="bg-transparent text-white border border-[#3DDC84]/80 font-medium px-6 py-3 rounded-lg hover:bg-[#11A15A]/15 transition-colors">
                 Soy profesional de salud
               </Link>
             </div>
@@ -349,7 +356,7 @@ function Hero() {
               <Link href="/auth/register/patient" className="bg-white text-[#0C447C] font-medium px-6 py-3 rounded-lg hover:bg-[#E6F1FB] transition-colors">
                 Soy paciente — quiero consultar
               </Link>
-              <Link href="/auth/register/professional" className="bg-transparent text-white border border-white/50 font-medium px-6 py-3 rounded-lg hover:bg-white/10 transition-colors">
+              <Link href="/auth/register/professional" className="bg-transparent text-white border border-[#3DDC84]/80 font-medium px-6 py-3 rounded-lg hover:bg-[#11A15A]/15 transition-colors">
                 Soy profesional de salud
               </Link>
             </div>
@@ -373,6 +380,7 @@ function HowItWorksSection() {
       icon: UserCheck,
       title: 'Te conecta con un profesional',
       text: 'Medi busca un médico verificado y disponible según tu síntoma.',
+      done: true,
     },
     {
       icon: Video,
@@ -390,7 +398,8 @@ function HowItWorksSection() {
   return (
     <section className="max-w-5xl mx-auto px-4 py-16">
       <h2 className="text-2xl font-bold text-center text-[#141820] mb-2">Cómo funciona</h2>
-      <p className="text-sm text-center text-[#6B738A] mb-10">
+      <SectionAccent />
+      <p className="text-sm text-center text-[#6B738A] mt-3 mb-10">
         De la consulta a la receta, en cuatro pasos.
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -417,7 +426,7 @@ function AppointmentsSection() {
       <div className="max-w-5xl mx-auto px-4 py-16">
         <div className="grid sm:grid-cols-2 gap-10 items-center">
           <div>
-            <span className="inline-flex items-center gap-1.5 bg-[#E6F1FB] text-[#185FA5] text-xs font-medium px-3 py-1 rounded-full mb-4">
+            <span className="inline-flex items-center gap-1.5 bg-[#E7F8EF] text-[#0F6E56] text-xs font-medium px-3 py-1 rounded-full mb-4">
               <CalendarCheck2 className="w-3.5 h-3.5" aria-hidden="true" />
               Agenda compartida
             </span>
@@ -431,7 +440,7 @@ function AppointmentsSection() {
             </p>
             <ul className="space-y-2 text-sm text-[#141820]">
               <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#185FA5]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#11A15A]" />
                 El paciente elige día y hora disponible del profesional
               </li>
               <li className="flex items-center gap-2">
@@ -449,7 +458,7 @@ function AppointmentsSection() {
           <div className="bg-[#F5F6FA] border border-[#DDE1EE] rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-medium text-[#141820]">Mis próximas citas</p>
-              <CalendarCheck2 className="w-4 h-4 text-[#185FA5]" aria-hidden="true" />
+              <CalendarCheck2 className="w-4 h-4 text-[#11A15A]" aria-hidden="true" />
             </div>
             <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-[#6B738A] mb-1">
               {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => <span key={i}>{d}</span>)}
@@ -460,7 +469,7 @@ function AppointmentsSection() {
                   key={i}
                   className={`aspect-square rounded-md flex items-center justify-center text-[10px] ${
                     [9, 16, 22].includes(i)
-                      ? 'bg-[#185FA5] text-white font-medium'
+                      ? 'bg-[#11A15A] text-white font-medium'
                       : 'bg-white text-[#6B738A]'
                   }`}
                 >
@@ -507,7 +516,7 @@ function AI24_7Section() {
         </div>
 
         <div className="order-1 sm:order-2">
-          <span className="inline-flex items-center gap-1.5 bg-[#E6F1FB] text-[#185FA5] text-xs font-medium px-3 py-1 rounded-full mb-4">
+          <span className="inline-flex items-center gap-1.5 bg-[#E7F8EF] text-[#0F6E56] text-xs font-medium px-3 py-1 rounded-full mb-4">
             <Clock className="w-3.5 h-3.5" aria-hidden="true" />
             Disponible 24/7
           </span>
@@ -548,6 +557,7 @@ function TrustSection() {
       icon: ShieldCheck,
       title: 'Consultas seguras',
       text: 'Videoconsulta cifrada y datos médicos protegidos en todo momento.',
+      green: true,
     },
     {
       icon: FileCheck2,
@@ -558,12 +568,13 @@ function TrustSection() {
   ]
 
   return (
-    <section className="bg-white border-t border-b border-[#DDE1EE]">
+    <section className="bg-gradient-to-b from-white via-[#F7FBF9] to-white border-t border-b border-[#DDE1EE]">
       <div className="max-w-5xl mx-auto px-4 py-16">
-        <h2 className="text-2xl font-bold text-center text-[#141820] mb-10">
+        <h2 className="text-2xl font-bold text-center text-[#141820] mb-3">
           Atención médica en la que podés confiar
         </h2>
-        <div className="grid sm:grid-cols-3 gap-4">
+        <SectionAccent />
+        <div className="grid sm:grid-cols-3 gap-4 mt-7">
           {points.map((point) => (
             <div key={point.title} className="flex items-start gap-3 bg-[#F5F6FA] rounded-xl p-4">
               <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0">
@@ -584,6 +595,7 @@ function TrustSection() {
 function LandingFooter() {
   return (
     <footer className="border-t border-[#DDE1EE] bg-white">
+      <div className="h-1 bg-gradient-to-r from-[#185FA5] to-[#11A15A]" />
       <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B738A]">
         <span>© {new Date().getFullYear()} MedicBolivia. Todos los derechos reservados.</span>
         <div className="flex gap-4">
@@ -628,7 +640,7 @@ export default function HomePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F6FA]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-[#185FA5] border-t-transparent rounded-full animate-spin-slow" />
+          <div className="w-8 h-8 border-2 border-[#11A15A] border-t-transparent rounded-full animate-spin-slow" />
           <p className="text-sm text-[#6B738A]">Redirigiendo...</p>
         </div>
       </div>

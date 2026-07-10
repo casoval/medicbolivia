@@ -113,14 +113,16 @@ export default function LoginPage() {
 
         {/* Panel informativo — solo visible en desktop (lg+) */}
         <div className="hidden lg:flex flex-col pr-10">
-          <Image
-            src="/logo.png"
-            alt="MedicBolivia"
-            width={440}
-            height={220}
-            className="w-96 h-auto mb-8 -ml-2 animate-fade-up"
-            priority
-          />
+          <Link href="/" className="mb-8 -ml-2 w-fit animate-fade-up">
+            <Image
+              src="/logo.png"
+              alt="MedicBolivia"
+              width={1779}
+              height={339}
+              className="w-96 h-auto"
+              priority
+            />
+          </Link>
 
           <h2
             className="text-2xl font-bold text-[#042C53] leading-snug mb-3 animate-fade-up"
@@ -176,17 +178,28 @@ export default function LoginPage() {
         {/* Columna del formulario */}
         <div className="w-full max-w-sm mx-auto">
 
+          {/* Volver a la página principal — visible siempre, arriba de todo en esta columna */}
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-sm text-[#6B738A] hover:text-[#185FA5] mb-4 animate-fade-up"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4">
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Volver al inicio
+          </Link>
+
           {/* Logo — visible solo en mobile/tablet (el panel de la izquierda ya lo muestra en desktop) */}
-          <div className="text-center mb-6 lg:hidden animate-fade-up">
+          <Link href="/" className="block text-center mb-6 lg:hidden animate-fade-up">
             <Image
               src="/logo.png"
               alt="MedicBolivia"
-              width={380}
-              height={190}
-              className="w-72 h-auto mx-auto"
+              width={1779}
+              height={339}
+              className="w-56 h-auto mx-auto"
               priority
             />
-          </div>
+          </Link>
 
           {/* Mini-banner de features — solo mobile/tablet, rota automáticamente */}
           <div
