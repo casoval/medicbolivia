@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { authAPI, specialtiesAPI, getErrorMessage } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { PhoneInput } from '@/components/ui/PhoneInput'
@@ -200,8 +201,8 @@ export default function RegisterProfessionalPage() {
       <div className="w-full max-w-md">
 
         <div className="text-center mb-6">
-          <Link href="/" className="text-xl font-bold text-[#042C53]">
-            Medic<span className="font-normal text-[#6B738A]">Bolivia</span>
+          <Link href="/" className="inline-block">
+            <Image src="/logo1.png" alt="MedicBolivia" width={1262} height={173} className="h-8 w-auto mx-auto" priority />
           </Link>
           <p className="text-sm text-[#6B738A] mt-1">Registro de profesional de salud</p>
         </div>
