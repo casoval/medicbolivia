@@ -149,11 +149,14 @@ function LandingHeader() {
           <a href="#faq" className="hover:text-[#141820]">Preguntas frecuentes</a>
           <Link href="/verificar-receta" className="hover:text-[#141820]">Verificar receta</Link>
         </nav>
-        <div className="flex items-center gap-2">
-          <Link href="/auth/login" className="text-sm font-medium text-[#0F6E56] border border-[#11A15A]/40 px-3 py-2 rounded-lg hover:bg-[#E7F8EF] transition-colors">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <Link
+            href="/auth/login"
+            className="text-xs sm:text-sm font-medium text-[#0F6E56] px-2 py-2 hover:underline sm:hover:no-underline sm:border sm:border-[#11A15A]/40 sm:px-3 sm:rounded-lg sm:hover:bg-[#E7F8EF] sm:transition-colors"
+          >
             Iniciar sesión
           </Link>
-          <Link href="/auth/register/patient" className="bg-[#185FA5] text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#0C447C] transition-colors">
+          <Link href="/auth/register/patient" className="bg-[#11A15A] text-white text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap">
             Registrarme
           </Link>
         </div>
