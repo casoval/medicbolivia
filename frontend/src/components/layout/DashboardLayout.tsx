@@ -13,6 +13,7 @@ interface NavItem {
   href: string
   icon: React.ReactNode
   badge?: number
+  description?: string
 }
 
 interface DashboardLayoutProps {
@@ -80,7 +81,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
       {navItems.map((item) => {
         const isActive = activeHref === item.href
         return (
-          <Link key={item.href} href={item.href} className={navLinkClass(isActive)}>
+          <Link key={item.href} href={item.href} className={navLinkClass(isActive)} title={item.description}>
             <span className="flex-shrink-0">{item.icon}</span>
             <span className="flex-1">{item.label}</span>
             {item.badge !== undefined && item.badge > 0 && (

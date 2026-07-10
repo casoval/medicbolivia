@@ -501,6 +501,9 @@ export default function ProfessionalDashboard() {
           <h1 className="text-lg font-semibold text-[#141820]">
             {getGreeting()}{user?.first_name ? `, Dr. ${user.first_name}` : ''} 👋
           </h1>
+          <p className="text-sm text-[#6B738A] mt-0.5">
+            Vista general de tu actividad, citas y consultas del día
+          </p>
         </div>
 
         {/* Disponibilidad */}
