@@ -167,6 +167,21 @@ class Settings(BaseSettings):
     # vez del archivo (Gmail rechaza adjuntos de más de ~25MB).
     BACKUP_MAX_ATTACHMENT_MB: int = 20
 
+    # ── SMTP Hostinger (formulario de contacto de la landing) ───────
+    # Buzón info@medicbolivia.com alojado en Hostinger. Se usa SOLO para
+    # avisar por correo cuando alguien manda el formulario público de
+    # "Contáctanos" — no tiene relación con el backup de Gmail de arriba.
+    CONTACT_SMTP_HOST: str = "smtp.hostinger.com"
+    CONTACT_SMTP_PORT: int = 465  # 465 = SSL directo (el que usa Hostinger por default)
+    CONTACT_SMTP_USER: str = ""
+    CONTACT_SMTP_PASSWORD: str = ""
+    # A dónde llega el aviso. Casi siempre la misma casilla que envía, pero
+    # queda separado por si algún día se quiere repartir a otra bandeja.
+    CONTACT_RECIPIENT_EMAIL: str = "info@medicbolivia.com"
+    # Tope de envíos del formulario por IP por hora, para frenar spam/bots
+    # sin necesitar CAPTCHA.
+    CONTACT_FORM_MAX_PER_HOUR: int = 5
+
     @field_validator("SECRET_KEY")
     @classmethod
     def validate_secret_key(cls, v: str) -> str:

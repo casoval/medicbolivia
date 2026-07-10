@@ -892,3 +892,33 @@ class DBBackupLog(Base):
     recipients: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
     error_detail: Mapped[Optional[str]] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ContactInquiry(Base):
+    """
+    Consulta enviada desde el formulario público de "Contáctanos" de la
+    landing (no requiere cuenta). Se guarda en la base ANTES de intentar el
+    envío del correo a info@medicbolivia.com — así, si el SMTP de Hostinger
+    falla o está caído, la consulta no se pierde y queda registrada con
+    email_sent=False para poder revisarla/reenviarla a mano.
+
+    country por defecto "Bolivia": el formulario permite elegir una ciudad
+    de una lista boliviana (queda en `city`) o tildar "otro país" y escribir
+    el nombre libremente en `country` (ahí `city` queda en None).
+    """
+    __tablename__ = "contact_inquiries"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    city: Mapped[Optional[str]] = mapped_column(String(100))
+    country: Mapped[str] = mapped_column(String(100), nullable=False, default="Bolivia")
+    # Formato canónico del proyecto: código de país + número, solo dígitos,
+    # sin '+' (ver app/core/phone.py::normalize_intl_phone).
+    phone: Mapped[str] = mapped_column(String(20), nullable=False)
+    email: Mapped[Optional[str]] = mapped_column(String(255))
+    inquiry_type: Mapped[str] = mapped_column(String(30), nullable=False, default="OTRO")
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    # Si el correo a info@medicbolivia.com se pudo mandar o no — la consulta
+    # se guarda igual aunque falle, para no perder ningún lead.
+    email_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -912,3 +912,36 @@ export const maintenanceAPI = {
   check: () =>
     api.get<{ maintenance_mode: boolean }>('/admin/maintenance-status').then(r => r.data),
 }
+
+// ── Contacto (formulario público de la landing) ───────
+export type ContactInquiryType = 'PACIENTE' | 'PROFESIONAL' | 'SOPORTE' | 'FACTURACION' | 'OTRO'
+
+export interface ContactInquiryPayload {
+  full_name: string
+  city: string | null
+  country: string
+  // Código de país + número, ya concatenado por PhoneInput (mismo formato
+  // que registro/login).
+  phone: string
+  email?: string
+  inquiry_type: ContactInquiryType
+  message: string
+}
+
+export interface ContactInquiryResponse {
+  id: string
+  full_name: string
+  city: string | null
+  country: string
+  phone: string
+  email: string | null
+  inquiry_type: ContactInquiryType
+  message: string
+  created_at: string
+}
+
+export const contactAPI = {
+  // Público — sin token.
+  send: (data: ContactInquiryPayload) =>
+    api.post<ContactInquiryResponse>('/contact', data).then(r => r.data),
+}

@@ -656,5 +656,71 @@ class FAQUpdateRequest(BaseModel):
     is_active: Optional[bool] = None
 
 
+# ─────────────────────────────────────────────────────
+# CONTACTO (formulario público "Contáctanos" — landing)
+# ─────────────────────────────────────────────────────
+
+CONTACT_INQUIRY_TYPES = ("PACIENTE", "PROFESIONAL", "SOPORTE", "FACTURACION", "OTRO")
+
+
+class ContactInquiryCreateRequest(BaseModel):
+    full_name: str = Field(..., min_length=3, max_length=200)
+    # Ciudad boliviana elegida de la lista del frontend. Requerida solo
+    # cuando country es "Bolivia" (ver validador abajo) — si la persona
+    # tildó "otro país", este campo queda vacío y lo que importa es country.
+    city: Optional[str] = Field(None, max_length=100)
+    country: str = Field(default="Bolivia", max_length=100)
+    # El frontend ya concatena código de país + número (mismo PhoneInput
+    # que registro/login), por eso se valida igual que ahí.
+    phone: str = Field(..., min_length=8, max_length=17, description="Código de país + número, ej: 59172345678")
+    email: Optional[EmailStr] = None
+    inquiry_type: str = Field(..., description="PACIENTE | PROFESIONAL | SOPORTE | FACTURACION | OTRO")
+    message: str = Field(..., min_length=5, max_length=3000)
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        try:
+            return normalize_intl_phone(v)
+        except InvalidPhoneError as e:
+            raise ValueError(str(e))
+
+    @field_validator("full_name", "message")
+    @classmethod
+    def strip_text(cls, v: str) -> str:
+        return v.strip()
+
+    @field_validator("inquiry_type")
+    @classmethod
+    def validate_inquiry_type(cls, v: str) -> str:
+        if v not in CONTACT_INQUIRY_TYPES:
+            raise ValueError(f"Tipo de consulta inválido. Debe ser uno de: {', '.join(CONTACT_INQUIRY_TYPES)}")
+        return v
+
+    @model_validator(mode="after")
+    def require_city_when_bolivia(self) -> "ContactInquiryCreateRequest":
+        country_clean = (self.country or "Bolivia").strip() or "Bolivia"
+        self.country = country_clean
+        if country_clean == "Bolivia" and not (self.city and self.city.strip()):
+            raise ValueError("Seleccioná una ciudad de la lista, o elegí 'Otro país' para escribirlo.")
+        if self.city:
+            self.city = self.city.strip()
+        return self
+
+
+class ContactInquiryResponse(BaseModel):
+    id: str
+    full_name: str
+    city: Optional[str]
+    country: str
+    phone: str
+    email: Optional[str]
+    inquiry_type: str
+    message: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # Actualizar referencias forward
 TokenResponse.model_rebuild()

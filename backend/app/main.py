@@ -11,7 +11,7 @@ import sys
 from app.core.config import settings
 from app.api.v1.endpoints import auth, professionals, patients, consultations, agent, admin
 from app.api.v1.endpoints import prescriptions, ratings, specialties, clinical_notes, faq
-from app.api.v1.endpoints import whatsapp
+from app.api.v1.endpoints import whatsapp, contact
 
 
 # ── Configurar logging con Loguru ─────────────────────
@@ -132,6 +132,7 @@ app.include_router(ratings.router,       prefix=f"{PREFIX}/ratings",        tags
 app.include_router(specialties.router,   prefix=f"{PREFIX}/specialties",    tags=["Especialidades"])
 app.include_router(faq.router,           prefix=f"{PREFIX}/faq",            tags=["Preguntas Frecuentes"])
 app.include_router(whatsapp.router,      prefix=f"{PREFIX}/whatsapp",       tags=["IA / WhatsApp"])
+app.include_router(contact.router,       prefix=f"{PREFIX}/contact",        tags=["Contacto"])
 
 
 # ── Health check ──────────────────────────────────────

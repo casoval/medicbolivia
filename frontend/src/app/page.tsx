@@ -14,7 +14,9 @@ import { useAuthStore } from '@/lib/store'
 import { faqAPI } from '@/lib/api'
 import type { FAQ, FAQAudience } from '@/types'
 import { Spinner } from '@/components/ui'
-import { MessageCircleHeart, UserCheck, Video, FileCheck2, QrCode, ShieldCheck, BadgeCheck, CalendarCheck2, Clock, Bell, Stethoscope, Mic, Cpu } from 'lucide-react'
+import { Reveal } from '@/components/ui/Reveal'
+import { ContactSection } from '@/components/landing/ContactSection'
+import { MessageCircleHeart, UserCheck, Video, FileCheck2, QrCode, ShieldCheck, BadgeCheck, CalendarCheck2, Clock, Bell, Stethoscope, Mic, Cpu, Mail } from 'lucide-react'
 
 const TABS: { key: FAQAudience; label: string }[] = [
   { key: 'GENERAL', label: 'General' },
@@ -148,6 +150,7 @@ function LandingHeader() {
         <nav className="hidden sm:flex items-center gap-6 text-sm text-[#6B738A]">
           <a href="#faq" className="hover:text-[#141820]">Preguntas frecuentes</a>
           <Link href="/verificar-receta" className="hover:text-[#141820]">Verificar receta</Link>
+          <a href="#contacto" className="hover:text-[#141820]">Contacto</a>
         </nav>
         <div className="flex items-center gap-1 sm:gap-2">
           <Link
@@ -502,7 +505,7 @@ function AI24_7Section() {
     <section className="max-w-5xl mx-auto px-4 py-16">
       <div className="grid sm:grid-cols-2 gap-10 items-center">
         {/* Mini mockup de recordatorio por WhatsApp, solo ilustrativo */}
-        <div className="order-2 sm:order-1 bg-[#E7F8EF] border border-[#DDE1EE] rounded-2xl p-5">
+        <Reveal className="order-2 sm:order-1 bg-[#E7F8EF] border border-[#DDE1EE] rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-7 h-7 rounded-full bg-[#25D366] flex items-center justify-center">
               <Bell className="w-3.5 h-3.5 text-white" aria-hidden="true" />
@@ -516,9 +519,9 @@ function AI24_7Section() {
           <div className="bg-[#DCF8C6] rounded-xl rounded-tr-none px-3 py-2.5 text-xs text-[#141820] ml-auto max-w-[70%] text-right">
             Sí, ahí estaré
           </div>
-        </div>
+        </Reveal>
 
-        <div className="order-1 sm:order-2">
+        <Reveal delayMs={100} className="order-1 sm:order-2">
           <span className="inline-flex items-center gap-1.5 bg-[#E7F8EF] text-[#0F6E56] text-xs font-medium px-3 py-1 rounded-full mb-4">
             <Clock className="w-3.5 h-3.5" aria-hidden="true" />
             Disponible 24/7
@@ -543,7 +546,7 @@ function AI24_7Section() {
               </p>
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   )
@@ -578,16 +581,18 @@ function TrustSection() {
         </h2>
         <SectionAccent />
         <div className="grid sm:grid-cols-3 gap-4 mt-7">
-          {points.map((point) => (
-            <div key={point.title} className="flex items-start gap-3 bg-[#F5F6FA] rounded-xl p-4">
-              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0">
-                <point.icon className={`w-5 h-5 ${point.green ? 'text-[#0F6E56]' : 'text-[#185FA5]'}`} aria-hidden="true" />
+          {points.map((point, i) => (
+            <Reveal key={point.title} delayMs={i * 120}>
+              <div className="flex items-start gap-3 bg-[#F5F6FA] rounded-xl p-4">
+                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0">
+                  <point.icon className={`w-5 h-5 ${point.green ? 'text-[#0F6E56]' : 'text-[#185FA5]'}`} aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#141820] mb-1">{point.title}</p>
+                  <p className="text-xs text-[#6B738A]">{point.text}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-[#141820] mb-1">{point.title}</p>
-                <p className="text-xs text-[#6B738A]">{point.text}</p>
-              </div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -600,8 +605,14 @@ function LandingFooter() {
     <footer className="border-t border-[#DDE1EE] bg-white">
       <div className="h-1 bg-gradient-to-r from-[#185FA5] to-[#11A15A]" />
       <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B738A]">
-        <span>© {new Date().getFullYear()} MedicBolivia. Todos los derechos reservados.</span>
+        <div className="flex flex-col items-center sm:items-start gap-1">
+          <span>© {new Date().getFullYear()} MedicBolivia. Todos los derechos reservados.</span>
+          <a href="mailto:info@medicbolivia.com" className="flex items-center gap-1.5 hover:text-[#141820]">
+            <Mail className="w-3.5 h-3.5" aria-hidden="true" /> info@medicbolivia.com
+          </a>
+        </div>
         <div className="flex gap-4">
+          <a href="#contacto" className="hover:text-[#141820]">Contacto</a>
           <a href="#faq" className="hover:text-[#141820]">Preguntas frecuentes</a>
           <Link href="/verificar-receta" className="hover:text-[#141820]">Verificar receta</Link>
           <Link href="/auth/login" className="hover:text-[#141820]">Iniciar sesión</Link>
@@ -621,6 +632,7 @@ function LandingPage() {
       <AI24_7Section />
       <VerifyPrescriptionSection />
       <TrustSection />
+      <ContactSection />
       <FAQSection />
       <LandingFooter />
     </div>
