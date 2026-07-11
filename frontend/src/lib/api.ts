@@ -36,13 +36,6 @@ export interface PlatformSettings {
   open_registration_patients: boolean
   open_registration_professionals: boolean
   maintenance_mode: boolean
-  alerts: {
-    no_response: boolean
-    daily_report: boolean
-    pending_payment: boolean
-    low_rating: boolean
-    new_professional: boolean
-  }
   updated_at: string | null
 }
 
@@ -52,11 +45,6 @@ export interface PlatformSettingsUpdate {
   open_registration_patients?: boolean
   open_registration_professionals?: boolean
   maintenance_mode?: boolean
-  alert_no_response?: boolean
-  alert_daily_report?: boolean
-  alert_pending_payment?: boolean
-  alert_low_rating?: boolean
-  alert_new_professional?: boolean
 }
 
 // ── Comisión por período / por profesional ──

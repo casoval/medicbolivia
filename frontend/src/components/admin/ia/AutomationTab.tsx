@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { SectionTitle, Alert, LoadingScreen, EmptyState } from '@/components/ui'
+import { SectionTitle, Alert, LoadingScreen, EmptyState, Toggle } from '@/components/ui'
 import { whatsappAPI, getErrorMessage } from '@/lib/api'
 
 interface BackupConfig {
@@ -97,12 +97,10 @@ export function AutomationTab() {
             <p className="text-sm font-medium">Backups activos</p>
             <p className="text-xs text-[#6B738A] mt-0.5">Si está apagado, no se manda nada automáticamente</p>
           </div>
-          <button
-            onClick={() => setLocalConfig({ ...localConfig, is_active: !localConfig.is_active })}
-            className={`w-9 h-5 rounded-full relative ${localConfig.is_active ? 'bg-[#185FA5]' : 'bg-[#DDE1EE]'}`}
-          >
-            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${localConfig.is_active ? 'translate-x-4' : 'translate-x-0.5'}`} />
-          </button>
+          <Toggle
+            on={localConfig.is_active}
+            onChange={(v) => setLocalConfig({ ...localConfig, is_active: v })}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3 py-3 border-b border-[#DDE1EE]">

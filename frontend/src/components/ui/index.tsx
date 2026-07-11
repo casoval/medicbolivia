@@ -137,6 +137,33 @@ export function StatusBadge({ status }: { status: string }) {
   return <span className={cfg.cls}>{cfg.label}</span>
 }
 
+// ── Toggle switch ─────────────────────────────────────
+export function Toggle({ on, onChange, disabled, activeColor = '#185FA5' }: {
+  on: boolean
+  onChange?: (v: boolean) => void
+  disabled?: boolean
+  activeColor?: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => !disabled && onChange?.(!on)}
+      disabled={disabled}
+      style={{ backgroundColor: on ? activeColor : '#DDE1EE' }}
+      className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#185FA5] ${
+        disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+      }`}
+    >
+      <span className={`absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+        on ? 'translate-x-5' : 'translate-x-1'
+      }`} />
+    </button>
+  )
+}
+
 // ── Section title ─────────────────────────────────────
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (

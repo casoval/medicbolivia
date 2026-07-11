@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { SectionTitle, Alert, LoadingScreen, EmptyState } from '@/components/ui'
+import { SectionTitle, Alert, LoadingScreen, EmptyState, Toggle } from '@/components/ui'
 import { whatsappAPI, getErrorMessage } from '@/lib/api'
 
 const AUDIENCE_LABEL: Record<string, string> = { PATIENT: 'Paciente', PROFESSIONAL: 'Profesional', ADMIN: 'Admin', PUBLIC: 'Público' }
@@ -118,15 +118,10 @@ export function ConversationsTab() {
                   {locked ? (
                     <div className="flex items-center gap-2">
                       <span className="badge-red text-[10px]">Bloqueado</span>
-                      <div className="w-9 h-5 bg-[#185FA5] rounded-full opacity-60 cursor-not-allowed" />
+                      <Toggle on={on} disabled />
                     </div>
                   ) : (
-                    <button
-                      onClick={() => toggleGlobalSwitch(key)}
-                      className={`w-9 h-5 rounded-full transition-colors relative ${on ? 'bg-[#185FA5]' : 'bg-[#DDE1EE]'}`}
-                    >
-                      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${on ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                    </button>
+                    <Toggle on={on} onChange={() => toggleGlobalSwitch(key)} />
                   )}
                 </div>
               )
@@ -199,12 +194,10 @@ export function ConversationsTab() {
                   </div>
                   <label className="flex items-center gap-2 text-xs text-[#6B738A]">
                     Agente en este chat
-                    <button
-                      onClick={() => toggleChatAgentMutation.mutate({ id: thread.conversation.id, agent_enabled: !thread.conversation.agent_enabled })}
-                      className={`w-8 h-[18px] rounded-full relative ${thread.conversation.agent_enabled ? 'bg-[#185FA5]' : 'bg-[#DDE1EE]'}`}
-                    >
-                      <span className={`absolute top-0.5 w-3.5 h-3.5 bg-white rounded-full transition-transform ${thread.conversation.agent_enabled ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-                    </button>
+                    <Toggle
+                      on={thread.conversation.agent_enabled}
+                      onChange={(v) => toggleChatAgentMutation.mutate({ id: thread.conversation.id, agent_enabled: v })}
+                    />
                   </label>
                 </div>
 

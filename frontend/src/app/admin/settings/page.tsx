@@ -4,45 +4,13 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
-import { Alert, SectionTitle } from '@/components/ui'
+import { Alert, SectionTitle, Toggle } from '@/components/ui'
 import {
   adminAPI, getErrorMessage,
   type PlatformSettings, type PlatformSettingsUpdate, type CommissionPeriod,
 } from '@/lib/api'
 
-function Toggle({ on, onChange, disabled }: { on: boolean; onChange?: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <button
-      onClick={() => !disabled && onChange?.(!on)}
-      disabled={disabled}
-      className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 ${
-        on ? 'bg-[#185FA5]' : 'bg-[#DDE1EE]'
-      } ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-    >
-      <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-        on ? 'translate-x-5' : 'translate-x-1'
-      }`} />
-    </button>
-  )
-}
-
-type AlertsState = {
-  noResponse: boolean
-  dailyReport: boolean
-  pendingPayment: boolean
-  lowRating: boolean
-  newProfessional: boolean
-}
-
-const DEFAULT_ALERTS: AlertsState = {
-  noResponse: true,
-  dailyReport: true,
-  pendingPayment: true,
-  lowRating: true,
-  newProfessional: true,
-}
-
-// El backend usa snake_case y agrupa las alertas; el formulario usa camelCase plano.
+// El backend usa snake_case; el formulario usa camelCase plano.
 // Estas dos funciones son el único lugar donde se traduce entre ambos formatos.
 function fromApi(data: PlatformSettings) {
   return {
@@ -51,13 +19,6 @@ function fromApi(data: PlatformSettings) {
     openRegistration: data.open_registration_patients,
     openProfessionals: data.open_registration_professionals,
     maintenance: data.maintenance_mode,
-    alerts: {
-      noResponse: data.alerts.no_response,
-      dailyReport: data.alerts.daily_report,
-      pendingPayment: data.alerts.pending_payment,
-      lowRating: data.alerts.low_rating,
-      newProfessional: data.alerts.new_professional,
-    } as AlertsState,
   }
 }
 
@@ -67,7 +28,6 @@ function toApiPayload(state: {
   openRegistration: boolean
   openProfessionals: boolean
   maintenance: boolean
-  alerts: AlertsState
 }): PlatformSettingsUpdate {
   return {
     app_name: state.appName,
@@ -75,11 +35,6 @@ function toApiPayload(state: {
     open_registration_patients: state.openRegistration,
     open_registration_professionals: state.openProfessionals,
     maintenance_mode: state.maintenance,
-    alert_no_response: state.alerts.noResponse,
-    alert_daily_report: state.alerts.dailyReport,
-    alert_pending_payment: state.alerts.pendingPayment,
-    alert_low_rating: state.alerts.lowRating,
-    alert_new_professional: state.alerts.newProfessional,
   }
 }
 
@@ -271,7 +226,6 @@ export default function AdminSettingsPage() {
   const [openRegistration, setOpenRegistration] = useState(true)
   const [openProfessionals, setOpenProfessionals] = useState(true)
   const [maintenance, setMaintenance] = useState(false)
-  const [alerts, setAlerts] = useState<AlertsState>(DEFAULT_ALERTS)
 
   const { data: systemInfo, isLoading: loadingSystemInfo } = useQuery({
     queryKey: ['admin', 'system-info'],
@@ -289,7 +243,6 @@ export default function AdminSettingsPage() {
         setOpenRegistration(mapped.openRegistration)
         setOpenProfessionals(mapped.openProfessionals)
         setMaintenance(mapped.maintenance)
-        setAlerts(mapped.alerts)
       })
       .catch((err) => {
         if (!active) return
@@ -306,7 +259,7 @@ export default function AdminSettingsPage() {
     setError('')
     try {
       const data = await adminAPI.updateSettings(
-        toApiPayload({ appName, commission, openRegistration, openProfessionals, maintenance, alerts })
+        toApiPayload({ appName, commission, openRegistration, openProfessionals, maintenance })
       )
       const mapped = fromApi(data)
       setAppName(mapped.appName)
@@ -314,7 +267,6 @@ export default function AdminSettingsPage() {
       setOpenRegistration(mapped.openRegistration)
       setOpenProfessionals(mapped.openProfessionals)
       setMaintenance(mapped.maintenance)
-      setAlerts(mapped.alerts)
       setSuccess('Configuración guardada correctamente')
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
@@ -415,32 +367,6 @@ export default function AdminSettingsPage() {
                   >
                     {saving ? 'Guardando…' : 'Guardar configuración'}
                   </button>
-                </div>
-              </div>
-
-              {/* Alertas automáticas */}
-              <div className="card">
-                <SectionTitle>Alertas automáticas</SectionTitle>
-                <div className="space-y-0">
-                  {[
-                    { key: 'noResponse',      label: 'Profesional sin responder',  desc: 'Notificar si un profesional no responde en 5 min' },
-                    { key: 'dailyReport',     label: 'Reporte diario por email',   desc: 'Resumen de consultas y pagos del día' },
-                    { key: 'pendingPayment',  label: 'Pago pendiente +2 horas',    desc: 'Alerta si un QR no se confirma' },
-                    { key: 'lowRating',       label: 'Calificación baja (1-2 ★)',  desc: 'Notificar cuando un profesional recibe mala nota' },
-                    { key: 'newProfessional', label: 'Nuevo profesional registrado', desc: 'Avisar cuando hay documentos para revisar' },
-                  ].map(({ key, label, desc }) => (
-                    <div key={key} className="flex items-center justify-between py-3 border-b border-[#DDE1EE] last:border-0">
-                      <div>
-                        <p className="text-sm font-medium">{label}</p>
-                        <p className="text-xs text-[#6B738A]">{desc}</p>
-                      </div>
-                      <Toggle
-                        on={alerts[key as keyof AlertsState]}
-                        disabled={saving}
-                        onChange={(v) => setAlerts((prev) => ({ ...prev, [key]: v }))}
-                      />
-                    </div>
-                  ))}
                 </div>
               </div>
             </>

@@ -72,11 +72,6 @@ class PlatformSettingsUpdate(BaseModel):
     open_registration_patients: Optional[bool] = None
     open_registration_professionals: Optional[bool] = None
     maintenance_mode: Optional[bool] = None
-    alert_no_response: Optional[bool] = None
-    alert_daily_report: Optional[bool] = None
-    alert_pending_payment: Optional[bool] = None
-    alert_low_rating: Optional[bool] = None
-    alert_new_professional: Optional[bool] = None
 
 
 async def _get_or_create_settings(db: AsyncSession) -> PlatformSettings:
@@ -98,13 +93,6 @@ def _settings_to_dict(s: PlatformSettings) -> dict:
         "open_registration_patients":        s.open_registration_patients,
         "open_registration_professionals":   s.open_registration_professionals,
         "maintenance_mode":                  s.maintenance_mode,
-        "alerts": {
-            "no_response":      s.alert_no_response,
-            "daily_report":     s.alert_daily_report,
-            "pending_payment":  s.alert_pending_payment,
-            "low_rating":       s.alert_low_rating,
-            "new_professional": s.alert_new_professional,
-        },
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
 

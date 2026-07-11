@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
-import { Alert } from '@/components/ui'
+import { Alert, Toggle } from '@/components/ui'
 import { clinicalNotesAPI, getErrorMessage } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
 
@@ -47,19 +47,12 @@ function ShareToggle({ note, onToggled }: { note: ClinicalNote; onToggled: () =>
               : 'Solo el médico que la escribió puede verla. Actívalo si quieres que otros médicos la consulten.'}
           </p>
         </div>
-        <button
-          onClick={toggle}
+        <Toggle
+          on={note.shared_with_professionals}
+          onChange={toggle}
           disabled={loading}
-          className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
-            note.shared_with_professionals ? 'bg-[#1D9E75]' : 'bg-[#DDE1EE]'
-          }`}
-        >
-          <span
-            className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-              note.shared_with_professionals ? 'translate-x-[22px]' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+          activeColor="#1D9E75"
+        />
       </div>
       {error && <p className="text-[11px] text-[#A32D2D] mt-2">{error}</p>}
     </div>
