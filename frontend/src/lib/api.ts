@@ -16,6 +16,20 @@ export function buildPrescriptionVerifyUrl(code: string): string {
 }
 
 // ── Configuración de la plataforma (admin → Configuración) ──
+export interface SystemInfo {
+  app_name: string
+  app_version: string
+  environment: string
+  backend: string
+  database: string
+  frontend: string
+  ai_agent_provider: string
+  ai_agent_model: string
+  whatsapp_engine: string
+  background_jobs: string
+  server_time_utc: string
+}
+
 export interface PlatformSettings {
   app_name: string
   commission_percent: number
@@ -851,6 +865,11 @@ export const specialtiesAPI = {
 }
 
 export const adminAPI = {
+  // Datos reales del stack (versión, DB, motor de IA/WhatsApp, etc.) para
+  // la sección "Información del sistema" — ver admin/system-info en el backend.
+  getSystemInfo: () =>
+    api.get<SystemInfo>('/admin/system-info').then(r => r.data),
+
   getSettings: () =>
     api.get<PlatformSettings>('/admin/settings').then(r => r.data),
 

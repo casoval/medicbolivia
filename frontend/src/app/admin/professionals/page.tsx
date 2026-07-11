@@ -1,6 +1,7 @@
 'use client'
 // src/app/admin/professionals/page.tsx — con filtro ciudad, contadores en tabs, mas datos y documentos de verificación
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
@@ -1005,7 +1006,13 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
 
 export default function AdminProfessionalsPage() {
   const qc = useQueryClient()
-  const [tab, setTab]           = useState<'APPROVED'|'PENDING_DOCS'|'SUSPENDED'>('APPROVED')
+  const searchParams = useSearchParams()
+  // Permite llegar directo a una pestaña desde otra página, ej. el aviso
+  // de "profesionales pendientes" en /admin/dashboard → /admin/professionals?tab=PENDING_DOCS
+  const initialTab = (searchParams.get('tab') as 'APPROVED'|'PENDING_DOCS'|'SUSPENDED' | null)
+  const [tab, setTab]           = useState<'APPROVED'|'PENDING_DOCS'|'SUSPENDED'>(
+    initialTab && ['APPROVED', 'PENDING_DOCS', 'SUSPENDED'].includes(initialTab) ? initialTab : 'APPROVED'
+  )
   const [success, setSuccess]   = useState('')
   const [error, setError]       = useState('')
   const [selected, setSelected] = useState<Professional|null>(null)

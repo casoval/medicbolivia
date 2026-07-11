@@ -1,6 +1,7 @@
 'use client'
 // src/app/admin/settings/page.tsx
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { Alert, SectionTitle } from '@/components/ui'
@@ -272,6 +273,11 @@ export default function AdminSettingsPage() {
   const [maintenance, setMaintenance] = useState(false)
   const [alerts, setAlerts] = useState<AlertsState>(DEFAULT_ALERTS)
 
+  const { data: systemInfo, isLoading: loadingSystemInfo } = useQuery({
+    queryKey: ['admin', 'system-info'],
+    queryFn: () => adminAPI.getSystemInfo(),
+  })
+
   useEffect(() => {
     let active = true
     adminAPI.getSettings()
@@ -443,22 +449,42 @@ export default function AdminSettingsPage() {
           {/* Promociones de comisión global */}
           <CommissionPeriodsSection />
 
-          {/* Info del sistema */}
+          {/* Info del sistema — datos reales desde /admin/system-info, no hardcodeados */}
           <div className="card lg:col-span-2">
             <SectionTitle>Información del sistema</SectionTitle>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { label: 'Versión',   value: 'v1.0.0' },
-                { label: 'Backend',   value: 'FastAPI 0.111' },
-                { label: 'Base de datos', value: 'PostgreSQL 15' },
-                { label: 'Agente IA', value: 'Claude Sonnet 4.6' },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-[#F5F6FA] rounded-lg p-3 text-center">
-                  <p className="text-xs text-[#6B738A]">{label}</p>
-                  <p className="text-sm font-semibold mt-1">{value}</p>
+            {loadingSystemInfo ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-14 rounded-lg bg-[#F5F6FA] animate-pulse" />
+                ))}
+              </div>
+            ) : systemInfo ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Versión',        value: `v${systemInfo.app_version}` },
+                  { label: 'Entorno',        value: systemInfo.environment },
+                  { label: 'Backend',        value: systemInfo.backend },
+                  { label: 'Base de datos',  value: systemInfo.database },
+                  { label: 'Frontend',       value: systemInfo.frontend },
+                  { label: 'Agente IA',      value: `${systemInfo.ai_agent_provider} (${systemInfo.ai_agent_model})` },
+                  { label: 'WhatsApp',       value: systemInfo.whatsapp_engine },
+                  { label: 'Tareas en segundo plano', value: systemInfo.background_jobs },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-[#F5F6FA] rounded-lg p-3 text-center">
+                    <p className="text-xs text-[#6B738A]">{label}</p>
+                    <p className="text-sm font-semibold mt-1 break-words">{value}</p>
+                  </div>
+                ))}
+                <div className="bg-[#F5F6FA] rounded-lg p-3 text-center col-span-2 sm:col-span-4">
+                  <p className="text-xs text-[#6B738A]">Hora del servidor (UTC)</p>
+                  <p className="text-sm font-semibold mt-1">
+                    {new Date(systemInfo.server_time_utc).toLocaleString('es-BO', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'medium' })}
+                  </p>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <p className="text-sm text-[#6B738A] text-center py-4">No se pudo cargar la información del sistema</p>
+            )}
           </div>
         </div>
       </div>

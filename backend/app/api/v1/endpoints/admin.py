@@ -1597,3 +1597,27 @@ async def get_current_commission(
 @router.get("/maintenance-status", summary="Estado público de mantenimiento")
 async def get_maintenance_status(db: AsyncSession = Depends(get_db)):
     return {"maintenance_mode": await is_maintenance_active(db)}
+
+
+# ── GET /api/v1/admin/system-info ────────────────────
+# Reemplaza los datos fijos que antes estaban hardcodeados en el frontend
+# ("v1.0.0", "FastAPI 0.111", "Claude Sonnet 4.6"...) por valores que salen
+# de la configuración real del backend (app/core/config.py) y de constantes
+# que reflejan el stack tal cual está hoy en el repo. Si mañana se cambia
+# de proveedor de IA o de motor de WhatsApp, alcanza con actualizar este
+# endpoint (o la env var correspondiente) para que el panel deje de mentir.
+@router.get("/system-info", summary="Información real del stack para el panel admin")
+async def get_system_info(current_user=Depends(get_current_admin)):
+    return {
+        "app_name":            settings.APP_NAME,
+        "app_version":         settings.APP_VERSION,
+        "environment":         settings.ENVIRONMENT,
+        "backend":             "FastAPI (Python) + SQLAlchemy async",
+        "database":            "PostgreSQL (asyncpg)",
+        "frontend":            "Next.js 14 + React 18",
+        "ai_agent_provider":   "Google Gemini",
+        "ai_agent_model":      settings.GEMINI_MODEL,
+        "whatsapp_engine":     "whatsapp-web.js (microservicio Node.js aparte)",
+        "background_jobs":     "Celery + Redis",
+        "server_time_utc":     datetime.utcnow().isoformat(),
+    }
