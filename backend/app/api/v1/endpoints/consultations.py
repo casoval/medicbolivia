@@ -1136,6 +1136,14 @@ async def update_consultation_status(
             delta = datetime.utcnow() - consultation.started_at
             consultation.duration_minutes = int(delta.total_seconds() / 60)
 
+        # Habilita el chat interno de seguimiento post-consulta (política:
+        # el paciente nunca ve el número del profesional, este es el único
+        # canal directo dentro de la plataforma). Se crea recién acá, no al
+        # pagar, para que la ventana de CHAT_WINDOW_DAYS arranque desde el
+        # fin real de la consulta, no desde el pago.
+        from app.services.chat import get_or_create_conversation_for_consultation
+        await get_or_create_conversation_for_consultation(db, consultation.id)
+
     await db.commit()
 
     response = {"status": new_status, "consultation_id": consultation_id}

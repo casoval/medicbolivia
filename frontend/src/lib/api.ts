@@ -2,7 +2,8 @@
 import axios, { AxiosError } from 'axios'
 import type {
   AuthResponse, User, Professional, Consultation,
-  Payment, Prescription, AgentResponse, Rating, FAQ
+  Payment, Prescription, AgentResponse, Rating, FAQ,
+  ChatConversationSummary, ChatMessage, ChatBlockScope,
 } from '@/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'
@@ -955,4 +956,41 @@ export const contactAPI = {
   // Público — sin token.
   send: (data: ContactInquiryPayload) =>
     api.post<ContactInquiryResponse>('/contact', data).then(r => r.data),
+}
+
+// ── Chat interno paciente-profesional ─────────────────
+// Por política, el paciente nunca ve el número del profesional: este es
+// el único canal de mensajería directa dentro de la plataforma. Cada
+// conversación nace ligada a una Consultation ya finalizada y queda
+// disponible por CHAT_WINDOW_DAYS (ver backend/app/core/config.py).
+export const chatAPI = {
+  listConversations: () =>
+    api.get<ChatConversationSummary[]>('/chat/conversations').then(r => r.data),
+
+  getMessages: (conversationId: string, before?: string) =>
+    api.get<ChatMessage[]>(`/chat/conversations/${conversationId}/messages`, {
+      params: before ? { before, limit: 50 } : { limit: 50 },
+    }).then(r => r.data),
+
+  sendAttachment: (conversationId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<ChatMessage>(`/chat/conversations/${conversationId}/attachments`, form)
+      .then(r => r.data)
+  },
+
+  block: (conversationId: string, scope: ChatBlockScope, reason?: string) =>
+    api.post(`/chat/conversations/${conversationId}/block`, { scope, reason }),
+
+  unblock: (conversationId: string, scope: ChatBlockScope) =>
+    api.delete(`/chat/conversations/${conversationId}/block`, { params: { scope } }),
+}
+
+// Arma la URL del WebSocket del chat a partir de BASE_URL (http→ws,
+// https→wss) y el JWT actual (viaja por query param: el WebSocket nativo
+// del navegador no permite headers custom en el handshake).
+export function buildChatWebSocketUrl(conversationId: string): string {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('mb_token') : null
+  const wsBase = BASE_URL.replace(/^http/, 'ws')
+  return `${wsBase}/chat/ws/${conversationId}?token=${encodeURIComponent(token || '')}`
 }

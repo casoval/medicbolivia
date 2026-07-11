@@ -727,5 +727,72 @@ class ContactInquiryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ─────────────────────────────────────────────────────
+# CHAT INTERNO (paciente ↔ profesional)
+# ─────────────────────────────────────────────────────
+
+class ChatParticipantResponse(BaseModel):
+    user_id: str
+    full_name: str
+    photo_url: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ChatConversationResponse(BaseModel):
+    id: str
+    consultation_id: str
+    status: str
+    expires_at: Optional[datetime]
+    last_message_at: Optional[datetime]
+    last_message_preview: Optional[str]
+    other_participant: ChatParticipantResponse
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ChatMessageResponse(BaseModel):
+    id: str
+    conversation_id: str
+    sender_id: str
+    content: Optional[str]
+    attachment_url: Optional[str] = None  # URL firmada, se resuelve al armar la respuesta
+    attachment_content_type: Optional[str] = None
+    read_at: Optional[datetime]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ChatSendMessageRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=4000)
+
+
+class ChatAttachmentUploadResponse(BaseModel):
+    message: ChatMessageResponse
+
+
+class ChatBlockRequest(BaseModel):
+    scope: str = Field(..., description='"CONTACT" o "GLOBAL"')
+    reason: Optional[str] = Field(None, max_length=255)
+
+    @field_validator("scope")
+    @classmethod
+    def validate_scope(cls, v: str) -> str:
+        if v not in ("CONTACT", "GLOBAL"):
+            raise ValueError('scope debe ser "CONTACT" o "GLOBAL"')
+        return v
+
+
+class ChatBlockResponse(BaseModel):
+    id: str
+    scope: str
+    blocked_id: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # Actualizar referencias forward
 TokenResponse.model_rebuild()

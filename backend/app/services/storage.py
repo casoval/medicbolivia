@@ -90,6 +90,40 @@ async def upload_photo_to_r2(
         raise Exception("Error al subir la foto de perfil. Intenta de nuevo.")
 
 
+async def upload_chat_attachment_to_r2(
+    file_content: bytes,
+    file_name: str,
+    conversation_id: str,
+    content_type: str,
+) -> str:
+    """
+    Sube un adjunto de chat (foto, PDF) al mismo bucket PRIVADO que los
+    documentos de verificación (R2_BUCKET_DOCS), bajo el prefijo
+    "chat/{conversation_id}/...". Nunca se guarda una URL pública — se
+    firma bajo demanda con get_presigned_url, igual que los documentos.
+    Retorna la key interna (formato r2://bucket/key), lista para guardar
+    en ChatMessage.attachment_key.
+    """
+    ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else "bin"
+    key = f"chat/{conversation_id}/{uuid.uuid4()}.{ext}"
+
+    try:
+        r2 = _get_r2_client()
+        r2.put_object(
+            Bucket=settings.R2_BUCKET_DOCS,
+            Key=key,
+            Body=file_content,
+            ContentType=content_type,
+        )
+        url = f"r2://{settings.R2_BUCKET_DOCS}/{key}"
+        logger.info(f"Adjunto de chat subido a R2: {key}")
+        return url
+
+    except ClientError as e:
+        logger.error(f"Error subiendo adjunto de chat a R2: {e}")
+        raise Exception("Error al subir el archivo. Intenta de nuevo.")
+
+
 async def get_presigned_url(r2_url: str, expires_seconds: int = 300) -> str:
     """
     Genera una URL temporal (5 min por defecto) para que el admin

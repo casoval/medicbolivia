@@ -76,6 +76,16 @@ class Settings(BaseSettings):
     # URL pública del bucket de fotos (la que te da Cloudflare al activar r2.dev)
     R2_PUBLIC_PHOTOS_URL: str = ""
 
+    # ── Chat interno paciente-profesional ─────────────
+    # Los adjuntos del chat van al mismo bucket privado que los documentos
+    # de verificación (R2_BUCKET_DOCS) bajo el prefijo "chat/", no a un
+    # bucket nuevo — son privados igual y ya tenemos ese bucket armado.
+    # Días que la conversación sigue activa después de Consultation.ended_at
+    # antes de pasar a solo lectura. 15 es el valor por defecto del negocio;
+    # ajustable sin tocar código.
+    CHAT_WINDOW_DAYS: int = 15
+    CHAT_MAX_ATTACHMENT_MB: int = 10
+
     QR_EXPIRY_MINUTES: int = 5
     PLATFORM_FEE_PERCENT: float = 0.15
     # Protección contra fuerza bruta en login: intentos fallidos permitidos

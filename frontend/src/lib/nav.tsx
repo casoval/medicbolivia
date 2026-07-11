@@ -20,7 +20,7 @@
 import {
   IconHome, IconSearch, IconBot, IconClock, IconFile, IconRx, IconNote,
   IconStetho, IconGrid, IconUsers, IconCal, IconStar, IconUser,
-  IconPatients, IconCard, IconLog, IconCog, IconTag,
+  IconPatients, IconCard, IconLog, IconCog, IconTag, IconChat,
 } from '@/components/nav-icons'
 
 export interface NavItem {
@@ -74,6 +74,12 @@ export const PATIENT_NAV: NavItem[] = [
     href: '/patient/history',
     icon: <IconFile />,
     description: 'Historial de todas tus consultas, pasadas y en curso',
+  },
+  {
+    label: 'Mensajes',
+    href: '/patient/chat',
+    icon: <IconChat />,
+    description: 'Chatea con tus profesionales para el seguimiento posterior a la cita',
   },
   {
     label: 'Historia clínica',
@@ -136,6 +142,12 @@ export const PROFESSIONAL_NAV: NavItem[] = [
     href: '/professional/patients',
     icon: <IconPatients />,
     description: 'Listado de pacientes que has atendido',
+  },
+  {
+    label: 'Mensajes',
+    href: '/professional/chat',
+    icon: <IconChat />,
+    description: 'Chat interno para el seguimiento posterior a tus consultas',
   },
   {
     label: 'Notas clínicas',

@@ -218,3 +218,44 @@ export interface WaitingRoomUpdate {
   message?: string
   video_url?: string
 }
+
+// ─────────────────────────────────────────────────────
+// CHAT INTERNO (paciente ↔ profesional)
+// ─────────────────────────────────────────────────────
+
+export type ChatConversationStatus = 'ACTIVE' | 'EXPIRED' | 'CLOSED'
+export type ChatBlockScope = 'CONTACT' | 'GLOBAL'
+
+export interface ChatParticipant {
+  user_id: string
+  full_name: string
+  photo_url: string | null
+}
+
+export interface ChatConversationSummary {
+  id: string
+  consultation_id: string
+  status: ChatConversationStatus
+  expires_at: string | null
+  last_message_at: string | null
+  last_message_preview: string | null
+  other_participant: ChatParticipant
+  created_at: string
+}
+
+export interface ChatMessage {
+  id: string
+  conversation_id: string
+  sender_id: string
+  content: string | null
+  attachment_url: string | null
+  attachment_content_type: string | null
+  read_at: string | null
+  created_at: string
+}
+
+// Eventos que llegan por el WebSocket del chat (ver
+// backend/app/api/v1/endpoints/chat.py::chat_websocket)
+export type ChatSocketEvent =
+  | ({ type: 'message' } & ChatMessage)
+  | { type: 'error'; code: 'blocked' | 'conversation_closed' | 'invalid_content' }

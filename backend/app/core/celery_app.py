@@ -28,6 +28,7 @@ celery_app = Celery(
         "app.tasks.whatsapp_tasks",
         "app.tasks.reminder_tasks",
         "app.tasks.backup_tasks",
+        "app.tasks.chat_tasks",
     ],
 )
 
@@ -58,5 +59,11 @@ celery_app.conf.beat_schedule = {
     "check-db-backup-schedule": {
         "task": "app.tasks.backup_tasks.check_and_run_backup",
         "schedule": crontab(minute=0),
+    },
+    # Cierra a solo-lectura las conversaciones de chat cuya ventana
+    # post-consulta (Consultation.ended_at + CHAT_WINDOW_DAYS) ya venció.
+    "expire-chat-conversations": {
+        "task": "app.tasks.chat_tasks.expire_chat_conversations",
+        "schedule": crontab(minute="*/15"),
     },
 }

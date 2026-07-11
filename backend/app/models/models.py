@@ -922,3 +922,95 @@ class ContactInquiry(Base):
     # se guarda igual aunque falle, para no perder ningún lead.
     email_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ─────────────────────────────────────────────────────
+# CHAT INTERNO (paciente ↔ profesional)
+#
+# Canal propio de la plataforma, separado de WhatsApp (que queda
+# reservado solo para recordatorios automáticos). Por política, el
+# paciente nunca ve el número de teléfono del profesional — si quiere
+# compartirlo, es decisión suya y se hace fuera de la plataforma.
+#
+# Una ChatConversation nace ligada 1 a 1 a una Consultation ya pagada
+# (no antes: evita que gente sin cita spamee profesionales). Se cierra
+# sola pasado CHAT_WINDOW_DAYS desde Consultation.ended_at — ver el job
+# expire_chat_conversations en tasks/.
+# ─────────────────────────────────────────────────────
+
+class ChatConversationStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"     # se puede seguir escribiendo
+    EXPIRED = "EXPIRED"   # venció la ventana post-consulta, solo lectura
+    CLOSED = "CLOSED"     # cerrada a mano por un admin (ej. moderación)
+
+
+class ChatConversation(Base):
+    __tablename__ = "chat_conversations"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    consultation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id", ondelete="CASCADE"), unique=True)
+    # Denormalizado a propósito: guardar directo el user_id de cada lado
+    # evita un join a patients/professionals en cada mensaje del WebSocket,
+    # que es la ruta más caliente de todo este módulo.
+    patient_user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"))
+    professional_user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=ChatConversationStatus.ACTIVE.value)
+    # Calculado al crear la conversación como Consultation.ended_at +
+    # CHAT_WINDOW_DAYS (ver config.py). Null mientras la consulta sigue
+    # en curso (la conversación existe desde que se paga, pero no expira
+    # hasta que la consulta termina).
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    closed_by_admin_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    close_reason: Mapped[Optional[str]] = mapped_column(String(255))
+    last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    last_message_preview: Mapped[Optional[str]] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    consultation: Mapped["Consultation"] = relationship()
+    patient_user: Mapped["User"] = relationship(foreign_keys=[patient_user_id])
+    professional_user: Mapped["User"] = relationship(foreign_keys=[professional_user_id])
+    messages: Mapped[List["ChatMessage"]] = relationship(back_populates="conversation", order_by="ChatMessage.created_at", cascade="all, delete-orphan")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    conversation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False)
+    sender_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content: Mapped[Optional[str]] = mapped_column(Text)
+    # Key privada dentro del bucket R2 (mismo patrón que ProfessionalDoc:
+    # nunca se guarda una URL pública, se firma al momento de mostrarla).
+    attachment_key: Mapped[Optional[str]] = mapped_column(String(500))
+    attachment_content_type: Mapped[Optional[str]] = mapped_column(String(100))
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    conversation: Mapped["ChatConversation"] = relationship(back_populates="messages")
+    sender: Mapped["User"] = relationship()
+
+
+class ChatBlockScope(str, enum.Enum):
+    CONTACT = "CONTACT"   # bloquea solo a esta persona puntual
+    GLOBAL = "GLOBAL"      # bloquea a cualquiera de contactarlo por chat
+
+
+class ChatBlock(Base):
+    """
+    blocked_id es NULL cuando scope=GLOBAL (el blocker no quiere que NADIE
+    le escriba por chat interno, sin importar la consulta). Con
+    scope=CONTACT, blocked_id es obligatorio y el bloqueo solo aplica
+    entre blocker_id y blocked_id.
+    """
+    __tablename__ = "chat_blocks"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    blocker_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    blocked_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    scope: Mapped[str] = mapped_column(String(10), nullable=False)
+    reason: Mapped[Optional[str]] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    blocker: Mapped["User"] = relationship(foreign_keys=[blocker_id])
+    blocked: Mapped[Optional["User"]] = relationship(foreign_keys=[blocked_id])
