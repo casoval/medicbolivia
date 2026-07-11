@@ -54,6 +54,7 @@ function FAQItem({ faq }: { faq: FAQ }) {
 
 function FAQSection() {
   const [tab, setTab] = useState<FAQAudience>('GENERAL')
+  const { t } = useLanguage()
 
   const { data: faqs = [], isLoading } = useQuery({
     queryKey: ['public', 'faqs'],
@@ -65,24 +66,24 @@ function FAQSection() {
 
   return (
     <section id="faq" className="max-w-3xl mx-auto px-4 py-16">
-      <h2 className="text-2xl font-bold text-center text-[#141820] mb-2">Preguntas frecuentes</h2>
+      <h2 className="text-2xl font-bold text-center text-[#141820] mb-2">{t('Preguntas frecuentes')}</h2>
       <SectionAccent />
       <p className="text-sm text-center text-[#6B738A] mt-3 mb-8">
-        ¿Quiénes somos, cómo funciona la plataforma y qué necesitás saber antes de empezar.
+        {t('¿Quiénes somos, cómo funciona la plataforma y qué necesitás saber antes de empezar.')}
       </p>
 
       <div className="flex justify-center gap-2 mb-6">
-        {TABS.map((t) => (
+        {TABS.map((tb) => (
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
+            key={tb.key}
+            onClick={() => setTab(tb.key)}
             className={`text-sm px-4 py-2 rounded-full border transition-colors ${
-              tab === t.key
+              tab === tb.key
                 ? 'bg-[#11A15A] text-white border-[#11A15A]'
                 : 'bg-white text-[#6B738A] border-[#DDE1EE]'
             }`}
           >
-            {t.label}
+            {t(tb.label)}
           </button>
         ))}
       </div>
@@ -91,7 +92,7 @@ function FAQSection() {
         <div className="flex justify-center py-8"><Spinner /></div>
       ) : visible.length === 0 ? (
         <p className="text-center text-sm text-[#6B738A] py-8">
-          Todavía no hay preguntas cargadas en esta sección.
+          {t('Todavía no hay preguntas cargadas en esta sección.')}
         </p>
       ) : (
         <div className="space-y-2">
@@ -105,6 +106,7 @@ function FAQSection() {
 function VerifyPrescriptionSection() {
   const router = useRouter()
   const [code, setCode] = useState('')
+  const { t } = useLanguage()
 
   function goVerify(e: React.FormEvent) {
     e.preventDefault()
@@ -118,10 +120,9 @@ function VerifyPrescriptionSection() {
         <div className="w-14 h-14 rounded-2xl bg-[#E7F8EF] flex items-center justify-center mx-auto mb-4">
           <QrCode className="w-6 h-6 text-[#0F6E56]" aria-hidden="true" />
         </div>
-        <h2 className="text-2xl font-bold text-[#141820] mb-2">Verificar una receta médica</h2>
+        <h2 className="text-2xl font-bold text-[#141820] mb-2">{t('Verificar una receta médica')}</h2>
         <p className="text-sm text-[#6B738A] mb-6 max-w-md mx-auto">
-          ¿Recibiste una receta digital de MedicBolivia? Escaneá el código QR con tu celular,
-          o ingresá el código manualmente para confirmar que es auténtica.
+          {t('¿Recibiste una receta digital de MedicBolivia? Escaneá el código QR con tu celular, o ingresá el código manualmente para confirmar que es auténtica.')}
         </p>
         <form onSubmit={goVerify} className="flex gap-2 max-w-sm mx-auto">
           <input
@@ -131,11 +132,11 @@ function VerifyPrescriptionSection() {
             onChange={(e) => setCode(e.target.value.toUpperCase())}
           />
           <button type="submit" className="bg-[#11A15A] text-white text-sm font-medium px-4 py-2.5 rounded-lg whitespace-nowrap hover:bg-[#0F6E56] transition-colors">
-            Verificar
+            {t('Verificar')}
           </button>
         </form>
         <Link href="/verificar-receta" className="text-xs text-[#0F6E56] hover:underline mt-3 inline-block">
-          o abrir la página de verificación completa →
+          {t('o abrir la página de verificación completa →')}
         </Link>
       </div>
     </section>
@@ -234,6 +235,7 @@ const HERO_KEN_BURNS_MS = HERO_INTERVAL_MS
 // para que, sin necesidad de scrollear, se entienda de inmediato que hay
 // médicos conectados ahora mismo y que la consulta es instantánea.
 function LiveDoctorsBadge({ className = '' }: { className?: string }) {
+  const { t } = useLanguage()
   return (
     <div className={`inline-flex items-center gap-2 bg-white/95 backdrop-blur-sm rounded-full pl-2.5 pr-4 py-2 shadow-lg ${className}`}>
       <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
@@ -241,7 +243,7 @@ function LiveDoctorsBadge({ className = '' }: { className?: string }) {
         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#11A15A]" />
       </span>
       <span className="text-xs font-semibold text-[#141820] whitespace-nowrap">
-        Médicos en línea ahora — <span className="text-[#0F6E56]">consulta al instante</span>
+        {t('Médicos en línea ahora')} — <span className="text-[#0F6E56]">{t('consulta al instante')}</span>
       </span>
     </div>
   )
@@ -249,19 +251,20 @@ function LiveDoctorsBadge({ className = '' }: { className?: string }) {
 
 function HeroCopy({ slide }: { slide: HeroSlide }) {
   const Icon = slide.badgeIcon
+  const { t } = useLanguage()
   return (
     <>
       <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full mb-4 backdrop-blur-sm ${
         slide.accent === 'green' ? 'bg-[#11A15A]/25 text-white' : 'bg-white/15 text-white'
       }`}>
         <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-        {slide.badgeText}
+        {t(slide.badgeText)}
       </span>
       <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
-        {slide.title}
+        {t(slide.title)}
       </h1>
       <p className="text-white/85 mt-4">
-        {slide.description}
+        {t(slide.description)}
       </p>
     </>
   )
@@ -286,6 +289,7 @@ function HeroDots({ active, onSelect }: { active: number; onSelect: (i: number) 
 
 function Hero() {
   const [active, setActive] = useState(0)
+  const { t } = useLanguage()
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -339,10 +343,10 @@ function Hero() {
             </div>
             <div className="flex flex-wrap gap-3 mt-8">
               <Link href="/auth/register/patient" className="bg-white text-[#0C447C] font-medium px-6 py-3 rounded-lg hover:bg-[#E6F1FB] transition-colors">
-                Soy paciente — quiero consultar
+                {t('Soy paciente — quiero consultar')}
               </Link>
               <Link href="/auth/register/professional" className="bg-transparent text-white border border-[#3DDC84]/80 font-medium px-6 py-3 rounded-lg hover:bg-[#11A15A]/15 transition-colors">
-                Soy profesional de salud
+                {t('Soy profesional de salud')}
               </Link>
             </div>
             <HeroDots active={active} onSelect={setActive} />
@@ -384,10 +388,10 @@ function Hero() {
             </div>
             <div className="flex flex-wrap gap-3 mt-8">
               <Link href="/auth/register/patient" className="bg-white text-[#0C447C] font-medium px-6 py-3 rounded-lg hover:bg-[#E6F1FB] transition-colors">
-                Soy paciente — quiero consultar
+                {t('Soy paciente — quiero consultar')}
               </Link>
               <Link href="/auth/register/professional" className="bg-transparent text-white border border-[#3DDC84]/80 font-medium px-6 py-3 rounded-lg hover:bg-[#11A15A]/15 transition-colors">
-                Soy profesional de salud
+                {t('Soy profesional de salud')}
               </Link>
             </div>
             <HeroDots active={active} onSelect={setActive} />
@@ -404,6 +408,7 @@ function Hero() {
 // más importantes de la plataforma (gratis, sin intermediarios, IA 24/7)
 // en un formato imposible de pasar por alto.
 function FreeAndDirectSection() {
+  const { t } = useLanguage()
   const points = [
     {
       icon: Gift,
@@ -431,15 +436,13 @@ function FreeAndDirectSection() {
       <div className="relative max-w-5xl mx-auto px-4 py-14 sm:py-16 text-center">
         <span className="inline-flex items-center gap-1.5 bg-[#3DDC84] text-[#0C2A1E] text-xs font-bold px-3 py-1.5 rounded-full mb-5 uppercase tracking-wide">
           <Gift className="w-3.5 h-3.5" aria-hidden="true" />
-          Registro 100% gratuito
+          {t('Registro 100% gratuito')}
         </span>
         <h2 className="text-2xl sm:text-3xl font-bold text-white leading-tight max-w-2xl mx-auto">
-          Tu salud, sin costo de entrada y sin intermediarios
+          {t('Tu salud, sin costo de entrada y sin intermediarios')}
         </h2>
         <p className="text-white/85 text-sm sm:text-base mt-4 max-w-xl mx-auto">
-          Pacientes y profesionales se registran gratis y se conectan directamente entre sí,
-          acompañados por agentes de IA que están despiertos las 24 horas, por texto o por voz,
-          para llevarte siempre con el médico indicado.
+          {t('Pacientes y profesionales se registran gratis y se conectan directamente entre sí, acompañados por agentes de IA que están despiertos las 24 horas, por texto o por voz, para llevarte siempre con el médico indicado.')}
         </p>
 
         <div className="grid sm:grid-cols-3 gap-4 mt-10 text-left">
@@ -449,8 +452,8 @@ function FreeAndDirectSection() {
                 <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center mb-3">
                   <point.icon className="w-5 h-5 text-white" aria-hidden="true" />
                 </div>
-                <p className="text-sm font-semibold text-white mb-1.5">{point.title}</p>
-                <p className="text-xs text-white/80">{point.text}</p>
+                <p className="text-sm font-semibold text-white mb-1.5">{t(point.title)}</p>
+                <p className="text-xs text-white/80">{t(point.text)}</p>
               </div>
             </Reveal>
           ))}
@@ -458,10 +461,10 @@ function FreeAndDirectSection() {
 
         <div className="flex flex-wrap justify-center gap-3 mt-10">
           <Link href="/auth/register/patient" className="bg-white text-[#0C447C] font-semibold px-6 py-3 rounded-lg hover:bg-[#E6F1FB] transition-colors">
-            Registrarme gratis como paciente
+            {t('Registrarme gratis como paciente')}
           </Link>
           <Link href="/auth/register/professional" className="bg-[#11A15A] text-white font-semibold px-6 py-3 rounded-lg hover:bg-[#0F6E56] transition-colors">
-            Registrarme gratis como profesional
+            {t('Registrarme gratis como profesional')}
           </Link>
         </div>
       </div>
@@ -470,6 +473,7 @@ function FreeAndDirectSection() {
 }
 
 function HowItWorksSection() {
+  const { t } = useLanguage()
   const steps = [
     {
       icon: MessageCircleHeart,
@@ -497,10 +501,10 @@ function HowItWorksSection() {
 
   return (
     <section className="max-w-5xl mx-auto px-4 py-16">
-      <h2 className="text-2xl font-bold text-center text-[#141820] mb-2">Cómo funciona</h2>
+      <h2 className="text-2xl font-bold text-center text-[#141820] mb-2">{t('Cómo funciona')}</h2>
       <SectionAccent />
       <p className="text-sm text-center text-[#6B738A] mt-3 mb-10">
-        De la consulta a la receta, en cuatro pasos.
+        {t('De la consulta a la receta, en cuatro pasos.')}
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {steps.map((step, i) => (
@@ -510,9 +514,9 @@ function HowItWorksSection() {
             }`}>
               <step.icon className={`w-5 h-5 ${step.done ? 'text-[#0F6E56]' : 'text-[#185FA5]'}`} aria-hidden="true" />
             </div>
-            <p className={`text-xs font-medium mb-1 ${step.done ? 'text-[#0F6E56]' : 'text-[#185FA5]'}`}>Paso {i + 1}</p>
-            <p className="text-sm font-medium text-[#141820] mb-1">{step.title}</p>
-            <p className="text-xs text-[#6B738A]">{step.text}</p>
+            <p className={`text-xs font-medium mb-1 ${step.done ? 'text-[#0F6E56]' : 'text-[#185FA5]'}`}>{t('Paso')} {i + 1}</p>
+            <p className="text-sm font-medium text-[#141820] mb-1">{t(step.title)}</p>
+            <p className="text-xs text-[#6B738A]">{t(step.text)}</p>
           </div>
         ))}
       </div>
@@ -521,6 +525,7 @@ function HowItWorksSection() {
 }
 
 function AppointmentsSection() {
+  const { t } = useLanguage()
   return (
     <section className="bg-white border-t border-b border-[#DDE1EE]">
       <div className="max-w-5xl mx-auto px-4 py-16">
@@ -528,36 +533,36 @@ function AppointmentsSection() {
           <div>
             <span className="inline-flex items-center gap-1.5 bg-[#E7F8EF] text-[#0F6E56] text-xs font-medium px-3 py-1 rounded-full mb-4">
               <CalendarCheck2 className="w-3.5 h-3.5" aria-hidden="true" />
-              Agenda compartida
+              {t('Agenda compartida')}
             </span>
             <h2 className="text-2xl font-bold text-[#141820] mb-3">
-              Agendá tu cita y seguila en un calendario
+              {t('Agendá tu cita y seguila en un calendario')}
             </h2>
             <p className="text-sm text-[#6B738A] mb-4">
-              Tanto el paciente como el profesional ven la cita en su propio calendario apenas
-              se agenda — con fecha, hora y estado siempre actualizados. Nada se coordina por
-              mensajes sueltos.
+              {t('Tanto el paciente como el profesional ven la cita en su propio calendario apenas se agenda — con fecha, hora y estado siempre actualizados. Nada se coordina por mensajes sueltos.')}
             </p>
             <ul className="space-y-2 text-sm text-[#141820]">
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#11A15A]" />
-                El paciente elige día y hora disponible del profesional
+                {t('El paciente elige día y hora disponible del profesional')}
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#185FA5]" />
-                El profesional confirma o reprograma desde su panel
+                {t('El profesional confirma o reprograma desde su panel')}
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#11A15A]" />
-                Ambos ven el mismo estado de la cita en tiempo real
+                {t('Ambos ven el mismo estado de la cita en tiempo real')}
               </li>
             </ul>
           </div>
 
-          {/* Mini mockup de calendario, solo ilustrativo */}
+          {/* Mini mockup de calendario, solo ilustrativo — los nombres de
+              ejemplo (Dra. Rojas, Dr. Vargas) no están en el glosario, así
+              que quedan en español a propósito, son solo datos de muestra */}
           <div className="bg-[#F5F6FA] border border-[#DDE1EE] rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-medium text-[#141820]">Mis próximas citas</p>
+              <p className="text-sm font-medium text-[#141820]">{t('Mis próximas citas')}</p>
               <CalendarCheck2 className="w-4 h-4 text-[#11A15A]" aria-hidden="true" />
             </div>
             <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-[#6B738A] mb-1">
@@ -595,10 +600,12 @@ function AppointmentsSection() {
 }
 
 function AI24_7Section() {
+  const { t } = useLanguage()
   return (
     <section className="max-w-5xl mx-auto px-4 py-16">
       <div className="grid sm:grid-cols-2 gap-10 items-center">
-        {/* Mini mockup de recordatorio por WhatsApp, solo ilustrativo */}
+        {/* Mini mockup de recordatorio por WhatsApp, solo ilustrativo — el
+            texto de la conversación de ejemplo queda en español a propósito */}
         <Reveal className="order-2 sm:order-1 bg-[#E7F8EF] border border-[#DDE1EE] rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-7 h-7 rounded-full bg-[#25D366] flex items-center justify-center">
@@ -618,25 +625,22 @@ function AI24_7Section() {
         <Reveal delayMs={100} className="order-1 sm:order-2">
           <span className="inline-flex items-center gap-1.5 bg-[#E7F8EF] text-[#0F6E56] text-xs font-medium px-3 py-1 rounded-full mb-4">
             <Clock className="w-3.5 h-3.5" aria-hidden="true" />
-            Disponible 24/7
+            {t('Disponible 24/7')}
           </span>
           <h2 className="text-2xl font-bold text-[#141820] mb-3">
-            Agentes de IA que nunca se duermen
+            {t('Agentes de IA que nunca se duermen')}
           </h2>
           <p className="text-sm text-[#6B738A] mb-4">
-            Medi está disponible las 24 horas, los 7 días de la semana, para orientarte,
-            conectarte con un profesional y agendar tu cita — sin horario de atención de por medio.
+            {t('Medi está disponible las 24 horas, los 7 días de la semana, para orientarte, conectarte con un profesional y agendar tu cita — sin horario de atención de por medio.')}
           </p>
           <div className="bg-white border border-[#DDE1EE] rounded-xl p-4 flex items-start gap-3">
             <div className="w-9 h-9 rounded-full bg-[#E7F8EF] flex items-center justify-center flex-shrink-0">
               <Stethoscope className="w-4 h-4 text-[#0F6E56]" aria-hidden="true" />
             </div>
             <div>
-              <p className="text-sm font-medium text-[#141820] mb-1">Recordatorios automáticos por WhatsApp</p>
+              <p className="text-sm font-medium text-[#141820] mb-1">{t('Recordatorios automáticos por WhatsApp')}</p>
               <p className="text-xs text-[#6B738A]">
-                Una vez agendada la cita, el agente te escribe por WhatsApp antes de la hora
-                para recordártela y confirmar que vas a asistir — así ni el paciente ni el
-                profesional pierden tiempo con citas a las que nadie se conecta.
+                {t('Una vez agendada la cita, el agente te escribe por WhatsApp antes de la hora para recordártela y confirmar que vas a asistir — así ni el paciente ni el profesional pierden tiempo con citas a las que nadie se conecta.')}
               </p>
             </div>
           </div>
@@ -647,6 +651,7 @@ function AI24_7Section() {
 }
 
 function TrustSection() {
+  const { t } = useLanguage()
   const points = [
     {
       icon: BadgeCheck,
@@ -671,7 +676,7 @@ function TrustSection() {
     <section className="bg-gradient-to-b from-white via-[#F7FBF9] to-white border-t border-b border-[#DDE1EE]">
       <div className="max-w-5xl mx-auto px-4 py-16">
         <h2 className="text-2xl font-bold text-center text-[#141820] mb-3">
-          Atención médica en la que podés confiar
+          {t('Atención médica en la que podés confiar')}
         </h2>
         <SectionAccent />
         <div className="grid sm:grid-cols-3 gap-4 mt-7">
@@ -682,8 +687,8 @@ function TrustSection() {
                   <point.icon className={`w-5 h-5 ${point.green ? 'text-[#0F6E56]' : 'text-[#185FA5]'}`} aria-hidden="true" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-[#141820] mb-1">{point.title}</p>
-                  <p className="text-xs text-[#6B738A]">{point.text}</p>
+                  <p className="text-sm font-medium text-[#141820] mb-1">{t(point.title)}</p>
+                  <p className="text-xs text-[#6B738A]">{t(point.text)}</p>
                 </div>
               </div>
             </Reveal>
@@ -695,21 +700,22 @@ function TrustSection() {
 }
 
 function LandingFooter() {
+  const { t } = useLanguage()
   return (
     <footer className="border-t border-[#DDE1EE] bg-white">
       <div className="h-1 bg-gradient-to-r from-[#185FA5] to-[#11A15A]" />
       <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B738A]">
         <div className="flex flex-col items-center sm:items-start gap-1">
-          <span>© {new Date().getFullYear()} MedicBolivia. Todos los derechos reservados.</span>
+          <span>© {new Date().getFullYear()} MedicBolivia. {t('Todos los derechos reservados.')}</span>
           <a href="mailto:info@medicbolivia.com" className="flex items-center gap-1.5 hover:text-[#141820]">
             <Mail className="w-3.5 h-3.5" aria-hidden="true" /> info@medicbolivia.com
           </a>
         </div>
         <div className="flex gap-4">
-          <a href="#contacto" className="hover:text-[#141820]">Contacto</a>
-          <a href="#faq" className="hover:text-[#141820]">Preguntas frecuentes</a>
-          <Link href="/verificar-receta" className="hover:text-[#141820]">Verificar receta</Link>
-          <Link href="/auth/login" className="hover:text-[#141820]">Iniciar sesión</Link>
+          <a href="#contacto" className="hover:text-[#141820]">{t('Contacto')}</a>
+          <a href="#faq" className="hover:text-[#141820]">{t('Preguntas frecuentes')}</a>
+          <Link href="/verificar-receta" className="hover:text-[#141820]">{t('Verificar receta')}</Link>
+          <Link href="/auth/login" className="hover:text-[#141820]">{t('Iniciar sesión')}</Link>
         </div>
       </div>
     </footer>
@@ -737,6 +743,7 @@ function LandingPage() {
 export default function HomePage() {
   const router = useRouter()
   const { user, isAuthenticated } = useAuthStore()
+  const { t } = useLanguage()
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -751,7 +758,7 @@ export default function HomePage() {
       <div className="min-h-screen flex items-center justify-center bg-[#F5F6FA]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-[#11A15A] border-t-transparent rounded-full animate-spin-slow" />
-          <p className="text-sm text-[#6B738A]">Redirigiendo...</p>
+          <p className="text-sm text-[#6B738A]">{t('Redirigiendo...')}</p>
         </div>
       </div>
     )

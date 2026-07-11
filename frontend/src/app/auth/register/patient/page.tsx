@@ -10,6 +10,7 @@ import { authAPI, getErrorMessage } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { PhoneInput } from '@/components/ui/PhoneInput'
 import { PhoneVerification } from '@/components/ui/PhoneVerification'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const DEPARTMENTS = [
   'La Paz', 'Santa Cruz', 'Cochabamba', 'Oruro', 'Potosí',
@@ -18,6 +19,7 @@ const DEPARTMENTS = [
 
 export default function RegisterPatientPage() {
   const router = useRouter()
+  const { t } = useLanguage()
   const setUser = useAuthStore((s) => s.setUser)
   const setToken = useAuthStore((s) => s.setToken)
 
@@ -39,12 +41,12 @@ export default function RegisterPatientPage() {
     setError('')
 
     if (!phoneVerified) {
-      setError('Verificá tu número de celular por WhatsApp antes de continuar')
+      setError(t('Verificá tu número de celular por WhatsApp antes de continuar'))
       return
     }
 
     if (form.password !== form.confirm_password) {
-      setError('Las contraseñas no coinciden')
+      setError(t('Las contraseñas no coinciden'))
       return
     }
 
@@ -84,11 +86,11 @@ export default function RegisterPatientPage() {
           <Link href="/" className="inline-block">
             <Image src="/logo1.png" alt="MedicBolivia" width={1262} height={173} className="h-8 w-auto mx-auto" priority />
           </Link>
-          <p className="text-sm text-[#6B738A] mt-1">Registro de paciente</p>
+          <p className="text-sm text-[#6B738A] mt-1">{t('Registro de paciente')}</p>
         </div>
 
         <div className="card">
-          <h2 className="text-base font-semibold mb-5">Crea tu cuenta de paciente</h2>
+          <h2 className="text-base font-semibold mb-5">{t('Crea tu cuenta de paciente')}</h2>
 
           {error && (
             <div className="bg-[#FCEBEB] text-[#A32D2D] text-sm px-3 py-2 rounded-lg mb-4 border border-[#F09595]">
@@ -99,47 +101,47 @@ export default function RegisterPatientPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Nombre <span className="text-[#E24B4A]">*</span></label>
+                <label className="label">{t('Nombre')} <span className="text-[#E24B4A]">*</span></label>
                 <input name="first_name" className="input" placeholder="Juan" value={form.first_name} onChange={handleChange} required />
               </div>
               <div>
-                <label className="label">Apellido <span className="text-[#E24B4A]">*</span></label>
+                <label className="label">{t('Apellido')} <span className="text-[#E24B4A]">*</span></label>
                 <input name="last_name" className="input" placeholder="Pérez" value={form.last_name} onChange={handleChange} required />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Cédula de identidad <span className="text-[#E24B4A]">*</span></label>
+                <label className="label">{t('Cédula de identidad')} <span className="text-[#E24B4A]">*</span></label>
                 <input name="ci" className="input" placeholder="5823741" value={form.ci} onChange={handleChange} required />
               </div>
               <div>
-                <label className="label">Fecha de nacimiento <span className="text-[#E24B4A]">*</span></label>
+                <label className="label">{t('Fecha de nacimiento')} <span className="text-[#E24B4A]">*</span></label>
                 <input name="birth_date" type="date" className="input" value={form.birth_date} onChange={handleChange} required />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Departamento <span className="text-[#E24B4A]">*</span></label>
+                <label className="label">{t('Departamento')} <span className="text-[#E24B4A]">*</span></label>
                 <select name="department" className="input" value={form.department} onChange={handleChange} required>
-                  <option value="">Seleccionar...</option>
+                  <option value="">{t('Seleccionar...')}</option>
                   {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
               <div>
-                <label className="label">Género (opcional)</label>
+                <label className="label">{t('Género (opcional)')}</label>
                 <select name="gender" className="input" value={form.gender} onChange={handleChange}>
-                  <option value="">No especificar</option>
-                  <option value="Masculino">Masculino</option>
-                  <option value="Femenino">Femenino</option>
-                  <option value="Otro">Otro</option>
+                  <option value="">{t('No especificar')}</option>
+                  <option value="Masculino">{t('Masculino')}</option>
+                  <option value="Femenino">{t('Femenino')}</option>
+                  <option value="Otro">{t('Otro')}</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="label">Número de celular <span className="text-[#E24B4A]">*</span></label>
+              <label className="label">{t('Número de celular')} <span className="text-[#E24B4A]">*</span></label>
               <PhoneInput
                 value={form.phone}
                 onChange={(phone) => { setForm((prev) => ({ ...prev, phone })); setPhoneVerified(false) }}
@@ -155,35 +157,35 @@ export default function RegisterPatientPage() {
             </div>
 
             <div>
-              <label className="label">Email (opcional)</label>
+              <label className="label">{t('Email (opcional)')}</label>
               <input name="email" type="email" className="input" placeholder="juan@email.com" value={form.email} onChange={handleChange} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Contraseña <span className="text-[#E24B4A]">*</span></label>
-                <input name="password" type="password" autoComplete="new-password" className="input" placeholder="Mínimo 8 caracteres" value={form.password} onChange={handleChange} required minLength={8} />
+                <label className="label">{t('Contraseña')} <span className="text-[#E24B4A]">*</span></label>
+                <input name="password" type="password" autoComplete="new-password" className="input" placeholder={t('Mínimo 8 caracteres')} value={form.password} onChange={handleChange} required minLength={8} />
               </div>
               <div>
-                <label className="label">Confirmar contraseña <span className="text-[#E24B4A]">*</span></label>
-                <input name="confirm_password" type="password" autoComplete="new-password" className="input" placeholder="Repetir contraseña" value={form.confirm_password} onChange={handleChange} required />
+                <label className="label">{t('Confirmar contraseña')} <span className="text-[#E24B4A]">*</span></label>
+                <input name="confirm_password" type="password" autoComplete="new-password" className="input" placeholder={t('Repetir contraseña')} value={form.confirm_password} onChange={handleChange} required />
               </div>
             </div>
 
             <p className="text-xs text-[#A0A8BF]">
-              <span className="text-[#E24B4A]">*</span> Campos obligatorios
+              <span className="text-[#E24B4A]">*</span> {t('Campos obligatorios')}
             </p>
 
             <button type="submit" disabled={loading || !phoneVerified} className="btn-primary w-full flex items-center justify-center gap-2">
               {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />}
-              {loading ? 'Registrando...' : 'Crear cuenta'}
+              {loading ? t('Registrando...') : t('Crear cuenta')}
             </button>
           </form>
 
           <p className="text-center text-sm text-[#6B738A] mt-4 pt-4 border-t border-[#DDE1EE]">
-            ¿Ya tienes cuenta?{' '}
+            {t('¿Ya tienes cuenta?')}{' '}
             <Link href="/auth/login" className="text-[#185FA5] font-medium hover:underline">
-              Inicia sesión
+              {t('Inicia sesión')}
             </Link>
           </p>
         </div>

@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { PhoneInput } from '@/components/ui/PhoneInput'
 import { Reveal } from '@/components/ui/Reveal'
 import { contactAPI, getErrorMessage, type ContactInquiryType } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 import { Send, User, Mail, MapPin, MessageSquare, CheckCircle2 } from 'lucide-react'
 
 // Ciudades capitales de los 9 departamentos de Bolivia. El valor especial
@@ -65,6 +66,7 @@ export function ContactSection() {
   const [success, setSuccess] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { t } = useLanguage()
 
   useEffect(() => {
     return () => {
@@ -109,11 +111,11 @@ export function ContactSection() {
     setError('')
 
     if (!form.full_name.trim() || !form.phone || !form.inquiry_type || !form.message.trim()) {
-      setError('Completá los campos obligatorios antes de enviar.')
+      setError(t('Completá los campos obligatorios antes de enviar.'))
       return
     }
     if (form.isOtherCountry && !form.otherCountry.trim()) {
-      setError('Escribí el país desde el que nos contactás.')
+      setError(t('Escribí el país desde el que nos contactás.'))
       return
     }
 
@@ -141,11 +143,10 @@ export function ContactSection() {
   return (
     <section id="contacto" className="max-w-2xl mx-auto px-4 py-16">
       <Reveal className="text-center mb-10">
-        <h2 className="text-2xl font-bold text-[#141820] mb-2">Contáctanos</h2>
+        <h2 className="text-2xl font-bold text-[#141820] mb-2">{t('Contáctanos')}</h2>
         <div className="w-10 h-1 rounded-full bg-gradient-to-r from-[#185FA5] to-[#11A15A] mx-auto mb-3" />
         <p className="text-sm text-[#6B738A] max-w-md mx-auto">
-          ¿Tenés dudas, sos profesional de salud, o necesitás soporte? Escribinos y te
-          respondemos a{' '}
+          {t('¿Tenés dudas, sos profesional de salud, o necesitás soporte? Escribinos y te respondemos a')}{' '}
           <a href="mailto:info@medicbolivia.com" className="text-[#0F6E56] font-medium hover:underline">
             info@medicbolivia.com
           </a>.
@@ -158,16 +159,16 @@ export function ContactSection() {
             <div className="w-12 h-12 rounded-full bg-[#E1F5EE] flex items-center justify-center mx-auto mb-3 opacity-0 animate-pop-in">
               <CheckCircle2 className="w-6 h-6 text-[#0F6E56]" aria-hidden="true" />
             </div>
-            <p className="text-sm font-medium text-[#141820] mb-1">¡Consulta enviada!</p>
+            <p className="text-sm font-medium text-[#141820] mb-1">{t('¡Consulta enviada!')}</p>
             <p className="text-xs text-[#6B738A] mb-4">
-              Gracias por escribirnos. Te vamos a responder a la brevedad.
+              {t('Gracias por escribirnos. Te vamos a responder a la brevedad.')}
             </p>
             <button
               type="button"
               onClick={() => setSuccess(false)}
               className="text-xs font-medium text-[#0F6E56] hover:underline"
             >
-              Enviar otra consulta
+              {t('Enviar otra consulta')}
             </button>
           </div>
         ) : (
@@ -177,7 +178,7 @@ export function ContactSection() {
                 inputs del formulario sí suele completarlo. Si llega con
                 algo, el backend descarta la consulta en silencio. */}
             <div className="absolute left-[-9999px] w-px h-px overflow-hidden" aria-hidden="true">
-              <label htmlFor="website">No completar este campo</label>
+              <label htmlFor="website">{t('No completar este campo')}</label>
               <input
                 type="text"
                 id="website"
@@ -200,7 +201,7 @@ export function ContactSection() {
 
             <Reveal delayMs={0}>
               <label className="label flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5" aria-hidden="true" /> Nombre completo
+                <User className="w-3.5 h-3.5" aria-hidden="true" /> {t('Nombre completo')}
               </label>
               <input
                 className={`input ${FIELD_TRANSITION}`}
@@ -214,7 +215,7 @@ export function ContactSection() {
 
             <Reveal delayMs={60}>
               <label className="label flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5" aria-hidden="true" /> Ciudad
+                <MapPin className="w-3.5 h-3.5" aria-hidden="true" /> {t('Ciudad')}
               </label>
               <select
                 className={`input ${FIELD_TRANSITION}`}
@@ -225,7 +226,7 @@ export function ContactSection() {
                 {BOLIVIA_CITIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
-                <option value={OTHER_COUNTRY_VALUE}>Estoy en otro país…</option>
+                <option value={OTHER_COUNTRY_VALUE}>{t('Estoy en otro país…')}</option>
               </select>
               {form.isOtherCountry && (
                 <input
@@ -240,13 +241,13 @@ export function ContactSection() {
             </Reveal>
 
             <Reveal delayMs={120}>
-              <label className="label">Teléfono</label>
+              <label className="label">{t('Teléfono')}</label>
               <PhoneInput value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} required />
             </Reveal>
 
             <Reveal delayMs={180}>
               <label className="label flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5" aria-hidden="true" /> Correo <span className="text-[#A0A8BF]">(opcional)</span>
+                <Mail className="w-3.5 h-3.5" aria-hidden="true" /> {t('Correo')} <span className="text-[#A0A8BF]">({t('opcional')})</span>
               </label>
               <input
                 className={`input ${FIELD_TRANSITION}`}
@@ -259,7 +260,7 @@ export function ContactSection() {
             </Reveal>
 
             <Reveal delayMs={240}>
-              <label className="label">Tipo de consulta</label>
+              <label className="label">{t('Tipo de consulta')}</label>
               <select
                 className={`input ${FIELD_TRANSITION}`}
                 name="inquiry_type"
@@ -267,9 +268,9 @@ export function ContactSection() {
                 onChange={handleChange}
                 required
               >
-                <option value="" disabled>Elegí una opción…</option>
-                {INQUIRY_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
+                <option value="" disabled>{t('Elegí una opción…')}</option>
+                {INQUIRY_TYPES.map((it) => (
+                  <option key={it.value} value={it.value}>{t(it.label)}</option>
                 ))}
               </select>
             </Reveal>
@@ -277,12 +278,12 @@ export function ContactSection() {
             <Reveal delayMs={300}>
               <div className="flex items-center gap-2 mb-0">
                 <label className="label flex items-center gap-1.5 mb-0">
-                  <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" /> Mensaje
+                  <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" /> {t('Mensaje')}
                 </label>
                 {isTyping && (
                   <span className="flex items-center gap-1 animate-fade-up">
                     <TypingDots />
-                    <span className="text-[10px] text-[#6B738A]">escribiendo…</span>
+                    <span className="text-[10px] text-[#6B738A]">{t('escribiendo…')}</span>
                   </span>
                 )}
               </div>
@@ -291,7 +292,7 @@ export function ContactSection() {
                 rows={4}
                 value={form.message}
                 onChange={handleMessageChange}
-                placeholder="Contanos en qué te podemos ayudar…"
+                placeholder={t('Contanos en qué te podemos ayudar…')}
                 required
               />
             </Reveal>
@@ -306,12 +307,12 @@ export function ContactSection() {
               {loading ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />
-                  Enviando…
+                  {t('Enviando…')}
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
-                  Enviar consulta
+                  {t('Enviar consulta')}
                 </>
               )}
             </button>

@@ -8,6 +8,7 @@ import { authAPI, specialtiesAPI, getErrorMessage } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { PhoneInput } from '@/components/ui/PhoneInput'
 import { PhoneVerification } from '@/components/ui/PhoneVerification'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const NOT_LISTED = '__NOT_LISTED__'
 
@@ -27,6 +28,7 @@ interface CatalogItem {
 
 export default function RegisterProfessionalPage() {
   const router = useRouter()
+  const { t } = useLanguage()
   const setUser  = useAuthStore((s) => s.setUser)
   const setToken = useAuthStore((s) => s.setToken)
 
@@ -64,7 +66,7 @@ export default function RegisterProfessionalPage() {
   useEffect(() => {
     specialtiesAPI.list()
       .then(setSpecialties)
-      .catch(() => setError('No se pudo cargar el catálogo de especialidades. Recarga la página.'))
+      .catch(() => setError(t('No se pudo cargar el catálogo de especialidades. Recarga la página.')))
       .finally(() => setLoadingCatalog(false))
   }, [])
 
@@ -111,20 +113,20 @@ export default function RegisterProfessionalPage() {
     e.preventDefault()
     setError('')
 
-    if (!phoneVerified) { setError('Verificá tu número de celular por WhatsApp antes de continuar'); return }
-    if (form.password !== form.confirm_password) { setError('Las contraseñas no coinciden'); return }
-    if (!form.department) { setError('Selecciona tu departamento'); return }
-    if (!form.birth_date) { setError('Ingresa tu fecha de nacimiento'); return }
+    if (!phoneVerified) { setError(t('Verificá tu número de celular por WhatsApp antes de continuar')); return }
+    if (form.password !== form.confirm_password) { setError(t('Las contraseñas no coinciden')); return }
+    if (!form.department) { setError(t('Selecciona tu departamento')); return }
+    if (!form.birth_date) { setError(t('Ingresa tu fecha de nacimiento')); return }
 
-    if (!form.specialty) { setError('Selecciona tu especialidad'); return }
+    if (!form.specialty) { setError(t('Selecciona tu especialidad')); return }
     if (specialtyNotListed && !specialtyProposal.trim()) {
-      setError('Escribe el nombre de tu especialidad'); return
+      setError(t('Escribe el nombre de tu especialidad')); return
     }
     if (subSpecialtyNotListed && !subSpecialtyProposal.trim()) {
-      setError('Escribe el nombre de tu subespecialidad'); return
+      setError(t('Escribe el nombre de tu subespecialidad')); return
     }
     if (selectedLanguages.length === 0 && !customLanguage.trim()) {
-      setError('Selecciona al menos un idioma de atención'); return
+      setError(t('Selecciona al menos un idioma de atención')); return
     }
 
     // Si la especialidad es nueva, se manda el texto propuesto como
@@ -204,19 +206,19 @@ export default function RegisterProfessionalPage() {
           <Link href="/" className="inline-block">
             <Image src="/logo1.png" alt="MedicBolivia" width={1262} height={173} className="h-8 w-auto mx-auto" priority />
           </Link>
-          <p className="text-sm text-[#6B738A] mt-1">Registro de profesional de salud</p>
+          <p className="text-sm text-[#6B738A] mt-1">{t('Registro de profesional de salud')}</p>
         </div>
 
         <div className="bg-white border border-[#DDE1EE] rounded-2xl p-6 shadow-sm">
 
           <div className="bg-[#E6F1FB] border border-[#85B7EB] rounded-xl px-4 py-3 mb-5">
-            <p className="text-xs text-[#0C447C] font-medium mb-1">📋 Tu perfil será verificado</p>
+            <p className="text-xs text-[#0C447C] font-medium mb-1">📋 {t('Tu perfil será verificado')}</p>
             <p className="text-xs text-[#185FA5]">
-              Deberás subir tus documentos profesionales. La verificación toma entre 24 y 72 horas hábiles.
+              {t('Deberás subir tus documentos profesionales. La verificación toma entre 24 y 72 horas hábiles.')}
             </p>
           </div>
 
-          <h2 className="text-base font-semibold mb-4">Crea tu cuenta profesional</h2>
+          <h2 className="text-base font-semibold mb-4">{t('Crea tu cuenta profesional')}</h2>
 
           {error && (
             <div className="bg-[#FCEBEB] text-[#A32D2D] text-sm px-3 py-2.5 rounded-lg mb-4 border border-[#F09595]">
@@ -229,11 +231,11 @@ export default function RegisterProfessionalPage() {
             {/* Nombre y apellido */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Nombre <span className="text-[#E24B4A]">*</span></label>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Nombre')} <span className="text-[#E24B4A]">*</span></label>
                 <input name="first_name" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="María" value={form.first_name} onChange={handleChange} required />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Apellido <span className="text-[#E24B4A]">*</span></label>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Apellido')} <span className="text-[#E24B4A]">*</span></label>
                 <input name="last_name" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="Paz" value={form.last_name} onChange={handleChange} required />
               </div>
             </div>
@@ -241,11 +243,11 @@ export default function RegisterProfessionalPage() {
             {/* CI y fecha de nacimiento */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Cédula de identidad <span className="text-[#E24B4A]">*</span></label>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Cédula de identidad')} <span className="text-[#E24B4A]">*</span></label>
                 <input name="ci" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="5823741" value={form.ci} onChange={handleChange} required />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Fecha de nacimiento <span className="text-[#E24B4A]">*</span></label>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Fecha de nacimiento')} <span className="text-[#E24B4A]">*</span></label>
                 <input name="birth_date" type="date" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" value={form.birth_date} onChange={handleChange} required />
               </div>
             </div>
@@ -253,26 +255,26 @@ export default function RegisterProfessionalPage() {
             {/* Departamento y género */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Departamento <span className="text-[#E24B4A]">*</span></label>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Departamento')} <span className="text-[#E24B4A]">*</span></label>
                 <select name="department" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" value={form.department} onChange={handleChange} required>
-                  <option value="">Seleccionar...</option>
+                  <option value="">{t('Seleccionar...')}</option>
                   {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Género (opcional)</label>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Género (opcional)')}</label>
                 <select name="gender" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" value={form.gender} onChange={handleChange}>
-                  <option value="">No especificar</option>
-                  <option value="Masculino">Masculino</option>
-                  <option value="Femenino">Femenino</option>
-                  <option value="Otro">Otro</option>
+                  <option value="">{t('No especificar')}</option>
+                  <option value="Masculino">{t('Masculino')}</option>
+                  <option value="Femenino">{t('Femenino')}</option>
+                  <option value="Otro">{t('Otro')}</option>
                 </select>
               </div>
             </div>
 
             {/* Especialidad */}
             <div>
-              <label className="block text-xs font-medium text-[#6B738A] mb-1">Especialidad <span className="text-[#E24B4A]">*</span></label>
+              <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Especialidad')} <span className="text-[#E24B4A]">*</span></label>
               <select
                 name="specialty"
                 className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
@@ -281,22 +283,22 @@ export default function RegisterProfessionalPage() {
                 disabled={loadingCatalog}
                 required
               >
-                <option value="">{loadingCatalog ? 'Cargando especialidades...' : 'Seleccionar especialidad...'}</option>
+                <option value="">{loadingCatalog ? t('Cargando especialidades...') : t('Seleccionar especialidad...')}</option>
                 {specialties.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                <option value={NOT_LISTED}>→ No encuentro mi especialidad</option>
+                <option value={NOT_LISTED}>→ {t('No encuentro mi especialidad')}</option>
               </select>
 
               {specialtyNotListed && (
                 <div className="mt-2">
                   <input
                     className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
-                    placeholder="Escribe el nombre de tu especialidad"
+                    placeholder={t('Escribe el nombre de tu especialidad')}
                     value={specialtyProposal}
                     onChange={(e) => setSpecialtyProposal(e.target.value)}
                     required
                   />
                   <p className="text-xs text-[#A0A8BF] mt-1">
-                    La revisaremos y te avisaremos cuando esté aprobada.
+                    {t('La revisaremos y te avisaremos cuando esté aprobada.')}
                   </p>
                 </div>
               )}
@@ -306,7 +308,7 @@ export default function RegisterProfessionalPage() {
             {form.specialty && (
               <div>
                 <label className="block text-xs font-medium text-[#6B738A] mb-1">
-                  Subespecialidad (opcional)
+                  {t('Subespecialidad (opcional)')}
                 </label>
 
                 {subSpecialties.length > 0 && (
@@ -315,12 +317,12 @@ export default function RegisterProfessionalPage() {
                     value={subSpecialtyNotListed ? NOT_LISTED : selectedSubSpecialty}
                     onChange={handleSubSpecialtyChange}
                   >
-                    <option value="">Sin subespecialidad</option>
+                    <option value="">{t('Sin subespecialidad')}</option>
                     {subSpecialties.map((sub) => (
                       <option key={sub.id} value={sub.name}>{sub.name}</option>
                     ))}
                     {!specialtyNotListed && (
-                      <option value={NOT_LISTED}>→ No encuentro mi subespecialidad</option>
+                      <option value={NOT_LISTED}>→ {t('No encuentro mi subespecialidad')}</option>
                     )}
                   </select>
                 )}
@@ -331,7 +333,7 @@ export default function RegisterProfessionalPage() {
                     onClick={() => setSubSpecialtyNotListed((v) => !v)}
                     className="text-xs text-[#185FA5] hover:underline"
                   >
-                    {subSpecialtyNotListed ? '✕ Cancelar propuesta' : '→ No encuentro mi subespecialidad'}
+                    {subSpecialtyNotListed ? `✕ ${t('Cancelar propuesta')}` : `→ ${t('No encuentro mi subespecialidad')}`}
                   </button>
                 )}
 
@@ -341,7 +343,7 @@ export default function RegisterProfessionalPage() {
                     onClick={() => setSubSpecialtyNotListed((v) => !v)}
                     className="text-xs text-[#185FA5] hover:underline"
                   >
-                    {subSpecialtyNotListed ? '✕ Cancelar' : '→ Agregar una subespecialidad nueva'}
+                    {subSpecialtyNotListed ? `✕ ${t('Cancelar')}` : `→ ${t('Agregar una subespecialidad nueva')}`}
                   </button>
                 )}
 
@@ -349,7 +351,7 @@ export default function RegisterProfessionalPage() {
                   <div className="mt-2">
                     <input
                       className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
-                      placeholder="Escribe el nombre de tu subespecialidad"
+                      placeholder={t('Escribe el nombre de tu subespecialidad')}
                       value={subSpecialtyProposal}
                       onChange={(e) => setSubSpecialtyProposal(e.target.value)}
                     />
@@ -373,7 +375,7 @@ export default function RegisterProfessionalPage() {
             {/* Idiomas */}
             <div>
               <label className="block text-xs font-medium text-[#6B738A] mb-1">
-                Idiomas de atención <span className="text-[#E24B4A]">*</span>
+                {t('Idiomas de atención')} <span className="text-[#E24B4A]">*</span>
               </label>
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {LANGUAGES.map((lang) => {
@@ -401,13 +403,13 @@ export default function RegisterProfessionalPage() {
                   onClick={() => setLanguageNotListed(true)}
                   className="text-xs text-[#185FA5] hover:underline"
                 >
-                  → Agregar otro idioma
+                  → {t('Agregar otro idioma')}
                 </button>
               ) : (
                 <div>
                   <input
                     className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
-                    placeholder="Ej. Italiano"
+                    placeholder={t('Ej. Italiano')}
                     value={customLanguage}
                     onChange={(e) => setCustomLanguage(e.target.value)}
                   />
@@ -416,7 +418,7 @@ export default function RegisterProfessionalPage() {
                     onClick={() => { setLanguageNotListed(false); setCustomLanguage('') }}
                     className="text-xs text-[#A0A8BF] hover:underline mt-1"
                   >
-                    ✕ Cancelar
+                    ✕ {t('Cancelar')}
                   </button>
                 </div>
               )}
@@ -424,7 +426,7 @@ export default function RegisterProfessionalPage() {
 
             {/* Teléfono */}
             <div>
-              <label className="block text-xs font-medium text-[#6B738A] mb-1">Celular <span className="text-[#E24B4A]">*</span></label>
+              <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Celular')} <span className="text-[#E24B4A]">*</span></label>
               <PhoneInput
                 value={form.phone}
                 onChange={(phone) => { setForm((prev) => ({ ...prev, phone })); setPhoneVerified(false) }}
@@ -442,36 +444,36 @@ export default function RegisterProfessionalPage() {
             {/* Email — opcional para profesionales, el celular ya es el
                 canal principal de contacto (WhatsApp) */}
             <div>
-              <label className="block text-xs font-medium text-[#6B738A] mb-1">Email profesional (opcional)</label>
+              <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Email profesional (opcional)')}</label>
               <input name="email" type="email" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="dr@email.com" value={form.email} onChange={handleChange} />
             </div>
 
             {/* Contraseñas */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Contraseña <span className="text-[#E24B4A]">*</span></label>
-                <input name="password" type="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="Mínimo 8 caracteres" value={form.password} onChange={handleChange} required minLength={8} />
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Contraseña')} <span className="text-[#E24B4A]">*</span></label>
+                <input name="password" type="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder={t('Mínimo 8 caracteres')} value={form.password} onChange={handleChange} required minLength={8} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Confirmar <span className="text-[#E24B4A]">*</span></label>
-                <input name="confirm_password" type="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder="Repetir" value={form.confirm_password} onChange={handleChange} required />
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Confirmar')} <span className="text-[#E24B4A]">*</span></label>
+                <input name="confirm_password" type="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder={t('Repetir')} value={form.confirm_password} onChange={handleChange} required />
               </div>
             </div>
 
             <p className="text-xs text-[#A0A8BF]">
-              <span className="text-[#E24B4A]">*</span> Campos obligatorios
+              <span className="text-[#E24B4A]">*</span> {t('Campos obligatorios')}
             </p>
 
             <button type="submit" disabled={loading || !phoneVerified}
               className="w-full bg-[#0F6E56] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#085041] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
               {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />}
-              {loading ? 'Registrando...' : 'Crear cuenta profesional'}
+              {loading ? t('Registrando...') : t('Crear cuenta profesional')}
             </button>
           </form>
 
           <p className="text-center text-sm text-[#6B738A] mt-4 pt-4 border-t border-[#DDE1EE]">
-            ¿Ya tienes cuenta?{' '}
-            <Link href="/auth/login" className="text-[#185FA5] font-medium hover:underline">Inicia sesión</Link>
+            {t('¿Ya tienes cuenta?')}{' '}
+            <Link href="/auth/login" className="text-[#185FA5] font-medium hover:underline">{t('Inicia sesión')}</Link>
           </p>
         </div>
       </div>

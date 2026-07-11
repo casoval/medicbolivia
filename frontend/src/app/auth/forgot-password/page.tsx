@@ -17,9 +17,11 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { passwordResetAPI, getErrorMessage } from '@/lib/api'
 import { PhoneInput } from '@/components/ui/PhoneInput'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 export default function ForgotPasswordPage() {
   const router = useRouter()
+  const { t } = useLanguage()
   const [step, setStep] = useState<1 | 2>(1)
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
@@ -80,11 +82,11 @@ export default function ForgotPasswordPage() {
     setError('')
 
     if (newPassword !== confirmPassword) {
-      setError('Las contraseñas no coinciden')
+      setError(t('Las contraseñas no coinciden'))
       return
     }
     if (newPassword.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres')
+      setError(t('La contraseña debe tener al menos 8 caracteres'))
       return
     }
 
@@ -107,7 +109,7 @@ export default function ForgotPasswordPage() {
           <Link href="/" className="inline-block">
             <Image src="/logo1.png" alt="MedicBolivia" width={1262} height={173} className="h-8 w-auto mx-auto" priority />
           </Link>
-          <p className="text-sm text-[#6B738A] mt-1">Recuperar contraseña</p>
+          <p className="text-sm text-[#6B738A] mt-1">{t('Recuperar contraseña')}</p>
         </div>
 
         <div className="card">
@@ -118,14 +120,14 @@ export default function ForgotPasswordPage() {
                   <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0l-3.5-3.5a1 1 0 111.4-1.4l2.8 2.8 6.8-6.8a1 1 0 011.4 0z" clipRule="evenodd" />
                 </svg>
               </div>
-              <h2 className="text-base font-semibold mb-1">Contraseña actualizada</h2>
-              <p className="text-sm text-[#6B738A]">Te llevamos al inicio de sesión...</p>
+              <h2 className="text-base font-semibold mb-1">{t('Contraseña actualizada')}</h2>
+              <p className="text-sm text-[#6B738A]">{t('Te llevamos al inicio de sesión...')}</p>
             </div>
           ) : step === 1 ? (
             <>
-              <h2 className="text-base font-semibold mb-1">¿Olvidaste tu contraseña?</h2>
+              <h2 className="text-base font-semibold mb-1">{t('¿Olvidaste tu contraseña?')}</h2>
               <p className="text-sm text-[#6B738A] mb-5">
-                Ingresá tu número de celular y te mandamos un código por WhatsApp para restablecerla.
+                {t('Ingresá tu número de celular y te mandamos un código por WhatsApp para restablecerla.')}
               </p>
 
               {error && (
@@ -136,23 +138,23 @@ export default function ForgotPasswordPage() {
 
               <form onSubmit={handleSendCode} className="space-y-4">
                 <div>
-                  <label className="label">Número de celular</label>
+                  <label className="label">{t('Número de celular')}</label>
                   <PhoneInput value={phone} onChange={setPhone} required />
                 </div>
 
                 <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
                   {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />}
-                  {loading ? 'Enviando...' : 'Enviar código por WhatsApp'}
+                  {loading ? t('Enviando...') : t('Enviar código por WhatsApp')}
                 </button>
               </form>
             </>
           ) : (
             <>
-              <h2 className="text-base font-semibold mb-1">Ingresá el código y tu contraseña nueva</h2>
+              <h2 className="text-base font-semibold mb-1">{t('Ingresá el código y tu contraseña nueva')}</h2>
               <p className="text-sm text-[#6B738A] mb-5">
-                Te enviamos un código de 6 dígitos por WhatsApp al{' '}
+                {t('Te enviamos un código de 6 dígitos por WhatsApp al')}{' '}
                 <span className="font-medium text-[#3A4155]">+{phone}</span>.
-                {expireMinutes != null && <> Vence en {expireMinutes} minutos.</>}
+                {expireMinutes != null && <> {t('Vence en')} {expireMinutes} {t('minutos.')}</>}
               </p>
 
               {error && (
@@ -163,7 +165,7 @@ export default function ForgotPasswordPage() {
 
               <form onSubmit={handleReset} className="space-y-4">
                 <div>
-                  <label className="label">Código de WhatsApp</label>
+                  <label className="label">{t('Código de WhatsApp')}</label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -181,17 +183,17 @@ export default function ForgotPasswordPage() {
                     disabled={cooldown > 0 || loading}
                     className="text-xs text-[#185FA5] font-medium mt-1.5 disabled:text-[#A0A8BF] disabled:cursor-not-allowed"
                   >
-                    {cooldown > 0 ? `Reenviar código (${cooldown}s)` : 'Reenviar código'}
+                    {cooldown > 0 ? `${t('Reenviar código')} (${cooldown}s)` : t('Reenviar código')}
                   </button>
                 </div>
 
                 <div>
-                  <label className="label">Contraseña nueva</label>
+                  <label className="label">{t('Contraseña nueva')}</label>
                   <input
                     type="password"
                     autoComplete="new-password"
                     className="input"
-                    placeholder="Mínimo 8 caracteres"
+                    placeholder={t('Mínimo 8 caracteres')}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
@@ -200,12 +202,12 @@ export default function ForgotPasswordPage() {
                 </div>
 
                 <div>
-                  <label className="label">Confirmar contraseña nueva</label>
+                  <label className="label">{t('Confirmar contraseña nueva')}</label>
                   <input
                     type="password"
                     autoComplete="new-password"
                     className="input"
-                    placeholder="Repetir contraseña"
+                    placeholder={t('Repetir contraseña')}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
@@ -214,7 +216,7 @@ export default function ForgotPasswordPage() {
 
                 <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
                   {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />}
-                  {loading ? 'Actualizando...' : 'Restablecer contraseña'}
+                  {loading ? t('Actualizando...') : t('Restablecer contraseña')}
                 </button>
 
                 <button
@@ -222,7 +224,7 @@ export default function ForgotPasswordPage() {
                   onClick={() => { setStep(1); setError(''); setCode(''); }}
                   className="text-xs text-[#6B738A] hover:underline w-full text-center"
                 >
-                  Usar otro número
+                  {t('Usar otro número')}
                 </button>
               </form>
             </>
@@ -231,7 +233,7 @@ export default function ForgotPasswordPage() {
           {!success && (
             <p className="text-center text-sm text-[#6B738A] mt-4 pt-4 border-t border-[#DDE1EE]">
               <Link href="/auth/login" className="text-[#185FA5] font-medium hover:underline">
-                Volver a iniciar sesión
+                {t('Volver a iniciar sesión')}
               </Link>
             </p>
           )}
