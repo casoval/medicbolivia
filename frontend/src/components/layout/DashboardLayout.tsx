@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/store'
 import { NotificationToast } from './NotificationToast'
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 import type { UserRole } from '@/types'
 
 interface NavItem {
@@ -27,6 +29,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
   const router = useRouter()
   const { user, isAuthenticated, logout } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
+  const { t } = useLanguage()
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -83,7 +86,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
         return (
           <Link key={item.href} href={item.href} className={navLinkClass(isActive)} title={item.description}>
             <span className="flex-shrink-0">{item.icon}</span>
-            <span className="flex-1">{item.label}</span>
+            <span className="flex-1">{t(item.label)}</span>
             {item.badge !== undefined && item.badge > 0 && (
               <span className="w-5 h-5 bg-[#E24B4A] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                 {item.badge}
@@ -103,7 +106,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
       </svg>
-      Cerrar sesión
+      {t('Cerrar sesión')}
     </button>
   )
 
@@ -132,6 +135,8 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
           </Link>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Selector de idioma — solo visual, ahora disponible en toda la app */}
+          <LanguageSwitcher variant="dark" />
           {firstName && (
             <span className="sm:hidden text-sm text-white font-medium max-w-[100px] truncate">
               {firstName}
@@ -143,7 +148,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
             </span>
           )}
           <span className={`${firstName ? 'hidden' : 'inline'} sm:inline text-xs bg-white/15 text-white px-2.5 py-1 rounded-full font-medium`}>
-            {roleLabels[role]}
+            {t(roleLabels[role])}
           </span>
           <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-white text-[#0F6E56]">
             {initials}

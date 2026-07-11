@@ -16,6 +16,8 @@ import type { FAQ, FAQAudience } from '@/types'
 import { Spinner } from '@/components/ui'
 import { Reveal } from '@/components/ui/Reveal'
 import { ContactSection } from '@/components/landing/ContactSection'
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 import { MessageCircleHeart, UserCheck, Video, FileCheck2, QrCode, ShieldCheck, BadgeCheck, CalendarCheck2, Clock, Bell, Stethoscope, Mic, Cpu, Mail, Gift, Handshake, Bot } from 'lucide-react'
 
 const TABS: { key: FAQAudience; label: string }[] = [
@@ -141,26 +143,28 @@ function VerifyPrescriptionSection() {
 }
 
 function LandingHeader() {
+  const { t } = useLanguage()
   return (
     <header className="border-b border-[#DDE1EE] bg-white sticky top-0 z-10">
-      <div className="max-w-5xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between">
+      <div className="max-w-5xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between gap-2">
         <div className="flex items-center">
           <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-7 sm:h-11 w-auto" priority />
         </div>
         <nav className="hidden sm:flex items-center gap-6 text-sm text-[#6B738A]">
-          <a href="#faq" className="hover:text-[#141820]">Preguntas frecuentes</a>
-          <Link href="/verificar-receta" className="hover:text-[#141820]">Verificar receta</Link>
-          <a href="#contacto" className="hover:text-[#141820]">Contacto</a>
+          <a href="#faq" className="hover:text-[#141820]">{t('Preguntas frecuentes')}</a>
+          <Link href="/verificar-receta" className="hover:text-[#141820]">{t('Verificar receta')}</Link>
+          <a href="#contacto" className="hover:text-[#141820]">{t('Contacto')}</a>
         </nav>
         <div className="flex items-center gap-1 sm:gap-2">
+          <LanguageSwitcher variant="light" />
           <Link
             href="/auth/login"
             className="text-xs sm:text-sm font-medium text-[#0F6E56] px-2 py-2 hover:underline sm:hover:no-underline sm:border sm:border-[#11A15A]/40 sm:px-3 sm:rounded-lg sm:hover:bg-[#E7F8EF] sm:transition-colors"
           >
-            Iniciar sesión
+            {t('Iniciar sesión')}
           </Link>
           <Link href="/auth/register/patient" className="bg-[#11A15A] text-white text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap">
-            Registrarme
+            {t('Registrarme')}
           </Link>
         </div>
       </div>

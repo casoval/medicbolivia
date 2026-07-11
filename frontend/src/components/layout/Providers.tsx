@@ -5,6 +5,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/lib/store'
+import { LanguageProvider } from '@/lib/i18n/LanguageContext'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,7 +37,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <LanguageProvider>
+        {children}
+      </LanguageProvider>
     </QueryClientProvider>
   )
 }

@@ -9,6 +9,8 @@ import Image from 'next/image'
 import { useAuthStore } from '@/lib/store'
 import { getErrorMessage } from '@/lib/api'
 import { PhoneInput } from '@/components/ui/PhoneInput'
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 // Puntos clave reutilizados del material de marca (afiches)
 const FEATURES = [
@@ -74,6 +76,7 @@ const FEATURES = [
 export default function LoginPage() {
   const router = useRouter()
   const login = useAuthStore((s) => s.login)
+  const { t } = useLanguage()
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -113,28 +116,31 @@ export default function LoginPage() {
 
         {/* Panel informativo — solo visible en desktop (lg+) */}
         <div className="hidden lg:flex flex-col pr-10">
-          <Link href="/" className="mb-8 -ml-2 w-fit animate-fade-up">
-            <Image
-              src="/logo.png"
-              alt="MedicBolivia"
-              width={1779}
-              height={339}
-              className="w-96 h-auto"
-              priority
-            />
-          </Link>
+          <div className="flex items-center justify-between mb-8 -ml-2 animate-fade-up">
+            <Link href="/" className="w-fit">
+              <Image
+                src="/logo.png"
+                alt="MedicBolivia"
+                width={1779}
+                height={339}
+                className="w-96 h-auto"
+                priority
+              />
+            </Link>
+            <LanguageSwitcher variant="light" />
+          </div>
 
           <h2
             className="text-2xl font-bold text-[#042C53] leading-snug mb-3 animate-fade-up"
             style={{ animationDelay: '120ms' }}
           >
-            Tu atención médica,<br />donde estés
+            {t('Tu atención médica,')}<br />{t('donde estés')}
           </h2>
           <p
             className="text-sm text-[#6B738A] mb-8 max-w-xs animate-fade-up"
             style={{ animationDelay: '220ms' }}
           >
-            Telemedicina con inteligencia artificial al servicio de la salud boliviana.
+            {t('Telemedicina con inteligencia artificial al servicio de la salud boliviana.')}
           </p>
 
           {/* Carrusel de features — rota automáticamente */}
@@ -154,7 +160,7 @@ export default function LoginPage() {
                 <span className="flex items-center justify-center w-10 h-10 rounded-full border border-[#0F6E56]/30 text-[#0F6E56] shrink-0">
                   {f.icon}
                 </span>
-                <span className="text-base text-[#3A4155] font-medium">{f.title}</span>
+                <span className="text-base text-[#3A4155] font-medium">{t(f.title)}</span>
               </div>
             ))}
           </div>
@@ -186,7 +192,7 @@ export default function LoginPage() {
             <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4">
               <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Volver al inicio
+            {t('Volver al inicio')}
           </Link>
 
           {/* Logo — visible solo en mobile/tablet (el panel de la izquierda ya lo muestra en desktop) */}
@@ -219,7 +225,7 @@ export default function LoginPage() {
                   <span className="flex items-center justify-center w-7 h-7 rounded-full bg-[#0F6E56]/10 text-[#0F6E56] shrink-0">
                     {f.icon}
                   </span>
-                  <span className="text-xs text-[#3A4155] font-medium">{f.title}</span>
+                  <span className="text-xs text-[#3A4155] font-medium">{t(f.title)}</span>
                 </div>
               ))}
             </div>
@@ -237,7 +243,7 @@ export default function LoginPage() {
 
           {/* Formulario */}
           <div className="card animate-fade-up" style={{ animationDelay: '200ms' }}>
-            <h2 className="text-base font-semibold mb-5">Iniciar sesión</h2>
+            <h2 className="text-base font-semibold mb-5">{t('Iniciar sesión')}</h2>
 
             {error && (
               <div className="bg-[#FCEBEB] text-[#A32D2D] text-sm px-3 py-2 rounded-lg mb-4 border border-[#F09595]">
@@ -247,7 +253,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="label">Número de celular</label>
+                <label className="label">{t('Número de celular')}</label>
                 <PhoneInput
                   value={phone}
                   onChange={setPhone}
@@ -257,9 +263,9 @@ export default function LoginPage() {
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="label mb-0">Contraseña</label>
+                  <label className="label mb-0">{t('Contraseña')}</label>
                   <Link href="/auth/forgot-password" className="text-xs text-[#185FA5] font-medium hover:underline">
-                    ¿Olvidaste tu contraseña?
+                    {t('¿Olvidaste tu contraseña?')}
                   </Link>
                 </div>
                 <input
@@ -281,28 +287,28 @@ export default function LoginPage() {
                 {loading && (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />
                 )}
-                {loading ? 'Ingresando...' : 'Ingresar'}
+                {loading ? t('Ingresando...') : t('Ingresar')}
               </button>
             </form>
 
             <div className="mt-4 pt-4 border-t border-[#DDE1EE] text-center space-y-2">
               <p className="text-sm text-[#6B738A]">
-                ¿Eres paciente nuevo?{' '}
+                {t('¿Eres paciente nuevo?')}{' '}
                 <Link href="/auth/register/patient" className="text-[#185FA5] font-medium hover:underline">
-                  Regístrate aquí
+                  {t('Regístrate aquí')}
                 </Link>
               </p>
               <p className="text-sm text-[#6B738A]">
-                ¿Eres profesional de salud?{' '}
+                {t('¿Eres profesional de salud?')}{' '}
                 <Link href="/auth/register/professional" className="text-[#0F6E56] font-medium hover:underline">
-                  Únete a MedicBolivia
+                  {t('Únete a MedicBolivia')}
                 </Link>
               </p>
             </div>
           </div>
 
           <p className="text-center text-xs text-[#A0A8BF] mt-4">
-            Al ingresar aceptas nuestros Términos de Uso y Política de Privacidad
+            {t('Al ingresar aceptas nuestros Términos de Uso y Política de Privacidad')}
           </p>
         </div>
       </div>
