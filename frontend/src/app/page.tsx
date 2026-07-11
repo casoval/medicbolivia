@@ -16,7 +16,7 @@ import type { FAQ, FAQAudience } from '@/types'
 import { Spinner } from '@/components/ui'
 import { Reveal } from '@/components/ui/Reveal'
 import { ContactSection } from '@/components/landing/ContactSection'
-import { MessageCircleHeart, UserCheck, Video, FileCheck2, QrCode, ShieldCheck, BadgeCheck, CalendarCheck2, Clock, Bell, Stethoscope, Mic, Cpu, Mail } from 'lucide-react'
+import { MessageCircleHeart, UserCheck, Video, FileCheck2, QrCode, ShieldCheck, BadgeCheck, CalendarCheck2, Clock, Bell, Stethoscope, Mic, Cpu, Mail, Gift, Handshake, Bot } from 'lucide-react'
 
 const TABS: { key: FAQAudience; label: string }[] = [
   { key: 'GENERAL', label: 'General' },
@@ -193,7 +193,7 @@ const HERO_SLIDES: HeroSlide[] = [
     focus: 'object-right',
     badgeIcon: MessageCircleHeart,
     badgeText: 'Orientación médica con IA, en segundos',
-    title: 'Consultas médicas en línea, conectadas por inteligencia artificial',
+    title: 'Consultas médicas en línea, conectadas por Agentes IA',
     description:
       'Contale tus síntomas a Medi, nuestro agente de orientación, y te conecta con un profesional de salud verificado en Bolivia — con videoconsulta, receta digital y pago con QR.',
   },
@@ -225,6 +225,23 @@ const HERO_INTERVAL_MS = 15000
 // se detiene en ningún momento: sigue animando hasta el instante justo en
 // que la foto cambia por la siguiente, dando sensación de animación continua.
 const HERO_KEN_BURNS_MS = HERO_INTERVAL_MS
+
+// Insignia "en vivo" con punto pulsante: se superpone sobre la foto del Hero
+// para que, sin necesidad de scrollear, se entienda de inmediato que hay
+// médicos conectados ahora mismo y que la consulta es instantánea.
+function LiveDoctorsBadge({ className = '' }: { className?: string }) {
+  return (
+    <div className={`inline-flex items-center gap-2 bg-white/95 backdrop-blur-sm rounded-full pl-2.5 pr-4 py-2 shadow-lg ${className}`}>
+      <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#11A15A] opacity-75" />
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#11A15A]" />
+      </span>
+      <span className="text-xs font-semibold text-[#141820] whitespace-nowrap">
+        Médicos en línea ahora — <span className="text-[#0F6E56]">consulta al instante</span>
+      </span>
+    </div>
+  )
+}
 
 function HeroCopy({ slide }: { slide: HeroSlide }) {
   const Icon = slide.badgeIcon
@@ -309,6 +326,7 @@ function Hero() {
               style={i === active ? { animation: `heroKenBurns ${HERO_KEN_BURNS_MS}ms ease-out forwards` } : undefined}
             />
           ))}
+          <LiveDoctorsBadge className="absolute top-3 left-3" />
         </div>
         <div className="bg-gradient-to-b from-[#0C447C] via-[#185FA5] to-[#0F6E56] px-4 py-10">
           <div className="max-w-lg mx-auto">
@@ -353,6 +371,8 @@ function Hero() {
             más clara y luminosa que la de la familia. */}
         <div className="absolute inset-0 bg-gradient-to-r from-[#041424]/85 via-[#041424]/55 to-[#041424]/10" />
 
+        <LiveDoctorsBadge className="absolute top-6 left-4 sm:left-6 z-10" />
+
         <div className="relative h-full max-w-5xl mx-auto px-4 flex items-center">
           <div className="max-w-lg">
             <div key={active} style={{ animation: 'heroTextIn 0.6s ease-out' }}>
@@ -374,6 +394,76 @@ function Hero() {
   )
 }
 
+
+// Banner llamativo ubicado justo debajo del Hero: es el primer mensaje
+// "fuerte" que ve cualquier visitante, así que concentra las tres promesas
+// más importantes de la plataforma (gratis, sin intermediarios, IA 24/7)
+// en un formato imposible de pasar por alto.
+function FreeAndDirectSection() {
+  const points = [
+    {
+      icon: Gift,
+      title: '100% gratis, para siempre',
+      text: 'Registrate como paciente o como profesional de salud sin pagar nada. Sin suscripciones, sin letra chica, sin sorpresas.',
+    },
+    {
+      icon: Handshake,
+      title: 'Contacto directo, sin intermediarios',
+      text: 'Hablás cara a cara con tu médico. La consulta es entre vos y el profesional — sin aseguradoras, oficinas ni filtros en el medio.',
+    },
+    {
+      icon: Bot,
+      title: 'IA por texto o por voz, las 24 horas',
+      text: 'Escribile o llamale a Medi cuando quieras. Te escucha, entiende tu síntoma y te conecta al toque con el profesional indicado para vos.',
+    },
+  ]
+
+  return (
+    <section className="relative overflow-hidden bg-gradient-to-br from-[#0C447C] via-[#185FA5] to-[#0F6E56]">
+      {/* Manchas decorativas sutiles, solo estética */}
+      <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/5" aria-hidden="true" />
+      <div className="absolute -bottom-20 -left-10 w-72 h-72 rounded-full bg-white/5" aria-hidden="true" />
+
+      <div className="relative max-w-5xl mx-auto px-4 py-14 sm:py-16 text-center">
+        <span className="inline-flex items-center gap-1.5 bg-[#3DDC84] text-[#0C2A1E] text-xs font-bold px-3 py-1.5 rounded-full mb-5 uppercase tracking-wide">
+          <Gift className="w-3.5 h-3.5" aria-hidden="true" />
+          Registro 100% gratuito
+        </span>
+        <h2 className="text-2xl sm:text-3xl font-bold text-white leading-tight max-w-2xl mx-auto">
+          Tu salud, sin costo de entrada y sin intermediarios
+        </h2>
+        <p className="text-white/85 text-sm sm:text-base mt-4 max-w-xl mx-auto">
+          Pacientes y profesionales se registran gratis y se conectan directamente entre sí,
+          acompañados por agentes de IA que están despiertos las 24 horas, por texto o por voz,
+          para llevarte siempre con el médico indicado.
+        </p>
+
+        <div className="grid sm:grid-cols-3 gap-4 mt-10 text-left">
+          {points.map((point, i) => (
+            <Reveal key={point.title} delayMs={i * 120}>
+              <div className="h-full bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl p-5">
+                <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center mb-3">
+                  <point.icon className="w-5 h-5 text-white" aria-hidden="true" />
+                </div>
+                <p className="text-sm font-semibold text-white mb-1.5">{point.title}</p>
+                <p className="text-xs text-white/80">{point.text}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-3 mt-10">
+          <Link href="/auth/register/patient" className="bg-white text-[#0C447C] font-semibold px-6 py-3 rounded-lg hover:bg-[#E6F1FB] transition-colors">
+            Registrarme gratis como paciente
+          </Link>
+          <Link href="/auth/register/professional" className="bg-[#11A15A] text-white font-semibold px-6 py-3 rounded-lg hover:bg-[#0F6E56] transition-colors">
+            Registrarme gratis como profesional
+          </Link>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 function HowItWorksSection() {
   const steps = [
@@ -627,6 +717,7 @@ function LandingPage() {
     <div className="min-h-screen bg-[#F5F6FA]">
       <LandingHeader />
       <Hero />
+      <FreeAndDirectSection />
       <HowItWorksSection />
       <AppointmentsSection />
       <AI24_7Section />
