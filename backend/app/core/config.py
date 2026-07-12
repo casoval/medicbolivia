@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
+    # TEMPORAL: permite simular el pago QR también en producción mientras
+    # se resuelve la integración con el banco. Default False a propósito
+    # (no queda prendido en producción salvo que se agregue explícitamente
+    # ALLOW_PAYMENT_SIMULATION=true al .env del VPS). Sacar este flag y el
+    # chequeo en consultations.py::simulate_payment cuando el banco esté listo.
+    ALLOW_PAYMENT_SIMULATION: bool = False
 
     API_V1_PREFIX: str = "/api/v1"
     ALLOWED_ORIGINS: List[str] = [

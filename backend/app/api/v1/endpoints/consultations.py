@@ -1192,7 +1192,10 @@ async def simulate_payment(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if settings.ENVIRONMENT != "development":
+    # TEMPORAL: en producción, esto solo se permite si ALLOW_PAYMENT_SIMULATION=true
+    # está seteado explícitamente en el .env del servidor (mientras se resuelve la
+    # integración con el banco). Sacar esta excepción cuando el banco esté listo.
+    if settings.ENVIRONMENT != "development" and not settings.ALLOW_PAYMENT_SIMULATION:
         raise HTTPException(status_code=403, detail="Solo disponible en entorno de desarrollo")
 
     cons_result = await db.execute(select(Consultation).where(Consultation.id == consultation_id))
