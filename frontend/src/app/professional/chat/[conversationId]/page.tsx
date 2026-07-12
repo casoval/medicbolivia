@@ -23,7 +23,7 @@ export default function ProfessionalChatConversationPage() {
 
   return (
     <DashboardLayout navItems={NAV} activeHref="/professional/chat" role="PROFESSIONAL">
-      <div className="max-w-5xl mx-auto grid md:grid-cols-[320px_1fr] gap-4">
+      <div className="max-w-5xl grid md:grid-cols-[320px_1fr] gap-4">
         <div className="hidden md:block bg-white rounded-xl border border-[#E5E7EB] overflow-hidden h-[calc(100vh-140px)] overflow-y-auto">
           <ChatConversationList activeConversationId={conversationId} basePath="/professional/chat" />
         </div>

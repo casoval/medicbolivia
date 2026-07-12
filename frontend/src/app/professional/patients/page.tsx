@@ -7,14 +7,18 @@
 // conmigo ahora mismo — lo que otros médicos compartieron con la plataforma).
 
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
-import { StatusBadge, LoadingScreen, EmptyState } from '@/components/ui'
+import { StatusBadge, LoadingScreen, EmptyState, Alert } from '@/components/ui'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { PatientRecordSummary } from '@/components/professional/PatientRecordSummary'
-import { consultationsAPI } from '@/lib/api'
+import { consultationsAPI, patientBlockAPI, getErrorMessage } from '@/lib/api'
 import { fmtFechaHora, fmtFechaHoraLocal } from '@/lib/consultationHistory'
+import { CHAT_REASON_CATEGORY_LABELS, type ChatReasonCategory } from '@/types'
+
+const IconDots = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+const IconBan = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M4.9 4.9l14.2 14.2"/></svg>
 
 const IconSearch = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
 const IconChevron = ({ open }: { open: boolean }) => (
@@ -88,17 +92,182 @@ function groupByPatient(consultations: any[]): PatientGroup[] {
   return Array.from(map.values()).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
 }
 
+function BlockPatientMenu({ patientId, patientName }: { patientId: string; patientName: string }) {
+  const queryClient = useQueryClient()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [reportChecked, setReportChecked] = useState(false)
+  const [reasonCategory, setReasonCategory] = useState<ChatReasonCategory>('OTHER')
+  const [reasonText, setReasonText] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const { data: status } = useQuery({
+    queryKey: ['patient-block-status', patientId],
+    queryFn: () => patientBlockAPI.getStatus(patientId),
+    enabled: menuOpen,
+  })
+
+  async function handleUnblock() {
+    setSubmitting(true)
+    setError('')
+    try {
+      await patientBlockAPI.unblock(patientId)
+      queryClient.invalidateQueries({ queryKey: ['patient-block-status', patientId] })
+      setMenuOpen(false)
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleSubmitBlock() {
+    setSubmitting(true)
+    setError('')
+    try {
+      await patientBlockAPI.block(patientId, {
+        isReported: reportChecked,
+        reasonCategory: reportChecked ? reasonCategory : undefined,
+        reasonText: reportChecked ? (reasonText || undefined) : undefined,
+      })
+      queryClient.invalidateQueries({ queryKey: ['patient-block-status', patientId] })
+      setModalOpen(false)
+      setMenuOpen(false)
+      setReportChecked(false)
+      setReasonText('')
+    } catch (err) {
+      // Si el backend responde 409 (citas pendientes), el mensaje ya viene
+      // listo para mostrar directamente — ver assert_no_pending_appointments.
+      setError(getErrorMessage(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => setMenuOpen((o) => !o)}
+        className="p-1.5 text-[#6B738A] hover:bg-[#F5F6FA] rounded-lg"
+        title="Opciones"
+      >
+        <IconDots />
+      </button>
+
+      {menuOpen && (
+        <div className="absolute right-0 top-9 w-72 bg-white border border-[#DDE1EE] rounded-xl shadow-lg py-1 z-20">
+          {status?.blocked ? (
+            <button
+              onClick={handleUnblock}
+              disabled={submitting}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#185FA5] hover:bg-[#F5F6FA] text-left disabled:opacity-50"
+            >
+              <IconBan /> Desbloquear paciente
+            </button>
+          ) : (
+            <button
+              onClick={() => { setModalOpen(true); setMenuOpen(false) }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] text-left"
+            >
+              <IconBan /> Bloquear paciente y reportar (opcional)
+            </button>
+          )}
+          {error && <p className="px-4 py-2 text-xs text-[#DC2626]">{error}</p>}
+        </div>
+      )}
+
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setModalOpen(false)}>
+          <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div>
+              <h3 className="text-sm font-semibold text-[#141820]">Bloquear a {patientName}</h3>
+              <p className="text-xs text-[#6B738A] mt-1">
+                Esto bloqueará por completo tu relación con este paciente: no podrán chatear,
+                el paciente ya no te verá en sus búsquedas y no podrá agendar nuevas citas contigo.
+                Tu historial clínico con este paciente se conserva.
+              </p>
+            </div>
+
+            {error && <Alert type="error" message={error} />}
+
+            <label className="flex items-start gap-2 text-sm text-[#141820]">
+              <input
+                type="checkbox"
+                checked={reportChecked}
+                onChange={(e) => setReportChecked(e.target.checked)}
+                className="mt-0.5"
+              />
+              Además, quiero reportar este caso al equipo de MedicBolivia
+            </label>
+
+            {reportChecked && (
+              <div className="space-y-3 pl-6">
+                <div>
+                  <label className="text-xs text-[#6B738A] block mb-1">Motivo</label>
+                  <select
+                    value={reasonCategory}
+                    onChange={(e) => setReasonCategory(e.target.value as ChatReasonCategory)}
+                    className="w-full text-sm border border-[#DDE1EE] rounded-lg px-3 py-2"
+                  >
+                    {Object.entries(CHAT_REASON_CATEGORY_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-[#6B738A] block mb-1">Detalle (opcional)</label>
+                  <textarea
+                    value={reasonText}
+                    onChange={(e) => setReasonText(e.target.value)}
+                    maxLength={1000}
+                    rows={3}
+                    className="w-full text-sm border border-[#DDE1EE] rounded-lg px-3 py-2 resize-none"
+                    placeholder="Contanos brevemente qué pasó..."
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-[#6B738A] hover:bg-[#F5F6FA] rounded-lg">
+                Cancelar
+              </button>
+              <button
+                onClick={handleSubmitBlock}
+                disabled={submitting}
+                className="px-4 py-2 text-sm text-white bg-[#DC2626] hover:bg-[#B91C1C] rounded-lg disabled:opacity-50"
+              >
+                {submitting ? 'Aplicando...' : 'Confirmar bloqueo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PatientCard({ group }: { group: PatientGroup }) {
   const [open, setOpen] = useState(false)
   const sortedConsultations = [...group.consultations].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )
 
+  // Mismo queryKey que usa BlockPatientMenu más abajo: comparten caché,
+  // así que esto se mantiene sincronizado apenas se bloquea/desbloquea,
+  // sin importar si el menú está abierto o no.
+  const { data: blockStatus } = useQuery({
+    queryKey: ['patient-block-status', group.patientId],
+    queryFn: () => patientBlockAPI.getStatus(group.patientId),
+  })
+  const isBlocked = !!blockStatus?.blocked
+
   return (
-    <div className="border border-[#DDE1EE] rounded-xl overflow-hidden bg-white">
+    <div className={`relative border rounded-xl bg-white ${isBlocked ? 'border-[#FCA5A5] bg-[#FFFBFB]' : 'border-[#DDE1EE]'}`}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#F5F6FA] transition-colors text-left"
+        className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${isBlocked ? 'hover:bg-[#FEF2F2]' : 'hover:bg-[#F5F6FA]'}`}
       >
         <PatientAvatar
           firstName={group.firstName}
@@ -109,22 +278,36 @@ function PatientCard({ group }: { group: PatientGroup }) {
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-medium truncate">{group.name}</p>
-            {group.isActive && (
+            <p className={`text-sm font-medium truncate ${isBlocked ? 'text-[#8A8F9C]' : ''}`}>{group.name}</p>
+            {isBlocked && (
+              <span className="text-[10px] bg-[#FEE2E2] text-[#B91C1C] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 flex items-center gap-1">
+                🚫 Bloqueado
+              </span>
+            )}
+            {!isBlocked && group.isActive && (
               <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium flex-shrink-0">
                 ● Activo ahora
               </span>
             )}
           </div>
-          <p className="text-xs text-[#6B738A]">
+          <p className={`text-xs ${isBlocked ? 'text-[#A0A5B5]' : 'text-[#6B738A]'}`}>
             {group.total} consulta{group.total > 1 ? 's' : ''} · {group.completed} completada{group.completed !== 1 ? 's' : ''} · última {fmtFechaHora(group.lastAt)}
           </p>
         </div>
         <IconChevron open={open} />
       </button>
 
+      <div className="absolute right-3 top-3">
+        <BlockPatientMenu patientId={group.patientId} patientName={group.name} />
+      </div>
+
       {open && (
-        <div className="bg-[#FAFBFC] border-t border-[#DDE1EE] px-4 py-4 space-y-5">
+        <div className={`border-t px-4 py-4 space-y-5 ${isBlocked ? 'bg-[#FFF9F9] border-[#FCA5A5]' : 'bg-[#FAFBFC] border-[#DDE1EE]'}`}>
+          {isBlocked && (
+            <div className="flex items-start gap-2 bg-[#FEF2F2] border border-[#FCA5A5] rounded-lg px-3 py-2 text-xs text-[#991B1B]">
+              🚫 Bloqueaste integralmente a este paciente: no pueden chatear, no te ve en sus búsquedas y no puede agendar nuevas citas contigo. Tu historial clínico con él se conserva.
+            </div>
+          )}
           {/* Historial de consultas */}
           <div>
             <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">

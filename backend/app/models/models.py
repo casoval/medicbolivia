@@ -10,7 +10,7 @@ from typing import Optional, List
 
 from sqlalchemy import (
     String, Boolean, DateTime, Numeric, Integer,
-    Text, ForeignKey, Enum as SAEnum, JSON, ARRAY
+    Text, ForeignKey, Enum as SAEnum, JSON, ARRAY, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -367,6 +367,12 @@ class Consultation(Base):
     # que estaba vigente cuando se generó. Sirve también para que admin y
     # profesional vean con transparencia qué % se cobró en cada caso.
     commission_percent_applied: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    # Foto fija de PlatformSettings.chat_window_days vigente en el momento
+    # en que se crea la consulta. Si el admin cambia ese valor más tarde,
+    # esta consulta NO se recalcula — solo afecta a consultas nuevas
+    # creadas después del cambio. Null en consultas creadas antes de este
+    # campo (se usa el default de settings como fallback, ver services/chat.py).
+    chat_window_days_snapshot: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -700,6 +706,15 @@ class PlatformSettings(Base):
     alert_pending_payment: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     alert_low_rating: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     alert_new_professional: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # ── Chat interno paciente-profesional ─────────────
+    # Reemplaza gradualmente a settings.CHAT_WINDOW_DAYS (env var, requiere
+    # redeploy). Editable en caliente desde el panel admin. Aplica SOLO a
+    # consultas nuevas creadas a partir del cambio — ver
+    # Consultation.chat_window_days_snapshot.
+    chat_window_days: Mapped[int] = mapped_column(Integer, nullable=False, default=15)
+    # Activable/desactivable por rol, no un único flag global.
+    chat_attachments_enabled_patient: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    chat_attachments_enabled_professional: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow, default=datetime.utcnow)
 
 
@@ -996,12 +1011,42 @@ class ChatBlockScope(str, enum.Enum):
     GLOBAL = "GLOBAL"      # bloquea a cualquiera de contactarlo por chat
 
 
+class ChatBlockOrigin(str, enum.Enum):
+    # Botón dentro de la ventana de chat (ChatWindow): bloqueo puntual,
+    # solo afecta la mensajería. El paciente sigue viendo al profesional
+    # y puede seguir agendando citas con normalidad.
+    CHAT_WINDOW = "CHAT_WINDOW"
+    # Botón desde "Mis Pacientes" (solo profesional -> paciente): bloqueo
+    # integral, ver ProfessionalPatientVisibility más abajo. Corta chat +
+    # visibilidad en búsquedas + nuevas citas, todo junto.
+    PATIENT_LIST = "PATIENT_LIST"
+
+
+class ChatBlockReasonCategory(str, enum.Enum):
+    HARASSMENT = "HARASSMENT"
+    INAPPROPRIATE_CONTENT = "INAPPROPRIATE_CONTENT"
+    SPAM = "SPAM"
+    PROFESSIONAL_MISCONDUCT = "PROFESSIONAL_MISCONDUCT"
+    NO_SHOW_OR_ABUSE = "NO_SHOW_OR_ABUSE"
+    OTHER = "OTHER"
+
+
 class ChatBlock(Base):
     """
     blocked_id es NULL cuando scope=GLOBAL (el blocker no quiere que NADIE
     le escriba por chat interno, sin importar la consulta). Con
     scope=CONTACT, blocked_id es obligatorio y el bloqueo solo aplica
     entre blocker_id y blocked_id.
+
+    unblocked_at es un soft-delete: nunca se borra la fila físicamente,
+    para conservar el historial completo de quién bloqueó/desbloqueó y
+    cuándo (auditoría ante disputas). Un bloqueo se considera activo
+    únicamente si unblocked_at IS NULL — ver services/chat.py::is_blocked.
+
+    is_reported=True dispara la notificación al admin (ver
+    tasks/chat_tasks.py). Un bloqueo puede existir sin reporte (la
+    persona solo quiere cortar el chat) o con reporte (además quiere que
+    el equipo de MedicBolivia lo revise).
     """
     __tablename__ = "chat_blocks"
 
@@ -1009,8 +1054,84 @@ class ChatBlock(Base):
     blocker_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     blocked_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     scope: Mapped[str] = mapped_column(String(10), nullable=False)
+    origin: Mapped[str] = mapped_column(String(20), nullable=False, default=ChatBlockOrigin.CHAT_WINDOW.value)
     reason: Mapped[Optional[str]] = mapped_column(String(255))
+
+    # ── Reporte al admin (opcional) ──────────────────
+    is_reported: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reason_category: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    reason_text: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    admin_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    admin_reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    admin_reviewed_by_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    admin_resolution_notes: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+
+    # ── Auditoría de desbloqueo (soft-delete) ────────
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    unblocked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    unblocked_by_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
 
     blocker: Mapped["User"] = relationship(foreign_keys=[blocker_id])
     blocked: Mapped[Optional["User"]] = relationship(foreign_keys=[blocked_id])
+    admin_reviewed_by: Mapped[Optional["User"]] = relationship(foreign_keys=[admin_reviewed_by_id])
+    unblocked_by: Mapped[Optional["User"]] = relationship(foreign_keys=[unblocked_by_id])
+
+
+class ProfessionalPatientVisibility(Base):
+    """
+    Bloqueo INTEGRAL desde "Mis Pacientes" (solo profesional -> paciente).
+    Distinto del ChatBlock puntual: además de cortar el chat (se crea un
+    ChatBlock derivado automáticamente, ver services/chat.py), oculta al
+    profesional de las búsquedas/listados de ESE paciente puntual y le
+    impide agendar nuevas citas con él. El historial clínico ya generado
+    (recetas, notas, consultas pasadas) nunca se oculta.
+
+    Solo se permite crear este bloqueo si no hay citas pendientes entre
+    ambos (ver services/chat.py::assert_no_pending_appointments) — así se
+    evita cualquier ambigüedad sobre qué pasa con una cita ya agendada:
+    el profesional debe cancelarla primero por los medios normales.
+
+    restored_at es soft-delete, mismo patrón que ChatBlock.unblocked_at.
+    """
+    __tablename__ = "professional_patient_visibility"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id", ondelete="CASCADE"), nullable=False)
+    patient_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False)
+    hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    is_reported: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reason_category: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    reason_text: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    admin_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    admin_reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    admin_reviewed_by_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    admin_resolution_notes: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    restored_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    restored_by_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+
+    professional: Mapped["Professional"] = relationship(foreign_keys=[professional_id])
+    patient: Mapped["Patient"] = relationship(foreign_keys=[patient_id])
+
+    __table_args__ = (
+        UniqueConstraint("professional_id", "patient_id", name="uq_professional_patient_visibility"),
+    )
+
+
+class AdminAccessLog(Base):
+    """
+    Auditoría de acceso de un admin al contenido de una conversación de
+    chat reportada. Dato de salud sensible: se registra quién vio qué y
+    cuándo, aunque el propio admin tenga permiso para verlo.
+    """
+    __tablename__ = "admin_access_logs"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    admin_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    conversation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False)
+    accessed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    admin: Mapped["User"] = relationship(foreign_keys=[admin_id])
+    conversation: Mapped["ChatConversation"] = relationship(foreign_keys=[conversation_id])

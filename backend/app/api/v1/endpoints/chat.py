@@ -28,10 +28,12 @@ from app.models.models import (
 from app.schemas.schemas import (
     ChatConversationResponse, ChatParticipantResponse, ChatMessageResponse,
     ChatSendMessageRequest, ChatBlockRequest, ChatBlockResponse,
+    ChatGlobalBlockRequest, ChatGlobalBlockStatusResponse,
 )
 from app.services.chat import (
     is_blocked, get_conversation_for_user, other_participant_id,
-    is_conversation_writable,
+    is_conversation_writable, create_chat_block, unblock_chat,
+    get_chat_attachments_enabled, get_my_active_blocks, RateLimitError,
 )
 from app.services.storage import upload_chat_attachment_to_r2, get_presigned_url
 from app.services.notify import notify_user
@@ -103,6 +105,7 @@ async def list_conversations(
     for conv in conversations:
         other_id = other_participant_id(conv, current_user.id)
         other = await _build_participant_response(db, other_id)
+        contact_blocked, global_blocked = await get_my_active_blocks(db, current_user.id, other_id)
         responses.append(ChatConversationResponse(
             id=conv.id,
             consultation_id=conv.consultation_id,
@@ -112,6 +115,8 @@ async def list_conversations(
             last_message_preview=conv.last_message_preview,
             other_participant=other,
             created_at=conv.created_at,
+            my_active_block_contact=contact_blocked,
+            my_active_block_global=global_blocked,
         ))
     return responses
 
@@ -161,7 +166,17 @@ async def send_attachment(
 
     other_id = other_participant_id(conv, current_user.id)
     if await is_blocked(db, current_user.id, other_id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "No se puede enviar: hay un bloqueo activo entre ambos usuarios")
+        # Mensaje genérico a propósito, ver nota en el WebSocket más abajo.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Esta conversación no está disponible en este momento")
+
+    # Activable/desactivable por rol desde el panel admin (Configuración > Chat).
+    patient_row = (await db.execute(select(Patient).where(Patient.user_id == current_user.id))).scalar_one_or_none()
+    current_role = "PATIENT" if patient_row else "PROFESSIONAL"
+    if not await get_chat_attachments_enabled(db, current_role):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "La subida de archivos por chat está deshabilitada para tu tipo de cuenta en este momento.",
+        )
 
     if file.content_type not in ALLOWED_ATTACHMENT_TYPES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tipo de archivo no permitido. Solo imágenes (JPEG, PNG, WEBP) o PDF")
@@ -212,6 +227,74 @@ async def send_attachment(
 # REST — bloqueo
 # ─────────────────────────────────────────────────────
 
+@router.get("/block-all/status", response_model=ChatGlobalBlockStatusResponse)
+async def get_global_block_status(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Para que el listado general de Mensajes sepa si mostrar
+    'Desactivar mi chat y reportar' o 'Reactivar mi chat'."""
+    result = await db.execute(
+        select(ChatBlock).where(
+            ChatBlock.blocker_id == current_user.id,
+            ChatBlock.scope == "GLOBAL",
+            ChatBlock.unblocked_at.is_(None),
+        ).limit(1)
+    )
+    return ChatGlobalBlockStatusResponse(blocked=result.scalar_one_or_none() is not None)
+
+
+@router.post("/block-all", response_model=ChatBlockResponse)
+async def block_all(
+    data: ChatGlobalBlockRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Desactiva TODO el chat interno del usuario (no depende de ninguna
+    conversación puntual — se activa desde el listado general de
+    Mensajes, ya que es una acción general, no del chat con una persona
+    específica). Opcionalmente reporta el caso al equipo de MedicBolivia.
+    """
+    try:
+        chat_block = await create_chat_block(
+            db,
+            blocker_id=current_user.id,
+            blocked_id=None,
+            scope="GLOBAL",
+            is_reported=data.is_reported,
+            reason_category=data.reason_category,
+            reason_text=data.reason_text,
+        )
+    except RateLimitError as e:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, e.message)
+
+    logger.info(f"🚫 Chat GLOBAL desactivado: blocker={current_user.id} reported={data.is_reported}")
+    if data.is_reported:
+        logger.info(f"🚩 Reporte de chat generado para revisión admin: chat_block_id={chat_block.id}")
+        from app.tasks.chat_tasks import notify_admin_of_chat_report
+        notify_admin_of_chat_report.delay(chat_block.id)
+
+    return ChatBlockResponse.model_validate(chat_block)
+
+
+@router.delete("/block-all", status_code=status.HTTP_204_NO_CONTENT)
+async def unblock_all(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Reactiva el chat general. Ojo: esto NO reactiva conversaciones cuya
+    propia ventana de 15 días ya venció — esa restricción es por
+    conversación (ver is_conversation_writable) e independiente de este
+    interruptor general.
+    """
+    await unblock_chat(
+        db, blocker_id=current_user.id, scope="GLOBAL", blocked_id=None,
+        unblocked_by_id=current_user.id,
+    )
+
+
 @router.post("/conversations/{conversation_id}/block", response_model=ChatBlockResponse)
 async def block(
     conversation_id: str,
@@ -219,22 +302,40 @@ async def block(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # GLOBAL vive en /chat/block-all (acción general, no de una
+    # conversación puntual) — ver esa sección más arriba.
+    if data.scope != "CONTACT":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            'Este endpoint solo acepta scope="CONTACT". Para desactivar todo tu chat, usá /chat/block-all.',
+        )
+
     conv = await get_conversation_for_user(db, conversation_id, current_user.id)
     if not conv:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversación no encontrada")
 
     other_id = other_participant_id(conv, current_user.id)
 
-    chat_block = ChatBlock(
-        blocker_id=current_user.id,
-        blocked_id=other_id if data.scope == "CONTACT" else None,
-        scope=data.scope,
-        reason=data.reason,
-    )
-    db.add(chat_block)
-    await db.flush()
+    try:
+        chat_block = await create_chat_block(
+            db,
+            blocker_id=current_user.id,
+            blocked_id=other_id,
+            scope="CONTACT",
+            is_reported=data.is_reported,
+            reason_category=data.reason_category,
+            reason_text=data.reason_text,
+        )
+    except RateLimitError as e:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, e.message)
 
-    logger.info(f"🚫 Chat block creado: blocker={current_user.id} scope={data.scope} blocked={other_id if data.scope == 'CONTACT' else 'GLOBAL'}")
+    logger.info(f"🚫 Chat block creado: blocker={current_user.id} scope=CONTACT blocked={other_id} reported={data.is_reported}")
+    if data.is_reported:
+        logger.info(f"🚩 Reporte de chat generado para revisión admin: chat_block_id={chat_block.id}")
+        # La notificación in-app/email al equipo admin se dispara de forma
+        # asíncrona (Celery) para no demorar la respuesta al usuario.
+        from app.tasks.chat_tasks import notify_admin_of_chat_report
+        notify_admin_of_chat_report.delay(chat_block.id)
 
     return ChatBlockResponse.model_validate(chat_block)
 
@@ -242,22 +343,29 @@ async def block(
 @router.delete("/conversations/{conversation_id}/block", status_code=status.HTTP_204_NO_CONTENT)
 async def unblock(
     conversation_id: str,
-    scope: str = Query(..., description='"CONTACT" o "GLOBAL"'),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Desbloqueo puntual (CONTACT). Para el bloqueo general (GLOBAL),
+    ver DELETE /chat/block-all."""
     conv = await get_conversation_for_user(db, conversation_id, current_user.id)
     if not conv:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversación no encontrada")
 
-    other_id = other_participant_id(conv, current_user.id)
+    # Regla de los 15 días: no se puede "reactivar" una conversación cuya
+    # ventana de chat ya venció desbloqueándola. El bloqueo se levanta
+    # igual (por prolijidad de datos), pero seguirá en modo solo lectura.
+    if conv.expires_at and conv.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "La ventana de chat de esta conversación ya venció; desbloquear no la reactivará.",
+        )
 
-    query = select(ChatBlock).where(ChatBlock.blocker_id == current_user.id, ChatBlock.scope == scope)
-    if scope == "CONTACT":
-        query = query.where(ChatBlock.blocked_id == other_id)
-    result = await db.execute(query)
-    for b in result.scalars().all():
-        await db.delete(b)
+    other_id = other_participant_id(conv, current_user.id)
+    await unblock_chat(
+        db, blocker_id=current_user.id, scope="CONTACT",
+        blocked_id=other_id, unblocked_by_id=current_user.id,
+    )
 
 
 # ─────────────────────────────────────────────────────
@@ -305,11 +413,15 @@ async def chat_websocket(websocket: WebSocket, conversation_id: str, token: str 
                 # bloquearse a mitad de la sesión abierta.
                 conv = await get_conversation_for_user(db, conversation_id, current_user.id)
                 if not conv or not is_conversation_writable(conv):
-                    await websocket.send_json({"type": "error", "code": "conversation_closed"})
+                    await websocket.send_json({"type": "error", "code": "chat_unavailable"})
                     continue
 
+                # Código genérico a propósito: nunca se le confirma al
+                # remitente si el motivo es un bloqueo puntual, un bloqueo
+                # global, o el bloqueo integral desde "Mis Pacientes" — el
+                # frontend siempre debe mostrar el mismo texto neutro.
                 if await is_blocked(db, current_user.id, other_id):
-                    await websocket.send_json({"type": "error", "code": "blocked"})
+                    await websocket.send_json({"type": "error", "code": "chat_unavailable"})
                     continue
 
                 content = (data.get("content") or "").strip()

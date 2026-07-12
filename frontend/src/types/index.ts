@@ -241,6 +241,27 @@ export interface ChatConversationSummary {
   last_message_preview: string | null
   other_participant: ChatParticipant
   created_at: string
+  /** Si YO tengo activo un bloqueo puntual (CONTACT) contra el otro participante */
+  my_active_block_contact: boolean
+  /** Si YO tengo activo el bloqueo global (GLOBAL) de todo mi chat */
+  my_active_block_global: boolean
+}
+
+export type ChatReasonCategory =
+  | 'HARASSMENT'
+  | 'INAPPROPRIATE_CONTENT'
+  | 'SPAM'
+  | 'PROFESSIONAL_MISCONDUCT'
+  | 'NO_SHOW_OR_ABUSE'
+  | 'OTHER'
+
+export const CHAT_REASON_CATEGORY_LABELS: Record<ChatReasonCategory, string> = {
+  HARASSMENT: 'Acoso',
+  INAPPROPRIATE_CONTENT: 'Contenido inapropiado',
+  SPAM: 'Spam',
+  PROFESSIONAL_MISCONDUCT: 'Mala conducta profesional',
+  NO_SHOW_OR_ABUSE: 'Inasistencia o abuso',
+  OTHER: 'Otro',
 }
 
 export interface ChatMessage {

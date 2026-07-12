@@ -13,8 +13,12 @@ const RECONNECT_DELAY_MS = 2500
 export function useChatSocket(conversationId: string | null, currentUserId: string | undefined) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [connected, setConnected] = useState(false)
-  const [blocked, setBlocked] = useState(false)
-  const [closedReason, setClosedReason] = useState<'conversation_closed' | null>(null)
+  // Un solo estado genérico a propósito: el backend nunca distingue si el
+  // motivo es un bloqueo puntual, un bloqueo global, el bloqueo integral
+  // desde "Mis Pacientes", o que la conversación venció — todos llegan
+  // con el mismo code="chat_unavailable" (ver endpoints/chat.py). El
+  // frontend jamás debe intentar adivinar cuál fue.
+  const [chatUnavailable, setChatUnavailable] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const shouldReconnect = useRef(true)
@@ -39,8 +43,7 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
           const { type, ...msg } = data
           setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
         } else if (data.type === 'error') {
-          if (data.code === 'blocked') setBlocked(true)
-          if (data.code === 'conversation_closed') setClosedReason('conversation_closed')
+          if (data.code === 'chat_unavailable') setChatUnavailable(true)
         }
       }
 
@@ -81,5 +84,5 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
     setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
   }, [])
 
-  return { messages, connected, blocked, closedReason, sendMessage, seedMessages, addLocalMessage }
+  return { messages, connected, chatUnavailable, sendMessage, seedMessages, addLocalMessage }
 }

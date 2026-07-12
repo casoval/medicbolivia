@@ -432,6 +432,14 @@ async def create_consultation(
     if not professional:
         raise HTTPException(status_code=404, detail="Profesional no encontrado")
 
+    # Bloqueo integral desde "Mis Pacientes": si el profesional bloqueó a
+    # este paciente puntual, no se puede agendar una cita nueva con él,
+    # aunque el paciente llegue directo por professional_id (sin pasar
+    # por el directorio, donde ya no lo vería listado).
+    from app.services.chat import is_professional_hidden_for_patient
+    if await is_professional_hidden_for_patient(db, professional.id, patient.id):
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
     if professional.status != ProfessionalStatus.APPROVED:
         raise HTTPException(status_code=400, detail="El profesional no está verificado")
 

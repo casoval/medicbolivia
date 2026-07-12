@@ -3,11 +3,12 @@ app/core/dependencies.py
 Dependencias de FastAPI: autenticación, roles, base de datos.
 Uso: current_user: User = Depends(get_current_user)
 """
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from jose import JWTError
+from typing import Optional
 
 from app.db.database import get_db
 from app.core.security import decode_token
@@ -67,6 +68,35 @@ async def get_current_user(
             },
         )
 
+    return user
+
+
+async def get_current_user_optional(
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """
+    Igual que get_current_user, pero NO lanza 401 si no hay token o es
+    inválido — retorna None. Usada en endpoints públicos (ej. directorio
+    de profesionales) que deben aplicar filtros extra (como
+    ProfessionalPatientVisibility) SOLO si el visitante está logueado
+    como paciente, sin romper el acceso anónimo al resto del directorio.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        payload = decode_token(token)
+        user_id: str = payload.get("sub")
+        if not user_id:
+            return None
+    except JWTError:
+        return None
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or user.status == UserStatus.SUSPENDED:
+        return None
     return user
 
 

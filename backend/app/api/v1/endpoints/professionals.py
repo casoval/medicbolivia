@@ -12,20 +12,25 @@ from zoneinfo import ZoneInfo
 from loguru import logger
 
 from app.db.database import get_db
-from app.core.dependencies import get_current_user, get_current_professional, get_current_admin
+from app.core.dependencies import get_current_user, get_current_professional, get_current_admin, get_current_user_optional
 from app.models.models import (
-    User, Professional, ProfessionalDoc, ProfessionalStatus,
+    User, UserRole, Professional, ProfessionalDoc, ProfessionalStatus,
     AvailabilityMode, DocType, DocStatus, AuditLog, Notification,
     Consultation, ConsultationStatus, ConsultationType, Schedule,
-    Payment, PaymentStatus, Patient
+    Payment, PaymentStatus, Patient, ProfessionalPatientVisibility
 )
 from app.schemas.schemas import (
     ProfessionalPublicResponse, ProfessionalUpdateRequest,
     PriceUpdateRequest, AvailabilityUpdateRequest, DocReviewRequest,
-    ScheduleSetRequest, ScheduleResponse
+    ScheduleSetRequest, ScheduleResponse, PatientBlockRequest, PatientBlockResponse,
 )
 from app.services.storage import upload_document_to_r2, upload_photo_to_r2
 from app.services.commission import get_professional_commission_summary
+from app.services.chat import (
+    assert_no_pending_appointments, block_patient_integrally,
+    unblock_patient_integrally, get_visibility_block, PendingAppointmentsError,
+    RateLimitError,
+)
 
 router = APIRouter()
 
@@ -84,6 +89,7 @@ async def list_professionals(
     specialty: Optional[str] = Query(None, description="Filtrar por especialidad"),
     available_now: bool = Query(False, description="Solo los disponibles ahora"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     from sqlalchemy.orm import selectinload
@@ -113,6 +119,24 @@ async def list_professionals(
 
     result = await db.execute(query)
     professionals = result.scalars().all()
+
+    # Si quien consulta es un paciente logueado, excluir los profesionales
+    # que lo bloquearon integralmente desde "Mis Pacientes" (ver
+    # ProfessionalPatientVisibility / services/chat.py). Para visitantes
+    # anónimos o profesionales/admin logueados, no aplica ningún filtro.
+    if current_user and current_user.role == UserRole.PATIENT:
+        patient_row = (await db.execute(select(Patient).where(Patient.user_id == current_user.id))).scalar_one_or_none()
+        if patient_row:
+            hidden_result = await db.execute(
+                select(ProfessionalPatientVisibility.professional_id).where(
+                    ProfessionalPatientVisibility.patient_id == patient_row.id,
+                    ProfessionalPatientVisibility.hidden.is_(True),
+                    ProfessionalPatientVisibility.restored_at.is_(None),
+                )
+            )
+            hidden_ids = {row[0] for row in hidden_result.all()}
+            if hidden_ids:
+                professionals = [p for p in professionals if p.id not in hidden_ids]
 
     # Profesionales con una consulta EN CURSO ahora mismo (inmediata o
     # agendada) — no deben recibir nuevas solicitudes inmediatas mientras
@@ -971,3 +995,130 @@ async def verify_professional(
     logger.info(f"Profesional {professional_id} → {new_status} por admin {current_user.id}")
 
     return {"message": f"Profesional {new_status.lower()}", "professional_id": professional_id}
+
+
+# ─────────────────────────────────────────────────────
+# "Mis Pacientes" — bloqueo INTEGRAL (solo profesional -> paciente)
+#
+# A diferencia del bloqueo puntual dentro de la ventana de chat (que
+# solo corta la mensajería, ver endpoints/chat.py), este bloqueo es
+# integral: el profesional desaparece de las búsquedas/listados de ESE
+# paciente puntual, no puede agendar nuevas citas con él, y el chat
+# también queda cortado — todo junto, como un solo efecto. El historial
+# clínico ya generado (recetas, notas) nunca se oculta.
+#
+# Precondición: no puede haber citas pendientes entre ambos — el
+# profesional debe cancelarlas primero por los medios normales.
+# ─────────────────────────────────────────────────────
+
+@router.get(
+    "/patients/{patient_id}/block",
+    summary="[Profesional] Ver si tengo bloqueado integralmente a este paciente",
+)
+async def get_patient_block_status(
+    patient_id: str,
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db),
+):
+    prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Perfil profesional no encontrado")
+
+    block = await get_visibility_block(db, professional.id, patient_id)
+    if not block:
+        return {"blocked": False}
+    return {"blocked": True, **PatientBlockResponse.model_validate(block).model_dump()}
+
+
+@router.post(
+    "/patients/{patient_id}/block",
+    response_model=PatientBlockResponse,
+    summary="[Profesional] Bloquear integralmente a un paciente propio (opcionalmente reportar)",
+)
+async def block_patient(
+    patient_id: str,
+    data: PatientBlockRequest,
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db),
+):
+    prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Perfil profesional no encontrado")
+
+    patient_result = await db.execute(select(Patient).where(Patient.id == patient_id))
+    patient = patient_result.scalar_one_or_none()
+    if not patient:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Paciente no encontrado")
+
+    try:
+        await assert_no_pending_appointments(db, professional.id, patient_id)
+    except Exception as e:
+        # PendingAppointmentsError trae el mensaje ya listo para el usuario.
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+
+    try:
+        visibility = await block_patient_integrally(
+            db,
+            professional_id=professional.id,
+            professional_user_id=current_user.id,
+            patient_id=patient_id,
+            patient_user_id=patient.user_id,
+            is_reported=data.is_reported,
+            reason_category=data.reason_category,
+            reason_text=data.reason_text,
+        )
+    except RateLimitError as e:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, e.message)
+
+    await db.commit()
+    await db.refresh(visibility)
+
+    logger.info(
+        f"🚫 Bloqueo integral creado: profesional={professional.id} paciente={patient_id} "
+        f"reported={data.is_reported}"
+    )
+    if data.is_reported:
+        from app.tasks.chat_tasks import notify_admin_of_patient_visibility_report
+        notify_admin_of_patient_visibility_report.delay(visibility.id)
+
+    return PatientBlockResponse.model_validate(visibility)
+
+
+@router.delete(
+    "/patients/{patient_id}/block",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="[Profesional] Desbloquear a un paciente previamente bloqueado de forma integral",
+)
+async def unblock_patient(
+    patient_id: str,
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db),
+):
+    prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Perfil profesional no encontrado")
+
+    patient_result = await db.execute(select(Patient).where(Patient.id == patient_id))
+    patient = patient_result.scalar_one_or_none()
+    if not patient:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Paciente no encontrado")
+
+    # Nota: a diferencia del desbloqueo de chat puntual, acá SÍ se permite
+    # desbloquear aunque la última conversación haya vencido — restaura
+    # la visibilidad y permite agendar una cita nueva, que generará su
+    # propia conversación con su propia ventana de 15 días. El chat
+    # derivado (ChatBlock scope=CONTACT) respeta igual la regla de los
+    # 15 días si existiera una conversación activa por reactivar.
+    await unblock_patient_integrally(
+        db,
+        professional_id=professional.id,
+        professional_user_id=current_user.id,
+        patient_id=patient_id,
+        patient_user_id=patient.user_id,
+        unblocked_by_id=current_user.id,
+    )
+    await db.commit()
+    logger.info(f"✅ Bloqueo integral levantado: profesional={professional.id} paciente={patient_id}")

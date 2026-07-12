@@ -62,7 +62,7 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
     queryFn: () => chatAPI.getMessages(conversation.id),
   })
 
-  const { messages, connected, blocked, closedReason, sendMessage, seedMessages, addLocalMessage } =
+  const { messages, connected, chatUnavailable, sendMessage, seedMessages, addLocalMessage } =
     useChatSocket(conversation.id, currentUserId)
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
-  const writable = conversation.status === 'ACTIVE' && !blocked && !closedReason
+  const writable = conversation.status === 'ACTIVE' && !chatUnavailable
   const diasRestantes = fmtDiasRestantes(conversation.expires_at)
 
   function handleSend() {
@@ -145,11 +145,32 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [previewUrl])
 
-  async function handleBlock(scope: 'CONTACT' | 'GLOBAL') {
-    const label = scope === 'CONTACT' ? `a ${conversation.other_participant.full_name}` : 'a cualquiera por este chat'
-    if (!confirm(`¿Seguro que quieres bloquear ${label}? Ya no podrán escribirse por el chat interno.`)) return
+  const [confirmBlockOpen, setConfirmBlockOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  // La ventana de chat de esta conversación ya venció: no se puede
+  // "reactivar" desbloqueando (regla de los 15 días). El botón de
+  // Desbloquear se deshabilita en ese caso.
+  const windowExpired = conversation.status !== 'ACTIVE'
+    || (conversation.expires_at ? new Date(conversation.expires_at.endsWith('Z') ? conversation.expires_at : conversation.expires_at + 'Z') < new Date() : false)
+
+  async function handleConfirmBlock() {
+    setSubmitting(true)
     try {
-      await chatAPI.block(conversation.id, scope)
+      await chatAPI.block(conversation.id)
+      queryClient.invalidateQueries({ queryKey: ['chat-conversations'] })
+      setConfirmBlockOpen(false)
+      setMenuOpen(false)
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleUnblock() {
+    try {
+      await chatAPI.unblock(conversation.id)
       queryClient.invalidateQueries({ queryKey: ['chat-conversations'] })
       setMenuOpen(false)
     } catch (err) {
@@ -186,22 +207,57 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
             <IconDots />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-10 w-64 bg-white border border-[#E5E7EB] rounded-xl shadow-lg py-1 z-10">
-              <button
-                onClick={() => handleBlock('CONTACT')}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] text-left"
-              >
-                <IconBan /> Bloquear a {conversation.other_participant.full_name.split(' ')[0]}
-              </button>
-              <button
-                onClick={() => handleBlock('GLOBAL')}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] text-left"
-              >
-                <IconBan /> Bloquear y reportar
-              </button>
+            <div className="absolute right-0 top-10 w-72 bg-white border border-[#E5E7EB] rounded-xl shadow-lg py-1 z-10">
+              {conversation.my_active_block_contact ? (
+                <button
+                  onClick={handleUnblock}
+                  disabled={windowExpired}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#185FA5] hover:bg-[#F5F6FA] text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={windowExpired ? 'La ventana de chat de esta conversación ya venció' : undefined}
+                >
+                  <IconBan /> Desbloquear a {conversation.other_participant.full_name.split(' ')[0]}
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setConfirmBlockOpen(true); setMenuOpen(false) }}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] text-left"
+                >
+                  <IconBan /> Bloquear a {conversation.other_participant.full_name.split(' ')[0]}
+                </button>
+              )}
             </div>
           )}
         </div>
+
+        {confirmBlockOpen && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setConfirmBlockOpen(false)}>
+            <div className="bg-white rounded-xl max-w-sm w-full p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div>
+                <h3 className="text-sm font-semibold text-[#111827]">
+                  ¿Bloquear a {conversation.other_participant.full_name}?
+                </h3>
+                <p className="text-xs text-[#6B7280] mt-1">
+                  Ya no podrán escribirse por el chat interno. Tus demás conversaciones no se ven afectadas.
+                </p>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  onClick={() => setConfirmBlockOpen(false)}
+                  className="px-4 py-2 text-sm text-[#6B7280] hover:bg-[#F5F6FA] rounded-lg"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmBlock}
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm text-white bg-[#DC2626] hover:bg-[#B91C1C] rounded-lg disabled:opacity-50"
+                >
+                  {submitting ? 'Bloqueando...' : 'Bloquear'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Historial */}
@@ -263,9 +319,7 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
 
       {!writable && (
         <div className="px-4 py-3 border-t border-[#E5E7EB] bg-[#F5F6FA] text-xs text-[#6B7280] text-center">
-          {blocked
-            ? 'No se pueden enviar mensajes: hay un bloqueo activo entre ambos usuarios.'
-            : 'Esta conversación ya no admite nuevos mensajes. El historial sigue disponible.'}
+          Esta conversación no está disponible en este momento. El historial sigue visible.
         </div>
       )}
 

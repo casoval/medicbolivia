@@ -231,6 +231,12 @@ export const ADMIN_NAV: NavItem[] = [
     description: 'Configura el agente de IA y el canal de WhatsApp',
   },
   {
+    label: 'Reportes de chat',
+    href: '/admin/chat-reports',
+    icon: <IconChat />,
+    description: 'Bloqueos reportados por pacientes y profesionales',
+  },
+  {
     label: 'Auditoría',
     href: '/admin/logs',
     icon: <IconLog />,

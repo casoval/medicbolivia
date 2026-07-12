@@ -23,7 +23,7 @@ export default function PatientChatConversationPage() {
 
   return (
     <DashboardLayout navItems={NAV} activeHref="/patient/chat" role="PATIENT">
-      <div className="max-w-5xl mx-auto grid md:grid-cols-[320px_1fr] gap-4">
+      <div className="max-w-5xl grid md:grid-cols-[320px_1fr] gap-4">
         <div className="hidden md:block bg-white rounded-xl border border-[#E5E7EB] overflow-hidden h-[calc(100vh-140px)] overflow-y-auto">
           <ChatConversationList activeConversationId={conversationId} basePath="/patient/chat" />
         </div>

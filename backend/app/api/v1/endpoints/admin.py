@@ -3,9 +3,9 @@ app/api/v1/endpoints/admin.py
 Endpoints del panel de administración.
 Requieren rol ADMIN.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, timedelta
@@ -24,6 +24,7 @@ from app.models.models import (
     ProfessionalStatus, ConsultationStatus, ConsultationType, PaymentStatus, DocStatus, UserStatus,
     Rating, ClinicalNote, ProfessionalPenaltyReset, Earning, Prescription,
     CommissionPeriod, CommissionScope,
+    ChatBlock, ProfessionalPatientVisibility, ChatConversation, AdminAccessLog,
 )
 from app.schemas.schemas import DocReviewRequest, RefundRequest, DisputeResolveRequest
 from app.services.payment import process_refund
@@ -72,6 +73,13 @@ class PlatformSettingsUpdate(BaseModel):
     open_registration_patients: Optional[bool] = None
     open_registration_professionals: Optional[bool] = None
     maintenance_mode: Optional[bool] = None
+    # ── Chat interno ──────────────────────────────────
+    # Aplica solo a consultas NUEVAS creadas a partir de este cambio
+    # (ver Consultation.chat_window_days_snapshot); no recalcula
+    # conversaciones ya activas o cerradas.
+    chat_window_days: Optional[int] = Field(None, ge=1, le=90)
+    chat_attachments_enabled_patient: Optional[bool] = None
+    chat_attachments_enabled_professional: Optional[bool] = None
 
 
 async def _get_or_create_settings(db: AsyncSession) -> PlatformSettings:
@@ -93,6 +101,9 @@ def _settings_to_dict(s: PlatformSettings) -> dict:
         "open_registration_patients":        s.open_registration_patients,
         "open_registration_professionals":   s.open_registration_professionals,
         "maintenance_mode":                  s.maintenance_mode,
+        "chat_window_days":                  s.chat_window_days,
+        "chat_attachments_enabled_patient":       s.chat_attachments_enabled_patient,
+        "chat_attachments_enabled_professional":  s.chat_attachments_enabled_professional,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
 
@@ -1609,3 +1620,124 @@ async def get_system_info(current_user=Depends(get_current_admin)):
         "background_jobs":     "Celery + Redis",
         "server_time_utc":     datetime.utcnow().isoformat(),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Chat > Reportes — panel de revisión de bloqueos reportados
+# (tanto los que vienen de ChatBlock/is_reported=True como los de
+# ProfessionalPatientVisibility/is_reported=True, unificados en una
+# sola vista para el admin)
+# ═══════════════════════════════════════════════════════════════════
+
+def _report_to_dict(row, kind: str) -> dict:
+    return {
+        "id": row.id,
+        "kind": kind,  # "CHAT_BLOCK" | "PATIENT_VISIBILITY"
+        "reason_category": row.reason_category,
+        "reason_text": row.reason_text,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "admin_reviewed_at": row.admin_reviewed_at.isoformat() if row.admin_reviewed_at else None,
+        "admin_reviewed_by_id": row.admin_reviewed_by_id,
+        "admin_resolution_notes": row.admin_resolution_notes,
+        "status": "reviewed" if row.admin_reviewed_at else "pending",
+    }
+
+
+@router.get("/chat-reports", summary="[Admin] Listar reportes de chat (bloqueos con is_reported=True)")
+async def list_chat_reports(
+    report_status: str = Query("pending", description='"pending", "reviewed" o "all"'),
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    def status_filter(model):
+        if report_status == "pending":
+            return [model.is_reported.is_(True), model.admin_reviewed_at.is_(None)]
+        if report_status == "reviewed":
+            return [model.is_reported.is_(True), model.admin_reviewed_at.isnot(None)]
+        return [model.is_reported.is_(True)]
+
+    blocks_result = await db.execute(select(ChatBlock).where(*status_filter(ChatBlock)))
+    visibility_result = await db.execute(select(ProfessionalPatientVisibility).where(*status_filter(ProfessionalPatientVisibility)))
+
+    reports = (
+        [_report_to_dict(b, "CHAT_BLOCK") for b in blocks_result.scalars().all()]
+        + [_report_to_dict(v, "PATIENT_VISIBILITY") for v in visibility_result.scalars().all()]
+    )
+    reports.sort(key=lambda r: r["created_at"] or "", reverse=True)
+    return reports
+
+
+@router.get("/chat-reports/{kind}/{report_id}", summary="[Admin] Ver detalle de un reporte (con auditoría de acceso)")
+async def get_chat_report_detail(
+    kind: str, report_id: str,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if kind == "CHAT_BLOCK":
+        result = await db.execute(select(ChatBlock).where(ChatBlock.id == report_id))
+    elif kind == "PATIENT_VISIBILITY":
+        result = await db.execute(select(ProfessionalPatientVisibility).where(ProfessionalPatientVisibility.id == report_id))
+    else:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'kind debe ser "CHAT_BLOCK" o "PATIENT_VISIBILITY"')
+
+    row = result.scalar_one_or_none()
+    if not row or not row.is_reported:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Reporte no encontrado")
+
+    # Auditoría: solo se registra acceso a contenido de conversación real
+    # (CHAT_BLOCK sí referencia mensajería). El registro de visibilidad
+    # (PATIENT_VISIBILITY) no expone contenido de chat en sí, así que no
+    # requiere este log.
+    if kind == "CHAT_BLOCK":
+        conv_result = await db.execute(
+            select(ChatConversation).where(
+                or_(
+                    and_(ChatConversation.patient_user_id == row.blocker_id, ChatConversation.professional_user_id == row.blocked_id),
+                    and_(ChatConversation.patient_user_id == row.blocked_id, ChatConversation.professional_user_id == row.blocker_id),
+                )
+            )
+        )
+        conv = conv_result.scalars().first()
+        if conv:
+            db.add(AdminAccessLog(admin_id=current_user.id, conversation_id=conv.id))
+            await db.commit()
+
+    return _report_to_dict(row, kind)
+
+
+class ChatReportResolutionRequest(BaseModel):
+    resolution_notes: str = Field(..., min_length=1, max_length=1000)
+
+
+@router.post("/chat-reports/{kind}/{report_id}/review", summary="[Admin] Marcar un reporte como revisado")
+async def review_chat_report(
+    kind: str, report_id: str,
+    data: ChatReportResolutionRequest,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if kind == "CHAT_BLOCK":
+        result = await db.execute(select(ChatBlock).where(ChatBlock.id == report_id))
+    elif kind == "PATIENT_VISIBILITY":
+        result = await db.execute(select(ProfessionalPatientVisibility).where(ProfessionalPatientVisibility.id == report_id))
+    else:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'kind debe ser "CHAT_BLOCK" o "PATIENT_VISIBILITY"')
+
+    row = result.scalar_one_or_none()
+    if not row or not row.is_reported:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Reporte no encontrado")
+
+    row.admin_reviewed_at = datetime.utcnow()
+    row.admin_reviewed_by_id = current_user.id
+    row.admin_resolution_notes = data.resolution_notes
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="CHAT_REPORT_REVIEWED",
+        entity_type=kind,
+        entity_id=row.id,
+        metadata_={"resolution_notes": data.resolution_notes},
+    ))
+    await db.commit()
+    logger.info(f"✅ Reporte de chat revisado: kind={kind} id={report_id} admin={current_user.id}")
+    return _report_to_dict(row, kind)

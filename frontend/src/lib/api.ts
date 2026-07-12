@@ -3,7 +3,7 @@ import axios, { AxiosError } from 'axios'
 import type {
   AuthResponse, User, Professional, Consultation,
   Payment, Prescription, AgentResponse, Rating, FAQ,
-  ChatConversationSummary, ChatMessage, ChatBlockScope,
+  ChatConversationSummary, ChatMessage, ChatReasonCategory,
 } from '@/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'
@@ -31,12 +31,27 @@ export interface SystemInfo {
   server_time_utc: string
 }
 
+export interface ChatReport {
+  id: string
+  kind: 'CHAT_BLOCK' | 'PATIENT_VISIBILITY'
+  reason_category: string | null
+  reason_text: string | null
+  created_at: string | null
+  admin_reviewed_at: string | null
+  admin_reviewed_by_id: string | null
+  admin_resolution_notes: string | null
+  status: 'pending' | 'reviewed'
+}
+
 export interface PlatformSettings {
   app_name: string
   commission_percent: number
   open_registration_patients: boolean
   open_registration_professionals: boolean
   maintenance_mode: boolean
+  chat_window_days: number
+  chat_attachments_enabled_patient: boolean
+  chat_attachments_enabled_professional: boolean
   updated_at: string | null
 }
 
@@ -46,6 +61,9 @@ export interface PlatformSettingsUpdate {
   open_registration_patients?: boolean
   open_registration_professionals?: boolean
   maintenance_mode?: boolean
+  chat_window_days?: number
+  chat_attachments_enabled_patient?: boolean
+  chat_attachments_enabled_professional?: boolean
 }
 
 // ── Comisión por período / por profesional ──
@@ -859,6 +877,17 @@ export const adminAPI = {
   getSystemInfo: () =>
     api.get<SystemInfo>('/admin/system-info').then(r => r.data),
 
+  // Chat > Reportes — bloqueos con is_reported=True (tanto del chat puntual
+  // como del bloqueo integral desde "Mis Pacientes"), unificados.
+  listChatReports: (reportStatus: 'pending' | 'reviewed' | 'all' = 'pending') =>
+    api.get<ChatReport[]>('/admin/chat-reports', { params: { report_status: reportStatus } }).then(r => r.data),
+
+  getChatReportDetail: (kind: 'CHAT_BLOCK' | 'PATIENT_VISIBILITY', id: string) =>
+    api.get<ChatReport>(`/admin/chat-reports/${kind}/${id}`).then(r => r.data),
+
+  reviewChatReport: (kind: 'CHAT_BLOCK' | 'PATIENT_VISIBILITY', id: string, resolutionNotes: string) =>
+    api.post<ChatReport>(`/admin/chat-reports/${kind}/${id}/review`, { resolution_notes: resolutionNotes }).then(r => r.data),
+
   getSettings: () =>
     api.get<PlatformSettings>('/admin/settings').then(r => r.data),
 
@@ -967,6 +996,21 @@ export const chatAPI = {
   listConversations: () =>
     api.get<ChatConversationSummary[]>('/chat/conversations').then(r => r.data),
 
+  // Bloqueo GLOBAL: acción general del usuario, no depende de ninguna
+  // conversación puntual — se usa desde el listado de Mensajes.
+  getGlobalBlockStatus: () =>
+    api.get<{ blocked: boolean }>('/chat/block-all/status').then(r => r.data),
+
+  blockAll: (opts?: { isReported?: boolean; reasonCategory?: ChatReasonCategory; reasonText?: string }) =>
+    api.post('/chat/block-all', {
+      is_reported: opts?.isReported ?? false,
+      reason_category: opts?.reasonCategory ?? null,
+      reason_text: opts?.reasonText ?? null,
+    }),
+
+  unblockAll: () =>
+    api.delete('/chat/block-all'),
+
   getMessages: (conversationId: string, before?: string) =>
     api.get<ChatMessage[]>(`/chat/conversations/${conversationId}/messages`, {
       params: before ? { before, limit: 50 } : { limit: 50 },
@@ -979,11 +1023,42 @@ export const chatAPI = {
       .then(r => r.data)
   },
 
-  block: (conversationId: string, scope: ChatBlockScope, reason?: string) =>
-    api.post(`/chat/conversations/${conversationId}/block`, { scope, reason }),
+  // Bloqueo puntual (CONTACT) dentro de una conversación. Para el
+  // bloqueo general, usar blockAll/unblockAll de arriba.
+  block: (
+    conversationId: string,
+    opts?: { isReported?: boolean; reasonCategory?: ChatReasonCategory; reasonText?: string }
+  ) =>
+    api.post(`/chat/conversations/${conversationId}/block`, {
+      scope: 'CONTACT',
+      is_reported: opts?.isReported ?? false,
+      reason_category: opts?.reasonCategory ?? null,
+      reason_text: opts?.reasonText ?? null,
+    }),
 
-  unblock: (conversationId: string, scope: ChatBlockScope) =>
-    api.delete(`/chat/conversations/${conversationId}/block`, { params: { scope } }),
+  unblock: (conversationId: string) =>
+    api.delete(`/chat/conversations/${conversationId}/block`),
+}
+
+// Bloqueo INTEGRAL desde "Mis Pacientes" (solo profesional -> paciente).
+// Distinto de chatAPI.block: corta chat + visibilidad + nuevas citas,
+// todo junto — ver backend/app/services/chat.py.
+export const patientBlockAPI = {
+  getStatus: (patientId: string) =>
+    api.get<{ blocked: boolean; reason_category?: string | null }>(`/professionals/patients/${patientId}/block`).then(r => r.data),
+
+  block: (
+    patientId: string,
+    opts?: { isReported?: boolean; reasonCategory?: ChatReasonCategory; reasonText?: string }
+  ) =>
+    api.post(`/professionals/patients/${patientId}/block`, {
+      is_reported: opts?.isReported ?? false,
+      reason_category: opts?.reasonCategory ?? null,
+      reason_text: opts?.reasonText ?? null,
+    }),
+
+  unblock: (patientId: string) =>
+    api.delete(`/professionals/patients/${patientId}/block`),
 }
 
 // Arma la URL del WebSocket del chat a partir de BASE_URL (http→ws,

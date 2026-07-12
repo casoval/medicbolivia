@@ -748,6 +748,12 @@ class ChatConversationResponse(BaseModel):
     last_message_preview: Optional[str]
     other_participant: ChatParticipantResponse
     created_at: datetime
+    # True si YO (el usuario autenticado que pide esto) tengo activo un
+    # bloqueo de ese scope contra el otro participante. Le permite al
+    # frontend mostrar "Desbloquear" en vez de "Bloquear" sin tener que
+    # hacer una llamada aparte.
+    my_active_block_contact: bool = False
+    my_active_block_global: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -773,9 +779,39 @@ class ChatAttachmentUploadResponse(BaseModel):
     message: ChatMessageResponse
 
 
+REASON_CATEGORIES = (
+    "HARASSMENT", "INAPPROPRIATE_CONTENT", "SPAM",
+    "PROFESSIONAL_MISCONDUCT", "NO_SHOW_OR_ABUSE", "OTHER",
+)
+
+
+class ChatGlobalBlockRequest(BaseModel):
+    """Body de POST /chat/block-all — bloqueo GLOBAL, no depende de
+    ninguna conversación puntual, se activa desde el listado general
+    de Mensajes."""
+    is_reported: bool = False
+    reason_category: Optional[str] = Field(None, description="Solo si is_reported=True")
+    reason_text: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator("reason_category")
+    @classmethod
+    def validate_reason_category(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in REASON_CATEGORIES:
+            raise ValueError(f"reason_category debe ser uno de {REASON_CATEGORIES}")
+        return v
+
+
+class ChatGlobalBlockStatusResponse(BaseModel):
+    blocked: bool
+
+
 class ChatBlockRequest(BaseModel):
     scope: str = Field(..., description='"CONTACT" o "GLOBAL"')
-    reason: Optional[str] = Field(None, max_length=255)
+    # Bloquear y reportar son independientes: is_reported=False solo
+    # corta el chat, sin avisar al admin.
+    is_reported: bool = False
+    reason_category: Optional[str] = Field(None, description="Solo si is_reported=True")
+    reason_text: Optional[str] = Field(None, max_length=1000)
 
     @field_validator("scope")
     @classmethod
@@ -784,11 +820,45 @@ class ChatBlockRequest(BaseModel):
             raise ValueError('scope debe ser "CONTACT" o "GLOBAL"')
         return v
 
+    @field_validator("reason_category")
+    @classmethod
+    def validate_reason_category(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in REASON_CATEGORIES:
+            raise ValueError(f"reason_category debe ser uno de {REASON_CATEGORIES}")
+        return v
+
 
 class ChatBlockResponse(BaseModel):
     id: str
     scope: str
     blocked_id: Optional[str]
+    is_reported: bool
+    reason_category: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PatientBlockRequest(BaseModel):
+    """Bloqueo INTEGRAL desde 'Mis Pacientes' (solo profesional -> paciente)."""
+    is_reported: bool = False
+    reason_category: Optional[str] = Field(None, description="Solo si is_reported=True")
+    reason_text: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator("reason_category")
+    @classmethod
+    def validate_reason_category(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in REASON_CATEGORIES:
+            raise ValueError(f"reason_category debe ser uno de {REASON_CATEGORIES}")
+        return v
+
+
+class PatientBlockResponse(BaseModel):
+    id: str
+    patient_id: str
+    hidden: bool
+    is_reported: bool
+    reason_category: Optional[str]
     created_at: datetime
 
     model_config = {"from_attributes": True}

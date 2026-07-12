@@ -19,6 +19,9 @@ function fromApi(data: PlatformSettings) {
     openRegistration: data.open_registration_patients,
     openProfessionals: data.open_registration_professionals,
     maintenance: data.maintenance_mode,
+    chatWindowDays: data.chat_window_days,
+    chatAttachmentsPatient: data.chat_attachments_enabled_patient,
+    chatAttachmentsProfessional: data.chat_attachments_enabled_professional,
   }
 }
 
@@ -28,6 +31,9 @@ function toApiPayload(state: {
   openRegistration: boolean
   openProfessionals: boolean
   maintenance: boolean
+  chatWindowDays: number
+  chatAttachmentsPatient: boolean
+  chatAttachmentsProfessional: boolean
 }): PlatformSettingsUpdate {
   return {
     app_name: state.appName,
@@ -35,6 +41,9 @@ function toApiPayload(state: {
     open_registration_patients: state.openRegistration,
     open_registration_professionals: state.openProfessionals,
     maintenance_mode: state.maintenance,
+    chat_window_days: state.chatWindowDays,
+    chat_attachments_enabled_patient: state.chatAttachmentsPatient,
+    chat_attachments_enabled_professional: state.chatAttachmentsProfessional,
   }
 }
 
@@ -226,6 +235,9 @@ export default function AdminSettingsPage() {
   const [openRegistration, setOpenRegistration] = useState(true)
   const [openProfessionals, setOpenProfessionals] = useState(true)
   const [maintenance, setMaintenance] = useState(false)
+  const [chatWindowDays, setChatWindowDays] = useState(15)
+  const [chatAttachmentsPatient, setChatAttachmentsPatient] = useState(true)
+  const [chatAttachmentsProfessional, setChatAttachmentsProfessional] = useState(true)
 
   const { data: systemInfo, isLoading: loadingSystemInfo } = useQuery({
     queryKey: ['admin', 'system-info'],
@@ -243,6 +255,9 @@ export default function AdminSettingsPage() {
         setOpenRegistration(mapped.openRegistration)
         setOpenProfessionals(mapped.openProfessionals)
         setMaintenance(mapped.maintenance)
+        setChatWindowDays(mapped.chatWindowDays)
+        setChatAttachmentsPatient(mapped.chatAttachmentsPatient)
+        setChatAttachmentsProfessional(mapped.chatAttachmentsProfessional)
       })
       .catch((err) => {
         if (!active) return
@@ -259,7 +274,10 @@ export default function AdminSettingsPage() {
     setError('')
     try {
       const data = await adminAPI.updateSettings(
-        toApiPayload({ appName, commission, openRegistration, openProfessionals, maintenance })
+        toApiPayload({
+          appName, commission, openRegistration, openProfessionals, maintenance,
+          chatWindowDays, chatAttachmentsPatient, chatAttachmentsProfessional,
+        })
       )
       const mapped = fromApi(data)
       setAppName(mapped.appName)
@@ -267,6 +285,9 @@ export default function AdminSettingsPage() {
       setOpenRegistration(mapped.openRegistration)
       setOpenProfessionals(mapped.openProfessionals)
       setMaintenance(mapped.maintenance)
+      setChatWindowDays(mapped.chatWindowDays)
+      setChatAttachmentsPatient(mapped.chatAttachmentsPatient)
+      setChatAttachmentsProfessional(mapped.chatAttachmentsProfessional)
       setSuccess('Configuración guardada correctamente')
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
@@ -374,6 +395,62 @@ export default function AdminSettingsPage() {
 
           {/* Promociones de comisión global */}
           <CommissionPeriodsSection />
+
+          {/* Chat interno: ventana post-consulta y adjuntos por rol */}
+          <div className="card">
+            <SectionTitle>Chat</SectionTitle>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">
+                  Días de chat después de la cita
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    disabled={saving}
+                    className="w-20 px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] disabled:opacity-60"
+                    value={chatWindowDays}
+                    onChange={(e) => {
+                      const n = Number(e.target.value)
+                      if (!Number.isNaN(n)) setChatWindowDays(Math.min(90, Math.max(1, n)))
+                    }}
+                  />
+                  <span className="text-xs text-[#6B738A]">días</span>
+                </div>
+                <p className="text-xs text-[#A0A8BF] mt-1">
+                  Aplica solo a consultas nuevas creadas a partir de guardar — las conversaciones
+                  ya activas o cerradas conservan la ventana que tenían.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-2 border-t border-[#DDE1EE]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Adjuntos — pacientes</p>
+                    <p className="text-xs text-[#6B738A]">Permitir subir archivos al chat</p>
+                  </div>
+                  <Toggle on={chatAttachmentsPatient} onChange={setChatAttachmentsPatient} disabled={saving} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Adjuntos — profesionales</p>
+                    <p className="text-xs text-[#6B738A]">Permitir subir archivos al chat</p>
+                  </div>
+                  <Toggle on={chatAttachmentsProfessional} onChange={setChatAttachmentsProfessional} disabled={saving} />
+                </div>
+              </div>
+
+              <button
+                onClick={saveSettings}
+                disabled={saving}
+                className="btn-primary w-full text-xs py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Guardando…' : 'Guardar configuración'}
+              </button>
+            </div>
+          </div>
 
           {/* Info del sistema — datos reales desde /admin/system-info, no hardcodeados */}
           <div className="card lg:col-span-2">
