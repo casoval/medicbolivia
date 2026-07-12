@@ -279,4 +279,4 @@ export interface ChatMessage {
 // backend/app/api/v1/endpoints/chat.py::chat_websocket)
 export type ChatSocketEvent =
   | ({ type: 'message' } & ChatMessage)
-  | { type: 'error'; code: 'blocked' | 'conversation_closed' | 'invalid_content' }
+  | { type: 'error'; code: 'chat_unavailable' }
