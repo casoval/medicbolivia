@@ -41,7 +41,24 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
         const data: ChatSocketEvent = JSON.parse(event.data)
         if (data.type === 'message') {
           const { type, ...msg } = data
-          setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev
+            // Si es un mensaje propio, puede haber un mensaje "temp-..."
+            // puesto por addLocalMessage (actualización optimista al
+            // mandar) esperando su confirmación real — lo reemplazamos en
+            // vez de agregar uno nuevo, para no duplicarlo en pantalla.
+            if (msg.sender_id === currentUserId) {
+              const tempIdx = prev.findIndex(
+                (m) => m.id.startsWith('temp-') && m.content === msg.content
+              )
+              if (tempIdx !== -1) {
+                const next = [...prev]
+                next[tempIdx] = msg
+                return next
+              }
+            }
+            return [...prev, msg]
+          })
         } else if (data.type === 'error') {
           if (data.code === 'chat_unavailable') setChatUnavailable(true)
         }
@@ -78,9 +95,12 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
   }, [])
 
   const addLocalMessage = useCallback((msg: ChatMessage) => {
-    // Usado tras subir un adjunto por REST: el mensaje ya vuelve en la
-    // respuesta HTTP, y también llega por WS (broadcast) — el chequeo
-    // de `id` duplicado en onmessage evita que aparezca dos veces.
+    // Usado para actualización optimista: al mandar texto (aparece al
+    // toque, sin esperar el viaje de ida y vuelta por Redis) y también
+    // tras subir un adjunto por REST (el mensaje ya vuelve en la
+    // respuesta HTTP). En ambos casos, cuando la confirmación real llega
+    // por WS, onmessage la reconcilia (reemplaza el "temp-..." o
+    // deduplica por id) en vez de duplicarlo en pantalla.
     setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
   }, [])
 

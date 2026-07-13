@@ -764,12 +764,16 @@ export default function WaitingRoomPage() {
     }
   }
 
-  // Polling cada 4 segundos
+  // Polling cada 4 segundos — pausado cuando la pestaña no está visible
+  // (minimizada, en otra pestaña) para no gastar peticiones al servidor
+  // en segundo plano sin que nadie esté mirando. Al volver a la pestaña,
+  // refresca al toque en vez de esperar hasta 4s.
   useEffect(() => {
     if (!resolvedId || !consultationStatus) return
     if (['IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'REFUNDED'].includes(consultationStatus)) return
 
-    const id = setInterval(async () => {
+    const poll = async () => {
+      if (document.hidden) return
       try {
         const res = await consultationsAPI.getMyConsultations()
         const all = res.data
@@ -798,8 +802,19 @@ export default function WaitingRoomPage() {
           } catch {}
         }
       } catch {}
-    }, 4000)
-    return () => clearInterval(id)
+    }
+
+    const id = setInterval(poll, 4000)
+
+    function onVisibilityChange() {
+      if (!document.hidden) poll()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [resolvedId, consultationStatus])
 
   async function generateQR(id?: string) {

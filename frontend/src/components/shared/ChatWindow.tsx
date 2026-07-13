@@ -79,6 +79,19 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
   function handleSend() {
     const content = draft.trim()
     if (!content || !writable) return
+    // Actualización optimista: se muestra al instante con un id temporal;
+    // useChatSocket lo reconcilia con el mensaje real en cuanto vuelve
+    // confirmado por el WebSocket (ver onmessage en useChatSocket.ts).
+    addLocalMessage({
+      id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      conversation_id: conversation.id,
+      sender_id: currentUserId,
+      content,
+      attachment_url: null,
+      attachment_content_type: null,
+      read_at: null,
+      created_at: new Date().toISOString(),
+    })
     sendMessage(content)
     setDraft('')
   }
