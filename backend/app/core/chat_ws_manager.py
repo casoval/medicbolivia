@@ -71,28 +71,60 @@ class ChatConnectionManager:
         )
 
     async def _listen(self, conversation_id: str):
-        pubsub = redis_client.pubsub()
+        """Escucha el canal Redis de esta conversación indefinidamente,
+        reintentando la suscripción ante cualquier error (no solo al
+        cancelarse) — un pubsub.listen() que muere por un corte de Redis
+        NO debe dejar la conversación sin listener hasta que todos los
+        usuarios se desconecten. Antes, cualquier excepción que no fuera
+        CancelledError mataba la tarea en silencio dejando la entrada en
+        self._listeners como si siguiera viva, y este worker dejaba de
+        reenviar mensajes de esa conversación hasta que todos los sockets
+        locales se cerraran (lo único que limpiaba la entrada muerta)."""
         channel = f"{CHANNEL_PREFIX}{conversation_id}"
-        await pubsub.subscribe(channel)
         try:
-            async for message in pubsub.listen():
-                if message["type"] != "message":
+            while True:
+                pubsub = redis_client.pubsub()
+                try:
+                    await pubsub.subscribe(channel)
+                    async for message in pubsub.listen():
+                        if message["type"] != "message":
+                            continue
+                        payload = json.loads(message["data"])
+                        conv_sockets = self.local.get(conversation_id, {})
+                        # Manda a TODOS los sockets locales de esta conversación,
+                        # incluido el emisor (así confirma que se envió, sin
+                        # necesidad de un ack aparte).
+                        for ws in list(conv_sockets.values()):
+                            try:
+                                await ws.send_json(payload)
+                            except Exception:
+                                pass  # el disconnect lo limpia el endpoint
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception(
+                        f"chat_ws_manager: listener de Redis cortado para "
+                        f"conversation_id={conversation_id}, reintentando en 2s"
+                    )
+                    await asyncio.sleep(2)
                     continue
-                payload = json.loads(message["data"])
-                conv_sockets = self.local.get(conversation_id, {})
-                # Manda a TODOS los sockets locales de esta conversación,
-                # incluido el emisor (así confirma que se envió, sin
-                # necesidad de un ack aparte).
-                for ws in list(conv_sockets.values()):
+                finally:
                     try:
-                        await ws.send_json(payload)
+                        await pubsub.unsubscribe(channel)
+                        await pubsub.aclose()
                     except Exception:
-                        pass  # el disconnect lo limpia el endpoint
+                        pass
+                # Si pubsub.listen() termina solo (sin excepción), no debería
+                # pasar en uso normal, pero por las dudas no lo dejamos morir
+                # en silencio: reintenta en vez de salir del while.
+                await asyncio.sleep(2)
         except asyncio.CancelledError:
             pass
         finally:
-            await pubsub.unsubscribe(channel)
-            await pubsub.aclose()
+            # Se borra a sí mismo de _listeners al terminar (por cancel() en
+            # disconnect(), o si esta tarea muriera por algún motivo no
+            # contemplado arriba) — así connect() siempre puede recrearlo.
+            self._listeners.pop(conversation_id, None)
 
 
 chat_manager = ChatConnectionManager()
