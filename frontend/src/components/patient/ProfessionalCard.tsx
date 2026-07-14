@@ -2,9 +2,11 @@
 // Tarjeta de profesional reutilizable en búsqueda y resultados del agente
 
 import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Avatar, Stars, StatusBadge } from '@/components/ui'
 import { BookAppointmentModal } from './BookAppointmentModal'
 import { ProfessionalDetailModal } from './ProfessionalDetailModal'
+import { patientLinksAPI } from '@/lib/api'
 import type { Professional } from '@/types'
 
 const SPECIALTY_COLORS: Record<string, 'blue' | 'teal' | 'purple' | 'coral' | 'amber'> = {
@@ -32,6 +34,25 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
   const [showBooking, setShowBooking] = useState(false)
   const [showDetail, setShowDetail] = useState(false)
   const [bioExpanded, setBioExpanded] = useState(false)
+
+  // Vínculo "Mis pacientes": lo crea/revoca siempre el paciente. Comparte
+  // queryKey entre todas las tarjetas de la página — react-query lo pide
+  // una sola vez y lo cachea, no una consulta por tarjeta.
+  const qc = useQueryClient()
+  const { data: myLinks = [] } = useQuery({
+    queryKey: ['patient-links'],
+    queryFn: patientLinksAPI.getMine,
+    staleTime: 30_000,
+  })
+  const isLinked = myLinks.some((l) => l.professional_id === pro.id)
+  const [linkError, setLinkError] = useState('')
+
+  const linkMutation = useMutation({
+    mutationFn: () => (isLinked ? patientLinksAPI.revoke(pro.id) : patientLinksAPI.create(pro.id)),
+    onMutate: () => setLinkError(''),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['patient-links'] }),
+    onError: (err: any) => setLinkError(err?.response?.data?.detail || 'No se pudo actualizar el vínculo'),
+  })
 
   // Avatar con foto real si existe, o iniciales como fallback
   const PhotoAvatar = ({ size }: { size: 'md' | 'lg' }) => {
@@ -148,6 +169,20 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
         className="flex items-center justify-end gap-3 pt-3 border-t border-[#DDE1EE]"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          onClick={() => linkMutation.mutate()}
+          disabled={linkMutation.isPending}
+          title={isLinked
+            ? 'El profesional puede verte en su lista de pacientes. Toca para desvincularte.'
+            : 'Vincúlate para que este profesional te pueda agendar citas directamente si tiene membresía activa.'}
+          className={`text-xs py-1.5 px-3 rounded-full border transition-colors ${
+            isLinked
+              ? 'border-[#185FA5] text-[#185FA5] bg-[#E6F1FB] hover:bg-[#DCE9F7]'
+              : 'border-[#DDE1EE] text-[#6B738A] hover:border-[#185FA5] hover:text-[#185FA5]'
+          }`}
+        >
+          {linkMutation.isPending ? '...' : isLinked ? '✓ Vinculado' : 'Vincularme'}
+        </button>
         <div className="flex flex-col items-center gap-1">
           <button
             onClick={() => setShowBooking(true)}
@@ -173,6 +208,11 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
           </div>
         )}
       </div>
+
+      {linkError && (
+        <p className="text-xs text-[#D14343] mt-2 text-right">{linkError}</p>
+      )}
+
 
       {showBooking && (
         <BookAppointmentModal professional={pro} onClose={() => setShowBooking(false)} />

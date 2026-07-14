@@ -359,6 +359,68 @@ class QRPaymentResponse(BaseModel):
     professional_name: str
 
 
+# ─────────────────────────────────────────────────────
+# MEMBRESÍA / AGENDAMIENTO DIRECTO DEL PROFESIONAL
+# ─────────────────────────────────────────────────────
+
+class ProfessionalScheduleRequest(BaseModel):
+    """
+    El profesional agenda directamente a un paciente ya vinculado (ver
+    /patients/link). Requiere membresía activa. Sin límite de horario
+    disponible (sí se sigue chequeando choque contra la propia agenda).
+    """
+    patient_id: str
+    scheduled_at: datetime
+    specialty: Optional[str] = None
+    chief_complaint: Optional[str] = None
+    payment_channel: str = Field(..., pattern="^(PLATFORM_QR|CASH)$")
+    # PLATFORM_QR: si se omite, se usa professional.price_general.
+    # CASH: obligatorio, pero se acepta 0 (ej. cortesía).
+    amount: Optional[Decimal] = None
+
+    @field_validator("amount")
+    @classmethod
+    def _amount_no_negativo(cls, v):
+        if v is not None and v < 0:
+            raise ValueError("El monto no puede ser negativo")
+        return v
+
+
+class PatientLinkCreateRequest(BaseModel):
+    professional_id: str
+
+
+class PatientLinkResponse(BaseModel):
+    id: str
+    patient_id: str
+    professional_id: str
+    created_at: datetime
+    revoked_at: Optional[datetime] = None
+    professional_first_name: Optional[str] = None
+    professional_last_name: Optional[str] = None
+    professional_photo_url: Optional[str] = None
+    professional_specialty: Optional[str] = None
+    patient_first_name: Optional[str] = None
+    patient_last_name: Optional[str] = None
+    patient_photo_url: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ProfessionalMembershipCreateRequest(BaseModel):
+    professional_id: str
+    period_label: str
+    starts_at: datetime
+    ends_at: Optional[datetime] = None
+    note: Optional[str] = None
+
+
+class ProfessionalMembershipUpdateRequest(BaseModel):
+    active: Optional[bool] = None
+    ends_at: Optional[datetime] = None
+    note: Optional[str] = None
+
+
 class PaymentWebhookRequest(BaseModel):
     """Webhook del banco cuando confirma el pago QR."""
     bank_tx_id: str

@@ -104,9 +104,38 @@ export interface CommissionPeriodUpdate {
 
 export interface CurrentCommission {
   percent: number
-  source: 'PROFESSIONAL' | 'GLOBAL_PROMO' | 'DEFAULT'
+  source: 'MEMBERSHIP' | 'PROFESSIONAL' | 'GLOBAL_PROMO' | 'DEFAULT'
   label: string | null
   ends_at: string | null
+}
+
+// ── Membresía mensual del profesional (comisión 0% + agendamiento directo) ──
+// La habilita/deshabilita SOLO un admin, manualmente, con un registro por
+// mes — no hay cobro recurrente automático dentro de la plataforma.
+export interface ProfessionalMembership {
+  id: string
+  professional_id: string
+  period_label: string
+  starts_at: string
+  ends_at: string | null
+  active: boolean
+  note: string | null
+  enabled_by_admin_id: string | null
+  created_at: string
+}
+
+export interface ProfessionalMembershipCreate {
+  professional_id: string
+  period_label: string
+  starts_at: string
+  ends_at?: string | null
+  note?: string
+}
+
+export interface ProfessionalMembershipUpdate {
+  active?: boolean
+  ends_at?: string | null
+  note?: string
 }
 
 // ── Disputas de pago ──────────────────────────────────
@@ -307,6 +336,16 @@ export const professionalsAPI = {
   // Historial y estadísticas de mis pagos recibidos (ganancias)
   getMyEarnings: (params?: { status?: string; limit?: number; offset?: number }) =>
     api.get<ProfessionalEarningsResponse>('/professionals/me/earnings', { params }).then(r => r.data),
+
+  // Pacientes que se vincularon a mí (ver PatientProfessionalLink) —
+  // el vínculo lo crea/revoca siempre el paciente, esto es solo lectura.
+  getMyPatients: () =>
+    api.get<PatientLink[]>('/professionals/my-patients').then(r => r.data),
+
+  // Estado de mi membresía (la habilita/deshabilita un admin manualmente).
+  // Si active=false, /consultations/professional-schedule devuelve 403.
+  getMyMembership: () =>
+    api.get<{ active: boolean }>('/professionals/my-membership').then(r => r.data),
 }
 
 
@@ -419,6 +458,39 @@ export const patientsAPI = {
     api.get<PatientPaymentsResponse>('/patients/me/payments', { params }).then(r => r.data),
 }
 
+// ── Vínculo "Mis pacientes" (PatientProfessionalLink) ─
+// Solo el PACIENTE puede crear y revocar el vínculo. Una vez activo, el
+// profesional lo ve en su lista (professionalsAPI.getMyPatients) y — si
+// además tiene membresía activa — puede agendarle citas directamente
+// (consultationsAPI.professionalSchedule).
+export interface PatientLink {
+  id: string
+  patient_id: string
+  professional_id: string
+  created_at: string
+  revoked_at: string | null
+  professional_first_name?: string | null
+  professional_last_name?: string | null
+  professional_photo_url?: string | null
+  professional_specialty?: string | null
+  patient_first_name?: string | null
+  patient_last_name?: string | null
+  patient_photo_url?: string | null
+}
+
+export const patientLinksAPI = {
+  // Vincularme a un profesional (para que me pueda agendar citas directamente)
+  create: (professionalId: string) =>
+    api.post<PatientLink>('/patients/links', { professional_id: professionalId }).then(r => r.data),
+
+  getMine: () =>
+    api.get<PatientLink[]>('/patients/links').then(r => r.data),
+
+  // Solo funciona si no tengo ninguna cita activa/pendiente con ese profesional
+  revoke: (professionalId: string) =>
+    api.delete(`/patients/links/${professionalId}`),
+}
+
 export interface ScheduleBlock {
   id: string
   day_of_week: number   // 0=Domingo..6=Sábado
@@ -525,6 +597,19 @@ export const consultationsAPI = {
       `/consultations/${consultationId}/dispute`,
       { category, reason }
     ),
+
+  // [Profesional con membresía activa] Agendar directamente a un paciente
+  // ya vinculado, sin límite de horario disponible. payment_channel:
+  // 'PLATFORM_QR' (amount opcional, default = price_general del profesional)
+  // o 'CASH' (amount obligatorio, acepta 0).
+  professionalSchedule: (data: {
+    patient_id: string
+    scheduled_at: string
+    specialty?: string
+    chief_complaint?: string
+    payment_channel: 'PLATFORM_QR' | 'CASH'
+    amount?: number
+  }) => api.post<Consultation>('/consultations/professional-schedule', data),
 }
 
 export const scheduleAPI = {
@@ -911,6 +996,19 @@ export const adminAPI = {
     api.get<CurrentCommission>('/admin/commission-periods/current', {
       params: professionalId ? { professional_id: professionalId } : undefined,
     }).then(r => r.data),
+
+  // Membresía mensual (comisión 0% + agendamiento directo). Habilitación
+  // manual — el admin la crea cuando confirma el pago por fuera de la plataforma.
+  listMemberships: (professionalId?: string) =>
+    api.get<ProfessionalMembership[]>('/admin/memberships', {
+      params: professionalId ? { professional_id: professionalId } : undefined,
+    }).then(r => r.data),
+
+  createMembership: (data: ProfessionalMembershipCreate) =>
+    api.post<ProfessionalMembership>('/admin/memberships', data).then(r => r.data),
+
+  updateMembership: (id: string, data: ProfessionalMembershipUpdate) =>
+    api.put<ProfessionalMembership>(`/admin/memberships/${id}`, data).then(r => r.data),
 
   // Cola de pagos congelados por reclamo del paciente, pendientes de que
   // un admin decida si se liberan al profesional o se reembolsan.

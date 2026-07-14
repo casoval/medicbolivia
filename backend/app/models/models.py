@@ -105,6 +105,24 @@ class PaymentStatus(str, enum.Enum):
     CANCELLED_NO_CHARGE = "CANCELLED_NO_CHARGE"
 
 
+class PaymentChannel(str, enum.Enum):
+    """
+    Por dónde entró el cobro de una consulta.
+    PLATFORM_QR: el flujo normal de siempre (QR generado por la plataforma).
+    CASH: solo disponible para profesionales con membresía activa agendando
+    directamente a un paciente vinculado (ver ProfessionalMembership /
+    PatientProfessionalLink) — el profesional reporta manualmente cuánto
+    cobró (puede ser 0).
+    """
+    PLATFORM_QR = "PLATFORM_QR"
+    CASH = "CASH"
+
+
+class ConsultationCreatedBy(str, enum.Enum):
+    PATIENT = "PATIENT"
+    PROFESSIONAL = "PROFESSIONAL"
+
+
 class AgentType(str, enum.Enum):
     COORDINATOR = "COORDINATOR"
     TRIAGE = "TRIAGE"
@@ -373,6 +391,15 @@ class Consultation(Base):
     # creadas después del cambio. Null en consultas creadas antes de este
     # campo (se usa el default de settings como fallback, ver services/chat.py).
     chat_window_days_snapshot: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Quién originó la consulta. Por defecto PATIENT (el flujo de toda la
+    # vida). PROFESSIONAL solo aplica al agendamiento directo que un
+    # profesional con membresía activa hace sobre un paciente vinculado
+    # (ver PatientProfessionalLink) — no tiene los límites de horario
+    # disponible ni la exigencia de una consulta previa COMPLETED que sí
+    # tiene el flujo normal de FOLLOW_UP.
+    created_by_role: Mapped[ConsultationCreatedBy] = mapped_column(
+        SAEnum(ConsultationCreatedBy), nullable=False, default=ConsultationCreatedBy.PATIENT
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -411,6 +438,13 @@ class Payment(Base):
     # Copia del % aplicado en la Consultation asociada, para no tener que
     # hacer join solo para mostrar transparencia en reportes de pagos.
     commission_percent_applied: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    # Por dónde entró el cobro. Por defecto PLATFORM_QR (el flujo de toda
+    # la vida). CASH solo aplica al agendamiento directo de un profesional
+    # con membresía activa sobre un paciente vinculado — ver
+    # ConsultationCreatedBy / PatientProfessionalLink.
+    payment_channel: Mapped[PaymentChannel] = mapped_column(
+        SAEnum(PaymentChannel), nullable=False, default=PaymentChannel.PLATFORM_QR
+    )
     qr_code: Mapped[Optional[str]] = mapped_column(Text)
     qr_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     bank_tx_id: Mapped[Optional[str]] = mapped_column(String(100))
@@ -716,6 +750,80 @@ class PlatformSettings(Base):
     chat_attachments_enabled_patient: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     chat_attachments_enabled_professional: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow, default=datetime.utcnow)
+
+
+class ProfessionalMembership(Base):
+    """
+    Habilitación mensual de la membresía de un profesional (comisión 0% +
+    agendamiento directo de pacientes vinculados). La activa/desactiva
+    SOLO un admin, manualmente — no hay cobro recurrente automatizado
+    dentro de la plataforma para esto (ver conversación de diseño: el
+    admin lleva el registro del pago mes a mes por fuera).
+
+    Un profesional puede tener varias filas a lo largo del tiempo (una
+    por cada mes/tramo habilitado). "¿Tiene membresía activa ahora?" se
+    resuelve buscando una fila con active=True cuyo rango [starts_at,
+    ends_at) cubra el momento actual — ver
+    app.services.commission._has_active_membership.
+
+    No se borran filas nunca (auditoría de cobros); para deshabilitar
+    antes de tiempo, el admin pone ends_at = ahora (o active=False).
+    """
+    __tablename__ = "professional_memberships"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    professional_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("professionals.id", ondelete="CASCADE"), nullable=False
+    )
+    # Mes que cubre este registro, ej. "2026-07". Puramente informativo/de
+    # reporte para el admin — la vigencia real la deciden starts_at/ends_at.
+    period_label: Mapped[str] = mapped_column(String(20), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # Si es NULL, queda vigente hasta que el admin la cierre explícitamente.
+    ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    note: Mapped[Optional[str]] = mapped_column(String(255))  # ej. "Pago recibido por QR personal, ref. 123"
+    enabled_by_admin_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow, default=datetime.utcnow)
+
+    professional: Mapped["Professional"] = relationship()
+
+
+class PatientProfessionalLink(Base):
+    """
+    Vínculo "Mis pacientes": el PACIENTE es el único que lo crea (nunca el
+    profesional). Una vez activo, el profesional lo ve en su lista de
+    pacientes vinculados y — si además tiene membresía activa — puede
+    agendarle citas directamente sin pasar por el flujo normal (ver
+    /consultations/professional-schedule).
+
+    Solo el paciente puede revocarlo, y solo si no queda ninguna consulta
+    activa (no completada/cancelada/reembolsada) entre ambos — así no se
+    puede desvincular a mitad de una cita en curso.
+    """
+    __tablename__ = "patient_professional_links"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    patient_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False
+    )
+    professional_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("professionals.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # NULL mientras el vínculo sigue activo. Se llena cuando el paciente lo
+    # revoca — no se borra la fila, para conservar el historial.
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    patient: Mapped["Patient"] = relationship()
+    professional: Mapped["Professional"] = relationship()
+
+    # Nota: que un paciente no tenga dos vínculos ACTIVOS con el mismo
+    # profesional a la vez se refuerza a nivel de aplicación (consultando
+    # revoked_at IS NULL antes de crear uno nuevo), no con una constraint
+    # de BD — porque sí puede volver a vincularse luego de revocar uno
+    # viejo, y esa fila vieja conserva patient_id+professional_id iguales.
 
 
 class FAQAudience(str, enum.Enum):

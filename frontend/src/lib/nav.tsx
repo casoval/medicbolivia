@@ -20,7 +20,7 @@
 import {
   IconHome, IconSearch, IconBot, IconClock, IconFile, IconRx, IconNote,
   IconStetho, IconGrid, IconUsers, IconCal, IconStar, IconUser,
-  IconPatients, IconCard, IconLog, IconCog, IconTag, IconChat,
+  IconPatients, IconCard, IconLog, IconCog, IconTag, IconChat, IconBadge,
 } from '@/components/nav-icons'
 
 export interface NavItem {
@@ -142,6 +142,12 @@ export const PROFESSIONAL_NAV: NavItem[] = [
     href: '/professional/patients',
     icon: <IconPatients />,
     description: 'Listado de pacientes que has atendido',
+  },
+  {
+    label: 'Membresía',
+    href: '/professional/membership',
+    icon: <IconBadge />,
+    description: 'Pacientes vinculados y agendamiento directo sin comisión',
   },
   {
     label: 'Mensajes',

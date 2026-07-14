@@ -11,9 +11,14 @@ from typing import Optional
 
 from app.db.database import get_db
 from app.core.dependencies import get_current_patient, get_current_professional
-from app.models.models import User, Patient, Professional, Consultation, Payment, PaymentStatus
-from app.schemas.schemas import PatientUpdateRequest
+from app.models.models import (
+    User, Patient, Professional, Consultation, Payment, PaymentStatus,
+    PatientProfessionalLink, ProfessionalStatus,
+)
+from app.schemas.schemas import PatientUpdateRequest, PatientLinkCreateRequest, PatientLinkResponse
 from app.services.storage import upload_photo_to_r2
+from app.services.patient_links import get_active_link, has_pending_consultations_between
+from app.services.chat import is_professional_hidden_for_patient
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -282,3 +287,122 @@ async def get_my_payments(
     ]
 
     return {"stats": stats, "items": items}
+
+# ─────────────────────────────────────────────────────
+# VÍNCULO "MIS PACIENTES" (PatientProfessionalLink)
+# Solo el paciente crea y revoca. Ver app/services/patient_links.py.
+# ─────────────────────────────────────────────────────
+
+@router.post(
+    "/links",
+    response_model=PatientLinkResponse,
+    summary="Vincularme a un profesional (para que me pueda agendar citas directamente)",
+)
+async def create_patient_link(
+    data: PatientLinkCreateRequest,
+    current_user: User = Depends(get_current_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    patient_result = await db.execute(select(Patient).where(Patient.user_id == current_user.id))
+    patient = patient_result.scalar_one_or_none()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Perfil de paciente no encontrado")
+
+    prof_result = await db.execute(
+        select(Professional).where(
+            Professional.id == data.professional_id,
+            Professional.status == ProfessionalStatus.APPROVED,
+        )
+    )
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
+    if await is_professional_hidden_for_patient(db, professional.id, patient.id):
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
+    existing = await get_active_link(db, patient.id, professional.id)
+    if existing:
+        return PatientLinkResponse(
+            id=existing.id, patient_id=existing.patient_id, professional_id=existing.professional_id,
+            created_at=existing.created_at, revoked_at=existing.revoked_at,
+            professional_first_name=professional.first_name, professional_last_name=professional.last_name,
+            professional_photo_url=professional.photo_url, professional_specialty=professional.specialty,
+        )
+
+    link = PatientProfessionalLink(patient_id=patient.id, professional_id=professional.id)
+    db.add(link)
+    await db.commit()
+    await db.refresh(link)
+
+    return PatientLinkResponse(
+        id=link.id, patient_id=link.patient_id, professional_id=link.professional_id,
+        created_at=link.created_at, revoked_at=link.revoked_at,
+        professional_first_name=professional.first_name, professional_last_name=professional.last_name,
+        professional_photo_url=professional.photo_url, professional_specialty=professional.specialty,
+    )
+
+
+@router.get(
+    "/links",
+    response_model=list[PatientLinkResponse],
+    summary="Listar mis vínculos activos con profesionales",
+)
+async def list_my_patient_links(
+    current_user: User = Depends(get_current_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    patient_result = await db.execute(select(Patient).where(Patient.user_id == current_user.id))
+    patient = patient_result.scalar_one_or_none()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Perfil de paciente no encontrado")
+
+    rows = (await db.execute(
+        select(PatientProfessionalLink, Professional)
+        .join(Professional, Professional.id == PatientProfessionalLink.professional_id)
+        .where(
+            PatientProfessionalLink.patient_id == patient.id,
+            PatientProfessionalLink.revoked_at.is_(None),
+        )
+        .order_by(PatientProfessionalLink.created_at.desc())
+    )).all()
+
+    return [
+        PatientLinkResponse(
+            id=link.id, patient_id=link.patient_id, professional_id=link.professional_id,
+            created_at=link.created_at, revoked_at=link.revoked_at,
+            professional_first_name=prof.first_name, professional_last_name=prof.last_name,
+            professional_photo_url=prof.photo_url, professional_specialty=prof.specialty,
+        )
+        for link, prof in rows
+    ]
+
+
+@router.delete(
+    "/links/{professional_id}",
+    summary="Desvincularme de un profesional (solo si no tengo citas activas pendientes con él)",
+)
+async def revoke_patient_link(
+    professional_id: str,
+    current_user: User = Depends(get_current_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    patient_result = await db.execute(select(Patient).where(Patient.user_id == current_user.id))
+    patient = patient_result.scalar_one_or_none()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Perfil de paciente no encontrado")
+
+    link = await get_active_link(db, patient.id, professional_id)
+    if not link:
+        raise HTTPException(status_code=404, detail="No tienes un vínculo activo con este profesional")
+
+    if await has_pending_consultations_between(db, patient.id, professional_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Tienes una cita agendada con este profesional. Complétala o cancélala antes de desvincularte.",
+        )
+
+    from datetime import datetime
+    link.revoked_at = datetime.utcnow()
+    await db.commit()
+    return {"detail": "Vínculo revocado"}

@@ -15,16 +15,18 @@ from app.core.dependencies import get_current_user
 from app.models.models import (
     User, UserRole, Patient, Professional, Consultation, Payment,
     ConsultationStatus, ConsultationType, PaymentStatus, ProfessionalStatus,
-    Notification, Earning, Prescription, ClinicalNote
+    Notification, Earning, Prescription, ClinicalNote,
+    ConsultationCreatedBy, PaymentChannel,
 )
 from app.schemas.schemas import (
     ConsultationCreateRequest, ConsultationResponse,
     QRPaymentResponse, PaymentWebhookRequest,
     RescheduleProposeRequest, RescheduleRespondRequest,
-    DisputeCreateRequest
+    DisputeCreateRequest, ProfessionalScheduleRequest,
 )
-from app.services.payment import generate_qr_data, calculate_amounts
+from app.services.payment import generate_qr_data, calculate_amounts, compute_professional_scheduled_qr_deadline
 from app.services.commission import resolve_commission_percent
+from app.services.patient_links import get_active_link, professional_has_active_membership
 from app.core.config import settings
 from livekit import api as lk
 
@@ -220,6 +222,54 @@ async def auto_cancel_payment_expired(consultation_id: str, db_url: str):
                 payment.refund_note = "No se generó cobro: el paciente no completó el pago a tiempo."
             await db.commit()
             logger.info(f"[AUTO-CANCEL] Consulta {consultation_id} cancelada — paciente no pagó en {PAYMENT_TIMEOUT_MINUTES} min")
+    await engine.dispose()
+
+
+# ── Tarea background: cancelar cita AGENDADA POR EL PROFESIONAL si el paciente no paga a tiempo ──
+# A diferencia de auto_cancel_payment_expired (plazo fijo de 30 min desde
+# la creación), acá el plazo es dinámico respecto a scheduled_at — ver
+# app.services.payment.compute_professional_scheduled_qr_deadline. Solo
+# aplica a consultas con created_by_role=PROFESSIONAL y
+# payment_channel=PLATFORM_QR (efectivo no pasa por acá, se confirma al crear).
+async def auto_cancel_professional_scheduled_payment_expired(consultation_id: str, db_url: str):
+    import asyncio
+    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession as AS
+    from sqlalchemy.orm import sessionmaker
+
+    engine_pre = create_async_engine(db_url)
+    async_session_pre = sessionmaker(engine_pre, class_=AS, expire_on_commit=False)
+    async with async_session_pre() as db_pre:
+        r = await db_pre.execute(select(Consultation).where(Consultation.id == consultation_id))
+        c = r.scalar_one_or_none()
+        if not c or not c.scheduled_at:
+            await engine_pre.dispose()
+            return
+        deadline = compute_professional_scheduled_qr_deadline(c.scheduled_at)
+    await engine_pre.dispose()
+
+    wait_seconds = max(0, (deadline - datetime.utcnow()).total_seconds())
+    await asyncio.sleep(wait_seconds)
+
+    engine = create_async_engine(db_url)
+    async_session = sessionmaker(engine, class_=AS, expire_on_commit=False)
+    async with async_session() as db:
+        result = await db.execute(select(Consultation).where(Consultation.id == consultation_id))
+        consultation = result.scalar_one_or_none()
+        if consultation and consultation.status == ConsultationStatus.WAITING_PAYMENT:
+            consultation.status = ConsultationStatus.CANCELLED
+            consultation.outcome_note = "AUTO_TIMEOUT_PAYMENT"
+            pay_result = await db.execute(
+                select(Payment).where(
+                    Payment.consultation_id == consultation_id,
+                    Payment.status == PaymentStatus.PENDING,
+                )
+            )
+            payment = pay_result.scalar_one_or_none()
+            if payment:
+                payment.status = PaymentStatus.CANCELLED_NO_CHARGE
+                payment.refund_note = "No se generó cobro: el paciente no completó el pago a tiempo."
+            await db.commit()
+            logger.info(f"[AUTO-CANCEL] Cita agendada por profesional {consultation_id} cancelada — paciente no pagó a tiempo")
     await engine.dispose()
 
 
@@ -555,6 +605,161 @@ async def create_consultation(
     return ConsultationResponse.model_validate(consultation)
 
 
+# ── POST /api/v1/consultations/professional-schedule ─
+# El PROFESIONAL agenda directamente a un paciente ya vinculado (ver
+# /patients/links). Requiere membresía activa (comisión 0%, habilitada
+# solo por admin). Sin límite de horario disponible del profesional —
+# sí se mantiene el anti-choque contra su propia agenda.
+@router.post(
+    "/professional-schedule",
+    response_model=ConsultationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="[Profesional con membresía] Agendar directamente a un paciente vinculado",
+)
+async def professional_schedule_consultation(
+    data: ProfessionalScheduleRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role.value != "PROFESSIONAL":
+        raise HTTPException(status_code=403, detail="Solo un profesional puede usar este endpoint")
+
+    prof_result = await db.execute(
+        select(Professional).where(Professional.user_id == current_user.id)
+    )
+    professional = prof_result.scalar_one_or_none()
+    if not professional or professional.status != ProfessionalStatus.APPROVED:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado o no verificado")
+
+    if not await professional_has_active_membership(db, professional.id):
+        raise HTTPException(
+            status_code=403,
+            detail="Necesitas una membresía activa para agendar directamente a un paciente. Contacta al administrador.",
+        )
+
+    link = await get_active_link(db, data.patient_id, professional.id)
+    if not link:
+        raise HTTPException(
+            status_code=403,
+            detail="Este paciente no está vinculado a ti. El paciente debe vincularse primero desde su cuenta.",
+        )
+
+    patient_result = await db.execute(select(Patient).where(Patient.id == data.patient_id))
+    patient = patient_result.scalar_one_or_none()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+
+    if data.scheduled_at <= _bolivia_now():
+        raise HTTPException(status_code=400, detail="La fecha/hora de la cita debe ser en el futuro")
+
+    # ── Anti-choque contra la propia agenda del profesional ───────────────
+    # Sin límite de disponibilidad declarada (eso sí se salta), pero no
+    # puede quedar dos citas superpuestas del mismo profesional.
+    active_statuses = [
+        ConsultationStatus.AGENT_TRIAGING,
+        ConsultationStatus.WAITING_PROFESSIONAL,
+        ConsultationStatus.PROFESSIONAL_ACCEPTED,
+        ConsultationStatus.WAITING_PAYMENT,
+        ConsultationStatus.PAYMENT_CONFIRMED,
+        ConsultationStatus.IN_PROGRESS,
+    ]
+    own_active_result = await db.execute(
+        select(Consultation).where(
+            Consultation.professional_id == professional.id,
+            Consultation.status.in_(active_statuses),
+        )
+    )
+    own_active = own_active_result.scalars().all()
+    prof_duration = timedelta(minutes=professional.appointment_duration_minutes or 30)
+    new_start = data.scheduled_at
+    new_end = new_start + prof_duration
+    for existing in own_active:
+        if existing.consultation_type == ConsultationType.IMMEDIATE:
+            continue  # las inmediatas son de duración corta/impredecible; no bloquean agenda futura
+        if not existing.scheduled_at:
+            continue
+        buffer = timedelta(minutes=SCHEDULED_BUFFER_MINUTES)
+        existing_end = existing.scheduled_at + prof_duration + buffer
+        existing_start_buffered = existing.scheduled_at - buffer
+        if new_start < existing_end and existing_start_buffered < new_end:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Ya tienes una cita agendada el {existing.scheduled_at.strftime('%d/%m %H:%M')} "
+                    f"que choca con este horario (ID: {existing.id})."
+                ),
+            )
+
+    # ── Monto ────────────────────────────────────────────────────────────
+    if data.payment_channel == PaymentChannel.CASH.value:
+        if data.amount is None:
+            raise HTTPException(status_code=400, detail="Debes indicar el monto cobrado (puede ser 0)")
+        amount = data.amount
+    else:
+        amount = data.amount if data.amount is not None else professional.price_general
+
+    # Comisión: al haber membresía activa, resolve_commission_percent ya
+    # devuelve 0.00 automáticamente (ver app/services/commission.py).
+    commission_percent = await resolve_commission_percent(db, professional.id)
+    amounts = calculate_amounts(amount, commission_percent)
+
+    is_cash = data.payment_channel == PaymentChannel.CASH.value
+    initial_status = ConsultationStatus.PAYMENT_CONFIRMED if is_cash else ConsultationStatus.WAITING_PAYMENT
+
+    consultation = Consultation(
+        patient_id=patient.id,
+        professional_id=professional.id,
+        consultation_type=ConsultationType.SCHEDULED,
+        status=initial_status,
+        specialty=data.specialty or professional.specialty,
+        chief_complaint=data.chief_complaint,
+        scheduled_at=data.scheduled_at,
+        amount=amounts["amount"],
+        platform_fee=amounts["platform_fee"],
+        professional_earning=amounts["professional_net"],
+        commission_percent_applied=amounts["commission_percent"],
+        created_by_role=ConsultationCreatedBy.PROFESSIONAL,
+    )
+    db.add(consultation)
+    await db.flush()
+
+    if is_cash:
+        payment = Payment(
+            consultation_id=consultation.id,
+            patient_id=patient.id,
+            amount=amounts["amount"],
+            platform_fee=amounts["platform_fee"],
+            professional_net=amounts["professional_net"],
+            commission_percent_applied=amounts["commission_percent"],
+            payment_channel=PaymentChannel.CASH,
+            status=PaymentStatus.CONFIRMED,
+            paid_at=datetime.utcnow(),
+        )
+        db.add(payment)
+
+    await db.commit()
+    await db.refresh(consultation)
+
+    if not is_cash:
+        background_tasks.add_task(
+            auto_cancel_professional_scheduled_payment_expired,
+            consultation.id,
+            settings.DATABASE_URL,
+        )
+        logger.info(
+            f"Cita agendada por profesional {professional.id} para paciente {patient.id}: "
+            f"{consultation.id} → esperando pago QR (plazo dinámico)"
+        )
+    else:
+        logger.info(
+            f"Cita agendada por profesional {professional.id} para paciente {patient.id}: "
+            f"{consultation.id} → pago en efectivo confirmado (monto: {amount})"
+        )
+
+    return ConsultationResponse.model_validate(consultation)
+
+
 # ── POST /api/v1/consultations/{id}/accept ──────────
 @router.post(
     "/{consultation_id}/accept",
@@ -785,11 +990,18 @@ async def generate_payment_qr(
     # Citas agendadas y seguimientos: el paciente paga antes de que el profesional
     # acepte → 30 min de QR. Consultas inmediatas: el profesional ya aceptó → 5 min
     # (config por defecto).
-    qr_expiry = (
-        PAYMENT_TIMEOUT_SCHEDULED_MINUTES
-        if consultation.consultation_type in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP)
-        else None
-    )
+    # Excepción: si la cita la agendó directamente el profesional (membresía),
+    # el plazo es dinámico respecto a scheduled_at, no 30 min fijos desde la
+    # creación — ver app.services.payment.compute_professional_scheduled_qr_deadline.
+    if consultation.created_by_role == ConsultationCreatedBy.PROFESSIONAL and consultation.scheduled_at:
+        deadline = compute_professional_scheduled_qr_deadline(consultation.scheduled_at)
+        qr_expiry = max(1, int((deadline - datetime.utcnow()).total_seconds() // 60))
+    else:
+        qr_expiry = (
+            PAYMENT_TIMEOUT_SCHEDULED_MINUTES
+            if consultation.consultation_type in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP)
+            else None
+        )
 
     qr_data = generate_qr_data(
         consultation_id=consultation.id,
@@ -1151,6 +1363,14 @@ async def update_consultation_status(
         # fin real de la consulta, no desde el pago.
         from app.services.chat import get_or_create_conversation_for_consultation
         await get_or_create_conversation_for_consultation(db, consultation.id)
+
+        # Auto-vínculo "Mis pacientes": cualquier consulta real completada
+        # (inmediata, agendada o seguimiento) vincula al paciente con el
+        # profesional automáticamente — no hace falta que se vincule a mano
+        # desde la búsqueda. Idempotente y no reactiva un vínculo que el
+        # paciente haya revocado antes. Ver app/services/patient_links.py.
+        from app.services.patient_links import ensure_patient_professional_link
+        await ensure_patient_professional_link(db, consultation.patient_id, consultation.professional_id)
 
     await db.commit()
 

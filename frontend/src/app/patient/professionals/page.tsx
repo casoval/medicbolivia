@@ -11,12 +11,12 @@
 // profesional en el cliente.
 
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState } from '@/components/ui'
 import { ProfessionalRecordSummary } from '@/components/patient/ProfessionalRecordSummary'
-import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI } from '@/lib/api'
+import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, patientLinksAPI } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
 import { fmtFechaHora, fmtFechaHoraLocal } from '@/lib/consultationHistory'
 import type { Consultation, Prescription } from '@/types'
@@ -143,6 +143,27 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )
 
+  // Vínculo "Mis pacientes": se crea solo (automático) al completar la
+  // primera consulta con este profesional, o a mano desde "Buscar médico".
+  // Acá solo mostramos el estado y permitimos vincularse manualmente si
+  // por algún motivo no quedó vinculado todavía (ej. todas sus consultas
+  // fueron canceladas antes de completarse).
+  const qc = useQueryClient()
+  const { data: myLinks = [] } = useQuery({
+    queryKey: ['patient-links'],
+    queryFn: patientLinksAPI.getMine,
+    staleTime: 30_000,
+  })
+  const isLinked = myLinks.some((l) => l.professional_id === group.professionalId)
+  const [linkError, setLinkError] = useState('')
+
+  const linkMutation = useMutation({
+    mutationFn: () => (isLinked ? patientLinksAPI.revoke(group.professionalId) : patientLinksAPI.create(group.professionalId)),
+    onMutate: () => setLinkError(''),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['patient-links'] }),
+    onError: (err: any) => setLinkError(err?.response?.data?.detail || 'No se pudo actualizar el vínculo'),
+  })
+
   return (
     <div className="border border-[#DDE1EE] rounded-xl overflow-hidden bg-white">
       <button
@@ -158,11 +179,25 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
                 ● Cita pendiente
               </span>
             )}
+            {isLinked ? (
+              <span className="text-[10px] bg-[#E6F1FB] text-[#185FA5] px-2 py-0.5 rounded-full font-medium flex-shrink-0">
+                ✓ Vinculado
+              </span>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); linkMutation.mutate() }}
+                disabled={linkMutation.isPending}
+                className="text-[10px] border border-[#DDE1EE] text-[#6B738A] hover:border-[#185FA5] hover:text-[#185FA5] px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+              >
+                {linkMutation.isPending ? '...' : 'Vincularme'}
+              </button>
+            )}
           </div>
           <p className="text-xs text-[#6B738A]">
             {group.specialty ? `${group.specialty} · ` : ''}
             {group.total} consulta{group.total > 1 ? 's' : ''} · {group.completed} completada{group.completed !== 1 ? 's' : ''} · última {fmtFechaHora(group.lastAt)}
           </p>
+          {linkError && <p className="text-[10px] text-[#D14343] mt-0.5">{linkError}</p>}
         </div>
         <IconChevron open={open} />
       </button>

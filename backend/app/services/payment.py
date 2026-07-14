@@ -53,6 +53,34 @@ def generate_qr_data(
     }
 
 
+def compute_professional_scheduled_qr_deadline(scheduled_at: datetime, now: datetime | None = None) -> datetime:
+    """
+    Plazo de pago del QR cuando la cita la agenda directamente el
+    profesional (agendamiento libre de membresía — ver
+    /consultations/professional-schedule), donde no aplican los 30 min
+    fijos de siempre porque la cita puede agendarse con días de
+    anticipación.
+
+    Regla (definida junto al usuario):
+      - Si faltan más de 2h para la cita al momento de agendar: el
+        paciente puede pagar hasta 1h antes de que empiece.
+      - Si faltan 2h o menos: el paciente puede pagar hasta 10 min antes.
+      - Piso de seguridad: nunca menos de 5 min desde "ahora", para que
+        una cita agendada casi encima del horario (ej. en 3 minutos)
+        igual le dé al paciente un margen real para pagar.
+    """
+    now = now or datetime.utcnow()
+    lead_time = scheduled_at - now
+
+    if lead_time > timedelta(hours=2):
+        deadline = scheduled_at - timedelta(hours=1)
+    else:
+        deadline = scheduled_at - timedelta(minutes=10)
+
+    floor = now + timedelta(minutes=5)
+    return max(deadline, floor)
+
+
 def calculate_amounts(consultation_amount: Decimal, commission_percent: Decimal) -> dict:
     """
     Calcula la distribución del pago dado un % de comisión ya resuelto

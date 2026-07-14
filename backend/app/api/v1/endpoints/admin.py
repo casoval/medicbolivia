@@ -23,10 +23,13 @@ from app.models.models import (
     ProfessionalDoc, AuditLog, AgentLog, Notification, PlatformSettings,
     ProfessionalStatus, ConsultationStatus, ConsultationType, PaymentStatus, DocStatus, UserStatus,
     Rating, ClinicalNote, ProfessionalPenaltyReset, Earning, Prescription,
-    CommissionPeriod, CommissionScope,
+    CommissionPeriod, CommissionScope, ProfessionalMembership,
     ChatBlock, ProfessionalPatientVisibility, ChatConversation, AdminAccessLog,
 )
-from app.schemas.schemas import DocReviewRequest, RefundRequest, DisputeResolveRequest
+from app.schemas.schemas import (
+    DocReviewRequest, RefundRequest, DisputeResolveRequest,
+    ProfessionalMembershipCreateRequest, ProfessionalMembershipUpdateRequest,
+)
 from app.services.payment import process_refund
 from app.services.commission import get_professional_commission_summary
 from app.core.config import settings
@@ -1565,6 +1568,118 @@ async def delete_commission_period(
 
     await db.commit()
     return {"message": "Período desactivado", "id": period_id}
+
+
+# ─────────────────────────────────────────────────────
+# MEMBRESÍA DE PROFESIONALES (ProfessionalMembership)
+# Habilitación/deshabilitación manual por admin, con registro mensual.
+# No hay cobro automático — el admin la activa cuando confirma el pago
+# por fuera de la plataforma. Ver app/services/commission.py
+# (_has_active_membership) para cómo esto anula la comisión por %.
+# ─────────────────────────────────────────────────────
+
+def _membership_to_dict(m: ProfessionalMembership) -> dict:
+    return {
+        "id": m.id,
+        "professional_id": m.professional_id,
+        "period_label": m.period_label,
+        "starts_at": m.starts_at.isoformat() if m.starts_at else None,
+        "ends_at": m.ends_at.isoformat() if m.ends_at else None,
+        "active": m.active,
+        "note": m.note,
+        "enabled_by_admin_id": m.enabled_by_admin_id,
+        "created_at": m.created_at.isoformat() if m.created_at else None,
+    }
+
+
+@router.get("/memberships", summary="Listar registros de membresía (por profesional o todos)")
+async def list_memberships(
+    professional_id: Optional[str] = Query(None),
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(ProfessionalMembership).order_by(ProfessionalMembership.starts_at.desc())
+    if professional_id:
+        query = query.where(ProfessionalMembership.professional_id == professional_id)
+    rows = (await db.execute(query)).scalars().all()
+    return [_membership_to_dict(m) for m in rows]
+
+
+@router.post("/memberships", summary="Habilitar membresía a un profesional (registro mensual)")
+async def create_membership(
+    data: ProfessionalMembershipCreateRequest,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    exists = (await db.execute(
+        select(Professional.id).where(Professional.id == data.professional_id)
+    )).scalar_one_or_none()
+    if not exists:
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
+    if data.ends_at and data.ends_at <= data.starts_at:
+        raise HTTPException(status_code=400, detail="ends_at debe ser posterior a starts_at")
+
+    membership = ProfessionalMembership(
+        professional_id=data.professional_id,
+        period_label=data.period_label,
+        starts_at=data.starts_at,
+        ends_at=data.ends_at,
+        note=data.note,
+        enabled_by_admin_id=current_user.id,
+    )
+    db.add(membership)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="MEMBERSHIP_ENABLED",
+        entity_type="ProfessionalMembership",
+        entity_id=membership.id,
+        metadata_={
+            "professional_id": data.professional_id,
+            "period_label": data.period_label,
+            "starts_at": data.starts_at.isoformat(),
+            "ends_at": data.ends_at.isoformat() if data.ends_at else None,
+        },
+    ))
+
+    await db.commit()
+    await db.refresh(membership)
+    logger.info(f"Membresía habilitada por admin {current_user.id} para profesional {data.professional_id} ({data.period_label})")
+    return _membership_to_dict(membership)
+
+
+@router.put("/memberships/{membership_id}", summary="Editar/deshabilitar un registro de membresía")
+async def update_membership(
+    membership_id: str,
+    data: ProfessionalMembershipUpdateRequest,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    membership = (await db.execute(
+        select(ProfessionalMembership).where(ProfessionalMembership.id == membership_id)
+    )).scalar_one_or_none()
+    if not membership:
+        raise HTTPException(status_code=404, detail="Registro de membresía no encontrado")
+
+    changes = data.model_dump(exclude_unset=True)
+    if not changes:
+        return _membership_to_dict(membership)
+
+    for field, value in changes.items():
+        setattr(membership, field, value)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="MEMBERSHIP_UPDATED",
+        entity_type="ProfessionalMembership",
+        entity_id=membership.id,
+        metadata_={k: str(v) for k, v in changes.items()},
+    ))
+
+    await db.commit()
+    await db.refresh(membership)
+    return _membership_to_dict(membership)
 
 
 # ── GET /api/v1/admin/commission-periods/current ─────

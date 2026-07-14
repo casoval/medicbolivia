@@ -23,8 +23,26 @@ from decimal import Decimal
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.models import CommissionPeriod, CommissionScope, PlatformSettings
+from app.models.models import CommissionPeriod, CommissionScope, PlatformSettings, ProfessionalMembership
 from app.core.config import settings
+
+
+async def _has_active_membership(db: AsyncSession, professional_id: str, at: datetime) -> bool:
+    """
+    True si el profesional tiene una membresía habilitada por el admin que
+    cubre el momento `at`. La membresía es el nivel de MÁS prioridad de
+    todos — si está activa, la comisión es 0% sin importar promociones
+    globales o individuales configuradas en CommissionPeriod.
+    """
+    result = await db.execute(
+        select(ProfessionalMembership).where(
+            ProfessionalMembership.professional_id == professional_id,
+            ProfessionalMembership.active == True,  # noqa: E712
+            ProfessionalMembership.starts_at <= at,
+            or_(ProfessionalMembership.ends_at.is_(None), ProfessionalMembership.ends_at > at),
+        ).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def _find_active_period(
@@ -61,6 +79,8 @@ async def resolve_commission_percent(
     at = at or datetime.utcnow()
 
     if professional_id:
+        if await _has_active_membership(db, professional_id, at):
+            return Decimal("0.00")
         individual = await _find_active_period(db, CommissionScope.PROFESSIONAL, professional_id, at)
         if individual:
             return individual.percent
@@ -86,6 +106,9 @@ async def get_professional_commission_summary(
     admin: % vigente + de dónde sale (individual / global / default).
     """
     at = at or datetime.utcnow()
+
+    if professional_id and await _has_active_membership(db, professional_id, at):
+        return {"percent": Decimal("0.00"), "source": "MEMBERSHIP", "label": None, "ends_at": None}
 
     individual = (
         await _find_active_period(db, CommissionScope.PROFESSIONAL, professional_id, at)

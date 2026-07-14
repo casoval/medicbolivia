@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, Alert } from '@/components/ui'
-import { api, adminAPI, specialtiesAPI, getErrorMessage, type CommissionPeriod, type CatalogItem } from '@/lib/api'
+import { api, adminAPI, specialtiesAPI, getErrorMessage, type CommissionPeriod, type CatalogItem, type ProfessionalMembership } from '@/lib/api'
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
 
 const DEPARTMENTS = ['Todos','La Paz','Santa Cruz','Cochabamba','Oruro','Potosi','Tarija','Beni','Pando','Chuquisaca']
@@ -585,6 +585,154 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
   )
 }
 
+// Membresía mensual (comisión 0% + agendamiento directo de pacientes
+// vinculados). A diferencia de la comisión individual (arriba), esto NO se
+// cobra dentro de la plataforma — el admin la activa manualmente cuando
+// confirma que el profesional pagó por fuera, y queda un registro por mes.
+function ProfessionalMembershipSection({ professionalId }: { professionalId: string }) {
+  const [memberships, setMemberships] = useState<ProfessionalMembership[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  const [periodLabel, setPeriodLabel] = useState('')
+  const [note, setNote] = useState('')
+  const [endsAt, setEndsAt] = useState('')
+
+  function load() {
+    setLoading(true)
+    adminAPI.listMemberships(professionalId)
+      .then(setMemberships)
+      .catch((err) => setError(getErrorMessage(err)))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(load, [professionalId])
+
+  const now = Date.now()
+  const current = memberships.find((m) => {
+    if (!m.active) return false
+    const started = new Date(m.starts_at).getTime()
+    const ended = m.ends_at ? new Date(m.ends_at).getTime() : null
+    return started <= now && (!ended || ended > now)
+  })
+
+  async function enableMembership() {
+    setError('')
+    if (!periodLabel.trim()) {
+      setError('Indica el período que cubre, ej. "2026-07"')
+      return
+    }
+    setCreating(true)
+    try {
+      await adminAPI.createMembership({
+        professional_id: professionalId,
+        period_label: periodLabel.trim(),
+        starts_at: new Date().toISOString(),
+        ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+        note: note || undefined,
+      })
+      setPeriodLabel(''); setNote(''); setEndsAt('')
+      load()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function disableMembership(id: string) {
+    try {
+      await adminAPI.updateMembership(id, { active: false, ends_at: new Date().toISOString() })
+      load()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Membresía mensual</p>
+        <button onClick={() => setOpen((v) => !v)} className="text-xs text-[#185FA5] hover:underline">
+          {open ? 'Ocultar' : current ? 'Ver / deshabilitar' : 'Habilitar'}
+        </button>
+      </div>
+
+      {current ? (
+        <div className="bg-[#FFF4E0] rounded-lg px-3 py-2 mb-2">
+          <p className="text-xs text-[#8A5A00]">
+            Membresía <span className="font-semibold">activa</span> ({current.period_label}) — comisión 0% y puede
+            agendar directamente a sus pacientes vinculados.
+            {current.ends_at ? ` Vigente hasta el ${fmtDate(current.ends_at)}.` : ''}
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-[#A0A8BF] mb-2">Sin membresía activa — paga comisión normal por cada consulta.</p>
+      )}
+
+      {open && (
+        <div className="bg-[#F5F6FA] rounded-lg p-3 space-y-2">
+          {error && <div><Alert type="error" message={error} /></div>}
+
+          {current ? (
+            <button onClick={() => disableMembership(current.id)}
+              className="text-xs text-[#A32D2D] hover:underline">
+              Deshabilitar membresía ahora
+            </button>
+          ) : (
+            <>
+              <p className="text-[10px] text-[#A0A8BF]">
+                Actívala solo después de confirmar el pago del profesional por fuera de la plataforma. Queda un
+                registro histórico por mes — no se borra, solo se desactiva.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-[#6B738A] mb-1">Período (ej. 2026-07)</label>
+                  <input value={periodLabel} onChange={(e) => setPeriodLabel(e.target.value)}
+                    placeholder="2026-07"
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#6B738A] mb-1">Vence (opcional)</label>
+                  <input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)}
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-[#6B738A] mb-1">Nota (opcional)</label>
+                  <input value={note} onChange={(e) => setNote(e.target.value)}
+                    placeholder="Ej. Pago recibido por QR personal, ref. 123"
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
+              </div>
+              <button onClick={enableMembership} disabled={creating}
+                className="btn-primary text-xs py-1.5 px-3 disabled:opacity-60">
+                {creating ? 'Guardando…' : 'Habilitar membresía'}
+              </button>
+            </>
+          )}
+
+          {!loading && memberships.length > 0 && (
+            <div className="pt-2 border-t border-[#DDE1EE] space-y-1">
+              {memberships.map((m) => (
+                <div key={m.id} className="flex items-center justify-between text-xs">
+                  <span>
+                    {m.period_label} · desde {fmtDate(m.starts_at)}
+                    {m.ends_at ? ` hasta ${fmtDate(m.ends_at)}` : ' · sin fecha de fin'}
+                    {!m.active && ' (deshabilitada)'}
+                    {m.note && ` — ${m.note}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   professional: Professional; onClose: () => void
   onAction: (id: string, status: string) => void; loading: boolean
@@ -965,6 +1113,9 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
 
           <div className="pt-2 border-t border-[#DDE1EE]">
             <ProfessionalCommissionSection professionalId={local.id} />
+          </div>
+          <div className="pt-2 border-t border-[#DDE1EE]">
+            <ProfessionalMembershipSection professionalId={local.id} />
           </div>
           {!editing && local.bio && (
             <div>

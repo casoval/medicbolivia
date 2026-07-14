@@ -23,9 +23,12 @@ from app.schemas.schemas import (
     ProfessionalPublicResponse, ProfessionalUpdateRequest,
     PriceUpdateRequest, AvailabilityUpdateRequest, DocReviewRequest,
     ScheduleSetRequest, ScheduleResponse, PatientBlockRequest, PatientBlockResponse,
+    PatientLinkResponse,
 )
 from app.services.storage import upload_document_to_r2, upload_photo_to_r2
 from app.services.commission import get_professional_commission_summary
+from app.services.patient_links import professional_has_active_membership
+from app.models.models import PatientProfessionalLink
 from app.services.chat import (
     assert_no_pending_appointments, block_patient_integrally,
     unblock_patient_integrally, get_visibility_block, PendingAppointmentsError,
@@ -1122,3 +1125,61 @@ async def unblock_patient(
     )
     await db.commit()
     logger.info(f"✅ Bloqueo integral levantado: profesional={professional.id} paciente={patient_id}")
+
+# ─────────────────────────────────────────────────────
+# "MIS PACIENTES" — pacientes que se vincularon a este profesional.
+# El vínculo lo crea/revoca siempre el paciente (ver /patients/links).
+# Esto es solo lectura para el profesional, más el estado de su propia
+# membresía (para que el frontend sepa si mostrar el botón "Agendar").
+# ─────────────────────────────────────────────────────
+
+@router.get(
+    "/my-patients",
+    response_model=list[PatientLinkResponse],
+    summary="Listar pacientes vinculados a mí",
+)
+async def list_my_linked_patients(
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db),
+):
+    prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
+
+    rows = (await db.execute(
+        select(PatientProfessionalLink, Patient)
+        .join(Patient, Patient.id == PatientProfessionalLink.patient_id)
+        .where(
+            PatientProfessionalLink.professional_id == professional.id,
+            PatientProfessionalLink.revoked_at.is_(None),
+        )
+        .order_by(PatientProfessionalLink.created_at.desc())
+    )).all()
+
+    return [
+        PatientLinkResponse(
+            id=link.id, patient_id=link.patient_id, professional_id=link.professional_id,
+            created_at=link.created_at, revoked_at=link.revoked_at,
+            patient_first_name=patient.first_name, patient_last_name=patient.last_name,
+            patient_photo_url=patient.photo_url,
+        )
+        for link, patient in rows
+    ]
+
+
+@router.get(
+    "/my-membership",
+    summary="Estado de mi membresía (habilitada/deshabilitada por el admin)",
+)
+async def get_my_membership_status(
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db),
+):
+    prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
+
+    active = await professional_has_active_membership(db, professional.id)
+    return {"active": active}
