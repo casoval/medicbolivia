@@ -28,7 +28,7 @@ from app.schemas.schemas import (
 from app.services.storage import upload_document_to_r2, upload_photo_to_r2
 from app.services.commission import get_professional_commission_summary
 from app.services.patient_links import professional_has_active_membership
-from app.models.models import PatientProfessionalLink
+from app.models.models import PatientProfessionalLink, ProfessionalMembership
 from app.services.chat import (
     assert_no_pending_appointments, block_patient_integrally,
     unblock_patient_integrally, get_visibility_block, PendingAppointmentsError,
@@ -919,7 +919,7 @@ async def compute_available_slots(
 @router.get(
     "/my-patients",
     response_model=list[PatientLinkResponse],
-    summary="Listar pacientes vinculados a mí",
+    summary="Listar mis vínculos con pacientes (incluye revocados)",
 )
 async def list_my_linked_patients(
     current_user: User = Depends(get_current_professional),
@@ -930,15 +930,23 @@ async def list_my_linked_patients(
     if not professional:
         raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
 
+    # OJO: ya no filtramos revoked_at IS NULL. El frontend necesita saber
+    # también cuáles se desvincularon explícitamente, para no ofrecer
+    # "Agendar cita" a un paciente que ya tuvo consulta pero luego se
+    # desvinculó (ver groupByPatient en professional/patients/page.tsx).
+    # Nos quedamos con la fila MÁS RECIENTE por paciente — si se vinculó,
+    # se desvinculó y se volvió a vincular, manda el estado actual.
     rows = (await db.execute(
         select(PatientProfessionalLink, Patient)
         .join(Patient, Patient.id == PatientProfessionalLink.patient_id)
-        .where(
-            PatientProfessionalLink.professional_id == professional.id,
-            PatientProfessionalLink.revoked_at.is_(None),
-        )
+        .where(PatientProfessionalLink.professional_id == professional.id)
         .order_by(PatientProfessionalLink.created_at.desc())
     )).all()
+
+    latest_by_patient: dict[str, tuple] = {}
+    for link, patient in rows:
+        if link.patient_id not in latest_by_patient:
+            latest_by_patient[link.patient_id] = (link, patient)
 
     return [
         PatientLinkResponse(
@@ -947,13 +955,14 @@ async def list_my_linked_patients(
             patient_first_name=patient.first_name, patient_last_name=patient.last_name,
             patient_photo_url=patient.photo_url,
         )
-        for link, patient in rows
+        for link, patient in latest_by_patient.values()
     ]
+
 
 
 @router.get(
     "/my-membership",
-    summary="Estado de mi membresía (habilitada/deshabilitada por el admin)",
+    summary="Estado y detalle de mi membresía (habilitada/deshabilitada por el admin)",
 )
 async def get_my_membership_status(
     current_user: User = Depends(get_current_professional),
@@ -965,7 +974,41 @@ async def get_my_membership_status(
         raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
 
     active = await professional_has_active_membership(db, professional.id)
-    return {"active": active}
+
+    # Detalle completo para que el profesional vea, en su propio perfil,
+    # exactamente qué tiene vigente y su historial (todo lo habilita/
+    # deshabilita un admin manualmente, ver ProfessionalMembership).
+    rows = (await db.execute(
+        select(ProfessionalMembership)
+        .where(ProfessionalMembership.professional_id == professional.id)
+        .order_by(ProfessionalMembership.starts_at.desc())
+    )).scalars().all()
+
+    def _serialize(m: ProfessionalMembership) -> dict:
+        now_bolivia = datetime.now(BOLIVIA_TZ).replace(tzinfo=None)
+        is_current = (
+            m.active
+            and m.starts_at <= now_bolivia
+            and (m.ends_at is None or m.ends_at > now_bolivia)
+        )
+        return {
+            "id": m.id,
+            "period_label": m.period_label,
+            "starts_at": m.starts_at.isoformat() if m.starts_at else None,
+            "ends_at": m.ends_at.isoformat() if m.ends_at else None,
+            "active": m.active,
+            "note": m.note,
+            "is_current": is_current,
+        }
+
+    serialized = [_serialize(m) for m in rows]
+    current = next((m for m in serialized if m["is_current"]), None)
+
+    return {
+        "active": active,
+        "current": current,
+        "history": serialized,
+    }
 
 
 # ── GET /api/v1/professionals/{id}/available-slots ──

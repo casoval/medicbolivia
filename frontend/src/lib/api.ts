@@ -357,10 +357,27 @@ export const professionalsAPI = {
   getMyPatients: () =>
     api.get<PatientLink[]>('/professionals/my-patients').then(r => r.data),
 
-  // Estado de mi membresía (la habilita/deshabilita un admin manualmente).
-  // Si active=false, /consultations/professional-schedule devuelve 403.
+  // Estado y detalle de mi membresía (la habilita/deshabilita un admin
+  // manualmente). Si active=false, /consultations/professional-schedule
+  // devuelve 403.
   getMyMembership: () =>
-    api.get<{ active: boolean }>('/professionals/my-membership').then(r => r.data),
+    api.get<MyMembershipStatus>('/professionals/my-membership').then(r => r.data),
+}
+
+export interface MembershipPeriod {
+  id: string
+  period_label: string | null
+  starts_at: string | null
+  ends_at: string | null
+  active: boolean
+  note: string | null
+  is_current: boolean
+}
+
+export interface MyMembershipStatus {
+  active: boolean
+  current: MembershipPeriod | null
+  history: MembershipPeriod[]
 }
 
 

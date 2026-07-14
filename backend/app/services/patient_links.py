@@ -41,6 +41,45 @@ async def get_active_link(db: AsyncSession, patient_id: str, professional_id: st
     return result.scalar_one_or_none()
 
 
+async def has_effective_link(db: AsyncSession, patient_id: str, professional_id: str) -> bool:
+    """
+    Vínculo "efectivo": true si este paciente debe considerarse vinculado
+    a este profesional para efectos de agendamiento directo (membresía) —
+    es decir, si aparece en "Mis pacientes" del profesional.
+
+    - Si existe una fila de PatientProfessionalLink (la más reciente
+      manda): activa (revoked_at IS NULL) → vinculado; revocada → el
+      paciente cortó el vínculo a propósito, no vinculado, aunque haya
+      consultas previas.
+    - Si NO existe ninguna fila (nunca se vinculó a mano, y la consulta es
+      de antes de que existiera el auto-vínculo — ver
+      ensure_patient_professional_link), se cae al historial: si tuvo al
+      menos una consulta COMPLETED con este profesional, por lógica ya es
+      "su paciente" y cuenta como vinculado.
+    """
+    existing = await db.execute(
+        select(PatientProfessionalLink)
+        .where(
+            PatientProfessionalLink.patient_id == patient_id,
+            PatientProfessionalLink.professional_id == professional_id,
+        )
+        .order_by(PatientProfessionalLink.created_at.desc())
+        .limit(1)
+    )
+    link = existing.scalar_one_or_none()
+    if link is not None:
+        return link.revoked_at is None
+
+    result = await db.execute(
+        select(Consultation.id).where(
+            Consultation.patient_id == patient_id,
+            Consultation.professional_id == professional_id,
+            Consultation.status == ConsultationStatus.COMPLETED,
+        ).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def has_pending_consultations_between(db: AsyncSession, patient_id: str, professional_id: str) -> bool:
     result = await db.execute(
         select(Consultation.id).where(

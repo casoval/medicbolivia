@@ -121,6 +121,15 @@ export default function ProfilePage() {
   })
   const unreadCount = notifications.filter((n) => !n.read).length
 
+  // Detalle completo de mi membresía (la habilita/deshabilita un admin
+  // manualmente) — estado actual + historial, para tener toda la info a
+  // la vista en mi propio perfil.
+  const { data: membership } = useQuery({
+    queryKey: ['my-membership'],
+    queryFn: professionalsAPI.getMyMembership,
+    staleTime: 30_000,
+  })
+
   async function markAllNotifsRead() {
     if (unreadCount === 0) return
     try {
@@ -637,6 +646,61 @@ export default function ProfilePage() {
                 Guardar precios
               </button>
             </div>
+          </div>
+
+          {/* Membresía */}
+          <div className="card">
+            <SectionTitle>Membresía</SectionTitle>
+            <p className="text-xs text-[#6B738A] mb-3">
+              La habilita o deshabilita el administrador manualmente. Con membresía activa no pagas comisión por tus consultas y puedes agendar directamente a los pacientes de "Mis pacientes", sin límite de horario.
+            </p>
+
+            {membership?.active && membership.current ? (
+              <div className="bg-[#E1F5EE] rounded-lg px-3 py-2.5 mb-3">
+                <p className="text-xs text-[#0F6E56] font-semibold mb-1">🟢 Membresía activa</p>
+                <p className="text-xs text-[#0F6E56]">
+                  {membership.current.period_label && <>Periodo: <span className="font-medium">{membership.current.period_label}</span>. </>}
+                  Desde el {membership.current.starts_at ? new Date(membership.current.starts_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                  {membership.current.ends_at
+                    ? <> hasta el {new Date(membership.current.ends_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}.</>
+                    : <>, sin fecha de fin definida (vigente hasta que el administrador la cierre).</>}
+                </p>
+                {membership.current.note && (
+                  <p className="text-xs text-[#0F6E56] mt-1">Nota del administrador: {membership.current.note}</p>
+                )}
+              </div>
+            ) : (
+              <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-3">
+                <p className="text-xs text-[#185FA5]">
+                  No tienes una membresía activa. Contacta al administrador para habilitarla — mientras tanto, operas con la comisión normal por consulta y sin agendamiento directo a "Mis pacientes".
+                </p>
+              </div>
+            )}
+
+            {membership && membership.history.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Historial</p>
+                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  {membership.history.map((m) => (
+                    <div key={m.id} className="flex items-center justify-between gap-2 bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium truncate">
+                          {m.period_label || 'Sin etiqueta'}
+                        </p>
+                        <p className="text-[11px] text-[#6B738A]">
+                          {m.starts_at ? new Date(m.starts_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                          {' → '}
+                          {m.ends_at ? new Date(m.ends_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' }) : 'sin fin'}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${m.is_current ? 'bg-[#E1F5EE] text-[#0F6E56]' : m.active ? 'bg-[#F5F6FA] text-[#6B738A]' : 'bg-[#FEE2E2] text-[#B91C1C]'}`}>
+                        {m.is_current ? 'Vigente' : m.active ? 'Habilitada' : 'Deshabilitada'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Documentos de verificación */}

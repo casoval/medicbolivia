@@ -26,7 +26,7 @@ from app.schemas.schemas import (
 )
 from app.services.payment import generate_qr_data, calculate_amounts, compute_professional_scheduled_qr_deadline
 from app.services.commission import resolve_commission_percent
-from app.services.patient_links import get_active_link, professional_has_active_membership
+from app.services.patient_links import has_effective_link, professional_has_active_membership
 from app.core.config import settings
 from livekit import api as lk
 
@@ -638,8 +638,12 @@ async def professional_schedule_consultation(
             detail="Necesitas una membresía activa para agendar directamente a un paciente. Contacta al administrador.",
         )
 
-    link = await get_active_link(db, data.patient_id, professional.id)
-    if not link:
+    # Vínculo "efectivo": vale tanto el vínculo manual (PatientProfessionalLink
+    # activo) como el histórico (ya tuvo una consulta COMPLETED conmigo) —
+    # cualquier paciente que aparezca en "Mis pacientes" se puede agendar
+    # directamente si hay membresía activa. Se sigue respetando si el
+    # paciente revocó el vínculo explícitamente (ver has_effective_link).
+    if not await has_effective_link(db, data.patient_id, professional.id):
         raise HTTPException(
             status_code=403,
             detail="Este paciente no está vinculado a ti. El paciente debe vincularse primero desde su cuenta.",
