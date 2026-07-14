@@ -22,3 +22,4 @@ loguru
 livekit-api
 bcrypt==4.0.1
 celery
+python-dateutil

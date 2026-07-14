@@ -115,10 +115,14 @@ export interface CurrentCommission {
 export interface ProfessionalMembership {
   id: string
   professional_id: string
-  period_label: string
+  period_label: string | null
   starts_at: string
   ends_at: string | null
   active: boolean
+  // true si "hoy" cae dentro de [starts_at, ends_at) y active=true.
+  // Úsalo para decidir si mostrar "Renovar" (sigue vigente) o forzar
+  // "Nueva membresía" (ya venció) — no lo calcules a mano en el front.
+  is_current: boolean
   note: string | null
   enabled_by_admin_id: string | null
   created_at: string
@@ -126,9 +130,20 @@ export interface ProfessionalMembership {
 
 export interface ProfessionalMembershipCreate {
   professional_id: string
-  period_label: string
-  starts_at: string
-  ends_at?: string | null
+  // Nota libre del admin (ej. "2026-07"), opcional. No afecta la
+  // vigencia — eso lo deciden starts_at/months.
+  period_label?: string
+  // Si se omite, arranca "hoy" (hora del server).
+  starts_at?: string | null
+  // Meses pagados de una vez (mínimo 1). ends_at se calcula en el
+  // backend como starts_at + months meses calendario — ya no se manda.
+  months: number
+  note?: string
+}
+
+export interface ProfessionalMembershipRenew {
+  // Mínimo 1 mes. El backend rechaza esto si la membresía ya venció.
+  months: number
   note?: string
 }
 
@@ -1006,6 +1021,9 @@ export const adminAPI = {
 
   createMembership: (data: ProfessionalMembershipCreate) =>
     api.post<ProfessionalMembership>('/admin/memberships', data).then(r => r.data),
+
+  renewMembership: (id: string, data: ProfessionalMembershipRenew) =>
+    api.post<ProfessionalMembership>(`/admin/memberships/${id}/renew`, data).then(r => r.data),
 
   updateMembership: (id: string, data: ProfessionalMembershipUpdate) =>
     api.put<ProfessionalMembership>(`/admin/memberships/${id}`, data).then(r => r.data),

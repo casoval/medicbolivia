@@ -17,7 +17,7 @@ guarda como foto fija en la Consultation/Payment al momento de crearlos
 (ver consultations.py), así que cambios futuros de comisión nunca
 recalculan consultas ya generadas.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import select, and_, or_
@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import CommissionPeriod, CommissionScope, PlatformSettings, ProfessionalMembership
 from app.core.config import settings
+from app.core.timezone import BOLIVIA_TZ
 
 
 async def _has_active_membership(db: AsyncSession, professional_id: str, at: datetime) -> bool:
@@ -33,13 +34,22 @@ async def _has_active_membership(db: AsyncSession, professional_id: str, at: dat
     cubre el momento `at`. La membresía es el nivel de MÁS prioridad de
     todos — si está activa, la comisión es 0% sin importar promociones
     globales o individuales configuradas en CommissionPeriod.
+
+    `at` llega en hora UTC (igual que el resto de la app), pero
+    ProfessionalMembership.starts_at/ends_at se guardan en hora de
+    Bolivia (ver app.core.timezone) porque son "días calendario" que
+    eligió el admin, no timestamps técnicos. Se convierte acá para no
+    comparar peras con manzanas.
     """
+    if at.tzinfo is not None:
+        at = at.astimezone(timezone.utc).replace(tzinfo=None)
+    at_bolivia = (at.replace(tzinfo=timezone.utc)).astimezone(BOLIVIA_TZ).replace(tzinfo=None)
     result = await db.execute(
         select(ProfessionalMembership).where(
             ProfessionalMembership.professional_id == professional_id,
             ProfessionalMembership.active == True,  # noqa: E712
-            ProfessionalMembership.starts_at <= at,
-            or_(ProfessionalMembership.ends_at.is_(None), ProfessionalMembership.ends_at > at),
+            ProfessionalMembership.starts_at <= at_bolivia,
+            or_(ProfessionalMembership.ends_at.is_(None), ProfessionalMembership.ends_at > at_bolivia),
         ).limit(1)
     )
     return result.scalar_one_or_none() is not None

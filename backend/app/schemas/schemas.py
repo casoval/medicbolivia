@@ -4,7 +4,7 @@ Esquemas Pydantic para validación de requests y serialización de responses.
 """
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from app.core.phone import normalize_bo_phone, normalize_intl_phone, InvalidPhoneError
 from app.models.models import (
@@ -407,11 +407,60 @@ class PatientLinkResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def _to_naive_utc(v: Optional[datetime]) -> Optional[datetime]:
+    """Normaliza cualquier datetime entrante a naive-UTC.
+
+    El frontend puede mandar ISO con 'Z' u offset (tz-aware) mientras que
+    las columnas en DB son TIMESTAMP WITHOUT TIME ZONE (naive). Mezclar
+    ambos en el mismo INSERT rompe asyncpg ("can't subtract offset-naive
+    and offset-aware datetimes"), así que se normaliza aquí, en el borde
+    de entrada, antes de que llegue a cualquier servicio o al ORM.
+    """
+    if v is None:
+        return v
+    if v.tzinfo is not None:
+        v = v.astimezone(timezone.utc).replace(tzinfo=None)
+    return v
+
+
+def _to_bolivia_naive(v: Optional[datetime]) -> Optional[datetime]:
+    """Igual que _to_naive_utc pero en hora de Bolivia, no UTC.
+
+    ProfessionalMembership.starts_at/ends_at viven en el dominio
+    "Bolivia-naive" (ver app.core.timezone) para que "¿sigue vigente
+    ahora?" se compare correctamente contra bolivia_now_naive(). Si acá
+    se normalizara a UTC en cambio, un "deshabilitar ahora" podría dejar
+    la membresía viéndose activa hasta 4 horas de más.
+    """
+    if v is None:
+        return v
+    from app.core.timezone import BOLIVIA_TZ
+    if v.tzinfo is not None:
+        v = v.astimezone(BOLIVIA_TZ).replace(tzinfo=None)
+    return v
+
+
 class ProfessionalMembershipCreateRequest(BaseModel):
     professional_id: str
-    period_label: str
-    starts_at: datetime
-    ends_at: Optional[datetime] = None
+    period_label: Optional[str] = None
+    # Si no se manda, arranca "hoy" en hora de Bolivia. OJO: a propósito
+    # NO se normaliza tzinfo acá — el endpoint (as_bolivia_calendar_day)
+    # necesita el tzinfo original intacto para convertir bien el día
+    # calendario elegido; si se le quita acá, se pierde el offset y el
+    # cálculo del día queda mal.
+    starts_at: Optional[datetime] = None
+    # Meses pagados de una vez (1 = un mes, 3 = trimestre, etc).
+    # ends_at YA NO se manda a mano: siempre se calcula como
+    # starts_at + months meses calendario (15 jul + 1 mes = 15 ago).
+    months: int = Field(default=1, ge=1)
+    note: Optional[str] = None
+
+
+class ProfessionalMembershipRenewRequest(BaseModel):
+    # Mínimo 1 mes. Solo aplica si la membresía sigue vigente al momento
+    # de renovar (ver regla de negocio en el endpoint); si ya venció, no
+    # se renueva — hay que crear una membresía nueva desde cero.
+    months: int = Field(default=1, ge=1)
     note: Optional[str] = None
 
 
@@ -419,6 +468,11 @@ class ProfessionalMembershipUpdateRequest(BaseModel):
     active: Optional[bool] = None
     ends_at: Optional[datetime] = None
     note: Optional[str] = None
+
+    @field_validator("ends_at")
+    @classmethod
+    def _normalize_tz2(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return _to_bolivia_naive(v)
 
 
 class PaymentWebhookRequest(BaseModel):

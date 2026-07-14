@@ -775,9 +775,10 @@ class ProfessionalMembership(Base):
     professional_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("professionals.id", ondelete="CASCADE"), nullable=False
     )
-    # Mes que cubre este registro, ej. "2026-07". Puramente informativo/de
-    # reporte para el admin — la vigencia real la deciden starts_at/ends_at.
-    period_label: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Nota libre del admin, ej. "2026-07" o cualquier texto para
+    # identificar la fila en el historial. Opcional — NO controla la
+    # vigencia real, eso lo deciden starts_at/ends_at.
+    period_label: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     starts_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     # Si es NULL, queda vigente hasta que el admin la cierre explícitamente.
     ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

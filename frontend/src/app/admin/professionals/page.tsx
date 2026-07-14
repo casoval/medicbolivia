@@ -9,6 +9,85 @@ import { StatusBadge, LoadingScreen, Alert } from '@/components/ui'
 import { api, adminAPI, specialtiesAPI, getErrorMessage, type CommissionPeriod, type CatalogItem, type ProfessionalMembership } from '@/lib/api'
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
 
+// ── Selector de fecha en español, semana empieza en lunes ──────────────
+// El <input type="date"> nativo usa el idioma/región del SISTEMA
+// OPERATIVO del usuario, no el idioma de la página (por eso salía en
+// inglés con domingo primero aunque <html lang="es">) — no hay forma
+// confiable de forzar eso vía HTML/CSS en todos los navegadores. Este
+// componente reemplaza el input nativo para tener control total.
+const ES_MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+]
+const ES_DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+function fmtDateEs(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return `${d} de ${ES_MESES[m - 1]} de ${y}`
+}
+
+function SpanishDatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const today = new Date()
+  const [viewY, setViewY] = useState(value ? Number(value.split('-')[0]) : today.getFullYear())
+  const [viewM, setViewM] = useState(value ? Number(value.split('-')[1]) - 1 : today.getMonth())
+
+  const firstOfMonth = new Date(viewY, viewM, 1)
+  // getDay(): 0=domingo..6=sábado. Convertimos a 0=lunes..6=domingo.
+  const leadingBlanks = (firstOfMonth.getDay() + 6) % 7
+  const daysInMonth = new Date(viewY, viewM + 1, 0).getDate()
+
+  function pad(n: number) { return String(n).padStart(2, '0') }
+  function pick(day: number) {
+    onChange(`${viewY}-${pad(viewM + 1)}-${pad(day)}`)
+    setOpen(false)
+  }
+  function changeMonth(delta: number) {
+    let m = viewM + delta, y = viewY
+    if (m < 0) { m = 11; y -= 1 }
+    if (m > 11) { m = 0; y += 1 }
+    setViewM(m); setViewY(y)
+  }
+
+  const selectedDay = value && Number(value.split('-')[0]) === viewY && Number(value.split('-')[1]) - 1 === viewM
+    ? Number(value.split('-')[2])
+    : null
+
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen((v) => !v)}
+        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm text-left bg-white">
+        {value ? fmtDateEs(value) : 'Elegir fecha…'}
+      </button>
+      {open && (
+        <div className="mt-1 border border-[#DDE1EE] rounded-lg bg-white p-2 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <button type="button" onClick={() => changeMonth(-1)} className="px-2 text-[#6B738A] hover:text-[#185FA5]">‹</button>
+            <span className="text-xs font-semibold text-[#3A4256] capitalize">{ES_MESES[viewM]} {viewY}</span>
+            <button type="button" onClick={() => changeMonth(1)} className="px-2 text-[#6B738A] hover:text-[#185FA5]">›</button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {ES_DIAS_CORTOS.map((d) => (
+              <span key={d} className="text-[10px] text-[#A0A8BF]">{d}</span>
+            ))}
+            {Array.from({ length: leadingBlanks }).map((_, i) => <span key={`b${i}`} />)}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1
+              const isSelected = selectedDay === day
+              return (
+                <button type="button" key={day} onClick={() => pick(day)}
+                  className={`text-xs rounded-md py-1 ${isSelected ? 'bg-[#185FA5] text-white' : 'hover:bg-[#F5F6FA] text-[#3A4256]'}`}>
+                  {day}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const DEPARTMENTS = ['Todos','La Paz','Santa Cruz','Cochabamba','Oruro','Potosi','Tarija','Beni','Pando','Chuquisaca']
 
 const DOC_LABELS: Record<string, string> = {
@@ -594,11 +673,17 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
+  const [renewing, setRenewing] = useState(false)
   const [open, setOpen] = useState(false)
 
   const [periodLabel, setPeriodLabel] = useState('')
   const [note, setNote] = useState('')
-  const [endsAt, setEndsAt] = useState('')
+  // 'today' = arranca hoy; 'custom' = el admin elige la fecha de inicio.
+  const [startMode, setStartMode] = useState<'today' | 'custom'>('today')
+  const [customStart, setCustomStart] = useState('')
+  const [months, setMonths] = useState(1)
+
+  const [renewMonths, setRenewMonths] = useState(1)
 
   function load() {
     setLoading(true)
@@ -610,35 +695,55 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
 
   useEffect(load, [professionalId])
 
-  const now = Date.now()
-  const current = memberships.find((m) => {
-    if (!m.active) return false
-    const started = new Date(m.starts_at).getTime()
-    const ended = m.ends_at ? new Date(m.ends_at).getTime() : null
-    return started <= now && (!ended || ended > now)
-  })
+  // El backend ya calcula is_current; no lo recalculamos a mano acá para
+  // no desincronizarnos si cambia la regla de vigencia.
+  const current = memberships.find((m) => m.is_current)
 
   async function enableMembership() {
     setError('')
-    if (!periodLabel.trim()) {
-      setError('Indica el período que cubre, ej. "2026-07"')
+    if (startMode === 'custom' && !customStart) {
+      setError('Elige la fecha de inicio o usa "Empezar hoy"')
+      return
+    }
+    if (months < 1) {
+      setError('Mínimo 1 mes')
       return
     }
     setCreating(true)
     try {
       await adminAPI.createMembership({
         professional_id: professionalId,
-        period_label: periodLabel.trim(),
-        starts_at: new Date().toISOString(),
-        ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+        period_label: periodLabel.trim() || undefined,
+        starts_at: startMode === 'custom' ? `${customStart}T00:00:00` : undefined,
+        months,
         note: note || undefined,
       })
-      setPeriodLabel(''); setNote(''); setEndsAt('')
+      setPeriodLabel(''); setNote(''); setCustomStart(''); setStartMode('today'); setMonths(1)
       load()
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
       setCreating(false)
+    }
+  }
+
+  async function renewMembership(id: string) {
+    setError('')
+    if (renewMonths < 1) {
+      setError('Mínimo 1 mes')
+      return
+    }
+    setRenewing(true)
+    try {
+      // El backend rechaza esto si la membresía ya venció: en ese caso
+      // hay que dar de alta una nueva (no se puede "revivir" una vencida).
+      await adminAPI.renewMembership(id, { months: renewMonths })
+      setRenewMonths(1)
+      load()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setRenewing(false)
     }
   }
 
@@ -663,7 +768,7 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
       {current ? (
         <div className="bg-[#FFF4E0] rounded-lg px-3 py-2 mb-2">
           <p className="text-xs text-[#8A5A00]">
-            Membresía <span className="font-semibold">activa</span> ({current.period_label}) — comisión 0% y puede
+            Membresía <span className="font-semibold">activa</span>{current.period_label ? ` (${current.period_label})` : ''} — comisión 0% y puede
             agendar directamente a sus pacientes vinculados.
             {current.ends_at ? ` Vigente hasta el ${fmtDate(current.ends_at)}.` : ''}
           </p>
@@ -677,27 +782,65 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
           {error && <div><Alert type="error" message={error} /></div>}
 
           {current ? (
-            <button onClick={() => disableMembership(current.id)}
-              className="text-xs text-[#A32D2D] hover:underline">
-              Deshabilitar membresía ahora
-            </button>
+            <>
+              <p className="text-[10px] text-[#A0A8BF]">
+                Sigue vigente hasta el {fmtDate(current.ends_at)} — puedes renovarla desde ya (se suma a esa
+                fecha) o deshabilitarla antes de tiempo.
+              </p>
+              <div className="flex items-end gap-2">
+                <div>
+                  <label className="block text-xs text-[#6B738A] mb-1">Meses a renovar</label>
+                  <input type="number" min={1} step={1} value={renewMonths}
+                    onChange={(e) => setRenewMonths(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-24 px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
+                <button onClick={() => renewMembership(current.id)} disabled={renewing}
+                  className="btn-primary text-xs py-1.5 px-3 disabled:opacity-60">
+                  {renewing ? 'Renovando…' : `Renovar ${renewMonths} mes${renewMonths > 1 ? 'es' : ''}`}
+                </button>
+              </div>
+              <button onClick={() => disableMembership(current.id)}
+                className="text-xs text-[#A32D2D] hover:underline">
+                Deshabilitar membresía ahora
+              </button>
+            </>
           ) : (
             <>
               <p className="text-[10px] text-[#A0A8BF]">
                 Actívala solo después de confirmar el pago del profesional por fuera de la plataforma. Queda un
-                registro histórico por mes — no se borra, solo se desactiva.
+                registro histórico por mes — no se borra, solo se desactiva. El vencimiento se calcula solo
+                (inicio + meses pagados, mes calendario exacto).
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">Período (ej. 2026-07)</label>
+                  <label className="block text-xs text-[#6B738A] mb-1">Nota de período (opcional)</label>
                   <input value={periodLabel} onChange={(e) => setPeriodLabel(e.target.value)}
-                    placeholder="2026-07"
+                    placeholder="Ej. 2026-07, o cualquier referencia tuya"
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">Vence (opcional)</label>
-                  <input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)}
+                  <label className="block text-xs text-[#6B738A] mb-1">Meses pagados</label>
+                  <input type="number" min={1} step={1} value={months}
+                    onChange={(e) => setMonths(Math.max(1, parseInt(e.target.value) || 1))}
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-[#6B738A] mb-1">Inicio</label>
+                  <div className="flex items-center gap-3 mb-1">
+                    <label className="flex items-center gap-1 text-xs text-[#3A4256]">
+                      <input type="radio" checked={startMode === 'today'}
+                        onChange={() => setStartMode('today')} />
+                      Empezar hoy
+                    </label>
+                    <label className="flex items-center gap-1 text-xs text-[#3A4256]">
+                      <input type="radio" checked={startMode === 'custom'}
+                        onChange={() => setStartMode('custom')} />
+                      Elegir fecha
+                    </label>
+                  </div>
+                  {startMode === 'custom' && (
+                    <SpanishDatePicker value={customStart} onChange={setCustomStart} />
+                  )}
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs text-[#6B738A] mb-1">Nota (opcional)</label>
@@ -718,8 +861,9 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
               {memberships.map((m) => (
                 <div key={m.id} className="flex items-center justify-between text-xs">
                   <span>
-                    {m.period_label} · desde {fmtDate(m.starts_at)}
+                    {m.period_label ? `${m.period_label} · ` : ''}desde {fmtDate(m.starts_at)}
                     {m.ends_at ? ` hasta ${fmtDate(m.ends_at)}` : ' · sin fecha de fin'}
+                    {m.is_current && ' (vigente)'}
                     {!m.active && ' (deshabilitada)'}
                     {m.note && ` — ${m.note}`}
                   </span>

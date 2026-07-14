@@ -9,7 +9,10 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from loguru import logger
+
+from app.core.timezone import bolivia_today_midnight_naive, bolivia_now_naive, as_bolivia_calendar_day
 
 from pydantic import BaseModel, Field
 
@@ -29,6 +32,7 @@ from app.models.models import (
 from app.schemas.schemas import (
     DocReviewRequest, RefundRequest, DisputeResolveRequest,
     ProfessionalMembershipCreateRequest, ProfessionalMembershipUpdateRequest,
+    ProfessionalMembershipRenewRequest,
 )
 from app.services.payment import process_refund
 from app.services.commission import get_professional_commission_summary
@@ -1579,6 +1583,13 @@ async def delete_commission_period(
 # ─────────────────────────────────────────────────────
 
 def _membership_to_dict(m: ProfessionalMembership) -> dict:
+    # starts_at/ends_at se guardan en hora Bolivia (día calendario que
+    # eligió el admin) — hay que comparar contra "ahora" en Bolivia, no
+    # UTC, o la vigencia queda corrida hasta 4 horas.
+    now = bolivia_now_naive()
+    is_current = bool(
+        m.active and m.starts_at <= now and (m.ends_at is None or m.ends_at > now)
+    )
     return {
         "id": m.id,
         "professional_id": m.professional_id,
@@ -1586,6 +1597,10 @@ def _membership_to_dict(m: ProfessionalMembership) -> dict:
         "starts_at": m.starts_at.isoformat() if m.starts_at else None,
         "ends_at": m.ends_at.isoformat() if m.ends_at else None,
         "active": m.active,
+        # True solo si hoy cae dentro de [starts_at, ends_at). El
+        # frontend usa esto para decidir si mostrar "Renovar" (sigue
+        # vigente) o forzar "Nueva membresía" (ya venció).
+        "is_current": is_current,
         "note": m.note,
         "enabled_by_admin_id": m.enabled_by_admin_id,
         "created_at": m.created_at.isoformat() if m.created_at else None,
@@ -1617,14 +1632,21 @@ async def create_membership(
     if not exists:
         raise HTTPException(status_code=404, detail="Profesional no encontrado")
 
-    if data.ends_at and data.ends_at <= data.starts_at:
-        raise HTTPException(status_code=400, detail="ends_at debe ser posterior a starts_at")
+    # Si no se manda starts_at, arranca "hoy" EN HORA DE BOLIVIA (no UTC:
+    # con UTC, después de las 20:00 en La Paz ya sería "mañana"). Si el
+    # admin sí eligió una fecha, se toma solo el día calendario elegido
+    # — la hora exacta no importa para una membresía.
+    # ends_at siempre se calcula como starts_at + N meses CALENDARIO
+    # (15 jul + 1 mes = 15 ago; con timedelta(days=30) hubiera dado
+    # 14 ago, mal), nunca a mano.
+    starts_at = as_bolivia_calendar_day(data.starts_at) if data.starts_at else bolivia_today_midnight_naive()
+    ends_at = starts_at + relativedelta(months=data.months)
 
     membership = ProfessionalMembership(
         professional_id=data.professional_id,
         period_label=data.period_label,
-        starts_at=data.starts_at,
-        ends_at=data.ends_at,
+        starts_at=starts_at,
+        ends_at=ends_at,
         note=data.note,
         enabled_by_admin_id=current_user.id,
     )
@@ -1638,14 +1660,70 @@ async def create_membership(
         metadata_={
             "professional_id": data.professional_id,
             "period_label": data.period_label,
-            "starts_at": data.starts_at.isoformat(),
-            "ends_at": data.ends_at.isoformat() if data.ends_at else None,
+            "months": data.months,
+            "starts_at": starts_at.isoformat(),
+            "ends_at": ends_at.isoformat(),
         },
     ))
 
     await db.commit()
     await db.refresh(membership)
-    logger.info(f"Membresía habilitada por admin {current_user.id} para profesional {data.professional_id} ({data.period_label})")
+    logger.info(f"Membresía habilitada por admin {current_user.id} para profesional {data.professional_id} ({data.period_label}, {data.months} mes(es))")
+    return _membership_to_dict(membership)
+
+
+@router.post("/memberships/{membership_id}/renew", summary="Renovar membresía (solo si sigue vigente)")
+async def renew_membership(
+    membership_id: str,
+    data: ProfessionalMembershipRenewRequest,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    membership = (await db.execute(
+        select(ProfessionalMembership).where(ProfessionalMembership.id == membership_id)
+    )).scalar_one_or_none()
+    if not membership:
+        raise HTTPException(status_code=404, detail="Membresía no encontrada")
+
+    now = bolivia_now_naive()
+    vigente = (
+        membership.active
+        and membership.starts_at <= now
+        and (membership.ends_at is None or membership.ends_at > now)
+    )
+    if not vigente:
+        # Regla de negocio: si ya venció (o fue desactivada), no se
+        # "revive" con una renovación — hay que dar de alta una
+        # membresía nueva (POST /memberships) desde cero.
+        raise HTTPException(
+            status_code=400,
+            detail="La membresía ya venció o está inactiva. Crea una nueva membresía en vez de renovar esta.",
+        )
+
+    base = membership.ends_at  # siempre vigente aquí, así que nunca es None
+    new_ends_at = base + relativedelta(months=data.months)
+
+    old_ends_at = membership.ends_at
+    membership.ends_at = new_ends_at
+    if data.note:
+        membership.note = data.note
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="MEMBERSHIP_RENEWED",
+        entity_type="ProfessionalMembership",
+        entity_id=membership.id,
+        metadata_={
+            "professional_id": membership.professional_id,
+            "months": data.months,
+            "old_ends_at": old_ends_at.isoformat() if old_ends_at else None,
+            "new_ends_at": new_ends_at.isoformat(),
+        },
+    ))
+
+    await db.commit()
+    await db.refresh(membership)
+    logger.info(f"Membresía {membership_id} renovada por admin {current_user.id}: +{data.months} mes(es) -> {new_ends_at.isoformat()}")
     return _membership_to_dict(membership)
 
 
