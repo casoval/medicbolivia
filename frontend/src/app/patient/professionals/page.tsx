@@ -16,7 +16,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState } from '@/components/ui'
 import { ProfessionalRecordSummary } from '@/components/patient/ProfessionalRecordSummary'
-import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, patientLinksAPI } from '@/lib/api'
+import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, patientLinksAPI, professionalsAPI } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
 import { fmtFechaHora, fmtFechaHoraLocal } from '@/lib/consultationHistory'
 import type { Consultation, Prescription } from '@/types'
@@ -157,6 +157,17 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
   const isLinked = myLinks.some((l) => l.professional_id === group.professionalId)
   const [linkError, setLinkError] = useState('')
 
+  // Igual que en la búsqueda de profesionales: "Vincularme" solo tiene
+  // sentido si el profesional tiene membresía activa (si no, el vínculo
+  // no da ningún privilegio real). Si ya está vinculado, se deja ver
+  // igual para poder desvincularse.
+  const { data: proProfile } = useQuery({
+    queryKey: ['professional-public-profile', group.professionalId],
+    queryFn: () => professionalsAPI.getById(group.professionalId).then(r => r.data),
+    staleTime: 60_000,
+  })
+  const hasActiveMembership = !!proProfile?.has_active_membership
+
   const linkMutation = useMutation({
     mutationFn: () => (isLinked ? patientLinksAPI.revoke(group.professionalId) : patientLinksAPI.create(group.professionalId)),
     onMutate: () => setLinkError(''),
@@ -183,7 +194,7 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
               <span className="text-[10px] bg-[#E6F1FB] text-[#185FA5] px-2 py-0.5 rounded-full font-medium flex-shrink-0">
                 ✓ Vinculado
               </span>
-            ) : (
+            ) : hasActiveMembership ? (
               <button
                 onClick={(e) => { e.stopPropagation(); linkMutation.mutate() }}
                 disabled={linkMutation.isPending}
@@ -191,7 +202,7 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
               >
                 {linkMutation.isPending ? '...' : 'Vincularme'}
               </button>
-            )}
+            ) : null}
           </div>
           <p className="text-xs text-[#6B738A]">
             {group.specialty ? `${group.specialty} · ` : ''}

@@ -74,6 +74,10 @@ export interface Professional {
   average_rating: string
   total_ratings: number
   total_consultations: number
+  // True si el profesional tiene membresía activa ahora mismo (la habilita
+  // un admin manualmente). Controla si se muestra "Vincularme" — vincularse
+  // sin membresía no da ningún privilegio real.
+  has_active_membership?: boolean
 }
 
 export interface Consultation {

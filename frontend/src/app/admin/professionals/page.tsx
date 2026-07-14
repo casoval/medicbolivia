@@ -1299,14 +1299,100 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   )
 }
 
+// ── Pestaña "Membresías": lista de profesionales con su estado de
+// membresía y gestión inline (habilitar/renovar/deshabilitar) sin tener
+// que abrir el detalle completo de cada uno. ──────────────────────────
+function MembershipStatusBadge({ m }: { m?: ProfessionalMembership }) {
+  if (!m) {
+    return (
+      <span className="text-[10px] px-2 py-1 rounded-full border font-medium bg-[#F5F6FA] text-[#6B738A] border-[#DDE1EE] flex-shrink-0 whitespace-nowrap">
+        Sin membresía
+      </span>
+    )
+  }
+  return (
+    <span className="text-[10px] px-2 py-1 rounded-full border font-medium bg-[#FFF4E0] text-[#8A5A00] border-[#F3D08B] flex-shrink-0 whitespace-nowrap">
+      🟢 Activa{m.ends_at ? ` hasta ${fmtDate(m.ends_at)}` : ''}
+    </span>
+  )
+}
+
+function MembershipsTabPanel({ professionals, membershipByPro, loading }: {
+  professionals: Professional[]
+  membershipByPro: Map<string, ProfessionalMembership>
+  loading: boolean
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  // Activos primero, luego el resto en orden alfabético — así el admin
+  // ve de un vistazo quién está pagando ahora mismo.
+  const sorted = [...professionals].sort((a, b) => {
+    const aActive = membershipByPro.has(a.id) ? 1 : 0
+    const bActive = membershipByPro.has(b.id) ? 1 : 0
+    if (aActive !== bActive) return bActive - aActive
+    return a.name.localeCompare(b.name)
+  })
+
+  return (
+    <div className="card">
+      {loading ? (
+        <LoadingScreen />
+      ) : sorted.length === 0 ? (
+        <p className="text-sm text-[#6B738A] text-center py-8">No hay profesionales para mostrar</p>
+      ) : (
+        <div className="divide-y divide-[#DDE1EE]">
+          {sorted.map((pro) => {
+            const current = membershipByPro.get(pro.id)
+            const isOpen = expandedId === pro.id
+            return (
+              <div key={pro.id}>
+                <div
+                  className="py-3 flex items-center gap-3 hover:bg-[#F5F6FA] -mx-4 px-4 cursor-pointer transition-colors rounded-lg"
+                  onClick={() => setExpandedId(isOpen ? null : pro.id)}
+                >
+                  {pro.photo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={pro.photo_url} alt={pro.name} className="w-10 h-10 rounded-full object-cover border border-[#DDE1EE] flex-shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[#E1F5EE] text-[#0F6E56] flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {pro.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{pro.name}</p>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      <span className="text-xs text-[#6B738A]">{pro.specialty}</span>
+                      {pro.department && <span className="text-xs text-[#A0A8BF]">· {pro.department}</span>}
+                    </div>
+                  </div>
+                  <MembershipStatusBadge m={current} />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A0A8BF" strokeWidth="2"
+                    className={`flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}>
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </div>
+                {isOpen && (
+                  <div className="pb-4 px-1">
+                    <ProfessionalMembershipSection professionalId={pro.id} />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminProfessionalsPage() {
   const qc = useQueryClient()
   const searchParams = useSearchParams()
   // Permite llegar directo a una pestaña desde otra página, ej. el aviso
   // de "profesionales pendientes" en /admin/dashboard → /admin/professionals?tab=PENDING_DOCS
-  const initialTab = (searchParams.get('tab') as 'APPROVED'|'PENDING_DOCS'|'SUSPENDED' | null)
-  const [tab, setTab]           = useState<'APPROVED'|'PENDING_DOCS'|'SUSPENDED'>(
-    initialTab && ['APPROVED', 'PENDING_DOCS', 'SUSPENDED'].includes(initialTab) ? initialTab : 'APPROVED'
+  const initialTab = (searchParams.get('tab') as 'APPROVED'|'PENDING_DOCS'|'SUSPENDED'|'MEMBERSHIPS' | null)
+  const [tab, setTab]           = useState<'APPROVED'|'PENDING_DOCS'|'SUSPENDED'|'MEMBERSHIPS'>(
+    initialTab && ['APPROVED', 'PENDING_DOCS', 'SUSPENDED', 'MEMBERSHIPS'].includes(initialTab) ? initialTab : 'APPROVED'
   )
   const [success, setSuccess]   = useState('')
   const [error, setError]       = useState('')
@@ -1321,11 +1407,29 @@ export default function AdminProfessionalsPage() {
     refetchInterval: 15000,
   })
 
+  // Todos los registros de membresía, de todos los profesionales, en un
+  // solo request (sin professional_id) — para la pestaña "Membresías".
+  // Se carga solo cuando esa pestaña está activa.
+  const { data: allMemberships = [], isLoading: loadingMemberships } = useQuery({
+    queryKey: ['admin', 'memberships', 'all'],
+    queryFn: () => adminAPI.listMemberships(),
+    enabled: tab === 'MEMBERSHIPS',
+    refetchInterval: tab === 'MEMBERSHIPS' ? 15000 : false,
+  })
+
+  // Membresía vigente por profesional (is_current=true), calculada una
+  // sola vez a partir del listado completo.
+  const currentMembershipByPro = new Map<string, ProfessionalMembership>()
+  for (const m of allMemberships as ProfessionalMembership[]) {
+    if (m.is_current) currentMembershipByPro.set(m.professional_id, m)
+  }
+
   // Counts for each tab
   const counts = {
     APPROVED:    allPros.filter((p:Professional) => p.status === 'APPROVED').length,
     PENDING_DOCS: allPros.filter((p:Professional) => ['PENDING_DOCS','UNDER_REVIEW'].includes(p.status)).length,
     SUSPENDED:   allPros.filter((p:Professional) => p.status === 'SUSPENDED').length,
+    MEMBERSHIPS: currentMembershipByPro.size,
   }
 
   // Filter by tab + search + department
@@ -1334,7 +1438,9 @@ export default function AdminProfessionalsPage() {
       ? p.status === 'APPROVED'
       : tab === 'PENDING_DOCS'
       ? ['PENDING_DOCS','UNDER_REVIEW'].includes(p.status)
-      : p.status === 'SUSPENDED'
+      : tab === 'SUSPENDED'
+      ? p.status === 'SUSPENDED'
+      : true // MEMBERSHIPS: todos los estados, la membresía puede haberse habilitado antes o después
     const matchSearch = !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.specialty.toLowerCase().includes(search.toLowerCase()) ||
@@ -1369,11 +1475,12 @@ export default function AdminProfessionalsPage() {
         {error   && <div className="mb-4"><Alert type="error"   message={error} /></div>}
 
         {/* Tabs con contadores */}
-        <div className="flex gap-1 bg-[#F5F6FA] p-1 rounded-xl mb-4 w-fit">
+        <div className="flex gap-1 bg-[#F5F6FA] p-1 rounded-xl mb-4 w-fit flex-wrap">
           {([
             { key: 'APPROVED',    label: 'Activos' },
             { key: 'PENDING_DOCS',label: 'Pendientes' },
             { key: 'SUSPENDED',   label: 'Suspendidos' },
+            { key: 'MEMBERSHIPS', label: 'Membresías' },
           ] as const).map(({ key, label }) => (
             <button key={key} onClick={() => setTab(key)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
@@ -1410,7 +1517,13 @@ export default function AdminProfessionalsPage() {
           </select>
         </div>
 
-        {isLoading ? <LoadingScreen /> : (
+        {tab === 'MEMBERSHIPS' ? (
+          <MembershipsTabPanel
+            professionals={filtered}
+            membershipByPro={currentMembershipByPro}
+            loading={loadingMemberships}
+          />
+        ) : isLoading ? <LoadingScreen /> : (
           <div className="card">
             {filtered.length === 0 ? (
               <p className="text-sm text-[#6B738A] text-center py-8">No hay profesionales en este estado</p>

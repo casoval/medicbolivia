@@ -13,7 +13,9 @@ import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, Alert } from '@/components/ui'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { PatientRecordSummary } from '@/components/professional/PatientRecordSummary'
-import { consultationsAPI, patientBlockAPI, getErrorMessage } from '@/lib/api'
+import { ProfessionalScheduleModal } from '@/components/professional/ProfessionalScheduleModal'
+import { consultationsAPI, patientBlockAPI, professionalsAPI, getErrorMessage } from '@/lib/api'
+import type { PatientLink } from '@/lib/api'
 import { fmtFechaHora, fmtFechaHoraLocal } from '@/lib/consultationHistory'
 import { CHAT_REASON_CATEGORY_LABELS, type ChatReasonCategory } from '@/types'
 
@@ -44,10 +46,24 @@ interface PatientGroup {
   completed: number
   isActive: boolean
   lastAt: string
+  // true si tiene un vínculo activo (PatientProfessionalLink) — ya sea
+  // porque se vinculó a mano o porque se creó automáticamente al
+  // completarse una consulta. Junto con la membresía activa del
+  // profesional, habilita el botón "Agendar cita" directo.
+  hasActiveLink: boolean
+  link: PatientLink | null
 }
 
-function groupByPatient(consultations: any[]): PatientGroup[] {
+// Combina el historial de consultas con la lista de vínculos activos
+// (PatientProfessionalLink) en una sola lista de pacientes, para no tener
+// "Mis pacientes" y "Membresía" mostrando datos distintos y confusos.
+// - Pacientes con consultas: aparecen con su historial completo.
+// - Pacientes solo vinculados (nunca tuvieron consulta, se vincularon a
+//   mano desde la búsqueda): aparecen igual, con 0 consultas.
+function groupByPatient(consultations: any[], links: PatientLink[]): PatientGroup[] {
   const map = new Map<string, PatientGroup>()
+  const linkByPatient = new Map(links.map((l) => [l.patient_id, l]))
+
   for (const c of consultations) {
     if (!c.patient_id) continue
     const name = c.patient_first_name ? `${c.patient_first_name} ${c.patient_last_name || ''}`.trim() : 'Paciente'
@@ -63,6 +79,7 @@ function groupByPatient(consultations: any[]): PatientGroup[] {
 
     let group = map.get(c.patient_id)
     if (!group) {
+      const link = linkByPatient.get(c.patient_id) || null
       group = {
         patientId: c.patient_id,
         name,
@@ -75,6 +92,8 @@ function groupByPatient(consultations: any[]): PatientGroup[] {
         completed: 0,
         isActive: false,
         lastAt: c.created_at,
+        hasActiveLink: !!link,
+        link,
       }
       map.set(c.patient_id, group)
     }
@@ -89,6 +108,32 @@ function groupByPatient(consultations: any[]): PatientGroup[] {
     if (isActiveNow) group.isActive = true
     if (new Date(c.created_at).getTime() > new Date(group.lastAt).getTime()) group.lastAt = c.created_at
   }
+
+  // Pacientes vinculados que todavía no tienen ninguna consulta (se
+  // vincularon a mano desde la búsqueda) — no están en `consultations`,
+  // hay que agregarlos aparte para que no queden "escondidos" en otra
+  // pantalla.
+  for (const link of links) {
+    if (map.has(link.patient_id)) continue
+    const name = link.patient_first_name ? `${link.patient_first_name} ${link.patient_last_name || ''}`.trim() : 'Paciente'
+    const initials = ((link.patient_first_name?.[0] || '') + (link.patient_last_name?.[0] || '')).toUpperCase() || 'P'
+    map.set(link.patient_id, {
+      patientId: link.patient_id,
+      name,
+      firstName: link.patient_first_name || '',
+      lastName: link.patient_last_name || '',
+      photoUrl: link.patient_photo_url || null,
+      initials,
+      consultations: [],
+      total: 0,
+      completed: 0,
+      isActive: false,
+      lastAt: link.created_at,
+      hasActiveLink: true,
+      link,
+    })
+  }
+
   return Array.from(map.values()).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
 }
 
@@ -248,8 +293,17 @@ function BlockPatientMenu({ patientId, patientName }: { patientId: string; patie
   )
 }
 
-function PatientCard({ group }: { group: PatientGroup }) {
+function PatientCard({ group, membershipActive, onSchedule }: {
+  group: PatientGroup
+  membershipActive: boolean
+  onSchedule: (link: PatientLink) => void
+}) {
   const [open, setOpen] = useState(false)
+  // El agendamiento directo requiere las DOS cosas: vínculo activo con
+  // este paciente Y membresía activa del profesional (ver
+  // app/services/patient_links.py — el vínculo por sí solo no da ningún
+  // privilegio si no hay membresía).
+  const canSchedule = group.hasActiveLink && membershipActive && !!group.link
   const sortedConsultations = [...group.consultations].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )
@@ -297,7 +351,15 @@ function PatientCard({ group }: { group: PatientGroup }) {
         <IconChevron open={open} />
       </button>
 
-      <div className="absolute right-3 top-3">
+      <div className="absolute right-3 top-3 flex items-center gap-1.5">
+        {canSchedule && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onSchedule(group.link as PatientLink) }}
+            className="btn-primary text-xs py-1.5 px-3"
+          >
+            Agendar cita
+          </button>
+        )}
         <BlockPatientMenu patientId={group.patientId} patientName={group.name} />
       </div>
 
@@ -343,6 +405,7 @@ function PatientCard({ group }: { group: PatientGroup }) {
 
 export default function ProfessionalPatientsPage() {
   const [search, setSearch] = useState('')
+  const [scheduling, setScheduling] = useState<PatientLink | null>(null)
 
   const { data: consultations = [], isLoading } = useQuery({
     queryKey: ['consultations', 'professional'],
@@ -350,7 +413,30 @@ export default function ProfessionalPatientsPage() {
     refetchInterval: 15000,
   })
 
-  const allPatients = useMemo(() => groupByPatient(consultations as any[]), [consultations])
+  // Vínculos activos (PatientProfessionalLink) — habilitan "Agendar cita"
+  // junto con la membresía. Ya no viven en una pantalla aparte.
+  const { data: links = [], isLoading: loadingLinks } = useQuery({
+    queryKey: ['my-linked-patients'],
+    queryFn: professionalsAPI.getMyPatients,
+    staleTime: 30_000,
+  })
+
+  const { data: membership, isLoading: loadingMembership } = useQuery({
+    queryKey: ['my-membership'],
+    queryFn: professionalsAPI.getMyMembership,
+    staleTime: 30_000,
+  })
+
+  const { data: profile } = useQuery({
+    queryKey: ['professional-profile'],
+    queryFn: professionalsAPI.getMyProfile,
+    staleTime: 60_000,
+  })
+
+  const membershipActive = !!membership?.active
+  const defaultAmount = profile ? parseFloat((profile as any).price_general || '0') : 0
+
+  const allPatients = useMemo(() => groupByPatient(consultations as any[], links as PatientLink[]), [consultations, links])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -359,6 +445,7 @@ export default function ProfessionalPatientsPage() {
   }, [allPatients, search])
 
   const activeCount = allPatients.filter(p => p.isActive).length
+  const isLoading_ = isLoading || loadingLinks || loadingMembership
 
   return (
     <DashboardLayout navItems={NAV} activeHref="/professional/patients" role="PROFESSIONAL">
@@ -371,6 +458,24 @@ export default function ProfessionalPatientsPage() {
           </p>
         </div>
 
+        {!loadingMembership && (
+          membershipActive ? (
+            <div className="mb-4">
+              <Alert
+                type="success"
+                message="Tu membresía está activa: no pagas comisión por tus consultas y puedes agendar directamente a los pacientes vinculados (el botón 'Agendar cita' aparece en su tarjeta), en cualquier horario."
+              />
+            </div>
+          ) : (
+            <div className="mb-4">
+              <Alert
+                type="info"
+                message="No tienes una membresía activa. Contacta al administrador para habilitarla — mientras tanto, sigues operando con la comisión normal por consulta y sin agendamiento directo."
+              />
+            </div>
+          )
+        )}
+
         <div className="relative mb-4">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A0A8BF]"><IconSearch /></span>
           <input
@@ -382,21 +487,34 @@ export default function ProfessionalPatientsPage() {
           />
         </div>
 
-        {isLoading && <LoadingScreen text="Cargando pacientes..." />}
+        {isLoading_ && <LoadingScreen text="Cargando pacientes..." />}
 
-        {!isLoading && filtered.length === 0 && (
+        {!isLoading_ && filtered.length === 0 && (
           <EmptyState
             title={search ? 'No se encontró ningún paciente' : 'Todavía no tienes pacientes'}
-            description={search ? 'Probá con otro nombre.' : 'Cuando atiendas tu primera consulta, el paciente aparecerá acá.'}
+            description={search ? 'Probá con otro nombre.' : 'Cuando atiendas tu primera consulta o un paciente se vincule contigo, aparecerá acá.'}
           />
         )}
 
         <div className="space-y-3">
           {filtered.map(group => (
-            <PatientCard key={group.patientId} group={group} />
+            <PatientCard
+              key={group.patientId}
+              group={group}
+              membershipActive={membershipActive}
+              onSchedule={setScheduling}
+            />
           ))}
         </div>
       </div>
+
+      {scheduling && (
+        <ProfessionalScheduleModal
+          link={scheduling}
+          defaultAmount={defaultAmount}
+          onClose={() => setScheduling(null)}
+        />
+      )}
     </DashboardLayout>
   )
 }

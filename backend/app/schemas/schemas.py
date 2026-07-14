@@ -210,6 +210,11 @@ class ProfessionalPublicResponse(BaseModel):
     average_rating: Decimal
     total_ratings: int
     total_consultations: int
+    # True si el profesional tiene membresía activa AHORA MISMO (la habilita
+    # un admin manualmente). El botón "Vincularme" del paciente depende de
+    # esto: vincularse sin membresía no da ningún privilegio real (ver
+    # app/services/patient_links.py), así que no tiene sentido mostrarlo.
+    has_active_membership: bool = False
 
     model_config = {"from_attributes": True}
 

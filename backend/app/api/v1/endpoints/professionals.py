@@ -153,6 +153,13 @@ async def list_professionals(
     busy_ids = {row[0] for row in busy_result.all()}
 
     now = datetime.now(BOLIVIA_TZ)
+
+    # Membresía activa, en bulk (un solo query para todo el directorio) —
+    # el botón "Vincularme" del paciente solo tiene sentido si el
+    # profesional tiene membresía activa (ver app/services/patient_links.py).
+    from app.services.patient_links import professionals_with_active_membership
+    membership_ids = await professionals_with_active_membership(db, [p.id for p in professionals], now)
+
     enriched = []
     for p in professionals:
         effective = _compute_effective_availability(p, busy_ids, now)
@@ -162,6 +169,7 @@ async def list_professionals(
         # serializada en su lugar.
         resp = ProfessionalPublicResponse.model_validate(p)
         resp.availability = effective
+        resp.has_active_membership = p.id in membership_ids
         enriched.append(resp)
 
     if available_now:
@@ -1032,7 +1040,9 @@ async def get_professional(
     if not professional:
         raise HTTPException(status_code=404, detail="Profesional no encontrado")
 
-    return ProfessionalPublicResponse.model_validate(professional)
+    resp = ProfessionalPublicResponse.model_validate(professional)
+    resp.has_active_membership = await professional_has_active_membership(db, professional.id)
+    return resp
 
 
 # ── PATCH /api/v1/professionals/{id}/verify (admin) ─

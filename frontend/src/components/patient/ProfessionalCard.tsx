@@ -169,20 +169,22 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
         className="flex items-center justify-end gap-3 pt-3 border-t border-[#DDE1EE]"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          onClick={() => linkMutation.mutate()}
-          disabled={linkMutation.isPending}
-          title={isLinked
-            ? 'El profesional puede verte en su lista de pacientes. Toca para desvincularte.'
-            : 'Vincúlate para que este profesional te pueda agendar citas directamente si tiene membresía activa.'}
-          className={`text-xs py-1.5 px-3 rounded-full border transition-colors ${
-            isLinked
-              ? 'border-[#185FA5] text-[#185FA5] bg-[#E6F1FB] hover:bg-[#DCE9F7]'
-              : 'border-[#DDE1EE] text-[#6B738A] hover:border-[#185FA5] hover:text-[#185FA5]'
-          }`}
-        >
-          {linkMutation.isPending ? '...' : isLinked ? '✓ Vinculado' : 'Vincularme'}
-        </button>
+        {(pro.has_active_membership || isLinked) && (
+          <button
+            onClick={() => linkMutation.mutate()}
+            disabled={linkMutation.isPending}
+            title={isLinked
+              ? 'El profesional puede verte en su lista de pacientes. Toca para desvincularte.'
+              : 'Vincúlate para que este profesional te pueda agendar citas directamente.'}
+            className={`text-xs py-1.5 px-3 rounded-full border transition-colors ${
+              isLinked
+                ? 'border-[#185FA5] text-[#185FA5] bg-[#E6F1FB] hover:bg-[#DCE9F7]'
+                : 'border-[#DDE1EE] text-[#6B738A] hover:border-[#185FA5] hover:text-[#185FA5]'
+            }`}
+          >
+            {linkMutation.isPending ? '...' : isLinked ? '✓ Vinculado' : 'Vincularme'}
+          </button>
+        )}
         <div className="flex flex-col items-center gap-1">
           <button
             onClick={() => setShowBooking(true)}

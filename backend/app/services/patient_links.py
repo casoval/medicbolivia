@@ -58,6 +58,42 @@ async def professional_has_active_membership(db: AsyncSession, professional_id: 
     return await _has_active_membership(db, professional_id, at or datetime.utcnow())
 
 
+async def professionals_with_active_membership(
+    db: AsyncSession, professional_ids: list[str], at: datetime | None = None
+) -> set[str]:
+    """
+    Versión en bulk de professional_has_active_membership — para listados
+    (ej. el directorio público de profesionales) donde consultar uno por
+    uno sería un N+1. Devuelve el subconjunto de IDs que tienen membresía
+    activa ahora mismo.
+
+    Misma conversión de hora que _has_active_membership: starts_at/ends_at
+    de ProfessionalMembership están en hora de Bolivia, `at` llega en UTC.
+    """
+    if not professional_ids:
+        return set()
+
+    from datetime import timezone
+    from sqlalchemy import or_
+    from app.core.timezone import BOLIVIA_TZ
+    from app.models.models import ProfessionalMembership
+
+    at = at or datetime.utcnow()
+    if at.tzinfo is not None:
+        at = at.astimezone(timezone.utc).replace(tzinfo=None)
+    at_bolivia = (at.replace(tzinfo=timezone.utc)).astimezone(BOLIVIA_TZ).replace(tzinfo=None)
+
+    result = await db.execute(
+        select(ProfessionalMembership.professional_id).where(
+            ProfessionalMembership.professional_id.in_(professional_ids),
+            ProfessionalMembership.active == True,  # noqa: E712
+            ProfessionalMembership.starts_at <= at_bolivia,
+            or_(ProfessionalMembership.ends_at.is_(None), ProfessionalMembership.ends_at > at_bolivia),
+        )
+    )
+    return {row[0] for row in result.all()}
+
+
 async def ensure_patient_professional_link(db: AsyncSession, patient_id: str, professional_id: str) -> None:
     """
     Auto-vínculo: se llama cuando una consulta real termina en COMPLETED
