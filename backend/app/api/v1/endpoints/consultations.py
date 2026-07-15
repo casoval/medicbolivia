@@ -681,6 +681,12 @@ async def professional_schedule_consultation(
     # Se registra el Payment solo para las estadísticas/historial del
     # profesional (ganancias, "Mis pacientes", etc.) — NUNCA representa
     # dinero que la plataforma haya recibido o deba devolver.
+    #
+    # charge_now decide si el cobro queda registrado como ya hecho (paga
+    # ahora) o pendiente para registrarlo después con
+    # /record-direct-payment (paga después). Ninguno de los dos casos
+    # afecta el estado de la cita (siempre PAYMENT_CONFIRMED arriba): es
+    # solo el registro contable del cobro directo lo que cambia.
     payment = Payment(
         consultation_id=consultation.id,
         patient_id=patient.id,
@@ -689,8 +695,8 @@ async def professional_schedule_consultation(
         professional_net=amounts["professional_net"],
         commission_percent_applied=amounts["commission_percent"],
         payment_channel=PaymentChannel.CASH,
-        status=PaymentStatus.CONFIRMED,
-        paid_at=datetime.utcnow(),
+        status=PaymentStatus.CONFIRMED if data.charge_now else PaymentStatus.PENDING,
+        paid_at=datetime.utcnow() if data.charge_now else None,
     )
     db.add(payment)
 
@@ -699,7 +705,8 @@ async def professional_schedule_consultation(
 
     logger.info(
         f"Cita agendada por profesional {professional.id} para paciente {patient.id}: "
-        f"{consultation.id} → pago directo confirmado (monto: {amount}, fuera de la plataforma)"
+        f"{consultation.id} → cobro directo {'confirmado' if data.charge_now else 'pendiente de registrar'} "
+        f"(monto: {amount}, fuera de la plataforma)"
     )
 
     return ConsultationResponse.model_validate(consultation)

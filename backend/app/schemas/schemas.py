@@ -394,6 +394,13 @@ class ProfessionalScheduleRequest(BaseModel):
     # Si se omite, se usa professional.price_general. Se acepta 0 (ej.
     # consulta de cortesía) — nunca negativo.
     amount: Optional[Decimal] = None
+    # True (default): el profesional ya cobró al agendar → el Payment queda
+    # CONFIRMED con paid_at = ahora. False: el cobro queda pendiente (Payment
+    # PENDING, sin paid_at) y se registra después con
+    # PATCH /{id}/record-direct-payment ("Registrar cobro" en el detalle de
+    # la cita). En ambos casos la cita queda igual de confirmada — esto solo
+    # afecta el registro contable del cobro, nunca el acceso a la consulta.
+    charge_now: bool = True
 
     @field_validator("amount")
     @classmethod

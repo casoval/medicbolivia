@@ -27,6 +27,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
   const [scheduledAt, setScheduledAt] = useState('')
   const [chiefComplaint, setChiefComplaint] = useState('')
   const [amount, setAmount] = useState(String(defaultAmount))
+  const [chargeNow, setChargeNow] = useState(true)
   const [error, setError] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -40,6 +41,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
         scheduled_at: scheduledAt,
         chief_complaint: chiefComplaint || undefined,
         amount: parsedAmount,
+        charge_now: chargeNow,
       })
     },
     onMutate: () => setError(''),
@@ -107,6 +109,39 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
               className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
             />
             <p className="text-[10px] text-[#A0A8BF] mt-1">Puedes poner 0 (ej. consulta de cortesía).</p>
+          </div>
+
+          <div>
+            <label className="block text-xs text-[#6B738A] mb-1">¿Cuándo cobras?</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setChargeNow(true)}
+                className={`text-xs font-medium rounded-lg py-1.5 border transition-colors ${
+                  chargeNow
+                    ? 'bg-[#0F6E56] border-[#0F6E56] text-white'
+                    : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                }`}
+              >
+                Pagar ahora
+              </button>
+              <button
+                type="button"
+                onClick={() => setChargeNow(false)}
+                className={`text-xs font-medium rounded-lg py-1.5 border transition-colors ${
+                  !chargeNow
+                    ? 'bg-[#185FA5] border-[#185FA5] text-white'
+                    : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                }`}
+              >
+                Pagar después
+              </button>
+            </div>
+            <p className="text-[10px] text-[#A0A8BF] mt-1">
+              {chargeNow
+                ? 'Se registrará el cobro como hecho, con la fecha de hoy.'
+                : 'La cita se agenda igual — luego registras cuánto y cuándo cobraste desde el detalle de la cita.'}
+            </p>
           </div>
         </div>
 

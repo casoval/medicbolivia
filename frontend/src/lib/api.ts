@@ -640,6 +640,7 @@ export const consultationsAPI = {
     specialty?: string
     chief_complaint?: string
     amount?: number
+    charge_now?: boolean
   }) => api.post<Consultation>('/consultations/professional-schedule', data),
 
   // Reprogramar una cita que el propio profesional agendó — sin
