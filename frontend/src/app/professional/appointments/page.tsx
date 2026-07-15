@@ -3,18 +3,22 @@
 // Vista dedicada: TODAS las citas agendadas del profesional, pasadas y futuras,
 // en un solo lugar (separado de las consultas inmediatas).
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, SectionTitle, Alert } from '@/components/ui'
-import { consultationsAPI, getErrorMessage } from '@/lib/api'
+import { consultationsAPI, professionalsAPI, getErrorMessage } from '@/lib/api'
+import type { PatientLink } from '@/lib/api'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, wasActuallyRefunded } from '@/lib/consultationHistory'
 import { PatientHistoryPanel } from '@/components/professional/PatientHistoryPanel'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
+import { CreatorBadge } from '@/components/shared/CreatorBadge'
 import { SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
+import { ProfessionalScheduleModal } from '@/components/professional/ProfessionalScheduleModal'
+import { groupByPatient, hasEffectiveLink, linkForSchedule } from '@/lib/patientGrouping'
 
 function patientNameOf(c: any): string | null {
   return c.patient_first_name ? `${c.patient_first_name} ${c.patient_last_name || ''}`.trim() : null
@@ -77,6 +81,42 @@ export default function ProfessionalAppointmentsPage() {
     queryFn: () => consultationsAPI.getMyConsultations().then((r) => r.data),
     refetchInterval: 15000,
   })
+
+  // Para el botón "+ Nueva cita" del calendario (agendamiento directo por
+  // membresía) — mismos datos y misma regla de vínculo efectivo que usa
+  // "Mis pacientes" (ver lib/patientGrouping.ts).
+  const { data: links = [] } = useQuery({
+    queryKey: ['my-linked-patients'],
+    queryFn: professionalsAPI.getMyPatients,
+    staleTime: 30_000,
+  })
+  const { data: membership } = useQuery({
+    queryKey: ['my-membership'],
+    queryFn: professionalsAPI.getMyMembership,
+    staleTime: 30_000,
+  })
+  const { data: profile } = useQuery({
+    queryKey: ['professional-profile'],
+    queryFn: professionalsAPI.getMyProfile,
+    staleTime: 60_000,
+  })
+  const membershipActive = !!membership?.active
+  const defaultAmount = profile ? parseFloat((profile as any).price_general || '0') : 0
+
+  const [showPatientPicker, setShowPatientPicker] = useState(false)
+  const [patientSearch, setPatientSearch] = useState('')
+  const [pickedLink, setPickedLink] = useState<PatientLink | null>(null)
+
+  const effectivePatients = useMemo(() => {
+    const groups = groupByPatient(consultations as any[], links as PatientLink[])
+    return groups.filter(hasEffectiveLink)
+  }, [consultations, links])
+
+  const filteredPatients = useMemo(() => {
+    const q = patientSearch.trim().toLowerCase()
+    if (!q) return effectivePatients
+    return effectivePatients.filter((p) => p.name.toLowerCase().includes(q))
+  }, [effectivePatients, patientSearch])
 
   const scheduled = consultations.filter((c: any) => c.consultation_type === 'SCHEDULED' || c.consultation_type === 'FOLLOW_UP')
   const upcoming = scheduled.filter((c: any) =>
@@ -210,7 +250,10 @@ export default function ProfessionalAppointmentsPage() {
                               </p>
                             )}
                           </div>
-                          <StatusBadge status={c.status} />
+                          <div className="flex flex-col items-end gap-1">
+                            <StatusBadge status={c.status} />
+                            <CreatorBadge createdByRole={c.created_by_role} viewerRole="PROFESSIONAL" />
+                          </div>
                         </div>
 
                         {c.chief_complaint && (
@@ -378,7 +421,10 @@ export default function ProfessionalAppointmentsPage() {
                             </>
                           )}
                         </div>
-                        <StatusBadge status={c.status} />
+                        <div className="flex flex-col items-end gap-1">
+                          <StatusBadge status={c.status} />
+                          <CreatorBadge createdByRole={c.created_by_role} viewerRole="PROFESSIONAL" />
+                        </div>
                       </div>
                     )
                   })}
@@ -387,11 +433,75 @@ export default function ProfessionalAppointmentsPage() {
           </div>
         ) : (
           <div className="card">
-            <SectionTitle>Calendario de citas agendadas</SectionTitle>
-            <AppointmentsCalendar consultations={scheduled} role="PROFESSIONAL" />
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <SectionTitle>Calendario de citas agendadas</SectionTitle>
+              {membershipActive && (
+                <button
+                  onClick={() => { setPatientSearch(''); setShowPatientPicker(true) }}
+                  className="btn-primary text-xs py-1.5 px-3 whitespace-nowrap"
+                >
+                  + Nueva cita
+                </button>
+              )}
+            </div>
+            <AppointmentsCalendar consultations={scheduled} role="PROFESSIONAL" membershipActive={membershipActive} />
           </div>
         )}
       </div>
+
+      {/* Picker de paciente para "+ Nueva cita" — solo pacientes con vínculo
+          efectivo (ver lib/patientGrouping.ts::hasEffectiveLink). */}
+      {showPatientPicker && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowPatientPicker(false)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-sm font-semibold mb-1">¿A quién le agendas la cita?</h2>
+            <p className="text-xs text-[#6B738A] mb-3">Solo aparecen tus pacientes vinculados (por consulta previa o vínculo manual).</p>
+            <input
+              autoFocus
+              value={patientSearch}
+              onChange={(e) => setPatientSearch(e.target.value)}
+              placeholder="Buscar por nombre…"
+              className="w-full px-3 py-1.5 border border-[#DDE1EE] rounded-lg text-sm mb-3"
+            />
+            <div className="overflow-y-auto flex-1 -mx-1 px-1">
+              {filteredPatients.length === 0 ? (
+                <p className="text-xs text-[#6B738A] text-center py-6">
+                  {effectivePatients.length === 0 ? 'Todavía no tienes pacientes vinculados.' : 'Sin resultados.'}
+                </p>
+              ) : (
+                <div className="divide-y divide-[#ECEEF5]">
+                  {filteredPatients.map((p) => (
+                    <button
+                      key={p.patientId}
+                      onClick={() => { setPickedLink(linkForSchedule(p)); setShowPatientPicker(false) }}
+                      className="w-full flex items-center gap-2 text-left px-1 py-2.5 hover:bg-[#F9FAFC]"
+                    >
+                      <PatientAvatar firstName={p.firstName} lastName={p.lastName} photoUrl={p.photoUrl} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium truncate">{p.name}</span>
+                        <span className="block text-[11px] text-[#A0A8BF]">
+                          {p.completed} consulta{p.completed === 1 ? '' : 's'} completada{p.completed === 1 ? '' : 's'}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setShowPatientPicker(false)} className="btn-secondary text-xs py-1.5 px-3 mt-3 self-end">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pickedLink && (
+        <ProfessionalScheduleModal
+          link={pickedLink}
+          defaultAmount={defaultAmount}
+          onClose={() => setPickedLink(null)}
+        />
+      )}
     </DashboardLayout>
   )
 }

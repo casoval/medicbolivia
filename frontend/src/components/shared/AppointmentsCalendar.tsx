@@ -15,9 +15,12 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { StatusBadge } from '@/components/ui'
-import { SpanishDatePicker } from '@/components/ui/SpanishDateTimePicker'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { StatusBadge, Alert } from '@/components/ui'
+import { SpanishDatePicker, SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
 import { fmtFechaHoraLocal } from '@/lib/consultationHistory'
+import { consultationsAPI, getErrorMessage } from '@/lib/api'
+import { CreatorBadge } from '@/components/shared/CreatorBadge'
 import type { Consultation, ConsultationStatus } from '@/types'
 
 // ─────────────────────────────────────────────────────
@@ -139,13 +142,65 @@ interface Props {
   role: 'PATIENT' | 'PROFESSIONAL'
   /** Si se pasa, la celda/chip llama a esto en vez de abrir el panel de detalle interno. */
   onSelectConsultation?: (c: Consultation) => void
+  /**
+   * Solo para role="PROFESSIONAL": si tiene membresía activa, el panel de
+   * detalle interno ofrece "Reprogramar"/"Cancelar cita" sin negociación
+   * para las citas que el propio profesional agendó (created_by_role ===
+   * 'PROFESSIONAL') — ver /consultations/professional-reschedule y
+   * /cancel-by-professional en el backend.
+   */
+  membershipActive?: boolean
 }
 
-export function AppointmentsCalendar({ consultations, role, onSelectConsultation }: Props) {
+export function AppointmentsCalendar({ consultations, role, onSelectConsultation, membershipActive }: Props) {
+  const qc = useQueryClient()
   const [view, setView] = useState<ViewMode>('agenda')
   const [cursor, setCursor] = useState(() => new Date())
   const [includeCancelled, setIncludeCancelled] = useState(false)
   const [detail, setDetail] = useState<Consultation | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
+  const [recordingPayment, setRecordingPayment] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentDate, setPaymentDate] = useState('')
+  const [newDateTime, setNewDateTime] = useState('')
+  const [actionError, setActionError] = useState('')
+
+  const rescheduleMutation = useMutation({
+    mutationFn: ({ id, scheduledAt }: { id: string; scheduledAt: string }) =>
+      consultationsAPI.professionalReschedule(id, scheduledAt),
+    onMutate: () => setActionError(''),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consultations'] })
+      qc.invalidateQueries({ queryKey: ['professional-appointments'] })
+      setEditing(false)
+      setDetail(null)
+    },
+    onError: (err: any) => setActionError(getErrorMessage(err)),
+  })
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => consultationsAPI.cancelByProfessional(id),
+    onMutate: () => setActionError(''),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consultations'] })
+      qc.invalidateQueries({ queryKey: ['professional-appointments'] })
+      setDetail(null)
+    },
+    onError: (err: any) => setActionError(getErrorMessage(err)),
+  })
+  const recordPaymentMutation = useMutation({
+    mutationFn: ({ id, amount, paidAt }: { id: string; amount: number; paidAt: string }) =>
+      consultationsAPI.recordDirectPayment(id, amount, paidAt),
+    onMutate: () => setActionError(''),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consultations'] })
+      qc.invalidateQueries({ queryKey: ['professional-appointments'] })
+      setRecordingPayment(false)
+      setDetail(null)
+    },
+    onError: (err: any) => setActionError(getErrorMessage(err)),
+  })
 
   const today = new Date()
 
@@ -176,7 +231,17 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
 
   function openDetail(c: Consultation) {
     if (onSelectConsultation) onSelectConsultation(c)
-    else setDetail(c)
+    else {
+      setDetail(c)
+      setEditing(false)
+      setPickerOpen(false)
+      setConfirmingCancel(false)
+      setRecordingPayment(false)
+      setPaymentAmount(c.amount != null ? String(c.amount) : '')
+      setPaymentDate(c.payment_paid_at ? c.payment_paid_at.slice(0, 16) : '')
+      setNewDateTime('')
+      setActionError('')
+    }
   }
 
   function nameOf(c: Consultation) {
@@ -190,6 +255,33 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
 
   function typeLabel(c: Consultation) {
     return c.consultation_type === 'FOLLOW_UP' ? 'Reconsulta' : 'Cita agendada'
+  }
+
+  // Solo el profesional puede reprogramar/cancelar sin negociación — y
+  // solo para las citas que él mismo agendó (agendamiento directo por
+  // membresía). Las que agendó el paciente siguen el flujo normal
+  // (proponer horario / cancelar con reembolso), fuera de este panel.
+  const EDITABLE_STATUSES = new Set<ConsultationStatus>(['PAYMENT_CONFIRMED', 'PROFESSIONAL_ACCEPTED'])
+  function canManageDirectly(c: Consultation) {
+    return (
+      role === 'PROFESSIONAL' &&
+      !!membershipActive &&
+      c.created_by_role === 'PROFESSIONAL' &&
+      EDITABLE_STATUSES.has(c.status)
+    )
+  }
+
+  // El cobro puede pasar en cualquier momento — a mitad de la consulta, al
+  // final, o en otra fecha — así que esto es más permisivo que
+  // canManageDirectly (que solo aplica antes de que la cita ocurra): se
+  // puede registrar/editar el cobro mientras la cita no esté cancelada.
+  function canRecordPayment(c: Consultation) {
+    return (
+      role === 'PROFESSIONAL' &&
+      c.created_by_role === 'PROFESSIONAL' &&
+      c.status !== 'CANCELLED' &&
+      c.status !== 'REFUNDED'
+    )
   }
 
   // ── Navegación ──
@@ -308,10 +400,16 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
             className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4"
             onClick={() => setDetail(null)}
           >
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-3">
+            <div
+              className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-1">
                 <h3 className="text-sm font-semibold text-[#141820]">Detalle de la cita</h3>
                 <StatusBadge status={detail.status} />
+              </div>
+              <div className="mb-3">
+                <CreatorBadge createdByRole={detail.created_by_role} viewerRole={role} />
               </div>
               <div className="flex flex-col gap-1.5 text-xs text-[#4A5169]">
                 <p>
@@ -338,7 +436,155 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
                     {detail.chief_complaint}
                   </p>
                 )}
+                {detail.created_by_role === 'PROFESSIONAL' && (
+                  <p>
+                    <span className="font-medium text-[#141820]">Cobro: </span>
+                    {detail.payment_paid_at
+                      ? `Bs. ${parseFloat(detail.amount as any).toFixed(2)} · ${fmtFechaHoraLocal(detail.payment_paid_at)}`
+                      : 'Sin registrar todavía'}
+                  </p>
+                )}
               </div>
+
+              {(canManageDirectly(detail) || canRecordPayment(detail)) && (
+                <div className="mt-3 pt-3 border-t border-[#ECEEF5]">
+                  <p className="text-[11px] text-[#A0A8BF] mb-2">
+                    Tú agendaste esta cita directamente — el cobro es directo contigo, no vía
+                    plataforma.
+                  </p>
+
+                  {actionError && <div className="mb-2"><Alert type="error" message={actionError} /></div>}
+
+                  {editing && (
+                    <div className="flex flex-col gap-2 mb-2" style={pickerOpen ? { marginBottom: 300 } : undefined}>
+                      <SpanishDateTimePicker value={newDateTime} onChange={setNewDateTime} onOpenChange={setPickerOpen} />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => newDateTime && rescheduleMutation.mutate({ id: detail.id, scheduledAt: newDateTime })}
+                          disabled={!newDateTime || rescheduleMutation.isPending}
+                          className="flex-1 text-xs font-medium bg-[#185FA5] text-white rounded-lg py-1.5 disabled:opacity-50"
+                        >
+                          {rescheduleMutation.isPending ? 'Guardando…' : 'Guardar nuevo horario'}
+                        </button>
+                        <button
+                          onClick={() => { setEditing(false); setNewDateTime(''); setPickerOpen(false) }}
+                          className="text-xs text-[#6B738A] px-2"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {confirmingCancel && (
+                    <div className="bg-[#FBEAEA] border border-[#F3C6C6] rounded-lg p-3 mb-2">
+                      <p className="text-xs text-[#8A2222] font-medium mb-1">¿Cancelar esta cita?</p>
+                      <p className="text-[11px] text-[#8A2222] mb-3">
+                        Se le avisará a {nameOf(detail)} que ya no hay cita el{' '}
+                        {fmtFechaHoraLocal(detail.scheduled_at)}. Como el cobro es directo contigo
+                        (no vía plataforma), no hay ningún reembolso que tramitar aquí — si ya
+                        cobraste algo, la devolución la coordinas tú directamente. Esta acción no se
+                        puede deshacer.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => cancelMutation.mutate(detail.id)}
+                          disabled={cancelMutation.isPending}
+                          className="flex-1 text-xs font-medium bg-[#A32D2D] text-white rounded-lg py-1.5 disabled:opacity-50"
+                        >
+                          {cancelMutation.isPending ? 'Cancelando…' : 'Sí, cancelar cita'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmingCancel(false)}
+                          disabled={cancelMutation.isPending}
+                          className="text-xs text-[#6B738A] px-2"
+                        >
+                          Volver
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {recordingPayment && (
+                    <div className="bg-[#F5F6FA] rounded-lg p-3 mb-2">
+                      <p className="text-[11px] text-[#6B738A] mb-2">
+                        El cobro puede pasar en cualquier momento — a mitad de la consulta, al
+                        final, o en otra fecha. Registra cuánto y cuándo cobraste realmente; puedes
+                        volver a editarlo después si cambia.
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        <div>
+                          <label className="block text-[11px] text-[#6B738A] mb-1">Monto cobrado (Bs.)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={paymentAmount}
+                            onChange={(e) => setPaymentAmount(e.target.value)}
+                            className="w-full px-2 py-1 border border-[#DDE1EE] rounded-lg text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-[#6B738A] mb-1">Fecha en que cobraste</label>
+                          <SpanishDateTimePicker value={paymentDate} onChange={setPaymentDate} onOpenChange={setPickerOpen} />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-2" style={pickerOpen ? { marginBottom: 300 } : undefined}>
+                        <button
+                          onClick={() => {
+                            const amt = Number(paymentAmount)
+                            if (paymentDate && !Number.isNaN(amt) && amt >= 0) {
+                              recordPaymentMutation.mutate({ id: detail.id, amount: amt, paidAt: paymentDate })
+                            }
+                          }}
+                          disabled={!paymentDate || paymentAmount.trim() === '' || recordPaymentMutation.isPending}
+                          className="flex-1 text-xs font-medium bg-[#185FA5] text-white rounded-lg py-1.5 disabled:opacity-50"
+                        >
+                          {recordPaymentMutation.isPending ? 'Guardando…' : 'Guardar cobro'}
+                        </button>
+                        <button
+                          onClick={() => setRecordingPayment(false)}
+                          disabled={recordPaymentMutation.isPending}
+                          className="text-xs text-[#6B738A] px-2"
+                        >
+                          Volver
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!editing && !confirmingCancel && !recordingPayment && (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex gap-2">
+                        {canManageDirectly(detail) && (
+                          <button
+                            onClick={() => setEditing(true)}
+                            className="flex-1 text-xs font-medium text-[#185FA5] border border-[#DDE1EE] rounded-lg py-1.5 hover:bg-[#F4F6FB]"
+                          >
+                            Reprogramar
+                          </button>
+                        )}
+                        {canManageDirectly(detail) && (
+                          <button
+                            onClick={() => setConfirmingCancel(true)}
+                            className="flex-1 text-xs font-medium text-[#A32D2D] border border-[#F3C6C6] rounded-lg py-1.5 hover:bg-[#FBEAEA]"
+                          >
+                            Cancelar cita
+                          </button>
+                        )}
+                      </div>
+                      {canRecordPayment(detail) && (
+                        <button
+                          onClick={() => setRecordingPayment(true)}
+                          className="w-full text-xs font-medium text-[#0F6E56] border border-[#BEEBDD] rounded-lg py-1.5 hover:bg-[#E1F5EE]"
+                        >
+                          {detail.payment_paid_at ? 'Editar cobro registrado' : 'Registrar cobro'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
                 onClick={() => setDetail(null)}
                 className="mt-4 w-full text-xs font-medium text-[#185FA5] border border-[#DDE1EE] rounded-lg py-2 hover:bg-[#F4F6FB]"

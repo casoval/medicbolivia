@@ -18,6 +18,7 @@ import { consultationsAPI, patientBlockAPI, professionalsAPI, getErrorMessage } 
 import type { PatientLink } from '@/lib/api'
 import { fmtFechaHora, fmtFechaHoraLocal } from '@/lib/consultationHistory'
 import { CHAT_REASON_CATEGORY_LABELS, type ChatReasonCategory } from '@/types'
+import { groupByPatient, hasEffectiveLink, linkForSchedule, type PatientGroup } from '@/lib/patientGrouping'
 
 const IconDots = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
 const IconBan = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M4.9 4.9l14.2 14.2"/></svg>
@@ -30,126 +31,7 @@ const IconChevron = ({ open }: { open: boolean }) => (
   </svg>
 )
 
-// Estados que cuentan como "el paciente está activo conmigo ahora" — listo
-// para atender, en curso, o con una cita agendada todavía por venir.
-const ACTIVE_STATUSES = new Set(['WAITING_PROFESSIONAL', 'PAYMENT_CONFIRMED', 'IN_PROGRESS'])
 
-interface PatientGroup {
-  patientId: string
-  name: string
-  firstName: string
-  lastName: string
-  photoUrl: string | null
-  initials: string
-  consultations: any[]
-  total: number
-  completed: number
-  isActive: boolean
-  lastAt: string
-  // true si tiene un vínculo activo (PatientProfessionalLink) — ya sea
-  // porque se vinculó a mano o porque se creó automáticamente al
-  // completarse una consulta.
-  hasActiveLink: boolean
-  // true si el paciente se desvinculó explícitamente (existe una fila de
-  // vínculo, pero con revoked_at). En ese caso NUNCA se habilita
-  // "Agendar cita", aunque tenga consultas completadas previas — la
-  // desvinculación es una decisión explícita del paciente y hay que
-  // respetarla (ver has_effective_link en el backend).
-  linkWasRevoked: boolean
-  link: PatientLink | null
-}
-
-// Combina el historial de consultas con la lista de vínculos (activos y
-// revocados) en una sola lista de pacientes, para no tener "Mis
-// pacientes" y "Membresía" mostrando datos distintos y confusos.
-// - Pacientes con consultas: aparecen con su historial completo.
-// - Pacientes solo vinculados (nunca tuvieron consulta, se vincularon a
-//   mano desde la búsqueda): aparecen igual, con 0 consultas.
-// - Si se desvincularon explícitamente, se marcan con linkWasRevoked
-//   para que la tarjeta no ofrezca "Agendar cita" aunque tengan
-//   historial de consultas.
-function groupByPatient(consultations: any[], links: PatientLink[]): PatientGroup[] {
-  const map = new Map<string, PatientGroup>()
-  // `links` trae la fila MÁS RECIENTE por paciente (activa o revocada) —
-  // ver GET /professionals/my-patients.
-  const linkByPatient = new Map(links.map((l) => [l.patient_id, l]))
-
-  for (const c of consultations) {
-    if (!c.patient_id) continue
-    const name = c.patient_first_name ? `${c.patient_first_name} ${c.patient_last_name || ''}`.trim() : 'Paciente'
-    const initials = ((c.patient_first_name?.[0] || '') + (c.patient_last_name?.[0] || '')).toUpperCase() || 'P'
-
-    const isFutureScheduled =
-      c.consultation_type === 'SCHEDULED' &&
-      c.scheduled_at &&
-      new Date(c.scheduled_at).getTime() > Date.now() &&
-      c.status !== 'CANCELLED' && c.status !== 'REFUNDED'
-
-    const isActiveNow = ACTIVE_STATUSES.has(c.status) || isFutureScheduled
-
-    let group = map.get(c.patient_id)
-    if (!group) {
-      const link = linkByPatient.get(c.patient_id) || null
-      group = {
-        patientId: c.patient_id,
-        name,
-        firstName: c.patient_first_name || '',
-        lastName: c.patient_last_name || '',
-        photoUrl: c.patient_photo_url || null,
-        initials,
-        consultations: [],
-        total: 0,
-        completed: 0,
-        isActive: false,
-        lastAt: c.created_at,
-        hasActiveLink: !!link && link.revoked_at === null,
-        linkWasRevoked: !!link && link.revoked_at !== null,
-        link,
-      }
-      map.set(c.patient_id, group)
-    }
-    // La foto es del paciente (no de la consulta), así que basta con
-    // quedarnos con la primera que venga con foto.
-    if (c.patient_photo_url && !group.photoUrl) {
-      group.photoUrl = c.patient_photo_url
-    }
-    group.consultations.push(c)
-    group.total += 1
-    if (c.status === 'COMPLETED') group.completed += 1
-    if (isActiveNow) group.isActive = true
-    if (new Date(c.created_at).getTime() > new Date(group.lastAt).getTime()) group.lastAt = c.created_at
-  }
-
-  // Pacientes vinculados ACTIVAMENTE que todavía no tienen ninguna
-  // consulta (se vincularon a mano desde la búsqueda) — no están en
-  // `consultations`, hay que agregarlos aparte para que no queden
-  // "escondidos" en otra pantalla. Los revocados sin ninguna consulta NO
-  // se agregan: no hay nada que mostrar y ya no están vinculados.
-  for (const link of links) {
-    if (map.has(link.patient_id)) continue
-    if (link.revoked_at !== null) continue
-    const name = link.patient_first_name ? `${link.patient_first_name} ${link.patient_last_name || ''}`.trim() : 'Paciente'
-    const initials = ((link.patient_first_name?.[0] || '') + (link.patient_last_name?.[0] || '')).toUpperCase() || 'P'
-    map.set(link.patient_id, {
-      patientId: link.patient_id,
-      name,
-      firstName: link.patient_first_name || '',
-      lastName: link.patient_last_name || '',
-      photoUrl: link.patient_photo_url || null,
-      initials,
-      consultations: [],
-      total: 0,
-      completed: 0,
-      isActive: false,
-      lastAt: link.created_at,
-      hasActiveLink: true,
-      linkWasRevoked: false,
-      link,
-    })
-  }
-
-  return Array.from(map.values()).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
-}
 
 function BlockPatientMenu({ patientId, patientName }: { patientId: string; patientName: string }) {
   const queryClient = useQueryClient()
@@ -314,28 +196,11 @@ function PatientCard({ group, membershipActive, onSchedule }: {
 }) {
   const [open, setOpen] = useState(false)
   // El agendamiento directo requiere membresía activa del profesional Y
-  // que el paciente esté "efectivamente" vinculado. Si el paciente se
-  // desvinculó explícitamente (linkWasRevoked), NUNCA se habilita, sin
-  // importar cuántas consultas completadas tenga en su historial — es
-  // una decisión suya y se respeta (igual que el backend en
-  // app/services/patient_links.py::has_effective_link). Si nunca hubo
-  // una desvinculación, cuenta tanto el vínculo manual activo
-  // (hasActiveLink) como el historial de consultas completadas.
-  const hasEffectiveLink = !group.linkWasRevoked && (group.hasActiveLink || group.completed > 0)
-  const canSchedule = hasEffectiveLink && membershipActive
-  // Si el paciente no tiene una fila de vínculo real (solo llegó acá por
-  // su historial de consultas), armamos un objeto mínimo compatible con
-  // ProfessionalScheduleModal (solo usa patient_id / nombre del paciente).
-  const linkForSchedule: PatientLink = group.link ?? {
-    id: '',
-    patient_id: group.patientId,
-    professional_id: '',
-    created_at: group.lastAt,
-    revoked_at: null,
-    patient_first_name: group.firstName,
-    patient_last_name: group.lastName,
-    patient_photo_url: group.photoUrl,
-  }
+  // que el paciente esté "efectivamente" vinculado (ver
+  // lib/patientGrouping.ts::hasEffectiveLink, misma regla que aplica el
+  // backend en app/services/patient_links.py::has_effective_link).
+  const canSchedule = hasEffectiveLink(group) && membershipActive
+  const scheduleLink = linkForSchedule(group)
   const sortedConsultations = [...group.consultations].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )
@@ -391,7 +256,7 @@ function PatientCard({ group, membershipActive, onSchedule }: {
       <div className="absolute right-3 top-3 flex items-center gap-1.5">
         {canSchedule && (
           <button
-            onClick={(e) => { e.stopPropagation(); onSchedule(linkForSchedule) }}
+            onClick={(e) => { e.stopPropagation(); onSchedule(scheduleLink) }}
             className="btn-primary text-xs py-1.5 px-3"
           >
             Agendar cita

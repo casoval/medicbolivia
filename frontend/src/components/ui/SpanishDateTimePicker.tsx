@@ -13,9 +13,27 @@ import { useState } from 'react'
 const MESES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 const DIAS_ES  = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'] // lunes primero
 
-export function SpanishDateTimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function SpanishDateTimePicker({
+  value,
+  onChange,
+  onOpenChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+  /** Se llama cuando se abre/cierra el desplegable del calendario — útil
+   * para que el contenedor padre reserve espacio o permita scroll y así
+   * el desplegable no tape botones que estén justo debajo. */
+  onOpenChange?: (open: boolean) => void
+}) {
   const now = new Date()
-  const [open, setOpen] = useState(false)
+  const [open, setOpenRaw] = useState(false)
+  function setOpen(v: boolean | ((prev: boolean) => boolean)) {
+    setOpenRaw((prev) => {
+      const next = typeof v === 'function' ? v(prev) : v
+      onOpenChange?.(next)
+      return next
+    })
+  }
   const initial = value ? new Date(value) : now
   const [viewYear, setViewYear]   = useState(initial.getFullYear())
   const [viewMonth, setViewMonth] = useState(initial.getMonth())

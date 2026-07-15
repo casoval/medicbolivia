@@ -631,17 +631,35 @@ export const consultationsAPI = {
     ),
 
   // [Profesional con membresía activa] Agendar directamente a un paciente
-  // ya vinculado, sin límite de horario disponible. payment_channel:
-  // 'PLATFORM_QR' (amount opcional, default = price_general del profesional)
-  // o 'CASH' (amount obligatorio, acepta 0).
+  // ya vinculado, sin límite de horario disponible. El cobro es SIEMPRE
+  // directo entre el profesional y el paciente — amount es opcional
+  // (default = price_general del profesional), acepta 0.
   professionalSchedule: (data: {
     patient_id: string
     scheduled_at: string
     specialty?: string
     chief_complaint?: string
-    payment_channel: 'PLATFORM_QR' | 'CASH'
     amount?: number
   }) => api.post<Consultation>('/consultations/professional-schedule', data),
+
+  // Reprogramar una cita que el propio profesional agendó — sin
+  // negociación con el paciente (a diferencia de proposeReschedule, que es
+  // para citas que agendó el paciente). Se puede repetir cuantas veces se
+  // quiera, ya que no hay ningún pago de plataforma que reprocesar.
+  professionalReschedule: (consultationId: string, scheduledAt: string) =>
+    api.patch<Consultation>(`/consultations/${consultationId}/professional-reschedule`, {
+      scheduled_at: scheduledAt,
+    }),
+
+  // Registrar/actualizar cuánto y CUÁNDO se cobró realmente una cita que
+  // el profesional agendó directamente (pago fuera de la plataforma). La
+  // fecha de pago es libre — a mitad de la consulta, al final, o en otra
+  // fecha — se puede editar las veces que haga falta.
+  recordDirectPayment: (consultationId: string, amount: number, paidAt: string) =>
+    api.patch<Consultation>(`/consultations/${consultationId}/record-direct-payment`, {
+      amount,
+      paid_at: paidAt,
+    }),
 }
 
 export const scheduleAPI = {

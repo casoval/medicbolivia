@@ -347,6 +347,11 @@ class ConsultationResponse(BaseModel):
     payment_paid_at: Optional[datetime] = None
     payment_refunded_at: Optional[datetime] = None
     payment_refund_note: Optional[str] = None
+    # Quién creó la cita — el paciente (flujo normal) o el propio
+    # profesional (agendamiento directo por membresía). El frontend lo usa
+    # para habilitar edición/cancelación sin negociación solo en las que
+    # el profesional creó (ver professional-reschedule / cancel-by-professional).
+    created_by_role: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -373,20 +378,57 @@ class ProfessionalScheduleRequest(BaseModel):
     El profesional agenda directamente a un paciente ya vinculado (ver
     /patients/link). Requiere membresía activa. Sin límite de horario
     disponible (sí se sigue chequeando choque contra la propia agenda).
+
+    El cobro es SIEMPRE directo entre el profesional y el paciente — la
+    plataforma NUNCA procesa ni reembolsa este dinero, solo registra el
+    monto para las estadísticas del profesional (ver
+    app/api/v1/endpoints/consultations.py::professional_schedule_consultation).
+    Por eso el profesional puede cancelar/reprogramar esta cita cuantas
+    veces quiera, sin flujo de reembolso — nunca hubo un pago que la
+    plataforma tuviera que devolver.
     """
     patient_id: str
     scheduled_at: datetime
     specialty: Optional[str] = None
     chief_complaint: Optional[str] = None
-    payment_channel: str = Field(..., pattern="^(PLATFORM_QR|CASH)$")
-    # PLATFORM_QR: si se omite, se usa professional.price_general.
-    # CASH: obligatorio, pero se acepta 0 (ej. cortesía).
+    # Si se omite, se usa professional.price_general. Se acepta 0 (ej.
+    # consulta de cortesía) — nunca negativo.
     amount: Optional[Decimal] = None
 
     @field_validator("amount")
     @classmethod
     def _amount_no_negativo(cls, v):
         if v is not None and v < 0:
+            raise ValueError("El monto no puede ser negativo")
+        return v
+
+
+class ProfessionalRescheduleRequest(BaseModel):
+    """
+    Reprogramar una cita que el PROPIO profesional creó
+    (ProfessionalScheduleRequest) — sin negociación con el paciente (a
+    diferencia de /reschedule/propose, que es para citas que el paciente
+    agendó). Solo se avisa al paciente del nuevo horario.
+    """
+    scheduled_at: datetime
+
+
+class RecordDirectPaymentRequest(BaseModel):
+    """
+    Registrar/actualizar cuánto y CUÁNDO se cobró realmente una cita que el
+    profesional agendó directamente (pago fuera de la plataforma). Al
+    crear la cita se pide un monto de referencia, pero el cobro real puede
+    pasar después — a mitad de la consulta, al final, o en otra fecha — así
+    que la fecha de pago es libre (pasada, de hoy, o incluso futura si el
+    profesional quiere dejarlo programado).
+    """
+    amount: Decimal
+    paid_at: datetime
+
+    @field_validator("amount")
+    @classmethod
+    def _amount_no_negativo(cls, v):
+        if v < 0:
             raise ValueError("El monto no puede ser negativo")
         return v
 

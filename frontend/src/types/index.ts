@@ -118,6 +118,9 @@ export interface Consultation {
   payment_paid_at?: string
   payment_refunded_at?: string
   payment_refund_note?: string
+  // Quién creó la cita — 'PATIENT' (flujo normal) o 'PROFESSIONAL'
+  // (agendamiento directo por membresía, ver ProfessionalScheduleRequest).
+  created_by_role?: 'PATIENT' | 'PROFESSIONAL'
 }
 
 export interface Payment {

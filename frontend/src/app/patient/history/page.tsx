@@ -13,6 +13,7 @@ import type { ClinicalNote, DisputeCategory } from '@/lib/api'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, fmtHora, wasActuallyRefunded } from '@/lib/consultationHistory'
 import type { Consultation, Rating } from '@/types'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
+import { CreatorBadge } from '@/components/shared/CreatorBadge'
 
 const IconClose  = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
 
@@ -738,7 +739,10 @@ export default function HistoryPage() {
                             </p>
                           )}
                         </div>
-                        <StatusBadge status={c.status} />
+                        <div className="flex flex-col items-end gap-1">
+                          <StatusBadge status={c.status} />
+                          <CreatorBadge createdByRole={c.created_by_role} viewerRole="PATIENT" />
+                        </div>
                         {c.status === 'WAITING_PAYMENT' && (
                           <a href={`/patient/waiting-room?consultationId=${c.id}`} className="btn-primary text-xs py-1 px-2">
                             Pagar
@@ -805,7 +809,10 @@ export default function HistoryPage() {
                               </p>
                             )}
                           </div>
-                          <StatusBadge status={c.status} />
+                          <div className="flex flex-col items-end gap-1">
+                            <StatusBadge status={c.status} />
+                            <CreatorBadge createdByRole={c.created_by_role} viewerRole="PATIENT" />
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-2 flex-wrap">
@@ -927,7 +934,10 @@ export default function HistoryPage() {
                             </p>
                           )}
                         </div>
-                        <StatusBadge status={c.status} />
+                        <div className="flex flex-col items-end gap-1">
+                          <StatusBadge status={c.status} />
+                          <CreatorBadge createdByRole={c.created_by_role} viewerRole="PATIENT" />
+                        </div>
                       </div>
                     )
                   })}
