@@ -12,6 +12,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { LoadingScreen, Alert, SectionTitle } from '@/components/ui'
 import { patientsAPI, getErrorMessage } from '@/lib/api'
+import { NotificationsBell } from '@/components/shared/NotificationsBell'
 
 const IconCamera = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
 
@@ -194,11 +195,14 @@ export default function PatientProfilePage() {
   return (
     <DashboardLayout navItems={NAV} activeHref="/patient/profile" role="PATIENT">
       <div className="max-w-2xl">
-        <div className="mb-4">
-          <h1 className="text-lg font-semibold text-[#141820]">Perfil</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">
-            Tus datos personales y tu información médica en un solo lugar.
-          </p>
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <h1 className="text-lg font-semibold text-[#141820]">Perfil</h1>
+            <p className="text-xs text-[#6B738A] mt-0.5">
+              Tus datos personales y tu información médica en un solo lugar.
+            </p>
+          </div>
+          <NotificationsBell role="PATIENT" />
         </div>
 
         {/* Datos personales + foto */}

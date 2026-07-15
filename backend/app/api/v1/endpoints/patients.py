@@ -6,7 +6,7 @@ import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from typing import Optional
 
 from app.db.database import get_db
@@ -406,3 +406,79 @@ async def revoke_patient_link(
     link.revoked_at = datetime.utcnow()
     await db.commit()
     return {"detail": "Vínculo revocado"}
+
+
+# ── GET /api/v1/patients/me/notifications ────────────
+@router.get("/me/notifications", summary="Mis notificaciones (campanita)")
+async def get_my_notifications(
+    unread_only: bool = Query(False),
+    current_user: User = Depends(get_current_patient),
+    db: AsyncSession = Depends(get_db)
+):
+    from app.models.models import Notification
+    conditions = [Notification.user_id == current_user.id]
+    if unread_only:
+        conditions.append(Notification.read_at.is_(None))
+
+    result = await db.execute(
+        select(Notification)
+        .where(and_(*conditions))
+        .order_by(Notification.created_at.desc())
+        .limit(50)
+    )
+    notifications = result.scalars().all()
+    return [
+        {
+            "id":          n.id,
+            "title":       n.title,
+            "body":        n.body,
+            "type":        n.type,
+            "entity_type": n.entity_type,
+            "entity_id":   n.entity_id,
+            "read":        n.read_at is not None,
+            "created_at":  n.created_at.isoformat(),
+        }
+        for n in notifications
+    ]
+
+
+# ── PATCH /api/v1/patients/me/notifications/{id}/read ─
+@router.patch("/me/notifications/{notification_id}/read", summary="Marcar notificación como leída")
+async def mark_notification_read(
+    notification_id: str,
+    current_user: User = Depends(get_current_patient),
+    db: AsyncSession = Depends(get_db)
+):
+    from app.models.models import Notification
+    from datetime import datetime as dt
+    result = await db.execute(
+        select(Notification).where(
+            and_(Notification.id == notification_id, Notification.user_id == current_user.id)
+        )
+    )
+    notif = result.scalar_one_or_none()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notificación no encontrada")
+
+    notif.read_at = dt.utcnow()
+    await db.commit()
+    return {"message": "Notificación marcada como leída"}
+
+
+# ── PATCH /api/v1/patients/me/notifications/read-all ─
+@router.patch("/me/notifications/read-all", summary="Marcar todas mis notificaciones como leídas")
+async def mark_all_notifications_read(
+    current_user: User = Depends(get_current_patient),
+    db: AsyncSession = Depends(get_db)
+):
+    from app.models.models import Notification
+    from datetime import datetime as dt
+    result = await db.execute(
+        select(Notification).where(
+            and_(Notification.user_id == current_user.id, Notification.read_at.is_(None))
+        )
+    )
+    for n in result.scalars().all():
+        n.read_at = dt.utcnow()
+    await db.commit()
+    return {"message": "Notificaciones marcadas como leídas"}

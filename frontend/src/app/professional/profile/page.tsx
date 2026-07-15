@@ -7,6 +7,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { Alert, SectionTitle } from '@/components/ui'
 import { professionalsAPI, api, getErrorMessage } from '@/lib/api'
+import { NotificationsBell } from '@/components/shared/NotificationsBell'
 
 const IconCamera = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
 const IconRefresh = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
@@ -31,15 +32,6 @@ interface DocRecord {
   url?: string | null
   review_note?: string | null
   reviewed_at?: string | null
-  created_at: string
-}
-
-interface NotificationItem {
-  id: string
-  title: string
-  body: string
-  type: string
-  read: boolean
   created_at: string
 }
 
@@ -84,7 +76,6 @@ export default function ProfilePage() {
   const [pricesSuccess, setPricesSuccess]   = useState('')
   const [pricesError, setPricesError]       = useState('')
   const [viewingDoc, setViewingDoc] = useState<{ label: string; url: string } | null>(null)
-  const [showNotifs, setShowNotifs] = useState(false)
 
   // % de comisión vigente ahora mismo (individual > promo global > default)
   // y cuánto le llegaría neto por cada tipo de consulta con los precios
@@ -113,14 +104,6 @@ export default function ProfilePage() {
     refetchInterval: 20000, // así se ve "Aprobado"/"Rechazado" solo, sin recargar la página
   })
 
-  // Notificaciones (campanita) — aprobaciones/rechazos del admin
-  const { data: notifications = [], refetch: refetchNotifs } = useQuery({
-    queryKey: ['professional', 'me', 'notifications'],
-    queryFn: () => api.get('/professionals/me/notifications').then((r) => r.data as NotificationItem[]),
-    refetchInterval: 20000,
-  })
-  const unreadCount = notifications.filter((n) => !n.read).length
-
   // Detalle completo de mi membresía (la habilita/deshabilita un admin
   // manualmente) — estado actual + historial, para tener toda la info a
   // la vista en mi propio perfil.
@@ -129,16 +112,6 @@ export default function ProfilePage() {
     queryFn: professionalsAPI.getMyMembership,
     staleTime: 30_000,
   })
-
-  async function markAllNotifsRead() {
-    if (unreadCount === 0) return
-    try {
-      await api.patch('/professionals/me/notifications/read-all')
-      refetchNotifs()
-    } catch {
-      // silencioso — no es crítico si falla el marcado de leído
-    }
-  }
 
   function docRecordOf(type: string): DocRecord | undefined {
     return myDocs.find((d) => d.doc_type === type)
@@ -324,48 +297,7 @@ export default function ProfilePage() {
             <p className="text-xs text-[#6B738A] mt-0.5">Tu perfil público y estado de verificación</p>
           </div>
 
-          <div className="relative">
-            <button
-              onClick={() => { setShowNotifs((v) => !v); if (!showNotifs) markAllNotifsRead() }}
-              className="relative w-9 h-9 rounded-full border border-[#DDE1EE] bg-white flex items-center justify-center hover:bg-[#F5F6FA] transition-colors"
-              title="Notificaciones"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
-              </svg>
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#E24B4A] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-
-            {showNotifs && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)} />
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-[#DDE1EE] rounded-xl shadow-lg z-50 max-h-96 overflow-y-auto">
-                <div className="p-3 border-b border-[#DDE1EE]">
-                  <p className="text-xs font-semibold">Notificaciones</p>
-                </div>
-                {notifications.length === 0 ? (
-                  <p className="text-xs text-[#6B738A] text-center py-6">No tenés notificaciones todavía</p>
-                ) : (
-                  <div className="divide-y divide-[#DDE1EE]">
-                    {notifications.map((n) => (
-                      <div key={n.id} className="p-3">
-                        <p className="text-xs font-medium">{n.title}</p>
-                        <p className="text-xs text-[#6B738A] mt-0.5">{n.body}</p>
-                        <p className="text-[10px] text-[#A0A8BF] mt-1">
-                          {new Date(n.created_at).toLocaleString('es-BO')}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                </div>
-              </>
-            )}
-          </div>
+          <NotificationsBell role="PROFESSIONAL" />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

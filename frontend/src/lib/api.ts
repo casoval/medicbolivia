@@ -490,6 +490,35 @@ export const patientsAPI = {
     api.get<PatientPaymentsResponse>('/patients/me/payments', { params }).then(r => r.data),
 }
 
+// ── Notificaciones (campanita) — comunes a paciente y profesional ────
+// Ambos roles tienen el mismo shape de endpoint (/me/notifications), solo
+// cambia el prefijo del recurso ("patients" vs "professionals"). Se centraliza
+// acá para reutilizar tanto en la página de Perfil como en el ícono flotante
+// global (FloatingNotificationBell).
+export interface NotificationItem {
+  id: string
+  title: string
+  body: string
+  type: string
+  entity_type?: string | null
+  entity_id?: string | null
+  read: boolean
+  created_at: string
+}
+
+function notifBase(role: 'PATIENT' | 'PROFESSIONAL') {
+  return role === 'PATIENT' ? '/patients' : '/professionals'
+}
+
+export const notificationsAPI = {
+  getMine: (role: 'PATIENT' | 'PROFESSIONAL') =>
+    api.get<NotificationItem[]>(`${notifBase(role)}/me/notifications`).then(r => r.data),
+  markAllRead: (role: 'PATIENT' | 'PROFESSIONAL') =>
+    api.patch(`${notifBase(role)}/me/notifications/read-all`),
+  markRead: (role: 'PATIENT' | 'PROFESSIONAL', notificationId: string) =>
+    api.patch(`${notifBase(role)}/me/notifications/${notificationId}/read`),
+}
+
 // ── Vínculo "Mis pacientes" (PatientProfessionalLink) ─
 // Solo el PACIENTE puede crear y revocar el vínculo. Una vez activo, el
 // profesional lo ve en su lista (professionalsAPI.getMyPatients) y — si

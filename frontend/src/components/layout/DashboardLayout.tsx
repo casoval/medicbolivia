@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/store'
 import { NotificationToast } from './NotificationToast'
+import { FloatingNotificationBell } from './FloatingNotificationBell'
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 import type { UserRole } from '@/types'
@@ -212,6 +213,9 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
 
       {/* Notificaciones flotantes — visibles en cualquier pestaña */}
       <NotificationToast />
+
+      {/* Ícono redondo flotante — avisa de notificaciones nuevas estés donde estés */}
+      <FloatingNotificationBell />
     </div>
   )
 }
