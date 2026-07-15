@@ -1070,19 +1070,29 @@ class ChatConversationStatus(str, enum.Enum):
 
 class ChatConversation(Base):
     __tablename__ = "chat_conversations"
+    __table_args__ = (
+        UniqueConstraint("patient_user_id", "professional_user_id", name="uq_chat_conversations_patient_professional"),
+    )
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
-    consultation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id", ondelete="CASCADE"), unique=True)
+    # Referencia informativa a la consulta que originó o más recientemente
+    # reactivó este hilo — YA NO es la clave de unicidad. La conversación
+    # es única por PAR paciente-profesional (ver UniqueConstraint arriba):
+    # si el mismo paciente y profesional tienen varias consultas (inmediata,
+    # agendada, seguimiento...), todas comparten un solo hilo de chat en vez
+    # de crear uno nuevo por cada una. Nullable + SET NULL porque ya no es
+    # dueña de la fila: si esa consulta puntual se borrara, el hilo compartido
+    # y su historial deben sobrevivir igual.
+    consultation_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id", ondelete="SET NULL"), nullable=True)
     # Denormalizado a propósito: guardar directo el user_id de cada lado
     # evita un join a patients/professionals en cada mensaje del WebSocket,
     # que es la ruta más caliente de todo este módulo.
     patient_user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"))
     professional_user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"))
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=ChatConversationStatus.ACTIVE.value)
-    # Calculado al crear la conversación como Consultation.ended_at +
-    # CHAT_WINDOW_DAYS (ver config.py). Null mientras la consulta sigue
-    # en curso (la conversación existe desde que se paga, pero no expira
-    # hasta que la consulta termina).
+    # Calculado al (re)activar el hilo como Consultation.ended_at +
+    # CHAT_WINDOW_DAYS (ver config.py) de la consulta más reciente que lo
+    # tocó. Null mientras esa consulta sigue en curso.
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     closed_by_admin_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
     close_reason: Mapped[Optional[str]] = mapped_column(String(255))
@@ -1091,7 +1101,7 @@ class ChatConversation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    consultation: Mapped["Consultation"] = relationship()
+    consultation: Mapped[Optional["Consultation"]] = relationship()
     patient_user: Mapped["User"] = relationship(foreign_keys=[patient_user_id])
     professional_user: Mapped["User"] = relationship(foreign_keys=[professional_user_id])
     messages: Mapped[List["ChatMessage"]] = relationship(back_populates="conversation", order_by="ChatMessage.created_at", cascade="all, delete-orphan")

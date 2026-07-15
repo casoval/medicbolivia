@@ -384,24 +384,25 @@ async def get_or_create_conversation_for_consultation(
     db: AsyncSession, consultation_id: str
 ) -> ChatConversation:
     """
-    Idempotente: si ya existe la conversación para esta consulta, la
-    retorna; si no, la crea. Se llama desde el momento en que la consulta
-    queda PAGADA (no antes) — ver hook en consultations.py.
-    expires_at queda en null hasta que la consulta termina (started_at/
-    ended_at); mientras la consulta está en curso, el chat no tiene
-    fecha de vencimiento todavía.
+    Idempotente — pero OJO: idempotente por PAR paciente-profesional, no
+    por consulta. Si el mismo paciente y el mismo profesional ya tienen
+    un hilo de chat (de una consulta anterior), esta consulta reutiliza
+    y reactiva ese mismo hilo en vez de crear uno nuevo; así todo el
+    historial de conversación entre ambos queda junto, sin importar
+    cuántas consultas distintas hayan tenido.
 
-    Al crear, se congela en la consulta el chat_window_days vigente HOY
-    (snapshot) si todavía no tenía uno — así, si el admin cambia el valor
-    global más adelante, esta consulta no se ve afectada retroactivamente.
+    Se llama desde el momento en que la consulta queda PAGADA (no antes)
+    — ver hook en consultations.py. expires_at queda en null hasta que
+    la consulta termina (started_at/ended_at); mientras la consulta está
+    en curso, el chat no tiene fecha de vencimiento todavía. Si se
+    reutiliza un hilo que había expirado, se reactiva y su expires_at se
+    empuja hacia adelante con la ventana de esta nueva consulta.
+
+    Al crear/reactivar, se congela en la consulta el chat_window_days
+    vigente HOY (snapshot) si todavía no tenía uno — así, si el admin
+    cambia el valor global más adelante, esta consulta no se ve afectada
+    retroactivamente.
     """
-    existing = await db.execute(
-        select(ChatConversation).where(ChatConversation.consultation_id == consultation_id)
-    )
-    conv = existing.scalar_one_or_none()
-    if conv:
-        return conv
-
     result = await db.execute(
         select(Consultation).where(Consultation.id == consultation_id)
     )
@@ -425,6 +426,27 @@ async def get_or_create_conversation_for_consultation(
         window_days = _effective_chat_window_days(consultation, await get_chat_window_days(db))
         expires_at = consultation.ended_at + timedelta(days=window_days)
 
+    existing = await db.execute(
+        select(ChatConversation).where(
+            ChatConversation.patient_user_id == patient.user_id,
+            ChatConversation.professional_user_id == professional.user_id,
+        )
+    )
+    conv = existing.scalar_one_or_none()
+    if conv:
+        # Nueva consulta entre el mismo par: el hilo compartido se
+        # reactiva (por si estaba EXPIRED/CLOSED por vencimiento natural,
+        # no por bloqueo/admin) y su vencimiento se extiende con la
+        # ventana de esta consulta más reciente.
+        conv.consultation_id = consultation_id
+        if conv.status == ChatConversationStatus.EXPIRED.value:
+            conv.status = ChatConversationStatus.ACTIVE.value
+        if expires_at and (conv.expires_at is None or expires_at > conv.expires_at):
+            conv.expires_at = expires_at
+        elif expires_at is None:
+            conv.expires_at = None
+        return conv
+
     conv = ChatConversation(
         consultation_id=consultation_id,
         patient_user_id=patient.user_id,
@@ -438,18 +460,33 @@ async def get_or_create_conversation_for_consultation(
 
 async def mark_conversation_expiry_on_consultation_end(db: AsyncSession, consultation_id: str) -> None:
     """Llamar cuando una Consultation pasa a ended_at != None, para fijar
-    la fecha de vencimiento del chat asociado si ya existía."""
+    la fecha de vencimiento del chat asociado si ya existía. Busca el
+    hilo por el par paciente-profesional de la consulta (el hilo es
+    compartido entre todas las consultas de ese par), no por
+    consultation_id directamente."""
+    result = await db.execute(select(Consultation).where(Consultation.id == consultation_id))
+    consultation = result.scalar_one_or_none()
+    if not consultation or not consultation.ended_at:
+        return
+
+    patient_result = await db.execute(select(Patient).where(Patient.id == consultation.patient_id))
+    patient = patient_result.scalar_one_or_none()
+    professional_result = await db.execute(select(Professional).where(Professional.id == consultation.professional_id))
+    professional = professional_result.scalar_one_or_none()
+    if not patient or not professional:
+        return
+
     result = await db.execute(
-        select(ChatConversation).where(ChatConversation.consultation_id == consultation_id)
+        select(ChatConversation).where(
+            ChatConversation.patient_user_id == patient.user_id,
+            ChatConversation.professional_user_id == professional.user_id,
+        )
     )
     conv = result.scalar_one_or_none()
     if not conv:
         return
 
-    result = await db.execute(select(Consultation).where(Consultation.id == consultation_id))
-    consultation = result.scalar_one_or_none()
-    if consultation and consultation.ended_at:
-        if consultation.chat_window_days_snapshot is None:
-            consultation.chat_window_days_snapshot = await get_chat_window_days(db)
-        window_days = _effective_chat_window_days(consultation, await get_chat_window_days(db))
-        conv.expires_at = consultation.ended_at + timedelta(days=window_days)
+    if consultation.chat_window_days_snapshot is None:
+        consultation.chat_window_days_snapshot = await get_chat_window_days(db)
+    window_days = _effective_chat_window_days(consultation, await get_chat_window_days(db))
+    conv.expires_at = consultation.ended_at + timedelta(days=window_days)

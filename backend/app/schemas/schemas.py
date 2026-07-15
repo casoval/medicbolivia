@@ -911,7 +911,7 @@ class ChatParticipantResponse(BaseModel):
 
 class ChatConversationResponse(BaseModel):
     id: str
-    consultation_id: str
+    consultation_id: Optional[str] = None
     status: str
     expires_at: Optional[datetime]
     last_message_at: Optional[datetime]
