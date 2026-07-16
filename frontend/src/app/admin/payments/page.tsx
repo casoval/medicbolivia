@@ -392,8 +392,16 @@ export default function AdminPaymentsPage() {
                             </>
                           )}
                         </div>
-                        <StatusBadge status={p.status} />
-                        {['CONFIRMED', 'RELEASED_TO_PROFESSIONAL'].includes(p.status) && (
+                        <StatusBadge status={p.status} channel={p.payment_channel} />
+                        {p.created_by_role === 'PROFESSIONAL' && (
+                          <span
+                            className="text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-[#EEEDFE] text-[#534AB7] flex-shrink-0"
+                            title="Cita agendada directamente por el profesional (membresía) — cobro directo, no vía plataforma."
+                          >
+                            Directo
+                          </span>
+                        )}
+                        {p.payment_channel !== 'CASH' && ['CONFIRMED', 'RELEASED_TO_PROFESSIONAL'].includes(p.status) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setRefundModal({ id: p.id, amount: p.amount }) }}
                             className="text-xs text-[#A32D2D] hover:underline flex-shrink-0"

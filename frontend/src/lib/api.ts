@@ -390,6 +390,11 @@ export interface PatientPaymentStats {
   total_en_disputa: number
   consultas_pagadas: number
   cantidad_pagos: number
+  // Desglose por canal — plataforma (QR) vs cobro directo con el
+  // profesional (agendamiento por membresía, ver PaymentChannel).
+  total_pagado_plataforma: number
+  total_pagado_directo: number
+  total_pendiente_cobro_directo: number
 }
 
 export interface PatientPaymentItem {
@@ -399,6 +404,7 @@ export interface PatientPaymentItem {
   platform_fee: number
   professional_net: number
   status: string
+  payment_channel: 'PLATFORM_QR' | 'CASH' | null
   bank_name: string | null
   bank_tx_id: string | null
   paid_at: string | null
@@ -420,6 +426,8 @@ export interface PatientPaymentItem {
   consultation_status: string | null
   scheduled_at: string | null
   outcome_note: string | null
+  created_by_role: 'PATIENT' | 'PROFESSIONAL' | null
+  modality: 'VIDEO_CALL' | 'IN_PERSON' | null
 }
 
 export interface PatientPaymentsResponse {
@@ -435,6 +443,12 @@ export interface ProfessionalEarningStats {
   total_comision_plataforma: number
   consultas_cobradas: number
   cantidad_pagos: number
+  // Desglose por canal — plataforma (QR, con comisión y garantía) vs
+  // cobro directo en efectivo con el paciente (agendamiento por
+  // membresía, sin comisión ni garantía — ver PaymentChannel).
+  total_recibido_plataforma: number
+  total_recibido_directo: number
+  total_pendiente_cobro_directo: number
 }
 
 export interface ProfessionalEarningItem {
@@ -444,6 +458,7 @@ export interface ProfessionalEarningItem {
   platform_fee: number
   professional_net: number
   status: string
+  payment_channel: 'PLATFORM_QR' | 'CASH' | null
   paid_at: string | null
   created_at: string
   released_at: string | null
@@ -461,6 +476,8 @@ export interface ProfessionalEarningItem {
   consultation_status: string | null
   scheduled_at: string | null
   outcome_note: string | null
+  created_by_role: 'PATIENT' | 'PROFESSIONAL' | null
+  modality: 'VIDEO_CALL' | 'IN_PERSON' | null
 }
 
 export interface ProfessionalEarningsResponse {
@@ -670,6 +687,7 @@ export const consultationsAPI = {
     chief_complaint?: string
     amount?: number
     charge_now?: boolean
+    modality?: 'VIDEO_CALL' | 'IN_PERSON'
   }) => api.post<Consultation>('/consultations/professional-schedule', data),
 
   // Reprogramar una cita que el propio profesional agendó — sin
@@ -690,6 +708,11 @@ export const consultationsAPI = {
       amount,
       paid_at: paidAt,
     }),
+
+  // Elegir videollamada o presencial para una cita que el propio
+  // profesional agendó (membresía) — no aplica al flujo normal.
+  setConsultationModality: (consultationId: string, modality: 'VIDEO_CALL' | 'IN_PERSON') =>
+    api.patch<Consultation>(`/consultations/${consultationId}/set-modality`, { modality }),
 }
 
 export const scheduleAPI = {

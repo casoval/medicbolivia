@@ -21,6 +21,7 @@ import { SpanishDatePicker, SpanishDateTimePicker } from '@/components/ui/Spanis
 import { fmtFechaHoraLocal } from '@/lib/consultationHistory'
 import { consultationsAPI, getErrorMessage } from '@/lib/api'
 import { CreatorBadge } from '@/components/shared/CreatorBadge'
+import { ConsultationTypeBadge, ModalityBadge } from '@/components/shared/ConsultationBadges'
 import type { Consultation, ConsultationStatus } from '@/types'
 
 // ─────────────────────────────────────────────────────
@@ -201,6 +202,17 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
     },
     onError: (err: any) => setActionError(getErrorMessage(err)),
   })
+  const setModalityMutation = useMutation({
+    mutationFn: ({ id, modality }: { id: string; modality: 'VIDEO_CALL' | 'IN_PERSON' }) =>
+      consultationsAPI.setConsultationModality(id, modality),
+    onMutate: () => setActionError(''),
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: ['consultations'] })
+      qc.invalidateQueries({ queryKey: ['professional-appointments'] })
+      setDetail((d) => (d ? { ...d, modality: updated.data.modality } : d))
+    },
+    onError: (err: any) => setActionError(getErrorMessage(err)),
+  })
 
   const today = new Date()
 
@@ -254,7 +266,11 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
   }
 
   function typeLabel(c: Consultation) {
-    return c.consultation_type === 'FOLLOW_UP' ? 'Reconsulta' : 'Cita agendada'
+    const base = c.consultation_type === 'FOLLOW_UP' ? 'Reconsulta' : 'Cita agendada'
+    if (c.created_by_role === 'PROFESSIONAL') {
+      return `${base} · agendada por ${role === 'PROFESSIONAL' ? 'ti' : 'el profesional'}`
+    }
+    return base
   }
 
   // Solo el profesional puede reprogramar/cancelar sin negociación — y
@@ -281,6 +297,19 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
       c.created_by_role === 'PROFESSIONAL' &&
       c.status !== 'CANCELLED' &&
       c.status !== 'REFUNDED'
+    )
+  }
+
+  // Elegir videollamada / presencial — igual de permisivo que el cobro:
+  // se puede cambiar hasta que la cita termine (completada, cancelada o
+  // reembolsada), no solo antes de que ocurra.
+  function canSetModality(c: Consultation) {
+    return (
+      role === 'PROFESSIONAL' &&
+      c.created_by_role === 'PROFESSIONAL' &&
+      c.status !== 'CANCELLED' &&
+      c.status !== 'REFUNDED' &&
+      c.status !== 'COMPLETED'
     )
   }
 
@@ -408,8 +437,10 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
                 <h3 className="text-sm font-semibold text-[#141820]">Detalle de la cita</h3>
                 <StatusBadge status={detail.status} />
               </div>
-              <div className="mb-3">
+              <div className="mb-3 flex items-center gap-1.5 flex-wrap">
                 <CreatorBadge createdByRole={detail.created_by_role} viewerRole={role} />
+                <ConsultationTypeBadge consultation={detail} />
+                <ModalityBadge consultation={detail} />
               </div>
               <div className="flex flex-col gap-1.5 text-xs text-[#4A5169]">
                 <p>
@@ -454,6 +485,36 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
                   </p>
 
                   {actionError && <div className="mb-2"><Alert type="error" message={actionError} /></div>}
+
+                  {canSetModality(detail) && !editing && !confirmingCancel && !recordingPayment && (
+                    <div className="mb-2">
+                      <label className="block text-[11px] text-[#6B738A] mb-1">¿Cómo se atiende?</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setModalityMutation.mutate({ id: detail.id, modality: 'VIDEO_CALL' })}
+                          disabled={setModalityMutation.isPending}
+                          className={`text-xs font-medium rounded-lg py-1.5 border transition-colors disabled:opacity-50 ${
+                            detail.modality !== 'IN_PERSON'
+                              ? 'bg-[#0F6E56] border-[#0F6E56] text-white'
+                              : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                          }`}
+                        >
+                          🎥 Videollamada
+                        </button>
+                        <button
+                          onClick={() => setModalityMutation.mutate({ id: detail.id, modality: 'IN_PERSON' })}
+                          disabled={setModalityMutation.isPending}
+                          className={`text-xs font-medium rounded-lg py-1.5 border transition-colors disabled:opacity-50 ${
+                            detail.modality === 'IN_PERSON'
+                              ? 'bg-[#993C1D] border-[#993C1D] text-white'
+                              : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                          }`}
+                        >
+                          🏥 Presencial
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {editing && (
                     <div className="flex flex-col gap-2 mb-2" style={pickerOpen ? { marginBottom: 300 } : undefined}>

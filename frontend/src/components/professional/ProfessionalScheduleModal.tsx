@@ -28,6 +28,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
   const [chiefComplaint, setChiefComplaint] = useState('')
   const [amount, setAmount] = useState(String(defaultAmount))
   const [chargeNow, setChargeNow] = useState(true)
+  const [modality, setModality] = useState<'VIDEO_CALL' | 'IN_PERSON'>('VIDEO_CALL')
   const [error, setError] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -42,6 +43,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
         chief_complaint: chiefComplaint || undefined,
         amount: parsedAmount,
         charge_now: chargeNow,
+        modality,
       })
     },
     onMutate: () => setError(''),
@@ -95,6 +97,39 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
               El cobro es directo entre tú y el paciente — la plataforma no genera QR ni participa
               en este pago, solo lo registra para tus estadísticas. Por eso puedes cancelar o
               reprogramar esta cita después las veces que necesites, sin trámites de reembolso.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs text-[#6B738A] mb-1">¿Cómo se atiende?</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setModality('VIDEO_CALL')}
+                className={`text-xs font-medium rounded-lg py-1.5 border transition-colors ${
+                  modality === 'VIDEO_CALL'
+                    ? 'bg-[#0F6E56] border-[#0F6E56] text-white'
+                    : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                }`}
+              >
+                🎥 Videollamada
+              </button>
+              <button
+                type="button"
+                onClick={() => setModality('IN_PERSON')}
+                className={`text-xs font-medium rounded-lg py-1.5 border transition-colors ${
+                  modality === 'IN_PERSON'
+                    ? 'bg-[#993C1D] border-[#993C1D] text-white'
+                    : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                }`}
+              >
+                🏥 Presencial
+              </button>
+            </div>
+            <p className="text-[10px] text-[#A0A8BF] mt-1">
+              {modality === 'IN_PERSON'
+                ? 'El paciente verá que debe presentarse en tu consultorio, sin videollamada.'
+                : 'Se atenderán por videollamada en la plataforma, como el resto de las consultas.'}
             </p>
           </div>
 

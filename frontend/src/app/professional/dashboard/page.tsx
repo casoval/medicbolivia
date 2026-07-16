@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
-import { Alert } from '@/components/ui'
+import { Alert, StatusBadge } from '@/components/ui'
+import { ModalityBadge } from '@/components/shared/ConsultationBadges'
 import { useAuthStore } from '@/lib/store'
 import { professionalsAPI, consultationsAPI, ratingsAPI, prescriptionsAPI, clinicalNotesAPI, getErrorMessage } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
@@ -1041,19 +1042,27 @@ export default function ProfessionalDashboard() {
                         </div>
                       )}
                     </div>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${
-                      c.status === 'COMPLETED'           ? 'badge-green' :
-                      c.status === 'IN_PROGRESS'         ? 'badge-blue'  :
-                      c.status === 'WAITING_PROFESSIONAL'? 'badge-amber' :
-                      c.status === 'PAYMENT_CONFIRMED'   ? 'badge-blue'  : 'badge-gray'
-                    }`}>
-                      {c.status === 'COMPLETED'            ? 'Completada' :
-                       c.status === 'IN_PROGRESS'          ? 'En curso' :
-                       c.status === 'WAITING_PROFESSIONAL' ? 'Solicitud' :
-                       c.status === 'PAYMENT_CONFIRMED'    ? 'Pago confirmado' :
-                       c.status === 'CANCELLED'            ? 'Cancelada' :
-                       c.status === 'REFUNDED'             ? 'Reembolsada' : 'Pendiente'}
-                    </span>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        c.status === 'COMPLETED'           ? 'badge-green' :
+                        c.status === 'IN_PROGRESS'         ? 'badge-blue'  :
+                        c.status === 'WAITING_PROFESSIONAL'? 'badge-amber' :
+                        c.status === 'PAYMENT_CONFIRMED'   ? 'badge-blue'  : 'badge-gray'
+                      }`}>
+                        {c.status === 'COMPLETED'            ? 'Completada' :
+                         c.status === 'IN_PROGRESS'          ? 'En curso' :
+                         c.status === 'WAITING_PROFESSIONAL' ? 'Solicitud' :
+                         c.status === 'PAYMENT_CONFIRMED'    ? (c.created_by_role === 'PROFESSIONAL' ? 'Cita confirmada' : 'Pago confirmado') :
+                         c.status === 'CANCELLED'            ? 'Cancelada' :
+                         c.status === 'REFUNDED'             ? 'Reembolsada' : 'Pendiente'}
+                      </span>
+                      {c.created_by_role === 'PROFESSIONAL' && !isCancelled && (
+                        <div className="flex flex-col items-end gap-1">
+                          <StatusBadge status={c.payment_status || 'PENDING'} channel={c.payment_channel} />
+                          <ModalityBadge consultation={c} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )
               })}

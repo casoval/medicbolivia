@@ -3,7 +3,7 @@ app/schemas/schemas.py
 Esquemas Pydantic para validación de requests y serialización de responses.
 """
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime, timezone
 from decimal import Decimal
 from app.core.phone import normalize_bo_phone, normalize_intl_phone, InvalidPhoneError
@@ -344,6 +344,7 @@ class ConsultationResponse(BaseModel):
     # Datos del pago (enriquecidos en el endpoint con JOIN), para que el
     # historial muestre cuándo se pagó/reembolsó y por qué.
     payment_status: Optional[str] = None
+    payment_channel: Optional[str] = None
     payment_paid_at: Optional[datetime] = None
     payment_refunded_at: Optional[datetime] = None
     payment_refund_note: Optional[str] = None
@@ -352,6 +353,8 @@ class ConsultationResponse(BaseModel):
     # para habilitar edición/cancelación sin negociación solo en las que
     # el profesional creó (ver professional-reschedule / cancel-by-professional).
     created_by_role: Optional[str] = None
+    # Modalidad de atención (VIDEO_CALL / IN_PERSON) — ver ConsultationModality.
+    modality: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -401,6 +404,10 @@ class ProfessionalScheduleRequest(BaseModel):
     # la cita). En ambos casos la cita queda igual de confirmada — esto solo
     # afecta el registro contable del cobro, nunca el acceso a la consulta.
     charge_now: bool = True
+    # Cómo se atenderá la cita. Solo tiene sentido elegir aquí porque es
+    # el profesional quien agenda directamente — el flujo normal (paciente
+    # agenda o pide consulta inmediata) siempre es por videollamada.
+    modality: Literal["VIDEO_CALL", "IN_PERSON"] = "VIDEO_CALL"
 
     @field_validator("amount")
     @classmethod
@@ -408,6 +415,15 @@ class ProfessionalScheduleRequest(BaseModel):
         if v is not None and v < 0:
             raise ValueError("El monto no puede ser negativo")
         return v
+
+
+class SetConsultationModalityRequest(BaseModel):
+    """
+    Cambiar la modalidad (videollamada / presencial) de una cita ya
+    agendada por el propio profesional. Solo aplica a citas con
+    created_by_role=PROFESSIONAL — el flujo normal no admite elegir esto.
+    """
+    modality: Literal["VIDEO_CALL", "IN_PERSON"]
 
 
 class ProfessionalRescheduleRequest(BaseModel):

@@ -11,13 +11,14 @@ import { useAuthStore } from '@/lib/store'
 import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, getErrorMessage, buildPrescriptionVerifyUrl } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
 import { getGreeting } from '@/lib/greeting'
+import { ModalityBadge } from '@/components/shared/ConsultationBadges'
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, createdByRole }: { status: string; createdByRole?: string | null }) {
   const map: Record<string, { cls: string; label: string }> = {
     COMPLETED:            { cls: 'badge-green', label: 'Completada' },
     IN_PROGRESS:          { cls: 'badge-blue',  label: 'En curso' },
     WAITING_PAYMENT:      { cls: 'badge-amber', label: 'Esperando pago' },
-    PAYMENT_CONFIRMED:    { cls: 'badge-blue',  label: 'Pago confirmado' },
+    PAYMENT_CONFIRMED:    { cls: 'badge-blue',  label: createdByRole === 'PROFESSIONAL' ? 'Cita confirmada' : 'Pago confirmado' },
     WAITING_PROFESSIONAL: { cls: 'badge-blue',  label: 'Buscando profesional' },
     CANCELLED:            { cls: 'badge-gray',  label: 'Cancelada' },
     REFUNDED:             { cls: 'badge-gray',  label: 'Reembolsada' },
@@ -488,7 +489,10 @@ export default function PatientDashboard() {
                         </div>
                       )}
                     </div>
-                    <StatusBadge status={c.status} />
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <StatusBadge status={c.status} createdByRole={c.created_by_role} />
+                      {c.created_by_role === 'PROFESSIONAL' && <ModalityBadge consultation={c} />}
+                    </div>
                   </div>
                 )
               })}

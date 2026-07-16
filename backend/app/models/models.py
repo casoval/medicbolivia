@@ -123,6 +123,20 @@ class ConsultationCreatedBy(str, enum.Enum):
     PROFESSIONAL = "PROFESSIONAL"
 
 
+class ConsultationModality(str, enum.Enum):
+    """
+    Cómo se realiza la consulta. Solo aplica una elección real para citas
+    agendadas directamente por el profesional (created_by_role=PROFESSIONAL,
+    ver ProfessionalScheduleRequest) — el flujo normal (paciente agenda o
+    pide consulta inmediata) siempre es VIDEO_CALL, ya que la plataforma
+    conecta a ambos por videollamada. IN_PERSON es para cuando el
+    profesional y su paciente vinculado se atienden físicamente en
+    consultorio, sin videollamada.
+    """
+    VIDEO_CALL = "VIDEO_CALL"
+    IN_PERSON = "IN_PERSON"
+
+
 class AgentType(str, enum.Enum):
     COORDINATOR = "COORDINATOR"
     TRIAGE = "TRIAGE"
@@ -399,6 +413,12 @@ class Consultation(Base):
     # tiene el flujo normal de FOLLOW_UP.
     created_by_role: Mapped[ConsultationCreatedBy] = mapped_column(
         SAEnum(ConsultationCreatedBy), nullable=False, default=ConsultationCreatedBy.PATIENT
+    )
+    # Modalidad de atención — ver ConsultationModality. Editable solo en
+    # citas creadas por el profesional (record_direct_payment/set-modality),
+    # antes de que la consulta termine o se cancele.
+    modality: Mapped[ConsultationModality] = mapped_column(
+        SAEnum(ConsultationModality), nullable=False, default=ConsultationModality.VIDEO_CALL
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

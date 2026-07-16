@@ -104,7 +104,12 @@ export function Avatar({ initials, color = 'blue', size = 'md' }: {
 }
 
 // ── Status badge ──────────────────────────────────────
-export function StatusBadge({ status }: { status: string }) {
+// channel: solo relevante cuando status es un PaymentStatus (PENDING/
+// CONFIRMED) — un pago CASH (cobro directo del profesional, agendamiento
+// por membresía) nunca pasó por QR de la plataforma, así que usa otro
+// texto ("Cobro pendiente de registrar" / "Cobro registrado") en vez de
+// "QR pendiente" / "Pago confirmado", que describen el flujo de plataforma.
+export function StatusBadge({ status, channel }: { status: string; channel?: 'PLATFORM_QR' | 'CASH' }) {
   const map: Record<string, { cls: string; label: string }> = {
     COMPLETED:            { cls: 'badge-green',  label: 'Completada' },
     IN_PROGRESS:          { cls: 'badge-blue',   label: 'En curso' },
@@ -132,6 +137,13 @@ export function StatusBadge({ status }: { status: string }) {
     UNDER_REVIEW:         { cls: 'badge-blue',   label: 'En revisión' },
     REJECTED:             { cls: 'badge-red',    label: 'Rechazado' },
     SUSPENDED:            { cls: 'badge-red',    label: 'Suspendido' },
+  }
+  // Overrides de texto para pagos con canal CASH (cobro directo) — el
+  // estado (PENDING/CONFIRMED) es el mismo enum, pero el significado es
+  // distinto al flujo de QR de la plataforma.
+  if (channel === 'CASH') {
+    if (status === 'PENDING') return <span className="badge-amber">Cobro pendiente de registrar</span>
+    if (status === 'CONFIRMED') return <span className="badge-green">Cobro directo registrado</span>
   }
   const cfg = map[status] || { cls: 'badge-gray', label: status }
   return <span className={cfg.cls}>{cfg.label}</span>

@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, SectionTitle } from '@/components/ui'
+import { ConsultationTypeBadge, ModalityBadge } from '@/components/shared/ConsultationBadges'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { professionalsAPI, getErrorMessage } from '@/lib/api'
 import type { ProfessionalEarningItem } from '@/lib/api'
@@ -46,6 +47,16 @@ const DISPUTE_CATEGORY_LABELS: Record<string, string> = {
 // actual de ESTE pago — para que nunca tenga dudas de si el dinero ya es
 // suyo, sigue retenido, o fue devuelto al paciente.
 function earningExplanation(p: ProfessionalEarningItem): string {
+  if (p.payment_channel === 'CASH') {
+    switch (p.status) {
+      case 'PENDING':
+        return 'Agendaste esta cita tú mismo y elegiste "pagar después" — todavía no registras que cobraste. Hazlo desde el detalle de la cita en tu calendario.'
+      case 'CONFIRMED':
+        return 'Cobro directo con tu paciente (cita que tú agendaste). Ya registraste el cobro — este dinero es tuyo, nunca pasó por la plataforma, así que no hay comisión ni garantía.'
+      default:
+        return ''
+    }
+  }
   switch (p.status) {
     case 'CONFIRMED':
       return 'El paciente ya pagó. El monto está retenido temporalmente por la plataforma como garantía y se liberará a tu favor una vez termine el período de espera post-consulta.'
@@ -70,8 +81,11 @@ function earningExplanation(p: ProfessionalEarningItem): string {
 const NO_MONEY_FOR_PROFESSIONAL = new Set([
   'PENDING', 'CANCELLED_NO_CHARGE', 'REFUNDED_FULL', 'REFUNDED_PARTIAL', 'DISPUTED',
 ])
-function earningAmountColorClass(status: string): string {
+function earningAmountColorClass(status: string, channel?: string | null): string {
   if (status === 'RELEASED_TO_PROFESSIONAL') return 'text-[#0F6E56]' // ya es suyo
+  // Cobro directo (CASH) confirmado nunca queda en garantía — es dinero ya
+  // recibido igual que uno liberado por la plataforma.
+  if (channel === 'CASH' && status === 'CONFIRMED') return 'text-[#0F6E56]'
   if (NO_MONEY_FOR_PROFESSIONAL.has(status)) return 'text-[#A0A8BF]' // gris: cancelado / sin cobro / devuelto / congelado
   return 'text-[#141820]' // CONFIRMED: en garantía, es dinero real pero todavía no liberado
 }
@@ -120,7 +134,7 @@ export default function ProfessionalEarningsPage() {
         {isLoading ? <LoadingScreen text="Cargando tus pagos..." /> : (
           <>
             {/* ── Estadísticas ─────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
               <div className="card py-3 text-center">
                 <p className="text-xl font-bold text-[#0F6E56]">Bs. {stats?.total_recibido.toFixed(2) ?? '0.00'}</p>
                 <p className="text-xs text-[#6B738A] mt-0.5">Total recibido</p>
@@ -138,6 +152,27 @@ export default function ProfessionalEarningsPage() {
                 <p className="text-xs text-[#6B738A] mt-0.5">Comisión de la plataforma</p>
               </div>
             </div>
+
+            {/* Desglose por canal — lo cobrado vía plataforma (QR, con
+                comisión y garantía) es distinto de lo cobrado directo en
+                efectivo con tus pacientes (citas que tú mismo agendaste por
+                membresía): ese dinero nunca pasa por la plataforma, no
+                genera comisión ni queda retenido en garantía. */}
+            {((stats?.total_recibido_directo ?? 0) > 0 || (stats?.total_pendiente_cobro_directo ?? 0) > 0) && (
+              <div className="mb-5 flex flex-wrap gap-2 text-xs">
+                <span className="px-2.5 py-1 rounded-full bg-[#EEF3FB] text-[#185FA5] border border-[#C3D6EF]">
+                  Vía plataforma: Bs. {stats?.total_recibido_plataforma.toFixed(2) ?? '0.00'}
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-[#EEEDFE] text-[#534AB7] border border-[#D7D4F7]">
+                  Cobros directos ya cobrados: Bs. {stats?.total_recibido_directo.toFixed(2) ?? '0.00'}
+                </span>
+                {(stats?.total_pendiente_cobro_directo ?? 0) > 0 && (
+                  <span className="px-2.5 py-1 rounded-full bg-[#FFF4E5] text-[#B25E09] border border-[#F5D9A8]">
+                    Directo, pendiente de que registres el cobro: Bs. {stats?.total_pendiente_cobro_directo.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            )}
 
             {(stats?.total_en_disputa ?? 0) > 0 && (
               <div className="mb-4">
@@ -208,7 +243,7 @@ export default function ProfessionalEarningsPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-medium truncate">{patientName}</p>
-                              <p className={`text-sm font-bold flex-shrink-0 ${earningAmountColorClass(p.status)}`}>
+                              <p className={`text-sm font-bold flex-shrink-0 ${earningAmountColorClass(p.status, p.payment_channel)}`}>
                                 Bs. {p.professional_net.toFixed(2)}
                               </p>
                             </div>
@@ -218,7 +253,17 @@ export default function ProfessionalEarningsPage() {
                               {p.amount.toFixed(2)}
                             </p>
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              <StatusBadge status={p.status} />
+                              <StatusBadge status={p.status} channel={p.payment_channel ?? undefined} />
+                              <ConsultationTypeBadge consultation={{
+                                consultation_type: (p.consultation_type as any) || 'IMMEDIATE',
+                                created_by_role: p.created_by_role ?? undefined,
+                                modality: p.modality ?? undefined,
+                              }} />
+                              <ModalityBadge consultation={{
+                                consultation_type: (p.consultation_type as any) || 'IMMEDIATE',
+                                created_by_role: p.created_by_role ?? undefined,
+                                modality: p.modality ?? undefined,
+                              }} />
                               <span className="text-[11px] text-[#A0A8BF]">
                                 {fmtFechaHora(p.paid_at || p.created_at)}
                               </span>
@@ -241,7 +286,7 @@ export default function ProfessionalEarningsPage() {
                               </div>
                               <div>
                                 <p className="text-[#A0A8BF]">Tu neto</p>
-                                <p className={`font-medium ${earningAmountColorClass(p.status)}`}>Bs. {p.professional_net.toFixed(2)}</p>
+                                <p className={`font-medium ${earningAmountColorClass(p.status, p.payment_channel)}`}>Bs. {p.professional_net.toFixed(2)}</p>
                               </div>
                               <div>
                                 <p className="text-[#A0A8BF]">Fecha de pago del paciente</p>

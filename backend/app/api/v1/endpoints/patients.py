@@ -13,7 +13,7 @@ from app.db.database import get_db
 from app.core.dependencies import get_current_patient, get_current_professional
 from app.models.models import (
     User, Patient, Professional, Consultation, Payment, PaymentStatus,
-    PatientProfessionalLink, ProfessionalStatus,
+    PatientProfessionalLink, ProfessionalStatus, PaymentChannel,
 )
 from app.schemas.schemas import PatientUpdateRequest, PatientLinkCreateRequest, PatientLinkResponse
 from app.services.storage import upload_photo_to_r2
@@ -207,24 +207,39 @@ async def get_my_payments(
     )
     all_rows = all_result.all()
 
-    total_pagado = 0.0        # Dinero que efectivamente salió de su bolsillo y no volvió
-    total_pendiente = 0.0     # QR generado, esperando que pague o se confirme
-    total_reembolsado = 0.0   # Le devolvieron el dinero
-    total_en_disputa = 0.0    # Congelado mientras el admin resuelve un reclamo
+    total_pagado = 0.0        # Dinero que efectivamente salió de su bolsillo y no volvió (ambos canales)
+    total_pendiente = 0.0     # QR generado, esperando que pague o se confirme (solo plataforma)
+    total_reembolsado = 0.0   # Le devolvieron el dinero (solo aplica al canal plataforma)
+    total_en_disputa = 0.0    # Congelado mientras el admin resuelve un reclamo (solo plataforma)
     consultas_pagadas = 0
+    # Desglose por canal — para diferenciar en la UI lo que pasó por la
+    # plataforma (QR) de lo que el profesional cobra directo en efectivo
+    # (agendamiento por membresía, ver PaymentChannel).
+    total_pagado_plataforma = 0.0
+    total_pagado_directo = 0.0
+    total_pendiente_cobro_directo = 0.0  # el profesional aún no registra que cobró
 
     for p, c, prof in all_rows:
         amount = float(p.amount)
+        is_directo = p.payment_channel == PaymentChannel.CASH
         if p.status in (PaymentStatus.CONFIRMED, PaymentStatus.RELEASED_TO_PROFESSIONAL):
             total_pagado += amount
             consultas_pagadas += 1
+            if is_directo:
+                total_pagado_directo += amount
+            else:
+                total_pagado_plataforma += amount
         elif p.status == PaymentStatus.PENDING:
-            total_pendiente += amount
+            if is_directo:
+                total_pendiente_cobro_directo += amount
+            else:
+                total_pendiente += amount
         elif p.status in (PaymentStatus.REFUNDED_FULL, PaymentStatus.REFUNDED_PARTIAL):
             refunded = float(p.refunded_amount) if p.refunded_amount is not None else amount
             total_reembolsado += refunded
             # Lo que sí quedó cobrado (monto original menos lo reembolsado) cuenta como pagado
             total_pagado += max(amount - refunded, 0.0)
+            total_pagado_plataforma += max(amount - refunded, 0.0)
             if amount - refunded > 0:
                 consultas_pagadas += 1
         elif p.status == PaymentStatus.DISPUTED:
@@ -237,6 +252,10 @@ async def get_my_payments(
         "total_en_disputa": round(total_en_disputa, 2),
         "consultas_pagadas": consultas_pagadas,
         "cantidad_pagos": len(all_rows),
+        # Desglose por canal (ver comentario arriba)
+        "total_pagado_plataforma": round(total_pagado_plataforma, 2),
+        "total_pagado_directo": round(total_pagado_directo, 2),
+        "total_pendiente_cobro_directo": round(total_pendiente_cobro_directo, 2),
     }
 
     # ── Listado paginado (con filtro opcional de estado) ────────────────
@@ -261,6 +280,7 @@ async def get_my_payments(
             "platform_fee": float(p.platform_fee),
             "professional_net": float(p.professional_net),
             "status": p.status,
+            "payment_channel": p.payment_channel,
             "bank_name": p.bank_name,
             "bank_tx_id": p.bank_tx_id,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
@@ -282,6 +302,8 @@ async def get_my_payments(
             "consultation_status": c.status if c else None,
             "scheduled_at": c.scheduled_at.isoformat() if c and c.scheduled_at else None,
             "outcome_note": c.outcome_note if c else None,
+            "created_by_role": c.created_by_role if c else None,
+            "modality": c.modality if c else None,
         }
         for p, c, prof in rows
     ]

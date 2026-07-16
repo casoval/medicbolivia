@@ -17,7 +17,7 @@ from app.models.models import (
     User, UserRole, Professional, ProfessionalDoc, ProfessionalStatus,
     AvailabilityMode, DocType, DocStatus, AuditLog, Notification,
     Consultation, ConsultationStatus, ConsultationType, Schedule,
-    Payment, PaymentStatus, Patient, ProfessionalPatientVisibility
+    Payment, PaymentStatus, Patient, ProfessionalPatientVisibility, PaymentChannel
 )
 from app.schemas.schemas import (
     ProfessionalPublicResponse, ProfessionalUpdateRequest,
@@ -512,16 +512,37 @@ async def get_my_earnings(
     )
     all_rows = all_result.all()
 
-    total_recibido = 0.0      # Ya liberado a su favor — es suyo, disponible
-    total_retenido = 0.0      # Pagado por el paciente, pero aún en garantía (no liberado)
-    total_en_disputa = 0.0    # Congelado mientras el admin resuelve un reclamo
+    total_recibido = 0.0      # Ya liberado a su favor — es suyo, disponible (ambos canales)
+    total_retenido = 0.0      # Pagado por el paciente vía plataforma, pero aún en garantía (solo QR — el
+                               # cobro directo (CASH) nunca pasa por la plataforma, así que no hay garantía)
+    total_en_disputa = 0.0    # Congelado mientras el admin resuelve un reclamo (solo aplica a canal plataforma)
     total_comision_plataforma = 0.0
     consultas_cobradas = 0
+    # Desglose por canal — diferencia lo cobrado vía plataforma (QR, con
+    # comisión y garantía) de lo cobrado directo en efectivo con el
+    # paciente (agendamiento por membresía, sin comisión ni garantía).
+    total_recibido_plataforma = 0.0
+    total_recibido_directo = 0.0
+    total_pendiente_cobro_directo = 0.0  # agendó "pagar después" y aún no registra el cobro
 
     for p, c, pat in all_rows:
         net = float(p.professional_net)
+        is_directo = p.payment_channel == PaymentChannel.CASH
+        if is_directo:
+            # El cobro directo nunca pasa por la plataforma: no hay garantía
+            # ni comisión — CONFIRMED ya es dinero recibido por el
+            # profesional, PENDING es que aún no lo registra.
+            if p.status == PaymentStatus.CONFIRMED:
+                total_recibido += net
+                total_recibido_directo += net
+                consultas_cobradas += 1
+            elif p.status == PaymentStatus.PENDING:
+                total_pendiente_cobro_directo += net
+            continue
+
         if p.status == PaymentStatus.RELEASED_TO_PROFESSIONAL:
             total_recibido += net
+            total_recibido_plataforma += net
             total_comision_plataforma += float(p.platform_fee)
             consultas_cobradas += 1
         elif p.status == PaymentStatus.CONFIRMED:
@@ -534,6 +555,7 @@ async def get_my_earnings(
             if p.released_at:
                 remainder_net = max(net - float(p.refunded_amount), 0.0)
                 total_recibido += remainder_net
+                total_recibido_plataforma += remainder_net
                 consultas_cobradas += 1
 
     stats = {
@@ -543,6 +565,10 @@ async def get_my_earnings(
         "total_comision_plataforma": round(total_comision_plataforma, 2),
         "consultas_cobradas": consultas_cobradas,
         "cantidad_pagos": len(all_rows),
+        # Desglose por canal (ver comentario arriba)
+        "total_recibido_plataforma": round(total_recibido_plataforma, 2),
+        "total_recibido_directo": round(total_recibido_directo, 2),
+        "total_pendiente_cobro_directo": round(total_pendiente_cobro_directo, 2),
     }
 
     # ── Listado paginado (con filtro opcional de estado) ────────────────
@@ -567,6 +593,7 @@ async def get_my_earnings(
             "platform_fee": float(p.platform_fee),
             "professional_net": float(p.professional_net),
             "status": p.status,
+            "payment_channel": p.payment_channel,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
             "created_at": p.created_at.isoformat(),
             "released_at": p.released_at.isoformat() if p.released_at else None,
@@ -584,6 +611,8 @@ async def get_my_earnings(
             "consultation_status": c.status if c else None,
             "scheduled_at": c.scheduled_at.isoformat() if c and c.scheduled_at else None,
             "outcome_note": c.outcome_note if c else None,
+            "created_by_role": c.created_by_role if c else None,
+            "modality": c.modality if c else None,
         }
         for p, c, pat in rows
     ]

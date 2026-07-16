@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, SectionTitle } from '@/components/ui'
+import { ConsultationTypeBadge, ModalityBadge } from '@/components/shared/ConsultationBadges'
 import { patientsAPI, getErrorMessage } from '@/lib/api'
 import type { PatientPaymentItem } from '@/lib/api'
 
@@ -46,6 +47,17 @@ const DISPUTE_CATEGORY_LABELS: Record<string, string> = {
 // Explica en una frase, para el paciente, qué significa el estado actual
 // de SU pago — más allá del badge corto, esto es lo que evita dudas.
 function paymentExplanation(p: PatientPaymentItem): string {
+  const isDirecto = p.payment_channel === 'CASH'
+  if (isDirecto) {
+    switch (p.status) {
+      case 'PENDING':
+        return 'Esta cita te la agendó directamente tu profesional. El cobro es directo entre ustedes — todavía no ha registrado que lo cobró.'
+      case 'CONFIRMED':
+        return 'Esta cita te la agendó directamente tu profesional y ya registró el cobro. Es un pago directo, fuera de la plataforma — no queda retenido ni pasa por garantía.'
+      default:
+        return ''
+    }
+  }
   switch (p.status) {
     case 'PENDING':
       return 'Generaste el código QR pero el pago todavía no fue confirmado por el banco.'
@@ -143,7 +155,7 @@ export default function PatientPaymentsPage() {
         {isLoading ? <LoadingScreen text="Cargando tus pagos..." /> : (
           <>
             {/* ── Estadísticas ─────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
               <div className="card py-3 text-center">
                 <p className="text-xl font-bold text-[#0F6E56]">Bs. {stats?.total_pagado.toFixed(2) ?? '0.00'}</p>
                 <p className="text-xs text-[#6B738A] mt-0.5">Total pagado</p>
@@ -154,13 +166,33 @@ export default function PatientPaymentsPage() {
               </div>
               <div className="card py-3 text-center">
                 <p className="text-xl font-bold text-[#854F0B]">Bs. {stats?.total_pendiente.toFixed(2) ?? '0.00'}</p>
-                <p className="text-xs text-[#6B738A] mt-0.5">Pendiente de pago</p>
+                <p className="text-xs text-[#6B738A] mt-0.5">QR pendiente</p>
               </div>
               <div className="card py-3 text-center">
                 <p className="text-xl font-bold text-[#6B738A]">Bs. {stats?.total_reembolsado.toFixed(2) ?? '0.00'}</p>
                 <p className="text-xs text-[#6B738A] mt-0.5">Reembolsado</p>
               </div>
             </div>
+
+            {/* Desglose por canal — separa lo que pasó por la plataforma (QR) de
+                lo que le pagaste directo a un profesional que te agendó por su
+                cuenta (membresía). Son cosas distintas: lo directo no tiene
+                garantía ni reembolso desde la plataforma. */}
+            {((stats?.total_pagado_directo ?? 0) > 0 || (stats?.total_pendiente_cobro_directo ?? 0) > 0) && (
+              <div className="mb-5 flex flex-wrap gap-2 text-xs">
+                <span className="px-2.5 py-1 rounded-full bg-[#EEF3FB] text-[#185FA5] border border-[#C3D6EF]">
+                  Vía plataforma: Bs. {stats?.total_pagado_plataforma.toFixed(2) ?? '0.00'}
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-[#EEEDFE] text-[#534AB7] border border-[#D7D4F7]">
+                  Cobro directo con el profesional: Bs. {stats?.total_pagado_directo.toFixed(2) ?? '0.00'}
+                </span>
+                {(stats?.total_pendiente_cobro_directo ?? 0) > 0 && (
+                  <span className="px-2.5 py-1 rounded-full bg-[#FFF4E5] text-[#B25E09] border border-[#F5D9A8]">
+                    Directo pendiente de que el profesional lo registre: Bs. {stats?.total_pendiente_cobro_directo.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            )}
 
             {(stats?.total_en_disputa ?? 0) > 0 && (
               <div className="mb-4">
@@ -225,7 +257,17 @@ export default function PatientPaymentsPage() {
                               {CONSULTATION_TYPE_LABELS[p.consultation_type || ''] || 'Consulta'}
                             </p>
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              <StatusBadge status={p.status} />
+                              <StatusBadge status={p.status} channel={p.payment_channel ?? undefined} />
+                              <ConsultationTypeBadge consultation={{
+                                consultation_type: (p.consultation_type as any) || 'IMMEDIATE',
+                                created_by_role: p.created_by_role ?? undefined,
+                                modality: p.modality ?? undefined,
+                              }} />
+                              <ModalityBadge consultation={{
+                                consultation_type: (p.consultation_type as any) || 'IMMEDIATE',
+                                created_by_role: p.created_by_role ?? undefined,
+                                modality: p.modality ?? undefined,
+                              }} />
                               <span className="text-[11px] text-[#A0A8BF]">
                                 {fmtFechaHora(p.paid_at || p.created_at)}
                               </span>

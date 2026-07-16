@@ -27,7 +27,7 @@ from app.models.models import (
     ProfessionalStatus, ConsultationStatus, ConsultationType, PaymentStatus, DocStatus, UserStatus,
     Rating, ClinicalNote, ProfessionalPenaltyReset, Earning, Prescription,
     CommissionPeriod, CommissionScope, ProfessionalMembership,
-    ChatBlock, ProfessionalPatientVisibility, ChatConversation, AdminAccessLog,
+    ChatBlock, ProfessionalPatientVisibility, ChatConversation, AdminAccessLog, PaymentChannel,
 )
 from app.schemas.schemas import (
     DocReviewRequest, RefundRequest, DisputeResolveRequest,
@@ -754,6 +754,7 @@ async def list_payments(
             "bank_name":          p.bank_name,
             "bank_tx_id":         p.bank_tx_id,
             "status":             p.status,
+            "payment_channel":    p.payment_channel,
             "paid_at":            p.paid_at.isoformat() if p.paid_at else None,
             "created_at":         p.created_at.isoformat(),
             "refunded_at":        p.refunded_at.isoformat() if p.refunded_at else None,
@@ -773,6 +774,8 @@ async def list_payments(
             "scheduled_at":       consultation.scheduled_at.isoformat() if consultation and consultation.scheduled_at else None,
             "consultation_status":consultation.status if consultation else None,
             "outcome_note":       consultation.outcome_note if consultation else None,
+            "created_by_role":    consultation.created_by_role if consultation else None,
+            "modality":           consultation.modality if consultation else None,
         }
         for p, consultation, patient_row, prof_row in rows
     ]
@@ -793,6 +796,16 @@ async def refund_payment(
 
     if payment.status not in [PaymentStatus.CONFIRMED, PaymentStatus.RELEASED_TO_PROFESSIONAL]:
         raise HTTPException(status_code=400, detail="Este pago no puede ser reembolsado en su estado actual")
+
+    # Un pago CASH (cobro directo del profesional, agendamiento por
+    # membresía) nunca pasó por la plataforma — no hay nada que la
+    # plataforma pueda devolver. Si el profesional y el paciente necesitan
+    # arreglar el monto, lo coordinan directamente entre ellos.
+    if payment.payment_channel == PaymentChannel.CASH:
+        raise HTTPException(
+            status_code=400,
+            detail="Este cobro fue directo entre el profesional y el paciente — la plataforma no participó en el pago, así que no hay nada que reembolsar desde aquí.",
+        )
 
     if data.refund_type == "PARTIAL":
         if not data.amount or data.amount <= 0:

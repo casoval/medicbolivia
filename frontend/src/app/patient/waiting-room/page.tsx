@@ -25,8 +25,26 @@ const STATUS_STEPS_SCHEDULED = [
   { key: 'IN_PROGRESS',          label: 'Videoconsulta',       sub: () => '' },
 ]
 
+// Flujo AGENDADA POR EL PROFESIONAL: el profesional la agenda directamente
+// (membresía) y queda confirmada de una — sin pago QR ni espera de
+// confirmación, porque el cobro es directo entre ambos.
+const STATUS_STEPS_PROFESSIONAL_SCHEDULED = [
+  { key: 'PAYMENT_CONFIRMED', label: 'Cita confirmada', sub: () => 'Tu profesional agendó esta cita directamente para ti' },
+  { key: 'IN_PROGRESS',       label: 'Consulta',         sub: () => '' },
+]
+
 // Helper para obtener los steps según el tipo de consulta
-const getSteps = (isScheduled: boolean) => isScheduled ? STATUS_STEPS_SCHEDULED : STATUS_STEPS_IMMEDIATE
+type WaitingRoomKind = 'IMMEDIATE' | 'PATIENT_SCHEDULED' | 'PROFESSIONAL_SCHEDULED'
+const getSteps = (kind: WaitingRoomKind) => {
+  if (kind === 'PROFESSIONAL_SCHEDULED') return STATUS_STEPS_PROFESSIONAL_SCHEDULED
+  if (kind === 'PATIENT_SCHEDULED') return STATUS_STEPS_SCHEDULED
+  return STATUS_STEPS_IMMEDIATE
+}
+function kindOf(c: { consultation_type?: string | null; created_by_role?: string | null } | null | undefined): WaitingRoomKind {
+  if (!c) return 'IMMEDIATE'
+  if (c.consultation_type !== 'SCHEDULED' && c.consultation_type !== 'FOLLOW_UP') return 'IMMEDIATE'
+  return c.created_by_role === 'PROFESSIONAL' ? 'PROFESSIONAL_SCHEDULED' : 'PATIENT_SCHEDULED'
+}
 
 const ACTIVE_STATUSES = ['WAITING_PROFESSIONAL', 'WAITING_PAYMENT', 'PAYMENT_CONFIRMED', 'IN_PROGRESS']
 
@@ -551,6 +569,13 @@ function ScheduledConfirmedCard({
 
   const hasProposalFromProfessional = consultation?.reschedule_proposed_at && consultation?.reschedule_proposed_by === 'PROFESSIONAL'
   const hasOwnPendingProposal = consultation?.reschedule_proposed_at && consultation?.reschedule_proposed_by === 'PATIENT'
+  // Las citas que agendó el propio profesional (membresía) no siguen el
+  // flujo de negociación de reprogramación ni el reembolso vía plataforma
+  // — el cobro es directo, así que cualquier cambio lo coordina el
+  // profesional directamente contigo (por eso él tiene sus propios botones
+  // de reprogramar/cancelar en su calendario).
+  const isProfessionalScheduled = consultation?.created_by_role === 'PROFESSIONAL'
+  const isInPerson = consultation?.modality === 'IN_PERSON'
 
   return (
     <div className="card text-center py-6 px-4">
@@ -559,7 +584,7 @@ function ScheduledConfirmedCard({
       {busyMessage && <div className="mb-3"><Alert type="warning" message={busyMessage} /></div>}
 
       <div className="w-16 h-16 rounded-full bg-[#E6F1FB] border-2 border-[#185FA5] flex items-center justify-center text-2xl mx-auto mb-3">
-        📅
+        {isProfessionalScheduled && isInPerson ? '🏥' : '📅'}
       </div>
       <p className="text-sm font-semibold mb-1">Tu cita está confirmada</p>
       {scheduledAt && (
@@ -573,11 +598,24 @@ function ScheduledConfirmedCard({
         <AppointmentCountdown scheduledAt={scheduledAt} />
       )}
       <p className="text-xs text-[#6B738A] mb-4">
-        {timeArrived
-          ? 'Tu médico debería estar conectándose. Si tarda, en breve podrás reportarlo.'
-          : 'Recibirás el acceso a la videollamada cuando llegue la hora.'}
+        {isProfessionalScheduled
+          ? (isInPerson
+              ? 'Esta es una consulta presencial — preséntate en el consultorio de tu profesional a la hora indicada.'
+              : (timeArrived
+                  ? 'Tu médico debería estar conectándose. Si tarda, contáctalo directamente.'
+                  : 'Recibirás el acceso a la videollamada cuando llegue la hora.'))
+          : (timeArrived
+              ? 'Tu médico debería estar conectándose. Si tarda, en breve podrás reportarlo.'
+              : 'Recibirás el acceso a la videollamada cuando llegue la hora.')}
       </p>
 
+      {isProfessionalScheduled ? (
+        <p className="text-xs text-[#A0A8BF] bg-[#F5F6FA] rounded-lg px-3 py-2.5">
+          Esta cita te la agendó directamente tu profesional (con membresía) — el cobro es directo entre
+          ustedes. Si necesitas cambiar el horario o cancelarla, contáctalo directamente por mensajes.
+        </p>
+      ) : (
+        <>
       {/* Propuesta del profesional — debo responder */}
       {hasProposalFromProfessional && (
         <div className="bg-[#FAEEDA] border border-[#F3D08A] rounded-lg px-3 py-3 mb-4 text-left">
@@ -670,6 +708,8 @@ function ScheduledConfirmedCard({
             </button>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   )
@@ -789,7 +829,7 @@ export default function WaitingRoomPage() {
               qrGeneratedRef.current = true
               generateQR(resolvedId)
             }
-            if (c.status === 'IN_PROGRESS') {
+            if (c.status === 'IN_PROGRESS' && c.modality !== 'IN_PERSON') {
               router.push(`/patient/video?cid=${resolvedId}`)
             }
           }
@@ -931,8 +971,10 @@ export default function WaitingRoomPage() {
     }
   }
 
-  const isScheduled = consultation?.consultation_type === 'SCHEDULED' || consultation?.consultation_type === 'FOLLOW_UP'
-  const activeSteps = getSteps(isScheduled)
+  const kind = kindOf(consultation)
+  const isScheduled = kind !== 'IMMEDIATE'
+  const isProfessionalScheduled = kind === 'PROFESSIONAL_SCHEDULED'
+  const activeSteps = getSteps(kind)
   const currentStepIndex = activeSteps.findIndex((s) => s.key === consultationStatus)
 
   // Segundos restantes para que el médico acepte (2 min desde created_at)
@@ -977,23 +1019,30 @@ export default function WaitingRoomPage() {
         {/* Pestañas — solo si hay más de una consulta activa */}
         {allActive.length > 1 && (
           <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
-            {allActive.map((c: any, i: number) => (
+            {allActive.map((c: any, i: number) => {
+              const tabKind = kindOf(c)
+              return (
               <button
                 key={c.id}
                 onClick={() => switchTab(i, allActive)}
                 className={`flex-shrink-0 text-xs px-3 py-2 rounded-xl font-medium border transition-colors ${
                   activeTabIdx === i
-                    ? (c.consultation_type === 'SCHEDULED' || c.consultation_type === 'FOLLOW_UP')
+                    ? tabKind === 'PROFESSIONAL_SCHEDULED'
+                      ? 'bg-[#534AB7] text-white border-[#534AB7]'
+                      : tabKind === 'PATIENT_SCHEDULED'
                       ? 'bg-[#185FA5] text-white border-[#185FA5]'
                       : 'bg-[#B95F00] text-white border-[#B95F00]'
                     : 'bg-white text-[#3C4257] border-[#DDE1EE] hover:border-[#185FA5]'
                 }`}
               >
-                {c.consultation_type === 'SCHEDULED' || c.consultation_type === 'FOLLOW_UP'
+                {tabKind === 'PROFESSIONAL_SCHEDULED'
+                  ? `👨‍⚕️ ${c.scheduled_at ? new Date(c.scheduled_at).toLocaleString('es-BO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Agendada por el profesional'}`
+                  : tabKind === 'PATIENT_SCHEDULED'
                   ? `🗓 ${c.scheduled_at ? new Date(c.scheduled_at).toLocaleString('es-BO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Cita agendada'}`
                   : '⚡ Inmediata'}
               </button>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -1001,12 +1050,25 @@ export default function WaitingRoomPage() {
         <div className="card mb-4">
           <h2 className="text-sm font-semibold mb-3">Estado de tu consulta</h2>
           {/* Badge que diferencia el tipo de flujo */}
-          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium mb-3 ${
-            isScheduled
-              ? 'bg-[#EEF3FB] text-[#185FA5] border border-[#C3D6EF]'
-              : 'bg-[#FFF0E6] text-[#B95F00] border border-[#FAD5AF]'
-          }`}>
-            {isScheduled ? '🗓 Cita agendada' : '⚡ Consulta inmediata'}
+          <div className="flex items-center gap-1.5 flex-wrap mb-3">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+              isProfessionalScheduled
+                ? 'bg-[#EEEDFE] text-[#534AB7] border border-[#D7D4F7]'
+                : isScheduled
+                ? 'bg-[#EEF3FB] text-[#185FA5] border border-[#C3D6EF]'
+                : 'bg-[#FFF0E6] text-[#B95F00] border border-[#FAD5AF]'
+            }`}>
+              {isProfessionalScheduled ? '👨‍⚕️ Agendada por el profesional' : isScheduled ? '🗓 Cita agendada' : '⚡ Consulta inmediata'}
+            </span>
+            {isProfessionalScheduled && consultation?.modality && (
+              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                consultation.modality === 'IN_PERSON'
+                  ? 'bg-[#FAECE7] text-[#993C1D] border-[#F0C7B4]'
+                  : 'bg-[#E1F5EE] text-[#0F6E56] border-[#9FE1CB]'
+              }`}>
+                {consultation.modality === 'IN_PERSON' ? '🏥 Presencial' : '🎥 Videollamada'}
+              </span>
+            )}
           </div>
           <div className="space-y-0">
             {activeSteps.map((step, i) => {

@@ -17,13 +17,14 @@ from app.models.models import (
     User, UserRole, Patient, Professional, Consultation, Payment,
     ConsultationStatus, ConsultationType, PaymentStatus, ProfessionalStatus,
     Notification, Earning, Prescription, ClinicalNote,
-    ConsultationCreatedBy, PaymentChannel,
+    ConsultationCreatedBy, PaymentChannel, ConsultationModality,
 )
 from app.schemas.schemas import (
     ConsultationCreateRequest, ConsultationResponse,
     QRPaymentResponse, PaymentWebhookRequest,
     RescheduleProposeRequest, RescheduleRespondRequest,
     DisputeCreateRequest, ProfessionalScheduleRequest, ProfessionalRescheduleRequest, RecordDirectPaymentRequest,
+    SetConsultationModalityRequest,
 )
 from app.services.payment import generate_qr_data, calculate_amounts, compute_professional_scheduled_qr_deadline
 from app.services.commission import resolve_commission_percent
@@ -674,6 +675,7 @@ async def professional_schedule_consultation(
         professional_earning=amounts["professional_net"],
         commission_percent_applied=amounts["commission_percent"],
         created_by_role=ConsultationCreatedBy.PROFESSIONAL,
+        modality=ConsultationModality(data.modality),
     )
     db.add(consultation)
     await db.flush()
@@ -901,6 +903,9 @@ async def record_direct_payment(
     payment.platform_fee = amounts["platform_fee"]
     payment.professional_net = amounts["professional_net"]
     payment.paid_at = data.paid_at
+    # Si se había agendado con "pagar después" (Payment PENDING, sin
+    # paid_at), registrar el cobro es justamente lo que lo confirma.
+    payment.status = PaymentStatus.CONFIRMED
 
     await db.commit()
     await db.refresh(consultation)
@@ -908,6 +913,58 @@ async def record_direct_payment(
     logger.info(
         f"Profesional {professional.id} registró cobro directo de la cita {consultation_id}: "
         f"Bs. {data.amount} el {data.paid_at}"
+    )
+    return ConsultationResponse.model_validate(consultation)
+
+
+# ── PATCH /{consultation_id}/set-modality ────────────────────────────────
+# Elegir si una cita agendada por el propio profesional (membresía) se
+# atiende por videollamada o presencial. Solo aplica a citas con
+# created_by_role=PROFESSIONAL — el flujo normal (paciente agenda o pide
+# consulta inmediata) siempre es por videollamada vía la plataforma.
+@router.patch(
+    "/{consultation_id}/set-modality",
+    response_model=ConsultationResponse,
+    summary="[Profesional con membresía] Elegir videollamada o presencial para una cita que yo agendé",
+)
+async def set_consultation_modality(
+    consultation_id: str,
+    data: SetConsultationModalityRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role.value != "PROFESSIONAL":
+        raise HTTPException(status_code=403, detail="Solo un profesional puede usar este endpoint")
+
+    prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
+
+    cons_result = await db.execute(
+        select(Consultation).where(
+            Consultation.id == consultation_id,
+            Consultation.professional_id == professional.id,
+        )
+    )
+    consultation = cons_result.scalar_one_or_none()
+    if not consultation:
+        raise HTTPException(status_code=404, detail="Consulta no encontrada")
+
+    if consultation.created_by_role != ConsultationCreatedBy.PROFESSIONAL:
+        raise HTTPException(
+            status_code=400,
+            detail="Esta acción es solo para citas que tú mismo agendaste.",
+        )
+    if consultation.status in (ConsultationStatus.COMPLETED, ConsultationStatus.CANCELLED, ConsultationStatus.REFUNDED):
+        raise HTTPException(status_code=400, detail="Esta cita ya terminó — no se puede cambiar la modalidad.")
+
+    consultation.modality = ConsultationModality(data.modality)
+    await db.commit()
+    await db.refresh(consultation)
+
+    logger.info(
+        f"Profesional {professional.id} cambió la modalidad de la cita {consultation_id} a {data.modality}"
     )
     return ConsultationResponse.model_validate(consultation)
 
@@ -1410,6 +1467,7 @@ async def get_my_consultations(
         Patient.last_name.label("pat_last_name"),
         Patient.photo_url.label("pat_photo_url"),
         Payment.status.label("pay_status"),
+        Payment.payment_channel.label("pay_channel"),
         Payment.paid_at.label("pay_paid_at"),
         Payment.refunded_at.label("pay_refunded_at"),
         Payment.refund_note.label("pay_refund_note"),
@@ -1449,7 +1507,7 @@ async def get_my_consultations(
     rows = result.all()
     responses = []
     for (consultation, prof_first_name, prof_last_name, prof_photo_url, prof_duration_minutes,
-         pat_first_name, pat_last_name, pat_photo_url, pay_status, pay_paid_at,
+         pat_first_name, pat_last_name, pat_photo_url, pay_status, pay_channel, pay_paid_at,
          pay_refunded_at, pay_refund_note) in rows:
         item = ConsultationResponse.model_validate(consultation)
         item.professional_first_name = prof_first_name
@@ -1460,6 +1518,7 @@ async def get_my_consultations(
         item.patient_last_name = pat_last_name
         item.patient_photo_url = pat_photo_url
         item.payment_status = pay_status.value if pay_status else None
+        item.payment_channel = pay_channel.value if pay_channel else None
         item.payment_paid_at = pay_paid_at
         item.payment_refunded_at = pay_refunded_at
         item.payment_refund_note = pay_refund_note

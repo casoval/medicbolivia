@@ -21,6 +21,13 @@ export type ConsultationStatus =
   | 'REFUNDED'
 export type ConsultationType = 'IMMEDIATE' | 'SCHEDULED' | 'FOLLOW_UP'
 export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'RELEASED_TO_PROFESSIONAL' | 'REFUNDED_PARTIAL' | 'REFUNDED_FULL' | 'DISPUTED'
+// Por dónde entró el cobro: PLATFORM_QR (flujo normal, QR de la plataforma)
+// o CASH (cobro directo entre profesional y paciente, solo en citas que el
+// profesional agenda con membresía — ver ProfessionalScheduleRequest).
+export type PaymentChannel = 'PLATFORM_QR' | 'CASH'
+// Cómo se atiende la cita — solo hay elección real en citas creadas por el
+// profesional (created_by_role='PROFESSIONAL'); el resto siempre es video.
+export type ConsultationModality = 'VIDEO_CALL' | 'IN_PERSON'
 
 // ─────────────────────────────────────────────────────
 // MODELOS
@@ -115,12 +122,15 @@ export interface Consultation {
   patient_last_name?: string
   patient_photo_url?: string
   payment_status?: 'PENDING' | 'CONFIRMED' | 'RELEASED_TO_PROFESSIONAL' | 'REFUNDED_PARTIAL' | 'REFUNDED_FULL' | 'DISPUTED' | 'CANCELLED_NO_CHARGE'
+  payment_channel?: PaymentChannel
   payment_paid_at?: string
   payment_refunded_at?: string
   payment_refund_note?: string
   // Quién creó la cita — 'PATIENT' (flujo normal) o 'PROFESSIONAL'
   // (agendamiento directo por membresía, ver ProfessionalScheduleRequest).
   created_by_role?: 'PATIENT' | 'PROFESSIONAL'
+  // Videollamada o presencial — ver ConsultationModality arriba.
+  modality?: ConsultationModality
 }
 
 export interface Payment {
@@ -131,6 +141,7 @@ export interface Payment {
   expires_at: string
   professional_name: string
   status: PaymentStatus
+  payment_channel?: PaymentChannel
 }
 
 // ── FAQ (landing pública) ────────────────────────────
