@@ -41,6 +41,16 @@ const AUTH_DIR = process.env.WHATSAPP_AUTH_DIR || './auth_info'
 // puede dejar la promesa colgada indefinidamente — lección aprendida del
 // mismo problema en whatsapp-bot (centro de terapias), julio 2026.
 const BACKEND_TIMEOUT_MS = Number(process.env.BACKEND_TIMEOUT_MS || 30000)
+// Watchdog de conexión: si connectToWhatsApp() se queda en CONNECTING sin
+// pasar a QR_PENDING ni CONNECTED dentro de este tiempo, se asume que
+// Puppeteer/Chromium quedó colgado por dentro (ver incidente real del
+// 16-jul-2026: la sesión guardada en AUTH_DIR quedó corrupta tras un
+// "detached frame", y el proceso se quedaba en CONNECTING indefinidamente
+// sin tirar ningún error — client.initialize() nunca resolvía ni
+// rechazaba). Sin este watchdog, la única forma de notarlo era mirando el
+// panel admin a mano. Un connect sano (con o sin sesión guardada) tarda
+// bien por debajo de 90s en los logs reales de este proyecto.
+const CONNECT_WATCHDOG_MS = Number(process.env.WHATSAPP_CONNECT_TIMEOUT_MS || 90000)
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' })
 
@@ -51,6 +61,7 @@ app.use(express.json())
 let client = null
 let connectionState = 'DOWN'   // DOWN | CONNECTING | QR_PENDING | CONNECTED
 let latestQR = null            // string crudo del QR, se convierte a PNG on-demand
+let connectWatchdogTimer = null
 
 // ── Middleware de autenticación interna ──────────────
 function requireInternalSecret(req, res, next) {
@@ -94,8 +105,34 @@ async function resolvePhoneFromMessage(msg) {
 }
 
 // ── Conexión a WhatsApp ───────────────────────────────
+function clearConnectWatchdog() {
+  if (connectWatchdogTimer) {
+    clearTimeout(connectWatchdogTimer)
+    connectWatchdogTimer = null
+  }
+}
+
 function connectToWhatsApp() {
   connectionState = 'CONNECTING'
+
+  // Si en CONNECT_WATCHDOG_MS no llegamos a QR_PENDING ni CONNECTED,
+  // Chromium quedó colgado por dentro (sesión corrupta, recurso agotado,
+  // etc.) sin que client.initialize() nunca resuelva ni rechace — por
+  // eso ningún otro manejador de error de acá abajo se dispara solo.
+  // Forzamos destroy + reconexión igual que en los otros casos de falla.
+  clearConnectWatchdog()
+  connectWatchdogTimer = setTimeout(() => {
+    if (connectionState === 'CONNECTING') {
+      logger.warn(
+        `Watchdog: sigue en CONNECTING después de ${CONNECT_WATCHDOG_MS / 1000}s ` +
+        `sin llegar a QR_PENDING ni CONNECTED — Chromium probablemente colgado por ` +
+        `dentro. Forzando destroy + reconexión.`
+      )
+      connectionState = 'DOWN'
+      try { client?.destroy() } catch (_) { /* noop */ }
+      setTimeout(connectToWhatsApp, 2000)
+    }
+  }, CONNECT_WATCHDOG_MS)
 
   client = new Client({
     authStrategy: new LocalAuth({ dataPath: AUTH_DIR }),
@@ -115,18 +152,21 @@ function connectToWhatsApp() {
   })
 
   client.on('qr', async (qr) => {
+    clearConnectWatchdog()
     latestQR = qr
     connectionState = 'QR_PENDING'
     logger.info('Nuevo QR generado — escanealo desde /admin (pestaña Bot de WhatsApp)')
   })
 
   client.on('ready', () => {
+    clearConnectWatchdog()
     connectionState = 'CONNECTED'
     latestQR = null
     logger.info('WhatsApp conectado correctamente')
   })
 
   client.on('disconnected', (reason) => {
+    clearConnectWatchdog()
     connectionState = 'DOWN'
     logger.warn(`Conexión cerrada (motivo: ${reason}). Reintentando...`)
     // whatsapp-web.js no reconecta solo tras un 'disconnected' real (a
@@ -137,6 +177,7 @@ function connectToWhatsApp() {
   })
 
   client.on('auth_failure', (msg) => {
+    clearConnectWatchdog()
     connectionState = 'DOWN'
     logger.error(`Fallo de autenticación: ${msg}. Puede requerir borrar ${AUTH_DIR} y re-escanear.`)
   })
@@ -168,6 +209,7 @@ function connectToWhatsApp() {
   })
 
   client.initialize().catch((err) => {
+    clearConnectWatchdog()
     connectionState = 'DOWN'
     logger.error(`Error al inicializar WhatsApp: ${err.message}`)
     setTimeout(connectToWhatsApp, 5000)
