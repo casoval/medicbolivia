@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, Alert } from '@/components/ui'
+import { PaymentBadge } from '@/components/shared/ConsultationBadges'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { PatientRecordSummary } from '@/components/professional/PatientRecordSummary'
 import { ProfessionalScheduleModal } from '@/components/professional/ProfessionalScheduleModal'
@@ -286,7 +287,10 @@ function PatientCard({ group, membershipActive, onSchedule }: {
                       {c.scheduled_at ? fmtFechaHoraLocal(c.scheduled_at) : fmtFechaHora(c.created_at)} · Bs. {parseFloat(c.professional_earning ?? c.amount ?? 0).toFixed(2)}
                     </p>
                   </div>
-                  <StatusBadge status={c.status} />
+                  <div className="flex flex-col items-end gap-1">
+                    <StatusBadge status={c.status} createdByRole={c.created_by_role} />
+                    <PaymentBadge consultation={c} viewerRole="PROFESSIONAL" />
+                  </div>
                 </div>
               ))}
             </div>

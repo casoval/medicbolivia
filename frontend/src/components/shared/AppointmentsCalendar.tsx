@@ -21,7 +21,7 @@ import { SpanishDatePicker, SpanishDateTimePicker } from '@/components/ui/Spanis
 import { fmtFechaHoraLocal } from '@/lib/consultationHistory'
 import { consultationsAPI, getErrorMessage } from '@/lib/api'
 import { CreatorBadge } from '@/components/shared/CreatorBadge'
-import { ConsultationTypeBadge, ModalityBadge } from '@/components/shared/ConsultationBadges'
+import { ConsultationTypeBadge, ModalityBadge, PaymentBadge } from '@/components/shared/ConsultationBadges'
 import type { Consultation, ConsultationStatus } from '@/types'
 
 // ─────────────────────────────────────────────────────
@@ -418,7 +418,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
       )}
 
       {view === 'month' && (
-        <MonthView cursor={cursor} today={today} byDay={byDay} nameOf={nameOf} onSelect={openDetail} />
+        <MonthView cursor={cursor} today={today} byDay={byDay} nameOf={nameOf} onSelect={openDetail} role={role} />
       )}
 
       {/* Panel de detalle interno (solo si el padre no maneja su propio detalle) */}
@@ -435,12 +435,13 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
             >
               <div className="flex items-center justify-between mb-1">
                 <h3 className="text-sm font-semibold text-[#141820]">Detalle de la cita</h3>
-                <StatusBadge status={detail.status} />
+                <StatusBadge status={detail.status} createdByRole={detail.created_by_role} />
               </div>
               <div className="mb-3 flex items-center gap-1.5 flex-wrap">
                 <CreatorBadge createdByRole={detail.created_by_role} viewerRole={role} />
                 <ConsultationTypeBadge consultation={detail} />
                 <ModalityBadge consultation={detail} />
+                <PaymentBadge consultation={detail} viewerRole={role} />
               </div>
               <div className="flex flex-col gap-1.5 text-xs text-[#4A5169]">
                 <p>
@@ -708,8 +709,9 @@ function AgendaView({
                 <span className="block text-xs font-medium text-[#141820] truncate">{nameOf(c)}</span>
                 <span className="block text-[11px] text-[#A0A8BF] truncate">{typeLabel(c)}</span>
               </span>
-              <span className="justify-self-end sm:justify-self-start">
-                <StatusBadge status={c.status} />
+              <span className="flex flex-col items-end sm:items-start gap-1 justify-self-end sm:justify-self-start">
+                <StatusBadge status={c.status} createdByRole={c.created_by_role} />
+                <PaymentBadge consultation={c} viewerRole={role} />
               </span>
             </button>
           ))}
@@ -964,12 +966,14 @@ function MonthView({
   byDay,
   nameOf,
   onSelect,
+  role,
 }: {
   cursor: Date
   today: Date
   byDay: Map<string, Consultation[]>
   nameOf: (c: Consultation) => string
   onSelect: (c: Consultation) => void
+  role: 'PATIENT' | 'PROFESSIONAL'
 }) {
   const year = cursor.getFullYear()
   const month = cursor.getMonth()
@@ -1112,7 +1116,10 @@ function MonthView({
                     {timeOf(c.scheduled_at as string)}
                   </span>
                   <span className="text-xs text-[#141820] truncate flex-1">{nameOf(c)}</span>
-                  <StatusBadge status={c.status} />
+                  <span className="flex flex-col items-end gap-1">
+                    <StatusBadge status={c.status} createdByRole={c.created_by_role} />
+                    <PaymentBadge consultation={c} viewerRole={role} />
+                  </span>
                 </button>
               ))}
             </div>

@@ -14,6 +14,7 @@ import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, fmtHor
 import type { Consultation, Rating } from '@/types'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
 import { CreatorBadge } from '@/components/shared/CreatorBadge'
+import { PaymentBadge } from '@/components/shared/ConsultationBadges'
 
 const IconClose  = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
 
@@ -321,7 +322,8 @@ function SummaryModal({ consultation, onClose }: {
           </div>
           <div className="bg-[#F5F6FA] rounded-xl p-3">
             <p className="text-xs text-[#6B738A] mb-1">Estado</p>
-            <StatusBadge status={consultation.status} />
+            <StatusBadge status={consultation.status} createdByRole={consultation.created_by_role} />
+            <div className="mt-1"><PaymentBadge consultation={consultation} viewerRole="PATIENT" /></div>
           </div>
           {(consultation as any).notes && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
@@ -740,8 +742,9 @@ export default function HistoryPage() {
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          <StatusBadge status={c.status} />
+                          <StatusBadge status={c.status} createdByRole={c.created_by_role} />
                           <CreatorBadge createdByRole={c.created_by_role} viewerRole="PATIENT" />
+                          <PaymentBadge consultation={c} viewerRole="PATIENT" />
                         </div>
                         {c.status === 'WAITING_PAYMENT' && (
                           <a href={`/patient/waiting-room?consultationId=${c.id}`} className="btn-primary text-xs py-1 px-2">
@@ -810,8 +813,9 @@ export default function HistoryPage() {
                             )}
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <StatusBadge status={c.status} />
+                            <StatusBadge status={c.status} createdByRole={c.created_by_role} />
                             <CreatorBadge createdByRole={c.created_by_role} viewerRole="PATIENT" />
+                            <PaymentBadge consultation={c} viewerRole="PATIENT" />
                           </div>
                         </div>
 
@@ -935,8 +939,9 @@ export default function HistoryPage() {
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          <StatusBadge status={c.status} />
+                          <StatusBadge status={c.status} createdByRole={c.created_by_role} />
                           <CreatorBadge createdByRole={c.created_by_role} viewerRole="PATIENT" />
+                          <PaymentBadge consultation={c} viewerRole="PATIENT" />
                         </div>
                       </div>
                     )

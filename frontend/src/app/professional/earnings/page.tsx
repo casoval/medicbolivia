@@ -58,6 +58,8 @@ function earningExplanation(p: ProfessionalEarningItem): string {
     }
   }
   switch (p.status) {
+    case 'PENDING':
+      return 'El paciente generó el código QR pero todavía no se confirma el pago desde el banco — no hay nada cobrado aún.'
     case 'CONFIRMED':
       return 'El paciente ya pagó. El monto está retenido temporalmente por la plataforma como garantía y se liberará a tu favor una vez termine el período de espera post-consulta.'
     case 'RELEASED_TO_PROFESSIONAL':
@@ -92,10 +94,11 @@ function earningAmountColorClass(status: string, channel?: string | null): strin
 
 const STATUS_TABS: { key: string; label: string }[] = [
   { key: '',                          label: 'Todos' },
-  { key: 'RELEASED_TO_PROFESSIONAL',  label: 'Recibidos' },
   { key: 'CONFIRMED',                 label: 'En garantía' },
-  { key: 'DISPUTED',                  label: 'En disputa' },
+  { key: 'RELEASED_TO_PROFESSIONAL',  label: 'Recibidos' },
+  { key: 'PENDING',                   label: 'Pendientes' },
   { key: 'REFUNDED_FULL',             label: 'Reembolsados' },
+  { key: 'DISPUTED',                  label: 'En disputa' },
 ]
 
 

@@ -109,7 +109,7 @@ export function Avatar({ initials, color = 'blue', size = 'md' }: {
 // por membresía) nunca pasó por QR de la plataforma, así que usa otro
 // texto ("Cobro pendiente de registrar" / "Cobro registrado") en vez de
 // "QR pendiente" / "Pago confirmado", que describen el flujo de plataforma.
-export function StatusBadge({ status, channel }: { status: string; channel?: 'PLATFORM_QR' | 'CASH' }) {
+export function StatusBadge({ status, channel, createdByRole }: { status: string; channel?: 'PLATFORM_QR' | 'CASH'; createdByRole?: string | null }) {
   const map: Record<string, { cls: string; label: string }> = {
     COMPLETED:            { cls: 'badge-green',  label: 'Completada' },
     IN_PROGRESS:          { cls: 'badge-blue',   label: 'En curso' },
@@ -144,6 +144,14 @@ export function StatusBadge({ status, channel }: { status: string; channel?: 'PL
   if (channel === 'CASH') {
     if (status === 'PENDING') return <span className="badge-amber">Cobro pendiente de registrar</span>
     if (status === 'CONFIRMED') return <span className="badge-green">Cobro directo registrado</span>
+  }
+  // Consultation.status === PAYMENT_CONFIRMED solo significa "la cita puede
+  // proceder" (nada la bloquea). En citas agendadas por el profesional el
+  // cobro nunca pasó por la plataforma y puede seguir sin registrarse, así
+  // que mostrar "Pago confirmado" ahí es engañoso (contradice el botón
+  // "Registrar cobro"). Usamos "Cita confirmada" en ese caso.
+  if (status === 'PAYMENT_CONFIRMED' && createdByRole === 'PROFESSIONAL') {
+    return <span className="badge-blue">Cita confirmada</span>
   }
   const cfg = map[status] || { cls: 'badge-gray', label: status }
   return <span className={cfg.cls}>{cfg.label}</span>

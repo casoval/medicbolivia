@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState } from '@/components/ui'
+import { PaymentBadge } from '@/components/shared/ConsultationBadges'
 import { ProfessionalRecordSummary } from '@/components/patient/ProfessionalRecordSummary'
 import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, patientLinksAPI, professionalsAPI } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
@@ -229,7 +230,10 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
                       {c.scheduled_at ? fmtFechaHoraLocal(c.scheduled_at) : fmtFechaHora(c.created_at)} · Bs. {parseFloat(c.amount ?? 0).toFixed(2)}
                     </p>
                   </div>
-                  <StatusBadge status={c.status} />
+                  <div className="flex flex-col items-end gap-1">
+                    <StatusBadge status={c.status} createdByRole={c.created_by_role} />
+                    <PaymentBadge consultation={c} viewerRole="PATIENT" />
+                  </div>
                 </div>
               ))}
             </div>

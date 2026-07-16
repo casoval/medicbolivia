@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, SectionTitle, Alert } from '@/components/ui'
+import { PaymentBadge } from '@/components/shared/ConsultationBadges'
 import { PatientHistoryPanel } from '@/components/professional/PatientHistoryPanel'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, getErrorMessage } from '@/lib/api'
@@ -342,7 +343,10 @@ export default function ConsultationsPage() {
                           {' · '}Bs. {parseFloat(c.professional_earning).toFixed(2)}
                         </p>
                       </div>
-                      <StatusBadge status={c.status} />
+                      <div className="flex flex-col items-end gap-1">
+                        <StatusBadge status={c.status} createdByRole={c.created_by_role} />
+                        <PaymentBadge consultation={c} viewerRole="PROFESSIONAL" />
+                      </div>
                       <button
                         onClick={() => updateMutation.mutate({ id: c.id, status: 'COMPLETED' })}
                         className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] text-xs px-3 py-1.5 rounded-lg"
@@ -578,7 +582,10 @@ export default function ConsultationsPage() {
                           </div>
                         )}
                       </div>
-                      <StatusBadge status={c.status} />
+                      <div className="flex flex-col items-end gap-1">
+                        <StatusBadge status={c.status} createdByRole={c.created_by_role} />
+                        <PaymentBadge consultation={c} viewerRole="PROFESSIONAL" />
+                      </div>
                     </div>
                   )
                 })}

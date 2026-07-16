@@ -7,8 +7,8 @@ import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
-import { Alert, StatusBadge } from '@/components/ui'
-import { ModalityBadge } from '@/components/shared/ConsultationBadges'
+import { Alert } from '@/components/ui'
+import { ModalityBadge, PaymentBadge } from '@/components/shared/ConsultationBadges'
 import { useAuthStore } from '@/lib/store'
 import { professionalsAPI, consultationsAPI, ratingsAPI, prescriptionsAPI, clinicalNotesAPI, getErrorMessage } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
@@ -1056,10 +1056,10 @@ export default function ProfessionalDashboard() {
                          c.status === 'CANCELLED'            ? 'Cancelada' :
                          c.status === 'REFUNDED'             ? 'Reembolsada' : 'Pendiente'}
                       </span>
-                      {c.created_by_role === 'PROFESSIONAL' && !isCancelled && (
+                      {!isCancelled && (
                         <div className="flex flex-col items-end gap-1">
-                          <StatusBadge status={c.payment_status || 'PENDING'} channel={c.payment_channel} />
-                          <ModalityBadge consultation={c} />
+                          <PaymentBadge consultation={c} viewerRole="PROFESSIONAL" />
+                          {c.created_by_role === 'PROFESSIONAL' && <ModalityBadge consultation={c} />}
                         </div>
                       )}
                     </div>

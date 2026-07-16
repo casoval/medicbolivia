@@ -11,7 +11,7 @@ import { useAuthStore } from '@/lib/store'
 import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, getErrorMessage, buildPrescriptionVerifyUrl } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
 import { getGreeting } from '@/lib/greeting'
-import { ModalityBadge } from '@/components/shared/ConsultationBadges'
+import { ModalityBadge, PaymentBadge } from '@/components/shared/ConsultationBadges'
 
 function StatusBadge({ status, createdByRole }: { status: string; createdByRole?: string | null }) {
   const map: Record<string, { cls: string; label: string }> = {
@@ -492,6 +492,7 @@ export default function PatientDashboard() {
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
                       <StatusBadge status={c.status} createdByRole={c.created_by_role} />
                       {c.created_by_role === 'PROFESSIONAL' && <ModalityBadge consultation={c} />}
+                      <PaymentBadge consultation={c} viewerRole="PATIENT" />
                     </div>
                   </div>
                 )

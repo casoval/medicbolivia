@@ -15,6 +15,7 @@ import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, wasAct
 import { PatientHistoryPanel } from '@/components/professional/PatientHistoryPanel'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { CreatorBadge } from '@/components/shared/CreatorBadge'
+import { PaymentBadge } from '@/components/shared/ConsultationBadges'
 import { SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
 import { ProfessionalScheduleModal } from '@/components/professional/ProfessionalScheduleModal'
@@ -251,8 +252,9 @@ export default function ProfessionalAppointmentsPage() {
                             )}
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <StatusBadge status={c.status} />
+                            <StatusBadge status={c.status} createdByRole={c.created_by_role} />
                             <CreatorBadge createdByRole={c.created_by_role} viewerRole="PROFESSIONAL" />
+                            <PaymentBadge consultation={c} viewerRole="PROFESSIONAL" />
                           </div>
                         </div>
 
@@ -422,8 +424,9 @@ export default function ProfessionalAppointmentsPage() {
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          <StatusBadge status={c.status} />
+                          <StatusBadge status={c.status} createdByRole={c.created_by_role} />
                           <CreatorBadge createdByRole={c.created_by_role} viewerRole="PROFESSIONAL" />
+                          <PaymentBadge consultation={c} viewerRole="PROFESSIONAL" />
                         </div>
                       </div>
                     )
