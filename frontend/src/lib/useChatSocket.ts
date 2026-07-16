@@ -12,6 +12,11 @@ const RECONNECT_DELAY_MS = 2500
 
 export function useChatSocket(conversationId: string | null, currentUserId: string | undefined) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  // true mientras no sepamos si hay mensajes más viejos que los ya
+  // cargados. seedMessages() lo fija según el tamaño del primer lote
+  // (ver ChatWindow.tsx) y prependOlderMessages lo actualiza en cada
+  // "Ver mensajes anteriores".
+  const [hasMore, setHasMore] = useState(true)
   const [connected, setConnected] = useState(false)
   // Un solo estado genérico a propósito: el backend nunca distingue si el
   // motivo es un bloqueo puntual, un bloqueo global, el bloqueo integral
@@ -23,8 +28,23 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const shouldReconnect = useRef(true)
 
-  const seedMessages = useCallback((history: ChatMessage[]) => {
+  const seedMessages = useCallback((history: ChatMessage[], pageSize: number) => {
     setMessages(history)
+    // Si el primer lote vino incompleto (menos que el tamaño de página),
+    // no hay mensajes más viejos que pedir.
+    setHasMore(history.length >= pageSize)
+  }, [])
+
+  // Antepone un lote de mensajes más viejos (ya vienen ordenados
+  // ascendente desde el backend) sin duplicar los que ya estén en
+  // memoria por las dudas.
+  const prependOlderMessages = useCallback((older: ChatMessage[], pageSize: number) => {
+    setMessages((prev) => {
+      const existingIds = new Set(prev.map((m) => m.id))
+      const toAdd = older.filter((m) => !existingIds.has(m.id))
+      return [...toAdd, ...prev]
+    })
+    setHasMore(older.length >= pageSize)
   }, [])
 
   useEffect(() => {
@@ -104,5 +124,5 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
     setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
   }, [])
 
-  return { messages, connected, chatUnavailable, sendMessage, seedMessages, addLocalMessage }
+  return { messages, hasMore, connected, chatUnavailable, sendMessage, seedMessages, prependOlderMessages, addLocalMessage }
 }

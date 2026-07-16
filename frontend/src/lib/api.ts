@@ -1196,6 +1196,12 @@ export const contactAPI = {
 // el único canal de mensajería directa dentro de la plataforma. Cada
 // conversación nace ligada a una Consultation ya finalizada y queda
 // disponible por CHAT_WINDOW_DAYS (ver backend/app/core/config.py).
+// Tamaño de página del historial de chat: 20 al abrir la conversación y
+// 20 por cada "Ver mensajes anteriores". El backend soporta hasta 100
+// por request como tope de seguridad, pero acá se pagina de a 20 para
+// mantener liviana la carga inicial (menos adjuntos/imágenes de golpe).
+export const CHAT_PAGE_SIZE = 20
+
 export const chatAPI = {
   listConversations: () =>
     api.get<ChatConversationSummary[]>('/chat/conversations').then(r => r.data),
@@ -1215,9 +1221,13 @@ export const chatAPI = {
   unblockAll: () =>
     api.delete('/chat/block-all'),
 
+  // Carga inicial y cada lote de "mensajes anteriores" traen 20 mensajes
+  // (CHAT_PAGE_SIZE). El backend acepta hasta 100 por request (tope de
+  // seguridad, ver endpoints/chat.py), pero acá siempre pedimos de a 20
+  // para no golpear con muchas imágenes/adjuntos de una sola vez.
   getMessages: (conversationId: string, before?: string) =>
     api.get<ChatMessage[]>(`/chat/conversations/${conversationId}/messages`, {
-      params: before ? { before, limit: 50 } : { limit: 50 },
+      params: before ? { before, limit: CHAT_PAGE_SIZE } : { limit: CHAT_PAGE_SIZE },
     }).then(r => r.data),
 
   sendAttachment: (conversationId: string, file: File) => {

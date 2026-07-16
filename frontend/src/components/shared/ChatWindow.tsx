@@ -6,9 +6,9 @@
 // irrelevante para este componente, solo importa currentUserId para
 // alinear las burbujas propias vs. las del otro participante.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { chatAPI, getErrorMessage } from '@/lib/api'
+import { chatAPI, CHAT_PAGE_SIZE, getErrorMessage } from '@/lib/api'
 import { useChatSocket } from '@/lib/useChatSocket'
 import { Alert, Spinner } from '@/components/ui'
 import type { ChatConversationSummary } from '@/types'
@@ -54,24 +54,74 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
   const [error, setError] = useState('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const historyRef = useRef<HTMLDivElement>(null)
+  // Solo hacemos el "salto" instantáneo al fondo la primera vez que un
+  // lote de mensajes se pinta en pantalla (al entrar al chat o al
+  // cambiar de conversación). Después de eso, el scroll queda librado
+  // al usuario, salvo cuando llega un mensaje nuevo en vivo.
+  const didInitialScroll = useRef(false)
 
   const { data: history, isLoading } = useQuery({
     queryKey: ['chat-messages', conversation.id],
     queryFn: () => chatAPI.getMessages(conversation.id),
   })
 
-  const { messages, connected, chatUnavailable, sendMessage, seedMessages, addLocalMessage } =
-    useChatSocket(conversation.id, currentUserId)
+  const {
+    messages, hasMore, connected, chatUnavailable,
+    sendMessage, seedMessages, prependOlderMessages, addLocalMessage,
+  } = useChatSocket(conversation.id, currentUserId)
 
   useEffect(() => {
-    if (history) seedMessages(history)
-  }, [history, seedMessages])
+    didInitialScroll.current = false
+    if (history) seedMessages(history, CHAT_PAGE_SIZE)
+  }, [history, seedMessages, conversation.id])
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  // Salto inicial al último mensaje: sin animación y antes del paint,
+  // para que el chat "abra" ya mostrando lo más reciente (no un scroll
+  // visible de arriba hacia abajo).
+  useLayoutEffect(() => {
+    if (didInitialScroll.current || messages.length === 0) return
+    bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+    didInitialScroll.current = true
   }, [messages.length])
+
+  // Mensajes nuevos en vivo (WS) o enviados por mí: ahí sí con animación,
+  // ya que el usuario está viendo la pantalla en ese momento.
+  const prevCountRef = useRef(0)
+  useEffect(() => {
+    if (!didInitialScroll.current) return
+    if (messages.length > prevCountRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+    prevCountRef.current = messages.length
+  }, [messages.length])
+
+  async function handleLoadOlder() {
+    const oldest = messages[0]
+    if (!oldest || loadingOlder) return
+    setLoadingOlder(true)
+    const container = historyRef.current
+    const prevScrollHeight = container?.scrollHeight ?? 0
+    try {
+      const older = await chatAPI.getMessages(conversation.id, oldest.created_at)
+      prependOlderMessages(older, CHAT_PAGE_SIZE)
+      // Anclar el scroll: al insertar contenido arriba, compensamos la
+      // diferencia de altura para que la vista no "salte" al tope.
+      requestAnimationFrame(() => {
+        if (container) {
+          const newScrollHeight = container.scrollHeight
+          container.scrollTop = newScrollHeight - prevScrollHeight
+        }
+      })
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setLoadingOlder(false)
+    }
+  }
 
   const writable = conversation.status === 'ACTIVE' && !chatUnavailable
   const diasRestantes = fmtDiasRestantes(conversation.expires_at)
@@ -274,13 +324,26 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
       </div>
 
       {/* Historial */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#FAFAFA]">
+      <div ref={historyRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#FAFAFA]">
         {isLoading ? (
           <div className="flex justify-center py-8"><Spinner /></div>
         ) : (
-          messages.map((m) => {
-            const own = m.sender_id === currentUserId
-            return (
+          <>
+            {hasMore && (
+              <div className="flex justify-center pb-2">
+                <button
+                  onClick={handleLoadOlder}
+                  disabled={loadingOlder}
+                  className="text-xs text-[#185FA5] hover:underline disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {loadingOlder ? <Spinner size="sm" /> : null}
+                  {loadingOlder ? 'Cargando...' : 'Ver mensajes anteriores'}
+                </button>
+              </div>
+            )}
+            {messages.map((m) => {
+              const own = m.sender_id === currentUserId
+              return (
               <div key={m.id} className={`flex flex-col ${own ? 'items-end' : 'items-start'}`}>
                 <div
                   className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
@@ -295,7 +358,13 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
                         aria-label="Ver imagen en grande"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={m.attachment_url} alt="Adjunto" className="rounded-lg max-w-full max-h-64 cursor-zoom-in" />
+                        <img
+                          src={m.attachment_url}
+                          alt="Adjunto"
+                          loading="lazy"
+                          decoding="async"
+                          className="rounded-lg max-w-full max-h-64 cursor-zoom-in"
+                        />
                         <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg">
                           <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-1.5">
                             <IconExpand />
@@ -322,8 +391,9 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
                 </div>
                 <p className="text-[11px] text-[#9CA3AF] mt-1 px-1">{fmtHora(m.created_at)}</p>
               </div>
-            )
-          })
+              )
+            })}
+          </>
         )}
         <div ref={bottomRef} />
       </div>
