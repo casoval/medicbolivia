@@ -124,6 +124,38 @@ async def upload_chat_attachment_to_r2(
         raise Exception("Error al subir el archivo. Intenta de nuevo.")
 
 
+async def upload_backup_to_r2(
+    file_content: bytes,
+    file_name: str,
+) -> str:
+    """
+    Sube un dump de backup de la base de datos al mismo bucket PRIVADO
+    que los documentos de verificación (R2_BUCKET_DOCS), bajo el prefijo
+    "backups/". Usado como fallback en app/tasks/backup_tasks.py cuando
+    el dump supera BACKUP_MAX_ATTACHMENT_MB y no puede ir como adjunto
+    de Gmail. Nunca es público — se sirve con get_presigned_url, igual
+    que documentos y adjuntos de chat.
+    Retorna la key interna (formato r2://bucket/key).
+    """
+    key = f"backups/{file_name}"
+
+    try:
+        r2 = _get_r2_client()
+        r2.put_object(
+            Bucket=settings.R2_BUCKET_DOCS,
+            Key=key,
+            Body=file_content,
+            ContentType="application/gzip",
+        )
+        url = f"r2://{settings.R2_BUCKET_DOCS}/{key}"
+        logger.info(f"Backup de BD subido a R2: {key}")
+        return url
+
+    except ClientError as e:
+        logger.error(f"Error subiendo backup a R2: {e}")
+        raise Exception("Error al subir el backup a R2.")
+
+
 async def get_presigned_url(r2_url: str, expires_seconds: int = 300) -> str:
     """
     Genera una URL temporal (5 min por defecto) para que el admin

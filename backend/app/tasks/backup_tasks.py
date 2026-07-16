@@ -6,9 +6,10 @@ Backup automático de la base de datos, enviado por correo a Gmail
 Método elegido: `pg_dump` (dump comprimido) + SMTP con contraseña de
 aplicación de Gmail. Ver notas de por qué en config.py (GMAIL_APP_PASSWORD).
 
-Si el dump supera BACKUP_MAX_ATTACHMENT_MB, se sube a R2 (ya usado en el
-proyecto para documentos/fotos, ver app/services de R2 si existen) y se
-manda un link temporal en el cuerpo del correo en vez del archivo.
+Si el dump supera BACKUP_MAX_ATTACHMENT_MB, se sube al bucket privado de
+R2 (mismo patrón que documentos/adjuntos de chat, ver app/services/storage.py)
+y se manda un link firmado (BACKUP_R2_LINK_EXPIRES_HOURS) en el cuerpo del
+correo en vez del archivo.
 """
 import asyncio
 import gzip
@@ -27,6 +28,7 @@ from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.db.database import AsyncSessionLocal, engine
 from app.models.models import DBBackupConfig, DBBackupLog
+from app.services.storage import upload_backup_to_r2, get_presigned_url
 
 
 def _dump_database(dest_path: Path) -> None:
@@ -88,6 +90,7 @@ async def _run_backup() -> None:
         status = "SUCCESS"
         error_detail = None
         file_size = None
+        delivery_method = "ATTACHMENT"
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             dump_path = Path(tmp_dir) / f"medicbolivia_backup_{timestamp}.sql.gz"
@@ -97,28 +100,45 @@ async def _run_backup() -> None:
                 max_bytes = settings.BACKUP_MAX_ATTACHMENT_MB * 1024 * 1024
 
                 if file_size > max_bytes:
-                    # TODO: subir a R2/S3 (ya hay boto3 + credenciales R2 en
-                    # el proyecto) y mandar el link en vez del adjunto.
-                    # Se deja marcado explícitamente para no fingir que ya
-                    # está implementado.
-                    raise RuntimeError(
-                        f"El dump pesa {file_size / 1024 / 1024:.1f}MB, "
-                        f"supera el límite de {settings.BACKUP_MAX_ATTACHMENT_MB}MB. "
-                        "Falta implementar la subida a R2 como fallback."
-                    )
+                    # Dump grande: no cabe como adjunto de Gmail (rechaza
+                    # ~25MB). Se sube al bucket privado de R2 y se manda
+                    # un link firmado en el cuerpo del correo en vez del
+                    # archivo — mismo patrón que documentos/adjuntos de
+                    # chat (ver app/services/storage.py).
+                    delivery_method = "R2_LINK"
+                    with open(dump_path, "rb") as f:
+                        r2_url = await upload_backup_to_r2(f.read(), dump_path.name)
+                    expires_seconds = settings.BACKUP_R2_LINK_EXPIRES_HOURS * 3600
+                    download_link = await get_presigned_url(r2_url, expires_seconds=expires_seconds)
 
-                _send_email_with_attachment(
-                    recipients=config.recipient_emails,
-                    subject=f"[MedicBolivia] Backup de base de datos — {timestamp}",
-                    body=(
-                        f"Backup automático generado el {timestamp} (UTC).\n"
-                        f"Tamaño: {file_size / 1024 / 1024:.2f} MB\n\n"
-                        "Este correo se generó automáticamente desde el panel "
-                        "de administración → IA → Automatización."
-                    ),
-                    attachment_path=dump_path,
-                )
-                logger.info(f"Backup de BD enviado a {config.recipient_emails}")
+                    _send_email_with_attachment(
+                        recipients=config.recipient_emails,
+                        subject=f"[MedicBolivia] Backup de base de datos — {timestamp}",
+                        body=(
+                            f"Backup automático generado el {timestamp} (UTC).\n"
+                            f"Tamaño: {file_size / 1024 / 1024:.2f} MB "
+                            f"(supera el límite de adjunto de {settings.BACKUP_MAX_ATTACHMENT_MB}MB, "
+                            "se subió a almacenamiento privado).\n\n"
+                            f"Descargar backup (válido por {settings.BACKUP_R2_LINK_EXPIRES_HOURS}h):\n"
+                            f"{download_link}\n\n"
+                            "Este correo se generó automáticamente desde el panel "
+                            "de administración → IA → Automatización."
+                        ),
+                        attachment_path=None,
+                    )
+                else:
+                    _send_email_with_attachment(
+                        recipients=config.recipient_emails,
+                        subject=f"[MedicBolivia] Backup de base de datos — {timestamp}",
+                        body=(
+                            f"Backup automático generado el {timestamp} (UTC).\n"
+                            f"Tamaño: {file_size / 1024 / 1024:.2f} MB\n\n"
+                            "Este correo se generó automáticamente desde el panel "
+                            "de administración → IA → Automatización."
+                        ),
+                        attachment_path=dump_path,
+                    )
+                logger.info(f"Backup de BD enviado a {config.recipient_emails} (método: {delivery_method})")
             except Exception as exc:
                 status = "FAILED"
                 error_detail = str(exc)[:290]
@@ -129,6 +149,7 @@ async def _run_backup() -> None:
             file_size_bytes=file_size,
             recipients=config.recipient_emails,
             error_detail=error_detail,
+            delivery_method=delivery_method,
         ))
         await db.commit()
 

@@ -463,6 +463,7 @@ async def get_backup_logs(db: AsyncSession = Depends(get_db), current_user: User
     logs = result.scalars().all()
     return [
         {"id": l.id, "status": l.status, "file_size_bytes": l.file_size_bytes,
-         "recipients": l.recipients, "error_detail": l.error_detail, "created_at": l.created_at}
+         "recipients": l.recipients, "error_detail": l.error_detail,
+         "delivery_method": l.delivery_method, "created_at": l.created_at}
         for l in logs
     ]

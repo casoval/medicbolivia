@@ -22,6 +22,7 @@ interface BackupLog {
   file_size_bytes: number | null
   recipients: string[]
   error_detail: string | null
+  delivery_method: 'ATTACHMENT' | 'R2_LINK'
   created_at: string
 }
 
@@ -86,6 +87,8 @@ export function AutomationTab() {
         <SectionTitle>Backups automáticos a Gmail</SectionTitle>
         <p className="text-xs text-[#6B738A] mb-3">
           Genera un dump comprimido de la base de datos y lo manda por correo con la frecuencia que definas acá.
+          Si el dump supera el límite de adjunto de Gmail (~20MB), se sube automáticamente a almacenamiento
+          privado y el correo lleva un link de descarga en vez del archivo.
           Requiere que el backend tenga configurado <code>GMAIL_SENDER_ADDRESS</code> y{' '}
           <code>GMAIL_APP_PASSWORD</code> (contraseña de aplicación, no la contraseña normal de Gmail).
         </p>
@@ -170,6 +173,11 @@ export function AutomationTab() {
               <div key={log.id} className="flex items-center justify-between text-xs py-2 border-b border-[#DDE1EE] last:border-0">
                 <div>
                   <span className={log.status === 'SUCCESS' ? 'badge-green' : 'badge-red'}>{log.status === 'SUCCESS' ? 'Enviado' : 'Falló'}</span>
+                  {log.status === 'SUCCESS' && log.delivery_method === 'R2_LINK' && (
+                    <span className="badge-blue ml-1.5" title="El dump superó el límite de adjunto y se mandó como link">
+                      Link R2
+                    </span>
+                  )}
                   <span className="ml-2 text-[#6B738A]">{new Date(log.created_at).toLocaleString('es-BO')}</span>
                 </div>
                 <div className="text-[#6B738A] text-right">

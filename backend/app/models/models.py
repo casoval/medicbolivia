@@ -1035,6 +1035,10 @@ class DBBackupLog(Base):
     file_size_bytes: Mapped[Optional[int]] = mapped_column(Integer)
     recipients: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
     error_detail: Mapped[Optional[str]] = mapped_column(String(300))
+    # ATTACHMENT: dump mandado directo en el correo (caso normal).
+    # R2_LINK: dump superó BACKUP_MAX_ATTACHMENT_MB, se subió a R2 y el
+    # correo llevó un link firmado en vez del archivo.
+    delivery_method: Mapped[str] = mapped_column(String(20), nullable=False, default="ATTACHMENT")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

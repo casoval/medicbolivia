@@ -182,6 +182,10 @@ class Settings(BaseSettings):
     # Límite de adjunto antes de subir el dump a R2/S3 y mandar el link en
     # vez del archivo (Gmail rechaza adjuntos de más de ~25MB).
     BACKUP_MAX_ATTACHMENT_MB: int = 20
+    # Duración del link firmado cuando el backup se sube a R2 (dump grande).
+    # 24h es suficiente margen para que el admin lo abra sin dejarlo
+    # expuesto indefinidamente; R2 soporta hasta 7 días como AWS S3 SigV4.
+    BACKUP_R2_LINK_EXPIRES_HOURS: int = 24
 
     # ── SMTP Hostinger (formulario de contacto de la landing) ───────
     # Buzón info@medicbolivia.com alojado en Hostinger. Se usa SOLO para
