@@ -784,8 +784,9 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
           {current ? (
             <>
               <p className="text-[10px] text-[#A0A8BF]">
-                Sigue vigente hasta el {fmtDate(current.ends_at)} — puedes renovarla desde ya (se suma a esa
-                fecha) o deshabilitarla antes de tiempo.
+                {current.ends_at
+                  ? `Sigue vigente hasta el ${fmtDate(current.ends_at)} — puedes renovarla desde ya (se suma a esa fecha) o deshabilitarla antes de tiempo.`
+                  : 'No tiene fecha de vencimiento (indefinida) — puedes deshabilitarla cuando corresponda.'}
               </p>
               <div className="flex items-end gap-2">
                 <div>

@@ -566,7 +566,7 @@ export const patientLinksAPI = {
 
   // Solo funciona si no tengo ninguna cita activa/pendiente con ese profesional
   revoke: (professionalId: string) =>
-    api.delete(`/patients/links/${professionalId}`),
+    api.delete(`/patients/links/${professionalId}`).then(r => r.data),
 }
 
 export interface ScheduleBlock {
