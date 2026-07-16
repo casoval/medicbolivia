@@ -1,14 +1,25 @@
 """
 app/tasks/whatsapp_tasks.py
 Tarea de Celery que efectivamente manda el mensaje de WhatsApp, llamando
-al microservicio Node (whatsapp-service/, Baileys) y dejando registro en
-`whatsapp_conversations` / `whatsapp_messages`.
+al microservicio Node (whatsapp-service/, whatsapp-web.js) y dejando
+registro en `whatsapp_conversations` / `whatsapp_messages`.
 
 Todo lo que necesite mandar un WhatsApp (recordatorios, notificaciones de
 consulta inmediata, respuestas del agente IA) pasa por acá — es el único
 lugar que le habla al microservicio Node.
+
+Reintentos: whatsapp-service usa whatsapp-web.js (Puppeteer/Chromium por
+debajo), que a veces muere y se reconecta solo en unos segundos (ver
+whatsapp-service/src/index.js — detección de "detached frame" /
+"target closed" y reconexión forzada). Un envío que le pega justo a ese
+instante no es un error permanente: reintentar unos segundos después casi
+siempre funciona. Por eso esta tarea reintenta sola (vía Celery) los
+errores 502/503 y de red hacia whatsapp-service, y solo registra el
+mensaje como FAILED en la BD cuando se agotan los reintentos — así no se
+acumula una fila por cada intento fallido.
 """
 import asyncio
+from datetime import datetime
 from typing import Optional
 
 import httpx
@@ -22,6 +33,15 @@ from app.db.database import AsyncSessionLocal, engine
 from app.models.models import WhatsAppConversation, WhatsAppMessage, WhatsAppAudience
 
 
+class _TransientSendError(Exception):
+    """
+    Falla de whatsapp-service que se espera que se resuelva sola en
+    unos segundos (frame de Puppeteer muerto reconectando, servicio
+    reiniciando, etc.) — dispara un reintento de la tarea en vez de
+    marcar el mensaje como fallido de una.
+    """
+
+
 async def _get_or_create_conversation(db, phone: str, audience: str, user_id: Optional[str]) -> WhatsAppConversation:
     result = await db.execute(select(WhatsAppConversation).where(WhatsAppConversation.phone == phone))
     conversation = result.scalar_one_or_none()
@@ -32,7 +52,7 @@ async def _get_or_create_conversation(db, phone: str, audience: str, user_id: Op
     return conversation
 
 
-async def _send_and_log(
+async def _log_message(
     phone: str,
     message: str,
     audience: str,
@@ -40,45 +60,10 @@ async def _send_and_log(
     related_entity_type: Optional[str],
     related_entity_id: Optional[str],
     sent_by: str,
+    status: str,
+    error_detail: Optional[str],
 ) -> None:
-    # Normalizamos ACÁ, antes de todo — así el número usado como clave de
-    # WhatsAppConversation es siempre el mismo formato que usa el webhook
-    # de entrada (whatsapp.py::receive_inbound_message), sin importar si
-    # `phone` venía de un User registrado antes o después del fix de
-    # normalización (ver app/core/phone.py).
-    try:
-        phone = normalize_bo_phone(phone)
-    except InvalidPhoneError as exc:
-        logger.error(f"Teléfono inválido, no se puede enviar WhatsApp: {exc}")
-        async with AsyncSessionLocal() as db:
-            conversation = await _get_or_create_conversation(db, phone, audience, user_id)
-            db.add(WhatsAppMessage(
-                conversation_id=conversation.id, direction="OUT", body=message,
-                sent_by=sent_by, status="FAILED", error_detail=str(exc),
-                related_entity_type=related_entity_type, related_entity_id=related_entity_id,
-            ))
-            await db.commit()
-        return
-
-    status = "SENT"
-    error_detail = None
-
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                f"{settings.WHATSAPP_SERVICE_URL}/send",
-                json={"to": phone, "message": message},
-                headers={"X-Internal-Secret": settings.WHATSAPP_SERVICE_INTERNAL_SECRET},
-            )
-        if resp.status_code >= 400:
-            status = "FAILED"
-            error_detail = f"whatsapp-service {resp.status_code}: {resp.text[:250]}"
-            logger.error(f"Error enviando WhatsApp a {phone}: {error_detail}")
-    except httpx.RequestError as exc:
-        status = "FAILED"
-        error_detail = f"Error de red hacia whatsapp-service: {exc}"
-        logger.error(error_detail)
-
+    """Escribe el resultado FINAL (SENT o FAILED tras agotar reintentos) — se llama una sola vez por mensaje, nunca por cada intento."""
     async with AsyncSessionLocal() as db:
         conversation = await _get_or_create_conversation(db, phone, audience, user_id)
         db.add(WhatsAppMessage(
@@ -91,18 +76,81 @@ async def _send_and_log(
             related_entity_type=related_entity_type,
             related_entity_id=related_entity_id,
         ))
-        from datetime import datetime
         conversation.last_message_at = datetime.utcnow()
         conversation.last_message_preview = message[:300]
         await db.commit()
 
 
+async def _send_and_log(task, phone: str, message: str, audience: str, user_id: Optional[str],
+                         related_entity_type: Optional[str], related_entity_id: Optional[str], sent_by: str) -> None:
+    # Normalizamos ACÁ, antes de todo — así el número usado como clave de
+    # WhatsAppConversation es siempre el mismo formato que usa el webhook
+    # de entrada (whatsapp.py::receive_inbound_message), sin importar si
+    # `phone` venía de un User registrado antes o después del fix de
+    # normalización (ver app/core/phone.py).
+    try:
+        phone = normalize_bo_phone(phone)
+    except InvalidPhoneError as exc:
+        # Error permanente: el número nunca se va a volver válido solo,
+        # no tiene sentido reintentar.
+        logger.error(f"Teléfono inválido, no se puede enviar WhatsApp: {exc}")
+        await _log_message(phone, message, audience, user_id, related_entity_type, related_entity_id, sent_by,
+                            status="FAILED", error_detail=str(exc))
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{settings.WHATSAPP_SERVICE_URL}/send",
+                json={"to": phone, "message": message},
+                headers={"X-Internal-Secret": settings.WHATSAPP_SERVICE_INTERNAL_SECRET},
+            )
+        if resp.status_code >= 400:
+            error_detail = f"whatsapp-service {resp.status_code}: {resp.text[:250]}"
+            if resp.status_code in (502, 503):
+                # 503 = "WhatsApp no está conectado" (reconectando) y
+                # 502 = el propio whatsapp-service devuelve el error del
+                # frame de Puppeteer muerto mientras se reconecta solo
+                # (ver whatsapp-service/src/index.js). Ambos transitorios.
+                raise _TransientSendError(error_detail)
+            # Cualquier otro 4xx/5xx (ej. 400 por payload mal formado) es
+            # permanente — reintentar no lo va a arreglar.
+            logger.error(f"Error enviando WhatsApp a {phone}: {error_detail}")
+            await _log_message(phone, message, audience, user_id, related_entity_type, related_entity_id, sent_by,
+                                status="FAILED", error_detail=error_detail)
+            return
+    except httpx.RequestError as exc:
+        # Error de red hacia whatsapp-service (ej. el proceso se está
+        # reiniciando justo en este instante) — también transitorio.
+        raise _TransientSendError(f"Error de red hacia whatsapp-service: {exc}") from exc
+    except _TransientSendError as exc:
+        attempt = task.request.retries + 1
+        total = task.max_retries + 1
+        if task.request.retries >= task.max_retries:
+            # Reintentos agotados: recién acá se registra como FAILED
+            # definitivo.
+            logger.error(f"WhatsApp a {phone} falló tras {total} intentos: {exc}")
+            await _log_message(phone, message, audience, user_id, related_entity_type, related_entity_id, sent_by,
+                                status="FAILED", error_detail=f"{exc} (tras {total} intentos)")
+            return
+        logger.warning(f"Fallo transitorio enviando WhatsApp a {phone} (intento {attempt}/{total}), reintentando: {exc}")
+        # Backoff lineal (30s, 60s, 90s con la config default_retry_delay=30
+        # actual) — le da tiempo de sobra a whatsapp-service para
+        # reconectar antes del siguiente intento.
+        raise task.retry(exc=exc, countdown=task.default_retry_delay * attempt)
+
+    await _log_message(phone, message, audience, user_id, related_entity_type, related_entity_id, sent_by,
+                        status="SENT", error_detail=None)
+
+
 @celery_app.task(
+    bind=True,
     name="app.tasks.whatsapp_tasks.send_whatsapp_message",
     max_retries=3,
     default_retry_delay=30,
 )
 def send_whatsapp_message(
+    self,
     phone: str,
     message: str,
     audience: str = WhatsAppAudience.PUBLIC.value,
@@ -116,14 +164,23 @@ def send_whatsapp_message(
     real. Se llama con `.delay(...)` desde notify.py, reminder_tasks.py,
     o directamente desde cualquier endpoint que necesite mandar un
     WhatsApp puntual (ej. el admin respondiendo un chat a mano).
+
+    `bind=True` para poder llamar a self.retry(...) desde _send_and_log
+    en fallos transitorios de whatsapp-service — antes max_retries/
+    default_retry_delay estaban configurados pero nunca se usaban
+    (ningún código llamaba a retry), así que cualquier falla puntual del
+    frame de Puppeteer quedaba marcada como FAILED para siempre.
     """
-    asyncio.run(_send_and_log(
-        phone=phone,
-        message=message,
-        audience=audience,
-        user_id=user_id,
-        related_entity_type=related_entity_type,
-        related_entity_id=related_entity_id,
-        sent_by=sent_by,
-    ))
-    asyncio.run(engine.dispose())
+    try:
+        asyncio.run(_send_and_log(
+            task=self,
+            phone=phone,
+            message=message,
+            audience=audience,
+            user_id=user_id,
+            related_entity_type=related_entity_type,
+            related_entity_id=related_entity_id,
+            sent_by=sent_by,
+        ))
+    finally:
+        asyncio.run(engine.dispose())
