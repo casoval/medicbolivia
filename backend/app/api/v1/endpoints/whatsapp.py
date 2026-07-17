@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Optional, List
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
@@ -29,6 +29,12 @@ from app.models.models import (
 )
 from app.tasks.whatsapp_tasks import send_whatsapp_message
 from app.tasks.backup_tasks import run_backup_now
+from app.services.consultation_actions import (
+    ConsultationActionError,
+    get_latest_pending_immediate_consultation,
+    accept_consultation_core,
+    reject_consultation_core,
+)
 
 router = APIRouter()
 
@@ -445,9 +451,27 @@ class InboundMessagePayload(BaseModel):
     contact_name: Optional[str] = None
 
 
+# Palabras/números que un profesional puede responder al aviso de "paciente
+# esperando" para aceptar o rechazar sin salir de WhatsApp. Se compara el
+# mensaje completo (recortado y en minúsculas), no una subcadena — así
+# "no puedo ahora, disculpa" no dispara un rechazo por casualidad.
+_ACCEPT_REPLIES = {"1", "aceptar", "acepto", "si", "sí", "acepta"}
+_REJECT_REPLIES = {"2", "rechazar", "rechazo", "no", "no puedo", "no acepto"}
+
+
+def _classify_immediate_reply(text: str) -> Optional[str]:
+    normalized = text.strip().lower().rstrip(".!¡¿?")
+    if normalized in _ACCEPT_REPLIES:
+        return "ACCEPT"
+    if normalized in _REJECT_REPLIES:
+        return "REJECT"
+    return None
+
+
 @router.post("/webhook/inbound", summary="[interno] whatsapp-service reporta un mensaje entrante")
 async def receive_inbound_message(
     payload: InboundMessagePayload,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     # Normalizamos acá aunque whatsapp-service ya manda el número con
@@ -507,6 +531,58 @@ async def receive_inbound_message(
         body=payload.message,
     ))
     await db.commit()
+
+    # ── Aceptar/rechazar una consulta inmediata directo desde WhatsApp ──
+    # Si quien escribe es un profesional CON una consulta inmediata
+    # esperando su aceptación, y el mensaje es "1"/"2" (o "aceptar"/
+    # "rechazar"), se resuelve acá mismo — sin pasar por el agente IA ni
+    # pedirle que abra la app. El resto de la conversación sigue normal.
+    #
+    # Nota: whatsapp-web.js es una librería no oficial; los botones
+    # interactivos de WhatsApp (Cloud API oficial de Meta) no se soportan
+    # de forma confiable acá, por eso la interacción es por texto plano.
+    if user and audience == WhatsAppAudience.PROFESSIONAL.value:
+        intent = _classify_immediate_reply(payload.message)
+        if intent:
+            prof_result = await db.execute(select(Professional).where(Professional.user_id == user.id))
+            professional = prof_result.scalar_one_or_none()
+            pending = (
+                await get_latest_pending_immediate_consultation(db, professional.id)
+                if professional else None
+            )
+            if professional and pending:
+                try:
+                    if intent == "ACCEPT":
+                        await accept_consultation_core(db, professional, pending, background_tasks)
+                        reply_text = (
+                            "✅ Aceptaste la consulta. Avisamos al paciente para que pague — "
+                            "en cuanto confirme el pago, te llega otro WhatsApp para que la inicies desde la app."
+                        )
+                    else:
+                        await reject_consultation_core(db, professional, pending)
+                        reply_text = "❌ Rechazaste la consulta. El paciente verá que no está disponible en este momento."
+                except ConsultationActionError as exc:
+                    reply_text = f"⚠️ No se pudo procesar: {exc.message}"
+
+                send_whatsapp_message.delay(
+                    phone=conversation.phone,
+                    message=reply_text,
+                    audience=audience,
+                    user_id=conversation.user_id,
+                    related_entity_type="Consultation",
+                    related_entity_id=pending.id,
+                    sent_by="BOT",
+                )
+                conversation.unread_count = 0
+                await db.commit()
+                return {"status": "received", "conversation_id": conversation.id}
+            elif not pending:
+                # Escribió "1"/"2" pero no tiene ninguna consulta inmediata
+                # esperando (ya se aceptó, se venció el timeout, o nunca
+                # hubo una) — no interceptamos: dejamos que siga a la
+                # conversación normal / agente, un "1" suelto también puede
+                # ser el inicio de una charla con el bot.
+                pass
 
     # Responder con el agente IA si está habilitado (global + por conversación).
     agent_config_result = await db.execute(select(AgentConfig).where(AgentConfig.id == "global"))

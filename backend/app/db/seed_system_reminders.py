@@ -69,7 +69,8 @@ SYSTEM_REMINDER_RULES = [
         "message_template": (
             "🩺 *Tienes un paciente esperando*\n\n"
             "{paciente} solicitó una consulta inmediata ({especialidad}).\n"
-            "Tienes 2 minutos para aceptarla desde la app antes de que se reasigne." + CTA
+            "Responde *1* para ACEPTAR o *2* para RECHAZAR.\n"
+            "Tienes 2 minutos antes de que se cancele." + CTA
         ),
     },
     {

@@ -31,6 +31,12 @@ from app.services.commission import resolve_commission_percent
 from app.services.patient_links import has_effective_link, professional_has_active_membership
 from app.services.system_reminders import fire_system_reminder
 from app.db.seed_system_reminders import SystemReminderID
+from app.services.consultation_actions import (
+    ConsultationActionError,
+    get_waiting_consultation_for_professional,
+    accept_consultation_core,
+    reject_consultation_core,
+)
 from app.core.config import settings
 from livekit import api as lk
 
@@ -990,100 +996,12 @@ async def accept_consultation(
     if not professional:
         raise HTTPException(status_code=403, detail="Solo profesionales pueden aceptar consultas")
 
-    cons_result = await db.execute(
-        select(Consultation).where(
-            Consultation.id == consultation_id,
-            Consultation.professional_id == professional.id,
-            Consultation.status == ConsultationStatus.WAITING_PROFESSIONAL
-        )
-    )
-    consultation = cons_result.scalar_one_or_none()
-    if not consultation:
-        raise HTTPException(status_code=404, detail="Consulta no encontrada o ya no está en espera")
+    try:
+        consultation = await get_waiting_consultation_for_professional(db, professional.id, consultation_id)
+        await accept_consultation_core(db, professional, consultation, background_tasks)
+    except ConsultationActionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
-    # Si es INMEDIATA, no se puede aceptar mientras el profesional ya está
-    # en otra llamada en curso — evita terminar con 2 consultas "en progreso"
-    # a la vez. Para AGENDADA no aplica: aceptar una cita futura está bien
-    # aunque ahora mismo esté en una llamada.
-    if consultation.consultation_type == ConsultationType.IMMEDIATE:
-        busy_result = await db.execute(
-            select(Consultation).where(
-                Consultation.professional_id == professional.id,
-                Consultation.status == ConsultationStatus.IN_PROGRESS,
-            )
-        )
-        if busy_result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=409,
-                detail="Estás en otra consulta en este momento. Termínala antes de aceptar una nueva."
-            )
-
-    # Si es una cita AGENDADA o de SEGUIMIENTO, verificar que no se cruce en
-    # horario con otra cita agendada/seguimiento que este mismo profesional ya
-    # aceptó previamente (ambas ocupan un horario real de su calendario).
-    if consultation.consultation_type in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP) and consultation.scheduled_at:
-        duration = timedelta(minutes=professional.appointment_duration_minutes or 30)
-        new_start = consultation.scheduled_at
-        new_end = new_start + duration
-
-        confirmed_statuses = [
-            ConsultationStatus.WAITING_PAYMENT,
-            ConsultationStatus.PAYMENT_CONFIRMED,
-            ConsultationStatus.IN_PROGRESS,
-        ]
-        others_result = await db.execute(
-            select(Consultation).where(
-                Consultation.professional_id == professional.id,
-                Consultation.consultation_type.in_([ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP]),
-                Consultation.id != consultation.id,
-                Consultation.status.in_(confirmed_statuses),
-                Consultation.scheduled_at.isnot(None),
-            )
-        )
-        for other in others_result.scalars().all():
-            other_start = other.scheduled_at
-            other_end = other_start + timedelta(minutes=professional.appointment_duration_minutes or 30)
-            # Para el profesional solo se verifica solapamiento real — sus citas
-            # van una detrás de otra sin margen adicional.
-            if new_start < other_end and other_start < new_end:
-                raise HTTPException(
-                    status_code=409,
-                    detail=(
-                        f"Esta cita ({new_start.strftime('%d/%m %H:%M')}) se solapa con otra "
-                        f"que ya aceptaste el {other_start.strftime('%d/%m %H:%M')}. "
-                        "Rechaza una de las dos antes de continuar."
-                    )
-                )
-
-    if consultation.consultation_type in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP):
-        # La cita/seguimiento ya fue pagada por el paciente — el profesional
-        # solo confirma. Cambiar estado directamente a PAYMENT_CONFIRMED.
-        consultation.status = ConsultationStatus.PAYMENT_CONFIRMED
-
-        # Notificar al paciente que su cita fue confirmada
-        patient_result_n = await db.execute(select(Patient).where(Patient.id == consultation.patient_id))
-        patient_n = patient_result_n.scalar_one_or_none()
-        if patient_n:
-            db.add(Notification(
-                user_id=patient_n.user_id,
-                title="¡Cita confirmada!",
-                body=f"Tu cita del {consultation.scheduled_at.strftime('%d/%m/%Y a las %H:%M')} fue confirmada por el profesional.",
-                type="CONSULTATION_CONFIRMED",
-                entity_type="Consultation",
-                entity_id=consultation.id,
-            ))
-    else:
-        # Inmediata: flujo original, el paciente paga ahora.
-        consultation.status = ConsultationStatus.WAITING_PAYMENT
-        background_tasks.add_task(
-            auto_cancel_payment_expired,
-            consultation.id,
-            settings.DATABASE_URL
-        )
-
-    await db.commit()
-
-    logger.info(f"Consulta {consultation_id} aceptada por profesional {professional.id}")
     return {"status": "accepted", "consultation_id": consultation_id}
 
 
@@ -1104,50 +1022,13 @@ async def reject_consultation(
     if not professional:
         raise HTTPException(status_code=403, detail="Solo profesionales pueden rechazar consultas")
 
-    cons_result = await db.execute(
-        select(Consultation).where(
-            Consultation.id == consultation_id,
-            Consultation.professional_id == professional.id,
-            Consultation.status == ConsultationStatus.WAITING_PROFESSIONAL
-        )
-    )
-    consultation = cons_result.scalar_one_or_none()
-    if not consultation:
-        raise HTTPException(status_code=404, detail="Consulta no encontrada")
+    try:
+        consultation = await get_waiting_consultation_for_professional(db, professional.id, consultation_id)
+    except ConsultationActionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail="Consulta no encontrada")
 
-    consultation.status = ConsultationStatus.CANCELLED
-    consultation.outcome_note = "REJECTED_BY_PROFESSIONAL"
+    await reject_consultation_core(db, professional, consultation)
 
-    # Si era una cita/seguimiento ya pagado, devolver el dinero
-    if consultation.consultation_type in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP):
-        pay_result = await db.execute(
-            select(Payment).where(
-                Payment.consultation_id == consultation_id,
-                Payment.status == PaymentStatus.CONFIRMED,
-            )
-        )
-        payment = pay_result.scalar_one_or_none()
-        if payment:
-            payment.status = PaymentStatus.REFUNDED_FULL
-            payment.refunded_at = datetime.utcnow()
-            payment.refund_note = "Devolución automática: el profesional no pudo atender la cita."
-
-        # Notificar al paciente
-        patient_result_r = await db.execute(select(Patient).where(Patient.id == consultation.patient_id))
-        patient_r = patient_result_r.scalar_one_or_none()
-        if patient_r:
-            db.add(Notification(
-                user_id=patient_r.user_id,
-                title="Cita no disponible — devolución en camino",
-                body=f"El profesional no pudo confirmar tu cita del {consultation.scheduled_at.strftime('%d/%m/%Y a las %H:%M')}. Se procesará la devolución completa.",
-                type="CONSULTATION_REJECTED_REFUND",
-                entity_type="Consultation",
-                entity_id=consultation.id,
-            ))
-
-    await db.commit()
-
-    logger.info(f"Consulta {consultation_id} rechazada por profesional {professional.id}")
     return {"status": "rejected", "consultation_id": consultation_id}
 
 
