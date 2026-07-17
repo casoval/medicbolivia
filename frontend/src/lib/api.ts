@@ -831,6 +831,7 @@ export const whatsappAPI = {
   }) => api.put(`/whatsapp/reminders/${id}`, data),
   deleteReminder: (id: string) => api.delete(`/whatsapp/reminders/${id}`),
   getReminderLogs: (id: string) => api.get(`/whatsapp/reminders/${id}/logs`),
+  getReminderStats: () => api.get('/whatsapp/reminders/stats'),
 
   // Pestaña 3 — conversaciones + configuración del agente
   listConversations: (audience?: string) =>

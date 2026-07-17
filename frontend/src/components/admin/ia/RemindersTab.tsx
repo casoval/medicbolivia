@@ -57,6 +57,16 @@ const EMPTY_FORM: FormState = {
   channel: 'WHATSAPP', offset_minutes: 1440, message_template: '', is_active: true, is_system: false,
 }
 
+interface ReminderStats {
+  per_rule: Record<string, { SENT: number; FAILED: number; SKIPPED: number }>
+  today: {
+    totals: { SENT: number; FAILED: number; SKIPPED: number }
+    by_audience: Record<string, { SENT: number; FAILED: number; SKIPPED: number }>
+  }
+  last_7_days: { date: string; SENT: number; FAILED: number; SKIPPED: number }[]
+  week_total_sent: number
+}
+
 export function RemindersTab() {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -65,6 +75,14 @@ export function RemindersTab() {
   const { data: rules = [], isLoading } = useQuery<ReminderRule[]>({
     queryKey: ['admin', 'whatsapp', 'reminders'],
     queryFn: async () => (await whatsappAPI.listReminders()).data,
+  })
+
+  const { data: stats } = useQuery<ReminderStats>({
+    queryKey: ['admin', 'whatsapp', 'reminders', 'stats'],
+    queryFn: async () => (await whatsappAPI.getReminderStats()).data,
+    // Se refresca solo cada minuto — son contadores informativos, no
+    // necesitan la inmediatez de un websocket.
+    refetchInterval: 60_000,
   })
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin', 'whatsapp', 'reminders'] })
@@ -122,6 +140,51 @@ export function RemindersTab() {
         &quot;Paciente esperando&quot; se dispara al instante cuando se crea una consulta inmediata — no usa el
         campo de minutos. El resto de reglas corre por un chequeo cada minuto contra la hora de la cita.
       </p>
+
+      {stats && (
+        <div className="card p-4">
+          <h3 className="text-sm font-semibold text-[#141820] mb-3">Resumen de hoy</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatBox label="Enviados" value={stats.today.totals.SENT || 0} tone="green" />
+            <StatBox label="Fallidos" value={stats.today.totals.FAILED || 0} tone="red" />
+            <StatBox label="Omitidos" value={stats.today.totals.SKIPPED || 0} tone="gray" />
+            <StatBox label="Últimos 7 días" value={stats.week_total_sent} tone="blue" />
+          </div>
+          {(stats.today.by_audience.PATIENT || stats.today.by_audience.PROFESSIONAL) && (
+            <div className="flex gap-4 mt-3 pt-3 border-t border-[#E5E7EB] text-xs text-[#6B738A]">
+              <span>
+                Paciente: <strong className="text-[#141820]">{stats.today.by_audience.PATIENT?.SENT || 0}</strong> enviados
+                {(stats.today.by_audience.PATIENT?.FAILED ?? 0) > 0 && (
+                  <span className="text-[#A32D2D]"> · {stats.today.by_audience.PATIENT?.FAILED} fallidos</span>
+                )}
+              </span>
+              <span>
+                Profesional: <strong className="text-[#141820]">{stats.today.by_audience.PROFESSIONAL?.SENT || 0}</strong> enviados
+                {(stats.today.by_audience.PROFESSIONAL?.FAILED ?? 0) > 0 && (
+                  <span className="text-[#A32D2D]"> · {stats.today.by_audience.PROFESSIONAL?.FAILED} fallidos</span>
+                )}
+              </span>
+            </div>
+          )}
+          {/* Mini gráfico de barras de los últimos 7 días — sin librería, solo divs con alto proporcional. */}
+          <div className="flex items-end gap-1.5 mt-4 h-16">
+            {stats.last_7_days.map((day) => {
+              const max = Math.max(1, ...stats.last_7_days.map((d) => d.SENT + d.FAILED))
+              const total = day.SENT + day.FAILED
+              return (
+                <div key={day.date} className="flex-1 flex flex-col items-center gap-1" title={`${day.date}: ${day.SENT} enviados, ${day.FAILED} fallidos`}>
+                  <div className="w-full flex flex-col justify-end" style={{ height: '48px' }}>
+                    <div className="w-full bg-[#A32D2D] rounded-t-sm" style={{ height: `${(day.FAILED / max) * 48}px` }} />
+                    <div className="w-full bg-[#2F7D4F]" style={{ height: `${(day.SENT / max) * 48}px` }} />
+                  </div>
+                  <span className="text-[9px] text-[#6B738A]">{day.date.slice(8, 10)}</span>
+                  {total === 0 && <span className="sr-only">Sin envíos</span>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="card p-4 space-y-3">
         <h3 className="text-sm font-semibold text-[#141820]">{form.id ? 'Editar recordatorio' : 'Nuevo recordatorio'}</h3>
@@ -206,7 +269,7 @@ export function RemindersTab() {
                 Catálogo del sistema (Profesional #1-8 · Paciente #1-4)
               </h3>
               {rules.filter((r) => r.is_system).map((rule) => (
-                <ReminderCard key={rule.id} rule={rule} onEdit={startEdit} onToggle={() => toggleMutation.mutate(rule)} />
+                <ReminderCard key={rule.id} rule={rule} todayCount={stats?.per_rule[rule.id]} onEdit={startEdit} onToggle={() => toggleMutation.mutate(rule)} />
               ))}
             </div>
           )}
@@ -215,7 +278,7 @@ export function RemindersTab() {
               <h3 className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide pt-2">Reglas personalizadas</h3>
               {rules.filter((r) => !r.is_system).map((rule) => (
                 <ReminderCard
-                  key={rule.id} rule={rule} onEdit={startEdit} onToggle={() => toggleMutation.mutate(rule)}
+                  key={rule.id} rule={rule} todayCount={stats?.per_rule[rule.id]} onEdit={startEdit} onToggle={() => toggleMutation.mutate(rule)}
                   onDelete={() => { if (confirm('¿Eliminar esta regla? No se puede deshacer.')) deleteMutation.mutate(rule.id) }}
                 />
               ))}
@@ -227,8 +290,21 @@ export function RemindersTab() {
   )
 }
 
-function ReminderCard({ rule, onEdit, onToggle, onDelete }: {
+function StatBox({ label, value, tone }: { label: string; value: number; tone: 'green' | 'red' | 'gray' | 'blue' }) {
+  const toneClass = {
+    green: 'text-[#2F7D4F]', red: 'text-[#A32D2D]', gray: 'text-[#6B738A]', blue: 'text-[#185FA5]',
+  }[tone]
+  return (
+    <div className="bg-[#F7F8FA] rounded-lg p-3">
+      <p className={`text-xl font-semibold ${toneClass}`}>{value}</p>
+      <p className="text-[10px] text-[#6B738A] mt-0.5">{label}</p>
+    </div>
+  )
+}
+
+function ReminderCard({ rule, todayCount, onEdit, onToggle, onDelete }: {
   rule: ReminderRule
+  todayCount?: { SENT: number; FAILED: number; SKIPPED: number }
   onEdit: (rule: ReminderRule) => void
   onToggle: () => void
   onDelete?: () => void
@@ -242,6 +318,13 @@ function ReminderCard({ rule, onEdit, onToggle, onDelete }: {
           {!rule.is_active && <span className="badge-gray">Inactiva</span>}
           <span className="text-[10px] text-[#6B738A]">{TRIGGER_LABEL[rule.trigger_type] || rule.trigger_type}</span>
           {rule.offset_minutes != null && <span className="text-[10px] text-[#6B738A]">· {rule.offset_minutes} min antes</span>}
+          {todayCount && (todayCount.SENT + todayCount.FAILED + todayCount.SKIPPED) > 0 && (
+            <span className="text-[10px] text-[#6B738A]">
+              · hoy: <strong className="text-[#2F7D4F]">{todayCount.SENT} enviados</strong>
+              {todayCount.FAILED > 0 && <> · <strong className="text-[#A32D2D]">{todayCount.FAILED} fallidos</strong></>}
+              {todayCount.SKIPPED > 0 && <> · {todayCount.SKIPPED} omitidos</>}
+            </span>
+          )}
         </div>
         <p className="text-sm font-medium text-[#141820]">{rule.name}</p>
         <p className="text-xs text-[#6B738A] mt-1 whitespace-pre-wrap">{rule.message_template}</p>

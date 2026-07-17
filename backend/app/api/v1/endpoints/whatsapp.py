@@ -179,6 +179,75 @@ async def get_reminder_logs(rule_id: str, db: AsyncSession = Depends(get_db), cu
     ]
 
 
+@router.get("/reminders/stats", summary="Contadores de recordatorios para el panel (hoy + últimos 7 días)")
+async def get_reminder_stats(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    """
+    Todo lo que el admin necesita para saber "¿esto está funcionando?" sin
+    tener que entrar regla por regla:
+      - per_rule: contador de HOY (enviado/fallido/omitido) por cada regla,
+        para el badge que se muestra en cada card del catálogo.
+      - today: el mismo desglose pero global, y por audiencia (para ver de
+        un vistazo si, por ejemplo, todos los recordatorios a PROFESSIONAL
+        están fallando — señal de que algo se rompió, no un caso aislado).
+      - last_7_days: serie diaria (para un mini gráfico) + total de la
+        semana, para detectar caídas de volumen día a día.
+    """
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    week_start = today_start - timedelta(days=6)
+
+    # ── Por regla, solo hoy (lo que se pinta en cada card) ──
+    per_rule_result = await db.execute(
+        select(ReminderLog.rule_id, ReminderLog.status, func.count(ReminderLog.id))
+        .where(ReminderLog.sent_at >= today_start)
+        .group_by(ReminderLog.rule_id, ReminderLog.status)
+    )
+    per_rule: dict = {}
+    for rule_id, status_, count in per_rule_result.all():
+        bucket = per_rule.setdefault(rule_id, {"SENT": 0, "FAILED": 0, "SKIPPED": 0})
+        bucket[status_] = count
+
+    # ── Global de hoy, desglosado por audiencia (join contra la regla) ──
+    today_audience_result = await db.execute(
+        select(ReminderRule.audience, ReminderLog.status, func.count(ReminderLog.id))
+        .join(ReminderRule, ReminderRule.id == ReminderLog.rule_id)
+        .where(ReminderLog.sent_at >= today_start)
+        .group_by(ReminderRule.audience, ReminderLog.status)
+    )
+    today_totals = {"SENT": 0, "FAILED": 0, "SKIPPED": 0}
+    today_by_audience: dict = {}
+    for audience, status_, count in today_audience_result.all():
+        today_totals[status_] = today_totals.get(status_, 0) + count
+        bucket = today_by_audience.setdefault(audience, {"SENT": 0, "FAILED": 0, "SKIPPED": 0})
+        bucket[status_] = count
+
+    # ── Serie diaria de los últimos 7 días (para el mini gráfico) ──
+    week_result = await db.execute(
+        select(func.date(ReminderLog.sent_at), ReminderLog.status, func.count(ReminderLog.id))
+        .where(ReminderLog.sent_at >= week_start)
+        .group_by(func.date(ReminderLog.sent_at), ReminderLog.status)
+    )
+    by_day: dict = {}
+    for day, status_, count in week_result.all():
+        day_key = day.isoformat() if hasattr(day, "isoformat") else str(day)
+        bucket = by_day.setdefault(day_key, {"SENT": 0, "FAILED": 0, "SKIPPED": 0})
+        bucket[status_] = count
+    # Completar los días sin ningún envío con ceros, para que el gráfico
+    # no tenga huecos.
+    last_7_days = []
+    for i in range(7):
+        day = (week_start + timedelta(days=i)).date().isoformat()
+        counts = by_day.get(day, {"SENT": 0, "FAILED": 0, "SKIPPED": 0})
+        last_7_days.append({"date": day, **counts})
+
+    return {
+        "per_rule": per_rule,
+        "today": {"totals": today_totals, "by_audience": today_by_audience},
+        "last_7_days": last_7_days,
+        "week_total_sent": sum(d["SENT"] for d in last_7_days),
+    }
+
+
 # ═══════════════════════════════════════════════════════
 # PESTAÑA 3 — Conversaciones + configuración del agente
 # ═══════════════════════════════════════════════════════
