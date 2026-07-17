@@ -393,9 +393,6 @@ export default function AdminSettingsPage() {
             </>
           )}
 
-          {/* Promociones de comisión global */}
-          <CommissionPeriodsSection />
-
           {/* Chat interno: ventana post-consulta y adjuntos por rol */}
           <div className="card">
             <SectionTitle>Chat</SectionTitle>
@@ -451,6 +448,9 @@ export default function AdminSettingsPage() {
               </button>
             </div>
           </div>
+
+          {/* Promociones de comisión global */}
+          <CommissionPeriodsSection />
 
           {/* Info del sistema — datos reales desde /admin/system-info, no hardcodeados */}
           <div className="card lg:col-span-2">
