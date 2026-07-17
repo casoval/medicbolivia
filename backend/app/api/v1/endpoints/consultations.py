@@ -1579,6 +1579,47 @@ async def get_my_consultations(
 
 
 # ── PATCH /api/v1/consultations/{id}/status ─────────
+async def _complete_consultation_effects(
+    db: AsyncSession,
+    background_tasks: BackgroundTasks,
+    consultation: Consultation,
+) -> dict:
+    """Efectos secundarios al completar una consulta (por videollamada o
+    presencial): habilita el chat post-consulta, crea el vínculo
+    paciente-profesional, agenda la liberación automática del pago, y avisa
+    si falta receta/nota clínica. Compartido entre update_consultation_status
+    (flujo por videollamada) y complete_in_person_consultation."""
+    from app.services.chat import get_or_create_conversation_for_consultation
+    await get_or_create_conversation_for_consultation(db, consultation.id)
+
+    from app.services.patient_links import ensure_patient_professional_link
+    await ensure_patient_professional_link(db, consultation.patient_id, consultation.professional_id)
+
+    await db.commit()
+
+    response = {"status": ConsultationStatus.COMPLETED, "consultation_id": consultation.id}
+
+    background_tasks.add_task(
+        auto_release_payment_after_hold,
+        consultation.id,
+        settings.DATABASE_URL,
+        settings.PAYMENT_HOLD_MINUTES,
+    )
+
+    rx_result = await db.execute(
+        select(Prescription).where(Prescription.consultation_id == consultation.id)
+    )
+    has_prescription = rx_result.scalar_one_or_none() is not None
+    response["prescription_pending"] = not has_prescription
+
+    note_result = await db.execute(
+        select(ClinicalNote).where(ClinicalNote.consultation_id == consultation.id)
+    )
+    has_clinical_note = note_result.scalar_one_or_none() is not None
+    response["clinical_note_pending"] = not has_clinical_note
+    return response
+
+
 @router.patch("/{consultation_id}/status", summary="Actualizar estado de una consulta")
 async def update_consultation_status(
     consultation_id: str,
@@ -1618,54 +1659,56 @@ async def update_consultation_status(
         if consultation.started_at:
             delta = datetime.utcnow() - consultation.started_at
             consultation.duration_minutes = int(delta.total_seconds() / 60)
-
-        # Habilita el chat interno de seguimiento post-consulta (política:
-        # el paciente nunca ve el número del profesional, este es el único
-        # canal directo dentro de la plataforma). Se crea recién acá, no al
-        # pagar, para que la ventana de CHAT_WINDOW_DAYS arranque desde el
-        # fin real de la consulta, no desde el pago.
-        from app.services.chat import get_or_create_conversation_for_consultation
-        await get_or_create_conversation_for_consultation(db, consultation.id)
-
-        # Auto-vínculo "Mis pacientes": cualquier consulta real completada
-        # (inmediata, agendada o seguimiento) vincula al paciente con el
-        # profesional automáticamente — no hace falta que se vincule a mano
-        # desde la búsqueda. Idempotente y no reactiva un vínculo que el
-        # paciente haya revocado antes. Ver app/services/patient_links.py.
-        from app.services.patient_links import ensure_patient_professional_link
-        await ensure_patient_professional_link(db, consultation.patient_id, consultation.professional_id)
+        return await _complete_consultation_effects(db, background_tasks, consultation)
 
     await db.commit()
+    return {"status": new_status, "consultation_id": consultation_id}
 
-    response = {"status": new_status, "consultation_id": consultation_id}
-    if new_status == ConsultationStatus.COMPLETED:
-        # Liberación automática del pago al profesional, con ventana de
-        # reclamo para el paciente (PAYMENT_HOLD_MINUTES). Si el paciente
-        # abre una disputa dentro de esa ventana (payment.status pasa a
-        # DISPUTED), esta tarea no libera nada y queda pendiente de un admin.
-        background_tasks.add_task(
-            auto_release_payment_after_hold,
-            consultation.id,
-            settings.DATABASE_URL,
-            settings.PAYMENT_HOLD_MINUTES,
-        )
-        # GAP 3: avisar al frontend que puede ofrecer al médico emitir la
-        # receta inmediatamente, en vez de depender de que se acuerde.
-        rx_result = await db.execute(
-            select(Prescription).where(Prescription.consultation_id == consultation_id)
-        )
-        has_prescription = rx_result.scalar_one_or_none() is not None
-        response["prescription_pending"] = not has_prescription
 
-        # GAP: mismo aviso pero para la historia clínica — si el médico
-        # todavía no dejó ninguna nota SOAP para esta consulta, se lo
-        # ofrecemos antes de que salga de la videollamada.
-        note_result = await db.execute(
-            select(ClinicalNote).where(ClinicalNote.consultation_id == consultation_id)
+# ── PATCH /{consultation_id}/complete-in-person ──────────────────────────
+# Las citas presenciales (modality=IN_PERSON, solo existen con
+# created_by_role=PROFESSIONAL) nunca pasan por start-video, así que nunca
+# llegaban a COMPLETED — se quedaban atascadas en "Cita confirmada" para
+# siempre, sin habilitar chat, vínculo con el paciente, ni el aviso de
+# receta/nota clínica pendiente. Este endpoint es el equivalente de
+# "Iniciar consulta" (video) pero para presencial: la marca completada
+# directamente, sin sala de videollamada.
+@router.patch(
+    "/{consultation_id}/complete-in-person",
+    summary="[Profesional] Marcar una cita presencial como completada",
+)
+async def complete_in_person_consultation(
+    consultation_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=403, detail="Solo un profesional puede usar este endpoint")
+
+    cons_result = await db.execute(
+        select(Consultation).where(
+            Consultation.id == consultation_id,
+            Consultation.professional_id == professional.id,
         )
-        has_clinical_note = note_result.scalar_one_or_none() is not None
-        response["clinical_note_pending"] = not has_clinical_note
-    return response
+    )
+    consultation = cons_result.scalar_one_or_none()
+    if not consultation:
+        raise HTTPException(status_code=404, detail="Consulta no encontrada")
+
+    if consultation.created_by_role != ConsultationCreatedBy.PROFESSIONAL or consultation.modality != ConsultationModality.IN_PERSON:
+        raise HTTPException(
+            status_code=400,
+            detail="Esta acción es solo para citas presenciales agendadas por ti. Para videollamada, usa 'Iniciar consulta'.",
+        )
+    if consultation.status != ConsultationStatus.PAYMENT_CONFIRMED:
+        raise HTTPException(status_code=400, detail=f"Estado actual no permite completarla: {consultation.status}")
+
+    consultation.ended_at = datetime.utcnow()
+    logger.info(f"Profesional {professional.id} completó la cita presencial {consultation_id}")
+    return await _complete_consultation_effects(db, background_tasks, consultation)
 
 
 # ── POST /api/v1/consultations/{id}/simulate-payment ─
@@ -2043,6 +2086,18 @@ async def propose_reschedule(
     role = await _get_role_in_consultation(db, current_user, consultation)
     if not role:
         raise HTTPException(status_code=403, detail="Esta consulta no te pertenece")
+
+    if (
+        role == "PROFESSIONAL"
+        and consultation.created_by_role == ConsultationCreatedBy.PROFESSIONAL
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Esta cita la agendaste tú directamente — no hace falta proponerle un cambio al "
+                "paciente y esperar que lo acepte. Usa 'Reprogramar' para moverla al instante."
+            ),
+        )
 
     if consultation.consultation_type not in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP):
         raise HTTPException(status_code=400, detail="Solo las citas agendadas o de seguimiento se pueden reprogramar")
@@ -2462,7 +2517,9 @@ async def _release_payment_to_professional(db: AsyncSession, consultation: Consu
         )
     )
     payment = payment_result.scalar_one_or_none()
-    if not payment:
+    if not payment or payment.payment_channel == PaymentChannel.CASH:
+        # Cobro directo: la plataforma nunca tuvo este dinero, no hay nada
+        # que "liberar" — el profesional ya lo registró aparte.
         return
     payment.status = PaymentStatus.RELEASED_TO_PROFESSIONAL
     payment.released_at = datetime.utcnow()
@@ -2506,6 +2563,16 @@ async def dispute_consultation(
 
     if consultation.status != ConsultationStatus.COMPLETED or not consultation.ended_at:
         raise HTTPException(status_code=400, detail="Solo puedes reportar un problema en una consulta ya finalizada")
+
+    if consultation.created_by_role == ConsultationCreatedBy.PROFESSIONAL:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Esta cita fue de cobro directo con el profesional — el pago nunca pasó por la "
+                "plataforma, así que no hay nada que la plataforma pueda retener o reembolsar aquí. "
+                "Si tuviste un problema, contacta directamente al profesional."
+            ),
+        )
 
     deadline = consultation.ended_at + timedelta(minutes=settings.PAYMENT_HOLD_MINUTES)
     if datetime.utcnow() > deadline:
@@ -2570,6 +2637,15 @@ async def report_patient_no_show(
 
     if consultation.consultation_type not in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP):
         raise HTTPException(status_code=400, detail="Esta acción es solo para citas agendadas o de seguimiento")
+    if consultation.created_by_role == ConsultationCreatedBy.PROFESSIONAL:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Esta cita la agendaste tú directamente (cobro fuera de la plataforma) — no aplica "
+                "el reporte de inasistencia, que libera un pago que la plataforma esté reteniendo. "
+                "Si el paciente no llegó, simplemente no registres el cobro."
+            ),
+        )
     if consultation.status != ConsultationStatus.PAYMENT_CONFIRMED:
         raise HTTPException(status_code=400, detail="Esta cita no está en estado de poder reportarse")
     if not consultation.scheduled_at:
@@ -2620,6 +2696,15 @@ async def report_professional_no_show(
 
     if consultation.consultation_type not in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP):
         raise HTTPException(status_code=400, detail="Esta acción es solo para citas agendadas o de seguimiento")
+    if consultation.created_by_role == ConsultationCreatedBy.PROFESSIONAL:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Esta cita fue de cobro directo con el profesional — el pago nunca pasó por la "
+                "plataforma, así que no hay nada que la plataforma pueda devolver aquí. "
+                "Contacta directamente al profesional."
+            ),
+        )
     if consultation.status != ConsultationStatus.PAYMENT_CONFIRMED:
         raise HTTPException(status_code=400, detail="Esta cita no está en estado de poder reportarse")
     if not consultation.scheduled_at:

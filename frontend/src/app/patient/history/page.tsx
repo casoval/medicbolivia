@@ -158,6 +158,7 @@ function disputeDeadline(consultation: Consultation): Date | null {
 
 function canDispute(consultation: Consultation): boolean {
   if (consultation.payment_status !== 'CONFIRMED') return false
+  if (consultation.created_by_role === 'PROFESSIONAL') return false
   const deadline = disputeDeadline(consultation)
   if (!deadline) return false
   return new Date() < deadline

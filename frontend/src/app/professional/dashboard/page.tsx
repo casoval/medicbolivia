@@ -447,6 +447,12 @@ export default function ProfessionalDashboard() {
     onError: (err) => setAvailError(getErrorMessage(err)),
   })
 
+  const completeInPersonMutation = useMutation({
+    mutationFn: (id: string) => consultationsAPI.completeInPerson(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['consultations'] }),
+    onError: (err) => setAvailError(getErrorMessage(err)),
+  })
+
   const cancelByProfessionalMutation = useMutation({
     mutationFn: (id: string) => consultationsAPI.cancelByProfessional(id),
     onSuccess: () => {
@@ -824,6 +830,17 @@ export default function ProfessionalDashboard() {
                           </div>
                         )
                       }
+                      if (c.modality === 'IN_PERSON') {
+                        return (
+                          <button
+                            onClick={() => completeInPersonMutation.mutate(c.id)}
+                            disabled={completeInPersonMutation.isPending}
+                            className="btn-primary text-xs py-1.5 px-3 flex-shrink-0"
+                          >
+                            {completeInPersonMutation.isPending ? 'Guardando...' : '✅ Completar'}
+                          </button>
+                        )
+                      }
                       return (
                         <button
                           onClick={() => startVideoMutation.mutate(c.id)}
@@ -881,7 +898,7 @@ export default function ProfessionalDashboard() {
                   {/* Acciones: reprogramar / reportar inasistencia */}
                   {!c.reschedule_proposed_at && (
                     <div className="ml-12 mt-2 flex items-center gap-3 flex-wrap">
-                      {!c.reschedule_used && (
+                      {!c.reschedule_used && c.created_by_role !== 'PROFESSIONAL' && (
                         reschedulingId === c.id ? (
                           <div className="flex items-center gap-2">
                             <SpanishDateTimePicker
@@ -908,14 +925,16 @@ export default function ProfessionalDashboard() {
                           </button>
                         )
                       )}
-                      <button
-                        onClick={() => noShowPatientMutation.mutate(c.id)}
-                        disabled={!graceOk || noShowPatientMutation.isPending}
-                        title={!graceOk ? 'Disponible 10 min después de la hora de la cita' : ''}
-                        className="text-xs text-[#A32D2D] disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        El paciente no llegó
-                      </button>
+                      {c.created_by_role !== 'PROFESSIONAL' && (
+                        <button
+                          onClick={() => noShowPatientMutation.mutate(c.id)}
+                          disabled={!graceOk || noShowPatientMutation.isPending}
+                          title={!graceOk ? 'Disponible 10 min después de la hora de la cita' : ''}
+                          className="text-xs text-[#A32D2D] disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          El paciente no llegó
+                        </button>
+                      )}
                       <button
                         onClick={() => setCancelTarget({
                           id: c.id,

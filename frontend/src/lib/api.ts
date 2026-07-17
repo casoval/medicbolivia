@@ -713,6 +713,12 @@ export const consultationsAPI = {
   // profesional agendó (membresía) — no aplica al flujo normal.
   setConsultationModality: (consultationId: string, modality: 'VIDEO_CALL' | 'IN_PERSON') =>
     api.patch<Consultation>(`/consultations/${consultationId}/set-modality`, { modality }),
+
+  // Marcar como completada una cita presencial (modality=IN_PERSON) que el
+  // profesional agendó directamente — equivalente a "Iniciar consulta" pero
+  // sin crear una sala de videollamada.
+  completeInPerson: (consultationId: string) =>
+    api.patch<Consultation>(`/consultations/${consultationId}/complete-in-person`, {}),
 }
 
 export const scheduleAPI = {

@@ -165,6 +165,11 @@ export default function ProfessionalAppointmentsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['consultations'] }),
     onError: (err) => setError(getErrorMessage(err)),
   })
+  const completeInPersonMutation = useMutation({
+    mutationFn: (id: string) => consultationsAPI.completeInPerson(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['consultations'] }),
+    onError: (err) => setError(getErrorMessage(err)),
+  })
 
   return (
     <DashboardLayout navItems={NAV} activeHref="/professional/appointments" role="PROFESSIONAL">
@@ -299,13 +304,23 @@ export default function ProfessionalAppointmentsPage() {
                         {/* Pagada — iniciar / reprogramar / no-show */}
                         {c.status === 'PAYMENT_CONFIRMED' && (
                           <div className="ml-12 mt-2">
-                            <button
-                              onClick={() => startVideoMutation.mutate(c.id)}
-                              disabled={startVideoMutation.isPending}
-                              className="btn-primary text-xs py-1.5 px-3 mb-2"
-                            >
-                              {startVideoMutation.isPending ? 'Iniciando...' : '📹 Iniciar consulta'}
-                            </button>
+                            {c.modality === 'IN_PERSON' ? (
+                              <button
+                                onClick={() => completeInPersonMutation.mutate(c.id)}
+                                disabled={completeInPersonMutation.isPending}
+                                className="btn-primary text-xs py-1.5 px-3 mb-2"
+                              >
+                                {completeInPersonMutation.isPending ? 'Guardando...' : '✅ Marcar como completada'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => startVideoMutation.mutate(c.id)}
+                                disabled={startVideoMutation.isPending}
+                                className="btn-primary text-xs py-1.5 px-3 mb-2"
+                              >
+                                {startVideoMutation.isPending ? 'Iniciando...' : '📹 Iniciar consulta'}
+                              </button>
+                            )}
 
                             {hasProposalFromPatient && (
                               <div className="bg-[#FAEEDA] border border-[#F3D08A] rounded-lg px-3 py-2 mb-2">
@@ -329,7 +344,12 @@ export default function ProfessionalAppointmentsPage() {
                               <p className="text-xs text-[#A0A8BF] mb-2">Propusiste otro horario — esperando respuesta del paciente.</p>
                             )}
 
-                            {!c.reschedule_proposed_at && (
+                            {c.created_by_role === 'PROFESSIONAL' && (
+                              <p className="text-xs text-[#A0A8BF]">
+                                Cita agendada por ti — reprográmala o cancélala al instante desde la pestaña "Calendario".
+                              </p>
+                            )}
+                            {!c.reschedule_proposed_at && c.created_by_role !== 'PROFESSIONAL' && (
                               <div className="flex items-center gap-3 flex-wrap">
                                 {!c.reschedule_used && (
                                   reschedulingId === c.id ? (
