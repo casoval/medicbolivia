@@ -17,6 +17,7 @@ interface Conversation {
   id: string
   phone: string
   contact_name: string | null
+  display_name: string
   audience: string
   agent_enabled: boolean
   last_message_at: string | null
@@ -164,9 +165,12 @@ export function ConversationsTab() {
                   className={`w-full text-left px-4 py-3 border-b border-[#DDE1EE] hover:bg-[#F5F6FA] transition-colors ${selectedId === c.id ? 'bg-[#F5F6FA]' : ''}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium truncate">{c.contact_name || c.phone}</p>
+                    <p className="text-sm font-medium truncate">{c.display_name}</p>
                     {c.unread_count > 0 && <span className="badge-blue text-[10px]">{c.unread_count}</span>}
                   </div>
+                  {/* Número siempre visible además del nombre, para identificación rápida
+                      y para distinguir contactos que compartan nombre. */}
+                  <p className="text-xs text-[#6B738A] truncate">{c.phone}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className={`${AUDIENCE_BADGE[c.audience] || 'badge-gray'} text-[9px]`}>{AUDIENCE_LABEL[c.audience] || c.audience}</span>
                     {!c.agent_enabled && <span className="badge-gray text-[9px]">Bot off</span>}
@@ -189,7 +193,7 @@ export function ConversationsTab() {
               <>
                 <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#DDE1EE]">
                   <div>
-                    <p className="text-sm font-medium">{thread.conversation.contact_name || thread.conversation.phone}</p>
+                    <p className="text-sm font-medium">{thread.conversation.display_name}</p>
                     <p className="text-xs text-[#6B738A]">{thread.conversation.phone}</p>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-[#6B738A]">

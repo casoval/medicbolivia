@@ -43,6 +43,11 @@ async def lifespan(app: FastAPI):
     # cree tablas por fuera del control de las migraciones.
     logger.info("📦 Base de datos lista (esquema gestionado por Alembic)")
 
+    from app.db.seed_system_reminders import ensure_system_reminder_rules
+    created = await ensure_system_reminder_rules()
+    if created:
+        logger.info(f"🔔 Recordatorios de sistema: {created} regla(s) nueva(s) sembrada(s)")
+
     yield
 
     # Al cerrar

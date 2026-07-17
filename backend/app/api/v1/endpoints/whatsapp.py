@@ -7,7 +7,7 @@ Backend del menú "IA" del panel admin (4 pestañas):
   4. CRUD /whatsapp/backup-config           → automatización BD → Gmail
 
   + POST /whatsapp/webhook/inbound          → llamado por whatsapp-service
-    (Node/Baileys) cada vez que llega un mensaje nuevo al número real.
+    (Node/whatsapp-web.js) cada vez que llega un mensaje nuevo al número real.
 """
 from datetime import datetime
 from typing import Optional, List
@@ -24,7 +24,7 @@ from app.core.dependencies import get_current_admin
 from app.core.config import settings
 from app.core.phone import normalize_bo_phone, InvalidPhoneError
 from app.models.models import (
-    User, WhatsAppConversation, WhatsAppMessage, WhatsAppAudience,
+    User, Patient, Professional, Admin, WhatsAppConversation, WhatsAppMessage, WhatsAppAudience,
     AgentConfig, ReminderRule, ReminderLog, DBBackupConfig, DBBackupLog,
 )
 from app.tasks.whatsapp_tasks import send_whatsapp_message
@@ -40,7 +40,7 @@ router = APIRouter()
 @router.get("/status", summary="Estado de conexión del bot de WhatsApp")
 async def get_whatsapp_status(current_user: User = Depends(get_current_admin)):
     """
-    Consulta al microservicio Node (Baileys) su estado real de sesión
+    Consulta al microservicio Node (whatsapp-web.js) su estado real de sesión
     (vinculado / esperando QR / desconectado). Si el microservicio no
     responde, se informa como DOWN en vez de tirar un 500 — el admin
     necesita ver esto como un estado, no como un error de la página.
@@ -105,14 +105,14 @@ class ReminderRuleIn(BaseModel):
 
 @router.get("/reminders", summary="Listar reglas de recordatorio")
 async def list_reminder_rules(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_admin)):
-    result = await db.execute(select(ReminderRule).order_by(ReminderRule.created_at.desc()))
+    result = await db.execute(select(ReminderRule).order_by(ReminderRule.is_system.desc(), ReminderRule.created_at.desc()))
     rules = result.scalars().all()
     return [
         {
             "id": r.id, "name": r.name, "trigger_type": r.trigger_type,
             "audience": r.audience, "channel": r.channel,
             "offset_minutes": r.offset_minutes, "message_template": r.message_template,
-            "is_active": r.is_active, "created_at": r.created_at,
+            "is_active": r.is_active, "is_system": r.is_system, "created_at": r.created_at,
         }
         for r in rules
     ]
@@ -120,7 +120,7 @@ async def list_reminder_rules(db: AsyncSession = Depends(get_db), current_user: 
 
 @router.post("/reminders", summary="Crear regla de recordatorio")
 async def create_reminder_rule(data: ReminderRuleIn, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_admin)):
-    rule = ReminderRule(**data.model_dump())
+    rule = ReminderRule(**data.model_dump())  # is_system siempre False acá — las de sistema solo las crea el seed
     db.add(rule)
     await db.commit()
     await db.refresh(rule)
@@ -133,6 +133,17 @@ async def update_reminder_rule(rule_id: str, data: ReminderRuleIn, db: AsyncSess
     rule = result.scalar_one_or_none()
     if not rule:
         raise HTTPException(status_code=404, detail="Regla no encontrada")
+    if rule.is_system and (data.trigger_type != rule.trigger_type or data.audience != rule.audience):
+        # Las 12 reglas del catálogo fijo están atadas 1:1 a un hook
+        # específico en consultations.py/reminder_tasks.py (ver
+        # SystemReminderID) — cambiarles el trigger_type o la audiencia
+        # rompería ese hook sin que el admin lo note. Sí se puede editar
+        # el texto, el offset y pausarla (is_active).
+        raise HTTPException(
+            status_code=400,
+            detail="Esta es una regla de sistema: no se puede cambiar su disparador ni su audiencia. "
+                   "Puedes editar el mensaje o desactivarla."
+        )
     for key, value in data.model_dump().items():
         setattr(rule, key, value)
     await db.commit()
@@ -145,6 +156,11 @@ async def delete_reminder_rule(rule_id: str, db: AsyncSession = Depends(get_db),
     rule = result.scalar_one_or_none()
     if not rule:
         raise HTTPException(status_code=404, detail="Regla no encontrada")
+    if rule.is_system:
+        raise HTTPException(
+            status_code=400,
+            detail="Esta es una regla de sistema y no se puede eliminar — desactívala con el switch si no la quieres usar."
+        )
     await db.delete(rule)
     await db.commit()
     return {"status": "deleted"}
@@ -167,6 +183,48 @@ async def get_reminder_logs(rule_id: str, db: AsyncSession = Depends(get_db), cu
 # PESTAÑA 3 — Conversaciones + configuración del agente
 # ═══════════════════════════════════════════════════════
 
+async def _resolve_platform_names(db: AsyncSession, user_ids: List[str]) -> dict:
+    """
+    Nombre real de la persona en la plataforma (Patient/Professional/Admin),
+    a partir de su user_id. Se prioriza sobre el nombre de WhatsApp
+    (contact_name / pushname) porque es el dato que el admin realmente
+    reconoce y no depende de que el usuario tenga configurado un nombre
+    de perfil en WhatsApp.
+    """
+    user_ids = [uid for uid in set(user_ids) if uid]
+    if not user_ids:
+        return {}
+
+    names: dict = {}
+
+    patients = await db.execute(
+        select(Patient.user_id, Patient.first_name, Patient.last_name)
+        .where(Patient.user_id.in_(user_ids))
+    )
+    for uid, first, last in patients.all():
+        names[uid] = f"{first} {last}".strip()
+
+    professionals = await db.execute(
+        select(Professional.user_id, Professional.first_name, Professional.last_name)
+        .where(Professional.user_id.in_(user_ids))
+    )
+    for uid, first, last in professionals.all():
+        names[uid] = f"{first} {last}".strip()
+
+    admins = await db.execute(
+        select(Admin.user_id, Admin.name).where(Admin.user_id.in_(user_ids))
+    )
+    for uid, name in admins.all():
+        names[uid] = name
+
+    return names
+
+
+def _display_name(platform_name: Optional[str], contact_name: Optional[str], phone: str) -> str:
+    """Prioridad: nombre registrado en la plataforma > nombre de WhatsApp > número."""
+    return platform_name or contact_name or phone
+
+
 @router.get("/conversations", summary="Listar conversaciones de WhatsApp (inbox)")
 async def list_conversations(
     audience: Optional[str] = None,
@@ -178,9 +236,13 @@ async def list_conversations(
         query = query.where(WhatsAppConversation.audience == audience)
     result = await db.execute(query)
     conversations = result.scalars().all()
+
+    platform_names = await _resolve_platform_names(db, [c.user_id for c in conversations])
+
     return [
         {
             "id": c.id, "phone": c.phone, "contact_name": c.contact_name,
+            "display_name": _display_name(platform_names.get(c.user_id), c.contact_name, c.phone),
             "audience": c.audience, "agent_enabled": c.agent_enabled,
             "last_message_at": c.last_message_at, "last_message_preview": c.last_message_preview,
             "unread_count": c.unread_count,
@@ -206,8 +268,14 @@ async def get_conversation_messages(
     messages = msg_result.scalars().all()
     await db.commit()
 
+    platform_names = await _resolve_platform_names(db, [conversation.user_id])
+    display_name = _display_name(platform_names.get(conversation.user_id), conversation.contact_name, conversation.phone)
+
     return {
-        "conversation": {"id": conversation.id, "phone": conversation.phone, "contact_name": conversation.contact_name, "agent_enabled": conversation.agent_enabled},
+        "conversation": {
+            "id": conversation.id, "phone": conversation.phone, "contact_name": conversation.contact_name,
+            "display_name": display_name, "agent_enabled": conversation.agent_enabled,
+        },
         "messages": [
             {"id": m.id, "direction": m.direction, "body": m.body, "sent_by": m.sent_by,
              "status": m.status, "created_at": m.created_at}
@@ -299,7 +367,7 @@ async def update_agent_config(data: AgentConfigIn, db: AsyncSession = Depends(ge
 
 
 # ═══════════════════════════════════════════════════════
-# Webhook interno — llamado por whatsapp-service (Baileys)
+# Webhook interno — llamado por whatsapp-service (whatsapp-web.js)
 # ═══════════════════════════════════════════════════════
 
 class InboundMessagePayload(BaseModel):
@@ -353,6 +421,12 @@ async def receive_inbound_message(
         )
         db.add(conversation)
         await db.flush()
+    elif not conversation.contact_name and payload.contact_name:
+        # El primer mensaje pudo llegar sin pushname resuelto (WhatsApp no
+        # siempre lo manda de entrada); si en un mensaje posterior sí viene,
+        # lo completamos para no dejar la conversación identificada solo
+        # por número.
+        conversation.contact_name = payload.contact_name
 
     conversation.last_message_at = datetime.utcnow()
     conversation.last_message_preview = payload.message[:300]

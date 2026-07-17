@@ -54,6 +54,13 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.reminder_tasks.check_scheduled_appointment_reminders",
         "schedule": 60.0,
     },
+    # Recordatorios #6 (profesional) / #2 (paciente): mensajes de chat sin
+    # leer. Corre una vez al día a las 20:00 — como `timezone` arriba está
+    # en "America/La_Paz", crontab(hour=20) es hora de La Paz, no UTC.
+    "send-unread-messages-reminder": {
+        "task": "app.tasks.reminder_tasks.send_unread_messages_reminder",
+        "schedule": crontab(hour=20, minute=0),
+    },
     # Revisa cada hora si hay que correr el backup de BD según
     # DBBackupConfig (frequency + hour_utc).
     "check-db-backup-schedule": {

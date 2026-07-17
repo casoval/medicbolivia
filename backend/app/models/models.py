@@ -971,6 +971,15 @@ class ReminderTriggerType(str, enum.Enum):
     PRESCRIPTION_ISSUED = "PRESCRIPTION_ISSUED"
     RATING_REQUEST = "RATING_REQUEST"
     CUSTOM = "CUSTOM"
+    # ── Catálogo fijo de recordatorios del sistema (no editable por admin
+    # más allá del texto/on-off) — ver seed_system_reminders.py ──
+    IMMEDIATE_CONSULTATION_PAID = "IMMEDIATE_CONSULTATION_PAID"
+    IMMEDIATE_CONSULTATION_CANCELLED = "IMMEDIATE_CONSULTATION_CANCELLED"
+    SCHEDULED_APPOINTMENT_PAID = "SCHEDULED_APPOINTMENT_PAID"
+    APPOINTMENT_RESCHEDULE_PROPOSED = "APPOINTMENT_RESCHEDULE_PROPOSED"
+    APPOINTMENT_CANCELLED_BY_PATIENT = "APPOINTMENT_CANCELLED_BY_PATIENT"
+    APPOINTMENT_CANCELLED_BY_PROFESSIONAL = "APPOINTMENT_CANCELLED_BY_PROFESSIONAL"
+    UNREAD_MESSAGES_8PM = "UNREAD_MESSAGES_8PM"                          # cron diario 20:00 La Paz
 
 
 class ReminderRule(Base):
@@ -982,6 +991,13 @@ class ReminderRule(Base):
       - Basado en cron (ej. SCHEDULED_APPOINTMENT_REMINDER): un beat de
         Celery revisa periódicamente citas próximas y dispara cuando faltan
         offset_minutes para scheduled_at.
+
+    is_system=True marca las 12 reglas fijas del catálogo (ver
+    seed_system_reminders.py): representan lógica de negocio ya escrita en
+    el código (consultations.py / reminder_tasks.py), no una plantilla
+    libre. El admin puede pausarlas (is_active) y ajustar el texto
+    (message_template), pero no puede borrarlas ni cambiarles el
+    trigger_type/audience — eso rompería el hook que las dispara.
     """
     __tablename__ = "reminder_rules"
 
@@ -993,6 +1009,7 @@ class ReminderRule(Base):
     offset_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     message_template: Mapped[str] = mapped_column(Text, nullable=False)  # admite {paciente}, {profesional}, {fecha}, {hora}
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

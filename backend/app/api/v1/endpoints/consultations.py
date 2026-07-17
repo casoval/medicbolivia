@@ -29,6 +29,8 @@ from app.schemas.schemas import (
 from app.services.payment import generate_qr_data, calculate_amounts, compute_professional_scheduled_qr_deadline
 from app.services.commission import resolve_commission_percent
 from app.services.patient_links import has_effective_link, professional_has_active_membership
+from app.services.system_reminders import fire_system_reminder
+from app.db.seed_system_reminders import SystemReminderID
 from app.core.config import settings
 from livekit import api as lk
 
@@ -1348,6 +1350,26 @@ async def cancel_consultation(
 
     await db.commit()
     logger.info(f"Consulta {consultation_id} cancelada por paciente")
+
+    # Recordatorios #3 (inmediata) / #8 (agendada) — avisar al profesional
+    # de que el paciente canceló, si ya había uno asignado.
+    if consultation.professional_id:
+        professional_result = await db.execute(select(Professional).where(Professional.id == consultation.professional_id))
+        cancelling_professional = professional_result.scalar_one_or_none()
+        if cancelling_professional:
+            is_immediate = consultation.consultation_type == ConsultationType.IMMEDIATE
+            await fire_system_reminder(
+                db,
+                SystemReminderID.PROF_IMMEDIATE_CANCELLED if is_immediate else SystemReminderID.PROF_APPOINTMENT_CANCELLED,
+                cancelling_professional.user_id,
+                related_entity_type="Consultation", related_entity_id=consultation.id,
+                paciente=f"{patient.first_name} {patient.last_name}",
+                especialidad=consultation.specialty or cancelling_professional.specialty,
+                fecha=consultation.scheduled_at.strftime("%d/%m/%Y") if consultation.scheduled_at else "",
+                hora=consultation.scheduled_at.strftime("%H:%M") if consultation.scheduled_at else "",
+            )
+            await db.commit()
+
     return {"status": "cancelled", "consultation_id": consultation_id}
 
 
@@ -1394,6 +1416,13 @@ async def payment_webhook(
     )
     consultation = cons_result.scalar_one_or_none()
     if consultation:
+        # Nombres para las plantillas de los recordatorios #2/#5 — se
+        # buscan una sola vez acá, se usan más abajo sea cual sea la rama.
+        patient_result = await db.execute(select(Patient).where(Patient.id == consultation.patient_id))
+        payer_patient = patient_result.scalar_one_or_none()
+        professional_result = await db.execute(select(Professional).where(Professional.id == consultation.professional_id))
+        payer_professional = professional_result.scalar_one_or_none()
+
         # Citas AGENDADAS y de SEGUIMIENTO: el paciente paga primero, pero el
         # profesional todavía no confirmó. No podemos poner PAYMENT_CONFIRMED
         # aquí directo: accept_consultation/reject_consultation exigen
@@ -1407,6 +1436,18 @@ async def payment_webhook(
             and consultation.scheduled_at
         ):
             consultation.status = ConsultationStatus.WAITING_PROFESSIONAL
+
+            # Recordatorio #5 — "paciente pagó una cita agendada": va al
+            # instante, sin escalonar (es un pago puntual, no un lote).
+            if payer_patient and payer_professional:
+                await fire_system_reminder(
+                    db, SystemReminderID.PROF_APPOINTMENT_PAID, payer_professional.user_id,
+                    related_entity_type="Consultation", related_entity_id=consultation.id,
+                    paciente=f"{payer_patient.first_name} {payer_patient.last_name}",
+                    especialidad=consultation.specialty or payer_professional.specialty,
+                    fecha=consultation.scheduled_at.strftime("%d/%m/%Y"),
+                    hora=consultation.scheduled_at.strftime("%H:%M"),
+                )
 
             now = datetime.utcnow()
             minutes_until = (consultation.scheduled_at - now).total_seconds() / 60
@@ -1442,6 +1483,17 @@ async def payment_webhook(
             # Inmediata: el profesional ya aceptó antes de que el paciente pague,
             # así que el pago confirma la consulta directamente.
             consultation.status = ConsultationStatus.PAYMENT_CONFIRMED
+
+            # Recordatorio #2 — "paciente pagó la consulta inmediata": al
+            # instante, sin escalonar (nunca hay 20 pagos de inmediatas en
+            # el mismo segundo, es un evento de a uno).
+            if payer_patient and payer_professional:
+                await fire_system_reminder(
+                    db, SystemReminderID.PROF_IMMEDIATE_PAID, payer_professional.user_id,
+                    related_entity_type="Consultation", related_entity_id=consultation.id,
+                    paciente=f"{payer_patient.first_name} {payer_patient.last_name}",
+                    especialidad=consultation.specialty or payer_professional.specialty,
+                )
 
     await db.commit()
     logger.info(f"Pago confirmado: {payment.id} | {data.bank_name} | Bs. {data.amount}")
@@ -2128,6 +2180,27 @@ async def propose_reschedule(
             entity_type="Consultation",
             entity_id=consultation.id,
         ))
+
+        # Recordatorio #7 (al profesional, si propuso el paciente) / #3 del
+        # paciente (al paciente, si propuso el profesional) — necesitamos
+        # el objeto Patient de todas formas para la plantilla, sea cual sea
+        # quién propuso.
+        if role == "PATIENT":
+            patient_result = await db.execute(select(Patient).where(Patient.id == consultation.patient_id))
+            patient = patient_result.scalar_one_or_none()
+
+        if patient:
+            await fire_system_reminder(
+                db,
+                SystemReminderID.PROF_RESCHEDULE_PROPOSED if role == "PATIENT" else SystemReminderID.PATIENT_RESCHEDULE_PROPOSED,
+                other_user_id,
+                related_entity_type="Consultation", related_entity_id=consultation.id,
+                paciente=f"{patient.first_name} {patient.last_name}",
+                profesional=f"{professional.first_name} {professional.last_name}",
+                fecha=new_time.strftime("%d/%m/%Y"),
+                hora=new_time.strftime("%H:%M"),
+            )
+
         await db.commit()
 
     logger.info(f"Reprogramación propuesta: consulta {consultation_id} → {new_time} por {role}")
@@ -2362,6 +2435,22 @@ async def cancel_scheduled_with_refund(
 
     await db.commit()
     logger.info(f"Cita agendada cancelada con devolución (aviso ≥24h): {consultation_id}")
+
+    # Recordatorio #8 — avisar al profesional de que el paciente canceló.
+    if consultation.professional_id:
+        professional_result = await db.execute(select(Professional).where(Professional.id == consultation.professional_id))
+        cancelling_professional = professional_result.scalar_one_or_none()
+        if cancelling_professional:
+            await fire_system_reminder(
+                db, SystemReminderID.PROF_APPOINTMENT_CANCELLED, cancelling_professional.user_id,
+                related_entity_type="Consultation", related_entity_id=consultation.id,
+                paciente=f"{patient.first_name} {patient.last_name}",
+                especialidad=consultation.specialty or cancelling_professional.specialty,
+                fecha=consultation.scheduled_at.strftime("%d/%m/%Y"),
+                hora=consultation.scheduled_at.strftime("%H:%M"),
+            )
+            await db.commit()
+
     return {"message": "Cita cancelada y dinero devuelto.", "consultation_id": consultation_id}
 
 
@@ -2670,6 +2759,17 @@ async def cancel_by_professional(
             entity_id=consultation_id,
         )
         db.add(notif)
+
+        # Recordatorio #4 (paciente) — el in-app de arriba ya cubre el
+        # detalle de reembolso/cobro directo; el WhatsApp usa el texto
+        # fijo y editable del catálogo (ver seed_system_reminders.py).
+        await fire_system_reminder(
+            db, SystemReminderID.PATIENT_APPOINTMENT_CANCELLED, patient.user_id,
+            related_entity_type="Consultation", related_entity_id=consultation.id,
+            profesional=f"{professional.first_name} {professional.last_name}",
+            fecha=consultation.scheduled_at.strftime("%d/%m/%Y") if consultation.scheduled_at else "",
+            hora=consultation.scheduled_at.strftime("%H:%M") if consultation.scheduled_at else "",
+        )
 
     await db.commit()
     if is_direct_payment:
