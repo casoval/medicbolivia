@@ -89,17 +89,36 @@ function toWhatsAppChatId(phone) {
 // whatsapp-web.js sincroniza (a diferencia de Baileys, este SÍ lo resuelve
 // de forma confiable en la práctica — validado en producción en el bot de
 // centro_terapias desde julio 2026).
+//
+// Incidente real (16-jul-2026): 2 mensajes entrantes llegaron como
+// "<15 dígitos>@c.us" — un ID interno tipo @lid, pero SIN el sufijo
+// literal "@lid" (WhatsApp lo mandó bajo el dominio @c.us de todas
+// formas). El chequeo original de solo `.includes('@lid')` no lo
+// detectó, así que nunca se intentó resolver el número real: se
+// reenvió tal cual al backend, que lo rechazó con 422 (correctamente,
+// ver whatsapp.py::receive_inbound_message) — pero el mensaje real del
+// paciente/profesional se perdió en el camino. Por eso ahora también
+// se dispara la resolución vía getContact() cuando el ID es
+// implausiblemente largo para ser un teléfono real, sin importar el
+// sufijo. Ningún número boliviano supera los 11 dígitos (591 + 8); el
+// límite de 13 deja margen para otros países sin colar los @lid de
+// 14-15+ dígitos que se han visto en la práctica.
+const MAX_PLAUSIBLE_PHONE_DIGITS = 13
+
 async function resolvePhoneFromMessage(msg) {
-  if (!msg.from.includes('@lid')) {
-    return msg.from.replace('@c.us', '')
+  const rawDigits = msg.from.replace('@c.us', '').replace('@lid', '')
+  const looksLikeInternalId = msg.from.includes('@lid') || rawDigits.length > MAX_PLAUSIBLE_PHONE_DIGITS
+
+  if (!looksLikeInternalId) {
+    return rawDigits
   }
   try {
     const contact = await msg.getContact()
     if (contact?.number) return contact.number
-    logger.warn(`No se pudo resolver @lid sin número real: ${msg.from}`)
+    logger.warn(`No se pudo resolver un número real para el ID interno: ${msg.from}`)
     return null
   } catch (err) {
-    logger.warn(`Error resolviendo @lid ${msg.from}: ${err.message}`)
+    logger.warn(`Error resolviendo ID interno ${msg.from}: ${err.message}`)
     return null
   }
 }
@@ -194,7 +213,8 @@ function connectToWhatsApp() {
       if (!phone) {
         logger.warn(
           `Mensaje entrante descartado: no se pudo resolver un número de teléfono real ` +
-          `(from=${msg.from}). WhatsApp está migrando a IDs internos (@lid) — ver whatsapp-service/README.md.`
+          `(from=${msg.from}). WhatsApp asigna IDs internos (@lid, o IDs largos bajo @c.us) ` +
+          `que a veces no traen el número real vinculado — ver whatsapp-service/README.md.`
         )
         return
       }
