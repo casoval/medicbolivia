@@ -28,8 +28,8 @@ export function LanguageSwitcher({ variant = 'light' }: { variant?: 'light' | 'd
 
   const triggerClass =
     variant === 'dark'
-      ? 'flex items-center gap-1.5 text-xs sm:text-sm font-medium text-white/90 hover:text-white bg-white/10 hover:bg-white/15 px-2.5 py-1.5 rounded-lg transition-colors'
-      : 'flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[#6B738A] hover:text-[#141820] border border-[#DDE1EE] hover:bg-[#F5F6FA] px-2.5 py-1.5 rounded-lg transition-colors'
+      ? 'flex items-center gap-1.5 text-xs sm:text-sm font-medium text-white/90 hover:text-white bg-white/10 hover:bg-white/15 px-2 sm:px-2.5 py-1.5 rounded-lg transition-colors shrink-0'
+      : 'flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[#6B738A] hover:text-[#141820] border border-[#DDE1EE] hover:bg-[#F5F6FA] px-2 sm:px-2.5 py-1.5 rounded-lg transition-colors shrink-0'
 
   return (
     <div className="relative" ref={ref}>
@@ -39,9 +39,11 @@ export function LanguageSwitcher({ variant = 'light' }: { variant?: 'light' | 'd
         aria-label="Cambiar idioma / Simiyta tikray"
         aria-expanded={open}
       >
-        <Globe className="w-4 h-4" />
-        <span>{current.nativeLabel}</span>
-        <span className={`transition-transform text-[10px] ${open ? 'rotate-180' : ''}`}>▾</span>
+        <Globe className="w-4 h-4 shrink-0" />
+        {/* En pantallas muy chicas solo se ve el ícono, para no competir por espacio
+            con el logo y los botones de acceso; el texto vuelve a partir de sm. */}
+        <span className="hidden sm:inline">{current.nativeLabel}</span>
+        <span className={`hidden sm:inline transition-transform text-[10px] ${open ? 'rotate-180' : ''}`}>▾</span>
       </button>
 
       {open && (

@@ -111,13 +111,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F6FA] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#F5F6FA] flex items-center justify-center p-4 relative">
+      {/* Selector de idioma: fijo en la esquina superior derecha para que sea
+          visible en cualquier tamaño de pantalla (antes vivía solo dentro del
+          panel de marca, que se oculta en móvil/tablet y quedaba sin acceso). */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
+        <LanguageSwitcher variant="light" />
+      </div>
       <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-0 items-center">
 
         {/* Panel informativo — solo visible en desktop (lg+) */}
         <div className="hidden lg:flex flex-col pr-10">
-          <div className="flex items-center justify-between mb-8 -ml-2 animate-fade-up">
-            <Link href="/" className="w-fit">
+          <div className="mb-8 -ml-2 animate-fade-up">
+            <Link href="/" className="w-fit inline-block">
               <Image
                 src="/logo.png"
                 alt="MedicBolivia"
@@ -127,7 +133,6 @@ export default function LoginPage() {
                 priority
               />
             </Link>
-            <LanguageSwitcher variant="light" />
           </div>
 
           <h2

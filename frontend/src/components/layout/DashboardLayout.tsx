@@ -116,11 +116,11 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
 
       {/* Topbar — degradado azul marino → verde oscuro, con el logo en una placa blanca compacta */}
       <header className="bg-gradient-to-r from-[#042C53] to-[#0F6E56] h-[52px] flex items-center justify-between px-4 sm:px-5 sticky top-0 z-50">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Botón hamburguesa — solo visible en mobile/tablet */}
           <button
             onClick={() => setMenuOpen(true)}
-            className="md:hidden -ml-1 mr-1 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white"
+            className="md:hidden -ml-1 mr-1 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white shrink-0"
             aria-label="Abrir menú"
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -129,29 +129,29 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
               <line x1="3" y1="18" x2="21" y2="18"/>
             </svg>
           </button>
-          <Link href="/" className="flex items-center">
+          <Link href="/" className="flex items-center shrink-0">
             <span className="text-base sm:text-lg font-semibold text-white tracking-tight">
               medic<span className="text-white/70 font-normal">bolivia</span><span className="text-white/60 text-xs font-normal">.com</span>
             </span>
           </Link>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {/* Selector de idioma — solo visual, ahora disponible en toda la app */}
           <LanguageSwitcher variant="dark" />
           {firstName && (
-            <span className="sm:hidden text-sm text-white font-medium max-w-[100px] truncate">
+            <span className="sm:hidden text-sm text-white font-medium max-w-[80px] truncate">
               {firstName}
             </span>
           )}
           {fullName && (
-            <span className="hidden sm:inline text-sm text-white font-medium">
+            <span className="hidden sm:inline text-sm text-white font-medium whitespace-nowrap">
               {fullName}
             </span>
           )}
-          <span className={`${firstName ? 'hidden' : 'inline'} sm:inline text-xs bg-white/15 text-white px-2.5 py-1 rounded-full font-medium`}>
+          <span className={`${firstName ? 'hidden' : 'inline'} sm:inline shrink-0 text-xs bg-white/15 text-white px-2.5 py-1 rounded-full font-medium whitespace-nowrap`}>
             {t(roleLabels[role])}
           </span>
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-white text-[#0F6E56]">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-white text-[#0F6E56] shrink-0">
             {initials}
           </div>
         </div>

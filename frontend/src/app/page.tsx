@@ -147,24 +147,26 @@ function LandingHeader() {
   const { t } = useLanguage()
   return (
     <header className="border-b border-[#DDE1EE] bg-white sticky top-0 z-10">
-      <div className="max-w-5xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between gap-2">
-        <div className="flex items-center">
-          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-7 sm:h-11 w-auto" priority />
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 h-16 sm:h-20 flex items-center justify-between gap-1 sm:gap-2">
+        {/* shrink-0: el logo no debe comprimirse aunque el resto de los
+            elementos (idioma, login, registro) no entren cómodos en pantallas chicas */}
+        <div className="flex items-center shrink-0">
+          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-6 sm:h-11 w-auto" priority />
         </div>
         <nav className="hidden sm:flex items-center gap-6 text-sm text-[#6B738A]">
           <a href="#faq" className="hover:text-[#141820]">{t('Preguntas frecuentes')}</a>
           <Link href="/verificar-receta" className="hover:text-[#141820]">{t('Verificar receta')}</Link>
           <a href="#contacto" className="hover:text-[#141820]">{t('Contacto')}</a>
         </nav>
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <LanguageSwitcher variant="light" />
           <Link
             href="/auth/login"
-            className="text-xs sm:text-sm font-medium text-[#0F6E56] px-2 py-2 hover:underline sm:hover:no-underline sm:border sm:border-[#11A15A]/40 sm:px-3 sm:rounded-lg sm:hover:bg-[#E7F8EF] sm:transition-colors"
+            className="text-xs sm:text-sm font-medium text-[#0F6E56] px-1.5 sm:px-2 py-2 hover:underline sm:hover:no-underline sm:border sm:border-[#11A15A]/40 sm:px-3 sm:rounded-lg sm:hover:bg-[#E7F8EF] sm:transition-colors whitespace-nowrap"
           >
             {t('Iniciar sesión')}
           </Link>
-          <Link href="/auth/register/patient" className="bg-[#11A15A] text-white text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap">
+          <Link href="/auth/register/patient" className="bg-[#11A15A] text-white text-xs sm:text-sm font-medium px-2.5 sm:px-4 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap">
             {t('Registrarme')}
           </Link>
         </div>
