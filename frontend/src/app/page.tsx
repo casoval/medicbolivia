@@ -6,7 +6,7 @@
 // un spinner de "Redirigiendo...".
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useQuery } from '@tanstack/react-query'
@@ -744,18 +744,26 @@ function LandingPage() {
 
 export default function HomePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, isAuthenticated } = useAuthStore()
   const { t } = useLanguage()
 
+  // Si el usuario llegó desde el logo de su panel (link "medicbolivia.com"
+  // en el DashboardLayout), queremos que vea la landing pública tal cual,
+  // sin que lo rebote de nuevo a su dashboard.
+  const stayOnLanding = searchParams.get('home') === '1'
+
   useEffect(() => {
     if (!isAuthenticated) return
+    if (stayOnLanding) return
     if (user?.role === 'PATIENT') router.push('/patient/dashboard')
     else if (user?.role === 'PROFESSIONAL') router.push('/professional/dashboard')
     else if (user?.role === 'ADMIN') router.push('/admin/dashboard')
-  }, [isAuthenticated, user, router])
+  }, [isAuthenticated, user, router, stayOnLanding])
 
-  // Con sesión iniciada: pantalla breve mientras el efecto redirige.
-  if (isAuthenticated) {
+  // Con sesión iniciada: pantalla breve mientras el efecto redirige
+  // (salvo que venga del logo, en cuyo caso mostramos la landing directo).
+  if (isAuthenticated && !stayOnLanding) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F6FA]">
         <div className="flex flex-col items-center gap-3">

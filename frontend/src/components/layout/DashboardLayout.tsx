@@ -129,7 +129,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
               <line x1="3" y1="18" x2="21" y2="18"/>
             </svg>
           </button>
-          <Link href="/" className="flex items-center shrink-0">
+          <Link href="/?home=1" className="flex items-center shrink-0">
             <span className="text-base sm:text-lg font-semibold text-white tracking-tight">
               medic<span className="text-white/70 font-normal">bolivia</span><span className="text-white/60 text-xs font-normal">.com</span>
             </span>
