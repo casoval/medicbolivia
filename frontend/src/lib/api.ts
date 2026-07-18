@@ -43,6 +43,18 @@ export interface ChatReport {
   status: 'pending' | 'reviewed'
 }
 
+export interface BroadcastMessage {
+  id: string
+  title: string
+  body: string
+  audience: 'ALL' | 'PATIENT' | 'PROFESSIONAL' | 'WHATSAPP_PUBLIC'
+  send_whatsapp: boolean
+  status: 'PENDING' | 'SENT' | 'FAILED'
+  recipients_count: number
+  sent_by_id: string
+  created_at: string | null
+}
+
 export interface PlatformSettings {
   app_name: string
   commission_percent: number
@@ -1152,6 +1164,18 @@ export const adminAPI = {
     api.patch<{ message: string; changed_fields: string[]; warnings: string[] }>(
       `/admin/professionals/${professionalId}`, data
     ).then(r => r.data),
+
+  // Mensajería masiva (broadcast) — anuncio libre a un segmento de usuarios.
+  previewBroadcastRecipients: (audience: string) =>
+    api.get<{ audience: string; recipients_count: number }>(
+      '/admin/broadcasts/preview', { params: { audience } }
+    ).then(r => r.data),
+
+  createBroadcast: (data: { title: string; body: string; audience: string; send_whatsapp: boolean }) =>
+    api.post<BroadcastMessage>('/admin/broadcasts', data).then(r => r.data),
+
+  listBroadcasts: () =>
+    api.get<BroadcastMessage[]>('/admin/broadcasts').then(r => r.data),
 }
 
 export const maintenanceAPI = {

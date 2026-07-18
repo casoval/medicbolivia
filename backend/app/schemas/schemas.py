@@ -789,6 +789,13 @@ class DocReviewRequest(BaseModel):
     review_note: Optional[str] = None
 
 
+class BroadcastCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=150)
+    body: str = Field(..., min_length=1, max_length=1000)
+    audience: str = Field(..., pattern="^(ALL|PATIENT|PROFESSIONAL|WHATSAPP_PUBLIC)$")
+    send_whatsapp: bool = True
+
+
 class RefundRequest(BaseModel):
     refund_type: str = Field(..., pattern="^(FULL|PARTIAL)$")
     reason: str = Field(..., min_length=10)

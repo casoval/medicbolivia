@@ -1295,3 +1295,46 @@ class AdminAccessLog(Base):
 
     admin: Mapped["User"] = relationship(foreign_keys=[admin_id])
     conversation: Mapped["ChatConversation"] = relationship(foreign_keys=[conversation_id])
+
+
+class BroadcastAudience(str, enum.Enum):
+    ALL = "ALL"                    # todos los usuarios registrados (pacientes + profesionales)
+    PATIENT = "PATIENT"
+    PROFESSIONAL = "PROFESSIONAL"
+    WHATSAPP_PUBLIC = "WHATSAPP_PUBLIC"  # contactos de WhatsApp sin cuenta en la plataforma
+
+
+class BroadcastStatus(str, enum.Enum):
+    PENDING = "PENDING"    # encolando envíos (aún corriendo)
+    SENT = "SENT"          # todos los envíos fueron encolados
+    FAILED = "FAILED"
+
+
+class BroadcastMessage(Base):
+    """
+    Anuncio/mensaje libre que un admin redacta y manda a un segmento de
+    usuarios (todos, solo pacientes, solo profesionales, o contactos
+    públicos de WhatsApp que aún no tienen cuenta).
+
+    No reemplaza a `Notification` (que sigue siendo la notificación
+    puntual automática de un evento del sistema, ej. cita confirmada):
+    esta tabla es solo el registro/auditoría de la campaña masiva en sí
+    — quién la mandó, a quién, cuándo, y cuántos destinatarios tuvo.
+    El envío real a cada usuario sigue pasando por `notify_user()` /
+    `send_whatsapp_message` como cualquier otro mensaje del sistema, uno
+    por uno con un pequeño espaciado aleatorio entre cada uno (ver
+    app/services/broadcast.py) para no parecer spam ante WhatsApp.
+    """
+    __tablename__ = "broadcast_messages"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    title: Mapped[str] = mapped_column(String(150), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    audience: Mapped[str] = mapped_column(String(20), nullable=False)
+    send_whatsapp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=BroadcastStatus.PENDING.value)
+    recipients_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sent_by_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    sent_by: Mapped["User"] = relationship(foreign_keys=[sent_by_id])

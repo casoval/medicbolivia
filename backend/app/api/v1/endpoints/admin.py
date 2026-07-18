@@ -32,10 +32,12 @@ from app.models.models import (
 from app.schemas.schemas import (
     DocReviewRequest, RefundRequest, DisputeResolveRequest,
     ProfessionalMembershipCreateRequest, ProfessionalMembershipUpdateRequest,
-    ProfessionalMembershipRenewRequest,
+    ProfessionalMembershipRenewRequest, BroadcastCreateRequest,
 )
 from app.services.payment import process_refund
 from app.services.commission import get_professional_commission_summary
+from app.services.broadcast import send_broadcast, count_recipients
+from app.models.models import BroadcastMessage, BroadcastAudience
 from app.core.config import settings
 
 router = APIRouter()
@@ -1947,3 +1949,74 @@ async def review_chat_report(
     await db.commit()
     logger.info(f"✅ Reporte de chat revisado: kind={kind} id={report_id} admin={current_user.id}")
     return _report_to_dict(row, kind)
+
+
+# ── Mensajería masiva (broadcast) ──────────────────────
+# El admin redacta un anuncio libre y lo manda a un segmento de usuarios.
+# La notificación in-app se crea de una sola vez; el WhatsApp se encola
+# escalonado con espaciado aleatorio (ver app/services/broadcast.py) para
+# no parecer un envío automatizado ante WhatsApp.
+
+def _broadcast_to_dict(b: BroadcastMessage) -> dict:
+    return {
+        "id": b.id,
+        "title": b.title,
+        "body": b.body,
+        "audience": b.audience,
+        "send_whatsapp": b.send_whatsapp,
+        "status": b.status,
+        "recipients_count": b.recipients_count,
+        "sent_by_id": b.sent_by_id,
+        "created_at": b.created_at.isoformat() if b.created_at else None,
+    }
+
+
+@router.get("/broadcasts/preview", summary="Contar destinatarios de una audiencia (sin enviar nada)")
+async def preview_broadcast_recipients(
+    audience: str = Query(..., pattern="^(ALL|PATIENT|PROFESSIONAL|WHATSAPP_PUBLIC)$"),
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    count = await count_recipients(db, audience)
+    return {"audience": audience, "recipients_count": count}
+
+
+@router.post("/broadcasts", summary="Enviar un mensaje masivo (anuncio) a un segmento de usuarios")
+async def create_broadcast(
+    data: BroadcastCreateRequest,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    broadcast = await send_broadcast(
+        db,
+        title=data.title,
+        body=data.body,
+        audience=data.audience,
+        send_whatsapp=data.send_whatsapp,
+        sent_by_id=current_user.id,
+    )
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="BROADCAST_SENT",
+        entity_type="BroadcastMessage",
+        entity_id=broadcast.id,
+        metadata_={"audience": data.audience, "recipients_count": broadcast.recipients_count},
+    ))
+    await db.commit()
+    logger.info(
+        f"📢 Broadcast enviado por admin={current_user.id}: audience={data.audience} "
+        f"recipients={broadcast.recipients_count}"
+    )
+    return _broadcast_to_dict(broadcast)
+
+
+@router.get("/broadcasts", summary="Historial de mensajes masivos enviados")
+async def list_broadcasts(
+    limit: int = Query(50, ge=1, le=200),
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(BroadcastMessage).order_by(BroadcastMessage.created_at.desc()).limit(limit)
+    )
+    return [_broadcast_to_dict(b) for b in result.scalars().all()]

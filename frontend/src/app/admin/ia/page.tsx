@@ -1,10 +1,11 @@
 'use client'
 // src/app/admin/ia/page.tsx
-// Menú "IA" del panel admin — 4 pestañas:
+// Menú "IA" del panel admin — 5 pestañas:
 //   1. Bot         → monitor y edición del bot de WhatsApp
 //   2. Recordatorios → avisos automáticos a pacientes/profesionales/admin
 //   3. Conversaciones → inbox de WhatsApp + on/off del agente
-//   4. Automatización → backups de la BD enviados por Gmail
+//   4. Mensajería masiva → anuncio libre a todos/pacientes/profesionales/público
+//   5. Automatización → backups de la BD enviados por Gmail
 
 import { useState } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -12,15 +13,17 @@ import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { BotTab } from '@/components/admin/ia/BotTab'
 import { RemindersTab } from '@/components/admin/ia/RemindersTab'
 import { ConversationsTab } from '@/components/admin/ia/ConversationsTab'
+import { BroadcastTab } from '@/components/admin/ia/BroadcastTab'
 import { AutomationTab } from '@/components/admin/ia/AutomationTab'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
-type TabKey = 'bot' | 'reminders' | 'conversations' | 'automation'
+type TabKey = 'bot' | 'reminders' | 'conversations' | 'broadcast' | 'automation'
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'bot',           label: 'Bot de WhatsApp' },
   { key: 'reminders',     label: 'Recordatorios' },
   { key: 'conversations', label: 'Conversaciones y agente' },
+  { key: 'broadcast',     label: 'Mensajería masiva' },
   { key: 'automation',    label: 'Automatización' },
 ]
 
@@ -34,7 +37,7 @@ export default function AdminIAPage() {
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('IA / WhatsApp')}</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">
-            {t('Bot de WhatsApp, recordatorios automáticos, conversaciones y automatización de backups.')}
+            {t('Bot de WhatsApp, recordatorios automáticos, conversaciones, mensajería masiva y automatización de backups.')}
           </p>
         </div>
 
@@ -58,6 +61,7 @@ export default function AdminIAPage() {
         {tab === 'bot' && <BotTab />}
         {tab === 'reminders' && <RemindersTab />}
         {tab === 'conversations' && <ConversationsTab />}
+        {tab === 'broadcast' && <BroadcastTab />}
         {tab === 'automation' && <AutomationTab />}
       </div>
     </DashboardLayout>
