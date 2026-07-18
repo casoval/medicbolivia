@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Alert, LoadingScreen, EmptyState } from '@/components/ui'
 import { whatsappAPI, getErrorMessage } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const TRIGGER_LABEL: Record<string, string> = {
   IMMEDIATE_CONSULTATION_WAITING: 'Paciente esperando (consulta inmediata)',
@@ -68,6 +69,7 @@ interface ReminderStats {
 }
 
 export function RemindersTab() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [error, setError] = useState('')
@@ -153,7 +155,7 @@ export function RemindersTab() {
           {(stats.today.by_audience.PATIENT || stats.today.by_audience.PROFESSIONAL) && (
             <div className="flex gap-4 mt-3 pt-3 border-t border-[#E5E7EB] text-xs text-[#6B738A]">
               <span>
-                Paciente: <strong className="text-[#141820]">{stats.today.by_audience.PATIENT?.SENT || 0}</strong> enviados
+                {t('Paciente:')} <strong className="text-[#141820]">{stats.today.by_audience.PATIENT?.SENT || 0}</strong> enviados
                 {(stats.today.by_audience.PATIENT?.FAILED ?? 0) > 0 && (
                   <span className="text-[#A32D2D]"> · {stats.today.by_audience.PATIENT?.FAILED} fallidos</span>
                 )}
@@ -198,14 +200,14 @@ export function RemindersTab() {
         )}
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">Nombre interno</label>
+          <label className="text-xs font-medium text-[#6B738A]">{t('Nombre interno')}</label>
           <input className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Ej: Recordatorio 24h antes de la cita" maxLength={150} />
+            placeholder={t('Ej: Recordatorio 24h antes de la cita')} maxLength={150} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">Disparador</label>
+            <label className="text-xs font-medium text-[#6B738A]">{t('Disparador')}</label>
             <select className="input mt-1" value={form.trigger_type} disabled={form.is_system}
               onChange={(e) => setForm({ ...form, trigger_type: e.target.value })}>
               {Object.entries(TRIGGER_LABEL).map(([value, label]) => (
@@ -214,30 +216,30 @@ export function RemindersTab() {
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">Destinatario</label>
+            <label className="text-xs font-medium text-[#6B738A]">{t('Destinatario')}</label>
             <select className="input mt-1" value={form.audience} disabled={form.is_system}
               onChange={(e) => setForm({ ...form, audience: e.target.value })}>
-              <option value="PATIENT">Paciente</option>
-              <option value="PROFESSIONAL">Profesional</option>
-              <option value="ADMIN">Admin</option>
+              <option value="PATIENT">{t('Paciente')}</option>
+              <option value="PROFESSIONAL">{t('Profesional')}</option>
+              <option value="ADMIN">{t('Admin')}</option>
             </select>
           </div>
         </div>
 
         {form.trigger_type === 'SCHEDULED_APPOINTMENT_REMINDER' && (
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">Minutos antes de la cita</label>
+            <label className="text-xs font-medium text-[#6B738A]">{t('Minutos antes de la cita')}</label>
             <input type="number" className="input mt-1 max-w-[160px]" value={form.offset_minutes}
               onChange={(e) => setForm({ ...form, offset_minutes: e.target.value === '' ? '' : Number(e.target.value) })}
-              placeholder="1440 = 24 horas" />
+              placeholder={t('1440 = 24 horas')} />
           </div>
         )}
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">Plantilla del mensaje</label>
+          <label className="text-xs font-medium text-[#6B738A]">{t('Plantilla del mensaje')}</label>
           <textarea className="input mt-1 min-h-[80px]" value={form.message_template}
             onChange={(e) => setForm({ ...form, message_template: e.target.value })}
-            placeholder="Hola {paciente}, tu cita con {profesional} es el {fecha} a las {hora}." />
+            placeholder={t('Hola {paciente}, tu cita con {profesional} es el {fecha} a las {hora}.')} />
           <p className="text-[10px] text-[#6B738A] mt-1">
             Variables disponibles: {'{paciente}'} {'{profesional}'} {'{especialidad}'} {'{fecha}'} {'{hora}'}
           </p>
@@ -246,10 +248,10 @@ export function RemindersTab() {
         <div className="flex items-center justify-between pt-1">
           <label className="flex items-center gap-2 text-sm text-[#141820]">
             <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
-            Regla activa
+            {t('Regla activa')}
           </label>
           <div className="flex gap-2">
-            {form.id && <button type="button" className="btn-secondary" onClick={() => { setForm(EMPTY_FORM); setError('') }}>Cancelar</button>}
+            {form.id && <button type="button" className="btn-secondary" onClick={() => { setForm(EMPTY_FORM); setError('') }}>{t('Cancelar')}</button>}
             <button type="submit" className="btn-primary" disabled={saveMutation.isPending}>
               {saveMutation.isPending ? 'Guardando...' : form.id ? 'Guardar cambios' : 'Crear regla'}
             </button>
@@ -309,13 +311,14 @@ function ReminderCard({ rule, todayCount, onEdit, onToggle, onDelete }: {
   onToggle: () => void
   onDelete?: () => void
 }) {
+  const { t } = useLanguage()
   return (
     <div className="card p-4 flex items-start justify-between gap-4">
       <div className="flex-1">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className={AUDIENCE_BADGE[rule.audience] || 'badge-gray'}>{AUDIENCE_LABEL[rule.audience] || rule.audience}</span>
           {rule.is_system && <span className="badge-blue">Sistema</span>}
-          {!rule.is_active && <span className="badge-gray">Inactiva</span>}
+          {!rule.is_active && <span className="badge-gray">{t('Inactiva')}</span>}
           <span className="text-[10px] text-[#6B738A]">{TRIGGER_LABEL[rule.trigger_type] || rule.trigger_type}</span>
           {rule.offset_minutes != null && <span className="text-[10px] text-[#6B738A]">· {rule.offset_minutes} min antes</span>}
           {todayCount && (todayCount.SENT + todayCount.FAILED + todayCount.SKIPPED) > 0 && (
@@ -330,13 +333,13 @@ function ReminderCard({ rule, todayCount, onEdit, onToggle, onDelete }: {
         <p className="text-xs text-[#6B738A] mt-1 whitespace-pre-wrap">{rule.message_template}</p>
       </div>
       <div className="flex flex-col gap-1.5 flex-shrink-0">
-        <button className="text-xs text-[#185FA5] hover:underline" onClick={() => onEdit(rule)}>Editar</button>
+        <button className="text-xs text-[#185FA5] hover:underline" onClick={() => onEdit(rule)}>{t('Editar')}</button>
         <button className="text-xs text-[#854F0B] hover:underline" onClick={onToggle}>
           {rule.is_active ? 'Desactivar' : 'Activar'}
         </button>
         {onDelete && (
           <button className="text-xs text-[#A32D2D] hover:underline" onClick={onDelete}>
-            Eliminar
+            {t('Eliminar')}
           </button>
         )}
       </div>

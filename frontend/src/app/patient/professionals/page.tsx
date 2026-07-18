@@ -21,6 +21,7 @@ import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, patientLinksAPI, 
 import type { ClinicalNote } from '@/lib/api'
 import { fmtFechaHora, fmtFechaHoraLocal } from '@/lib/consultationHistory'
 import type { Consultation, Prescription } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconSearch2 = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
 const IconChevron = ({ open }: { open: boolean }) => (
@@ -139,6 +140,7 @@ function DoctorAvatar({ initials, photoUrl, name }: { initials: string; photoUrl
 }
 
 function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const sortedConsultations = [...group.consultations].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -188,7 +190,7 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
             <p className="text-sm font-medium truncate">{group.name}</p>
             {group.isActive && (
               <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium flex-shrink-0">
-                ● Cita pendiente
+                {t('● Cita pendiente')}
               </span>
             )}
             {isLinked ? (
@@ -242,7 +244,7 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
           {/* Recetas + historias clínicas que tengo con este profesional */}
           <div>
             <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">
-              🗂️ Mi historial con este médico
+              {t('🗂️ Mi historial con este médico')}
             </p>
             <ProfessionalRecordSummary prescriptions={group.prescriptions} notes={group.notes} />
           </div>
@@ -253,6 +255,7 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
 }
 
 export default function PatientProfessionalsPage() {
+  const { t } = useLanguage()
   const [search, setSearch] = useState('')
 
   const { data: consultations = [], isLoading: loadingC } = useQuery({
@@ -288,7 +291,7 @@ export default function PatientProfessionalsPage() {
     <DashboardLayout navItems={NAV} activeHref="/patient/professionals" role="PATIENT">
       <div className="max-w-2xl">
         <div className="mb-4">
-          <h1 className="text-lg font-semibold text-[#141820]">Mis profesionales</h1>
+          <h1 className="text-lg font-semibold text-[#141820]">{t('Mis profesionales')}</h1>
           <p className="text-sm text-[#6B738A] mt-0.5">
             {allProfessionals.length} médico{allProfessionals.length !== 1 ? 's' : ''}
             {activeCount > 0 ? ` · ${activeCount} con cita pendiente` : ''}
@@ -301,7 +304,7 @@ export default function PatientProfessionalsPage() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar médico por nombre o especialidad..."
+            placeholder={t('Buscar médico por nombre o especialidad...')}
             className="w-full pl-9 pr-3 py-2.5 text-sm border border-[#DDE1EE] rounded-xl focus:outline-none focus:border-[#185FA5] bg-white"
           />
         </div>

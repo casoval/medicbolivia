@@ -13,6 +13,7 @@ import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { LoadingScreen, Alert, SectionTitle } from '@/components/ui'
 import { patientsAPI, getErrorMessage } from '@/lib/api'
 import { NotificationsBell } from '@/components/shared/NotificationsBell'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconCamera = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
 
@@ -27,6 +28,7 @@ function TagListEditor({
   items: string[]
   onChange: (items: string[]) => void
 }) {
+  const { t } = useLanguage()
   const [draft, setDraft] = useState('')
 
   function add() {
@@ -65,7 +67,7 @@ function TagListEditor({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-[#6B738A] mb-3">Todavía no registraste nada acá.</p>
+        <p className="text-xs text-[#6B738A] mb-3">{t('Todavía no registraste nada acá.')}</p>
       )}
 
       <div className="flex gap-2">
@@ -82,7 +84,7 @@ function TagListEditor({
           disabled={!draft.trim()}
           className="px-3 py-2 rounded-lg text-sm font-medium bg-[#185FA5] text-white hover:bg-[#0C447C] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          Agregar
+          {t('Agregar')}
         </button>
       </div>
     </div>
@@ -90,6 +92,7 @@ function TagListEditor({
 }
 
 export default function PatientProfilePage() {
+  const { t } = useLanguage()
   const qc = useQueryClient()
 
   // Datos médicos (editable)
@@ -197,9 +200,9 @@ export default function PatientProfilePage() {
       <div className="max-w-2xl">
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-[#141820]">Perfil</h1>
+            <h1 className="text-lg font-semibold text-[#141820]">{t('Perfil')}</h1>
             <p className="text-xs text-[#6B738A] mt-0.5">
-              Tus datos personales y tu información médica en un solo lugar.
+              {t('Tus datos personales y tu información médica en un solo lugar.')}
             </p>
           </div>
           <NotificationsBell role="PATIENT" />
@@ -207,12 +210,12 @@ export default function PatientProfilePage() {
 
         {/* Datos personales + foto */}
         <div className="card mb-4">
-          <SectionTitle>Mis datos</SectionTitle>
+          <SectionTitle>{t('Mis datos')}</SectionTitle>
           {photoSuccess && <div className="mb-3"><Alert type="success" message={photoSuccess} /></div>}
           {photoError   && <div className="mb-3"><Alert type="error"   message={photoError} /></div>}
 
           <div className="flex flex-col items-center mb-5">
-            <p className="text-xs font-medium text-[#6B738A] mb-2 self-start">Foto de perfil</p>
+            <p className="text-xs font-medium text-[#6B738A] mb-2 self-start">{t('Foto de perfil')}</p>
             <div className="relative">
               <div className="w-24 h-24 rounded-full border-2 border-[#DDE1EE] overflow-hidden bg-[#F5F6FA] flex items-center justify-center">
                 {photoPreview ? (
@@ -230,7 +233,7 @@ export default function PatientProfilePage() {
                 className="absolute bottom-0 right-0 w-8 h-8 bg-[#185FA5] rounded-full flex items-center justify-center shadow-md hover:bg-[#0C447C] transition-colors"
               >
                 <IconCamera />
-                <span className="sr-only">Cambiar foto</span>
+                <span className="sr-only">{t('Cambiar foto')}</span>
               </button>
               <input
                 type="file"
@@ -247,54 +250,54 @@ export default function PatientProfilePage() {
                   {photoUploading ? 'Subiendo...' : 'Guardar foto'}
                 </button>
                 <button onClick={cancelPhoto} disabled={photoUploading} className="btn-secondary text-xs py-1 px-3">
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
               </div>
             )}
-            <p className="text-xs text-[#A0A8BF] mt-1">JPG, PNG o WebP · Máximo 5MB</p>
-            <p className="text-xs text-[#A0A8BF] text-center">Es opcional, pero ayuda a tus profesionales a identificarte mejor</p>
+            <p className="text-xs text-[#A0A8BF] mt-1">{t('JPG, PNG o WebP · Máximo 5MB')}</p>
+            <p className="text-xs text-[#A0A8BF] text-center">{t('Es opcional, pero ayuda a tus profesionales a identificarte mejor')}</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">Nombre completo</p>
+              <p className="text-xs font-medium text-[#6B738A]">{t('Nombre completo')}</p>
               <p className="text-sm">{profile?.first_name} {profile?.last_name}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">Cédula de identidad</p>
+              <p className="text-xs font-medium text-[#6B738A]">{t('Cédula de identidad')}</p>
               <p className="text-sm">{profile?.ci || '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">Fecha de nacimiento</p>
+              <p className="text-xs font-medium text-[#6B738A]">{t('Fecha de nacimiento')}</p>
               <p className="text-sm">
                 {profile?.birth_date ? new Date(profile.birth_date).toLocaleDateString('es-BO') : '—'}
               </p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">Departamento</p>
+              <p className="text-xs font-medium text-[#6B738A]">{t('Departamento')}</p>
               <p className="text-sm">{profile?.department || '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">Género</p>
+              <p className="text-xs font-medium text-[#6B738A]">{t('Género')}</p>
               <p className="text-sm">{profile?.gender || '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">Correo electrónico</p>
+              <p className="text-xs font-medium text-[#6B738A]">{t('Correo electrónico')}</p>
               <p className="text-sm">{profile?.email || '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">Celular</p>
+              <p className="text-xs font-medium text-[#6B738A]">{t('Celular')}</p>
               <p className="text-sm">{profile?.phone || '—'}</p>
             </div>
           </div>
           <p className="text-xs text-[#A0A8BF] mt-3">
-            Para corregir tu CI, fecha de nacimiento u otro dato de registro, escribe a soporte.
+            {t('Para corregir tu CI, fecha de nacimiento u otro dato de registro, escribe a soporte.')}
           </p>
         </div>
 
         {/* Datos médicos */}
         <div className="mb-3">
-          <h2 className="text-sm font-semibold text-[#141820]">Mis datos médicos</h2>
+          <h2 className="text-sm font-semibold text-[#141820]">{t('Mis datos médicos')}</h2>
           <p className="text-xs text-[#6B738A] mt-0.5">
             Esta información la ven los profesionales que te atienden antes y durante la consulta —
             mantenerla al día ayuda a que la atención sea más segura.
@@ -309,7 +312,7 @@ export default function PatientProfilePage() {
             title="Alergias"
             emoji="⚠"
             colorClasses={{ bg: 'bg-[#FCEBEB]', text: 'text-[#A32D2D]', chipBg: 'bg-[#F7C1C1]', chipText: 'text-[#A32D2D]' }}
-            placeholder="Ej: Penicilina, mariscos..."
+            placeholder={t('Ej: Penicilina, mariscos...')}
             items={allergies}
             onChange={update(setAllergies)}
           />
@@ -318,7 +321,7 @@ export default function PatientProfilePage() {
             title="Condiciones crónicas"
             emoji="🏥"
             colorClasses={{ bg: 'bg-[#FAEEDA]', text: 'text-[#854F0B]', chipBg: 'bg-[#FAD89A]', chipText: 'text-[#854F0B]' }}
-            placeholder="Ej: Diabetes, hipertensión..."
+            placeholder={t('Ej: Diabetes, hipertensión...')}
             items={chronicConditions}
             onChange={update(setChronicConditions)}
           />
@@ -327,7 +330,7 @@ export default function PatientProfilePage() {
             title="Medicación actual"
             emoji="💊"
             colorClasses={{ bg: 'bg-[#E6F1FB]', text: 'text-[#185FA5]', chipBg: 'bg-[#B5D4F4]', chipText: 'text-[#0C447C]' }}
-            placeholder="Ej: Losartán 50mg cada 24h..."
+            placeholder={t('Ej: Losartán 50mg cada 24h...')}
             items={medications}
             onChange={update(setMedications)}
           />

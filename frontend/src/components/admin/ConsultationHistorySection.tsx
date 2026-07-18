@@ -12,6 +12,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface PaymentInfo {
   status: string
@@ -98,6 +99,7 @@ function fmtDateTime(iso: string | null): string {
 }
 
 function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counterpartName: string }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const hasClinicalNote = !!item.clinical_note
   const hasRx = item.prescriptions.length > 0
@@ -140,16 +142,16 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
         <div className="p-3 border-t border-[#DDE1EE] bg-[#FAFBFC] space-y-3">
           {item.chief_complaint && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">Motivo de consulta</p>
+              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">{t('Motivo de consulta')}</p>
               <p className="text-xs text-[#3A4155]">{item.chief_complaint}</p>
             </div>
           )}
 
           {item.payment && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">Pago</p>
+              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">{t('Pago')}</p>
               <div className="text-xs text-[#3A4155] bg-white rounded-lg border border-[#DDE1EE] p-2 space-y-0.5">
-                <p>Estado: <span className="font-medium">{item.payment.status}</span></p>
+                <p>{t('Estado:')} <span className="font-medium">{item.payment.status}</span></p>
                 {item.payment.paid_at && <p>Pagado: {fmtDateTime(item.payment.paid_at)}</p>}
                 {item.payment.bank_tx_id && <p>Referencia bancaria: {item.payment.bank_tx_id}</p>}
                 {item.payment.refunded_at && <p className="text-[#A32D2D]">Reembolsado: {fmtDateTime(item.payment.refunded_at)} — {item.payment.refund_note}</p>}
@@ -167,7 +169,7 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
                       <span className={`font-medium ${rx.status === 'VOIDED' ? 'text-[#A32D2D] line-through' : 'text-[#141820]'}`}>
                         {rx.status === 'VOIDED' ? 'Anulada' : 'Activa'} · {fmtDateTime(rx.signed_at)}
                       </span>
-                      {rx.pdf_url && <a href={rx.pdf_url} target="_blank" rel="noreferrer" className="text-[#185FA5] hover:underline">Ver PDF</a>}
+                      {rx.pdf_url && <a href={rx.pdf_url} target="_blank" rel="noreferrer" className="text-[#185FA5] hover:underline">{t('Ver PDF')}</a>}
                     </div>
                     <ul className="list-disc list-inside text-[#3A4155]">
                       {rx.medications.map((m, i) => (
@@ -184,7 +186,7 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
 
           {hasClinicalNote && item.clinical_note && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">Historia clínica (SOAP)</p>
+              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">{t('Historia clínica (SOAP)')}</p>
               <div className="text-xs bg-white rounded-lg border border-[#DDE1EE] p-2 space-y-1.5">
                 {item.clinical_note.subjective && <p><span className="font-medium">S:</span> {item.clinical_note.subjective}</p>}
                 {item.clinical_note.objective && <p><span className="font-medium">O:</span> {item.clinical_note.objective}</p>}
@@ -201,7 +203,7 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
 
           {item.rating && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">Calificación del paciente</p>
+              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">{t('Calificación del paciente')}</p>
               <div className="text-xs bg-white rounded-lg border border-[#DDE1EE] p-2">
                 <p className="text-[#EF9F27] font-medium">{'★'.repeat(item.rating.score)}{'☆'.repeat(5 - item.rating.score)} ({item.rating.score}/5)</p>
                 {item.rating.comment && <p className="text-[#3A4155] mt-1">"{item.rating.comment}"</p>}
@@ -210,7 +212,7 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
           )}
 
           {!item.chief_complaint && !hasRx && !hasClinicalNote && !item.rating && !item.payment && (
-            <p className="text-xs text-[#A0A8BF]">Sin más detalles registrados para esta consulta.</p>
+            <p className="text-xs text-[#A0A8BF]">{t('Sin más detalles registrados para esta consulta.')}</p>
           )}
         </div>
       )}
@@ -225,28 +227,29 @@ export function ConsultationHistorySection({
   endpoint: string
   counterpartField: 'patient_name' | 'professional_name'
 }) {
+  const { t } = useLanguage()
   const { data: history = [], isLoading, isError } = useQuery({
     queryKey: ['admin', 'history', endpoint],
     queryFn: () => api.get(endpoint).then((r) => r.data as HistoryItem[]),
   })
 
   if (isLoading) {
-    return <p className="text-xs text-[#6B738A] py-4 text-center">Cargando historial...</p>
+    return <p className="text-xs text-[#6B738A] py-4 text-center">{t('Cargando historial...')}</p>
   }
   if (isError) {
-    return <p className="text-xs text-[#A32D2D] py-4 text-center">No se pudo cargar el historial.</p>
+    return <p className="text-xs text-[#A32D2D] py-4 text-center">{t('No se pudo cargar el historial.')}</p>
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Historial detallado</p>
+        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">{t('Historial detallado')}</p>
         <span className="text-[10px] text-[#A0A8BF]">{history.length} consulta{history.length !== 1 ? 's' : ''}</span>
       </div>
 
       {history.length === 0 ? (
         <p className="text-sm text-[#6B738A] bg-[#F5F6FA] rounded-xl p-3 text-center">
-          Todavía no hay consultas registradas
+          {t('Todavía no hay consultas registradas')}
         </p>
       ) : (
         <div className="space-y-2">

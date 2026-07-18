@@ -13,6 +13,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { prescriptionsAPI, clinicalNotesAPI, patientsAPI } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 function fmtDate(d?: string | null) {
   if (!d) return ''
@@ -36,6 +37,7 @@ export function PatientRecordSummary({
   patientId: string
   showSharedFromOthers: boolean
 }) {
+  const { t } = useLanguage()
   const { data: myRx = [], isLoading: loadingRx } = useQuery({
     queryKey: ['patient-history-rx-mine', patientId],
     queryFn: () => prescriptionsAPI.getMineForPatient(patientId),
@@ -62,19 +64,19 @@ export function PatientRecordSummary({
 
   return (
     <div>
-      {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">Cargando historial...</p>}
+      {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando historial...')}</p>}
 
       {!isLoading && medicalInfo && (
         medicalInfo.allergies.length > 0 || medicalInfo.chronic_conditions.length > 0 || medicalInfo.current_medications.length > 0
       ) && (
         <div className="mb-5">
           <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">
-            🩺 Datos médicos del paciente
+            {t('🩺 Datos médicos del paciente')}
           </p>
           <div className="space-y-2">
             {medicalInfo.allergies.length > 0 && (
               <div className="bg-[#FCEBEB] rounded-lg p-2.5">
-                <p className="text-[11px] font-medium text-[#A32D2D] mb-1">⚠ Alergias</p>
+                <p className="text-[11px] font-medium text-[#A32D2D] mb-1">{t('⚠ Alergias')}</p>
                 <div className="flex flex-wrap gap-1">
                   {medicalInfo.allergies.map((a, i) => (
                     <span key={i} className="bg-[#F7C1C1] text-[#A32D2D] text-[11px] px-2 py-0.5 rounded-full">{a}</span>
@@ -84,7 +86,7 @@ export function PatientRecordSummary({
             )}
             {medicalInfo.chronic_conditions.length > 0 && (
               <div className="bg-[#FAEEDA] rounded-lg p-2.5">
-                <p className="text-[11px] font-medium text-[#854F0B] mb-1">🏥 Condiciones crónicas</p>
+                <p className="text-[11px] font-medium text-[#854F0B] mb-1">{t('🏥 Condiciones crónicas')}</p>
                 <div className="flex flex-wrap gap-1">
                   {medicalInfo.chronic_conditions.map((c, i) => (
                     <span key={i} className="bg-[#FAD89A] text-[#854F0B] text-[11px] px-2 py-0.5 rounded-full">{c}</span>
@@ -94,7 +96,7 @@ export function PatientRecordSummary({
             )}
             {medicalInfo.current_medications.length > 0 && (
               <div className="bg-[#E6F1FB] rounded-lg p-2.5">
-                <p className="text-[11px] font-medium text-[#185FA5] mb-1">💊 Medicación actual</p>
+                <p className="text-[11px] font-medium text-[#185FA5] mb-1">{t('💊 Medicación actual')}</p>
                 <div className="flex flex-wrap gap-1">
                   {medicalInfo.current_medications.map((m, i) => (
                     <span key={i} className="bg-[#B5D4F4] text-[#0C447C] text-[11px] px-2 py-0.5 rounded-full">{m}</span>
@@ -109,7 +111,7 @@ export function PatientRecordSummary({
       {nothingAtAll && (
         <div className="text-center py-6">
           <p className="text-3xl mb-2">🗂️</p>
-          <p className="text-sm text-[#6B738A]">Todavía no hay recetas ni historias clínicas de este paciente.</p>
+          <p className="text-sm text-[#6B738A]">{t('Todavía no hay recetas ni historias clínicas de este paciente.')}</p>
         </div>
       )}
 
@@ -127,7 +129,7 @@ export function PatientRecordSummary({
                 <Field label="Diagnóstico (A)" value={note.assessment} />
                 <Field label="Plan (P)" value={note.plan} />
                 {!note.subjective && !note.objective && !note.assessment && !note.plan && (
-                  <p className="text-xs text-[#A0A8BF]">Sin detalle registrado.</p>
+                  <p className="text-xs text-[#A0A8BF]">{t('Sin detalle registrado.')}</p>
                 )}
               </div>
             ))}
@@ -165,7 +167,7 @@ export function PatientRecordSummary({
             🔗 Compartido por otros médicos ({sharedNotes.length})
           </p>
           <p className="text-[11px] text-[#6B738A] mb-2">
-            El paciente autorizó compartir estas notas con médicos de la plataforma.
+            {t('El paciente autorizó compartir estas notas con médicos de la plataforma.')}
           </p>
           <div className="space-y-2">
             {sharedNotes.map((note: any) => (

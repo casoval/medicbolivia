@@ -6703,5 +6703,20 @@
     "qu": "MedicBolivia — Telemedicina con IA",
     "ay": "MedicBolivia — Telemedicina con IA",
     "gn": "MedicBolivia — Telemedicina con IA"
+  },
+  "Mensajes": {
+    "qu": "Willaykuna",
+    "ay": "Yatiyawinaka",
+    "gn": "Marandukuéra"
+  },
+  "Ver documento": {
+    "qu": "Qillqata qhaway",
+    "ay": "Qillqata uñjaña",
+    "gn": "Kuatia jehecha"
+  },
+  "Cerrada": {
+    "qu": "Wisqasqa",
+    "ay": "Jist'antata",
+    "gn": "Mbotypy"
   }
 }

@@ -13,6 +13,7 @@ import { BotTab } from '@/components/admin/ia/BotTab'
 import { RemindersTab } from '@/components/admin/ia/RemindersTab'
 import { ConversationsTab } from '@/components/admin/ia/ConversationsTab'
 import { AutomationTab } from '@/components/admin/ia/AutomationTab'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 type TabKey = 'bot' | 'reminders' | 'conversations' | 'automation'
 
@@ -24,15 +25,16 @@ const TABS: { key: TabKey; label: string }[] = [
 ]
 
 export default function AdminIAPage() {
+  const { t } = useLanguage()
   const [tab, setTab] = useState<TabKey>('bot')
 
   return (
     <DashboardLayout navItems={NAV} activeHref="/admin/ia" role="ADMIN">
       <div className="max-w-4xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">IA / WhatsApp</h1>
+          <h1 className="text-base font-semibold">{t('IA / WhatsApp')}</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">
-            Bot de WhatsApp, recordatorios automáticos, conversaciones y automatización de backups.
+            {t('Bot de WhatsApp, recordatorios automáticos, conversaciones y automatización de backups.')}
           </p>
         </div>
 

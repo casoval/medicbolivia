@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { agentAPI } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface Message {
   role: 'user' | 'agent'
@@ -13,6 +14,7 @@ interface Message {
 }
 
 export default function ProfessionalOnboardingPage() {
+  const { t } = useLanguage()
   const router = useRouter()
   const { user, setUser } = useAuthStore()
   const [messages, setMessages] = useState<Message[]>([])
@@ -82,10 +84,10 @@ export default function ProfessionalOnboardingPage() {
 
         <div className="text-center mb-6">
           <h1 className="text-xl font-bold text-[#042C53]">
-            Medic<span className="font-normal text-[#6B738A]">Bolivia</span>
+            {t('Medic')}<span className="font-normal text-[#6B738A]">{t('Bolivia')}</span>
           </h1>
           <p className="text-sm text-[#6B738A] mt-1">
-            Bienvenido profesional — configuremos tu perfil
+            {t('Bienvenido profesional — configuremos tu perfil')}
           </p>
         </div>
 
@@ -95,17 +97,17 @@ export default function ProfessionalOnboardingPage() {
               IA
             </div>
             <div>
-              <p className="text-white text-sm font-medium">Agente de bienvenida · Medi</p>
+              <p className="text-white text-sm font-medium">{t('Agente de bienvenida · Medi')}</p>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#22C27A]" />
-                <p className="text-white/60 text-xs">En línea</p>
+                <p className="text-white/60 text-xs">{t('En línea')}</p>
               </div>
             </div>
             <button
               onClick={() => router.push('/professional/dashboard')}
               className="ml-auto text-white/50 text-xs hover:text-white/80"
             >
-              Saltar →
+              {t('Saltar →')}
             </button>
           </div>
 
@@ -133,7 +135,7 @@ export default function ProfessionalOnboardingPage() {
             {done && (
               <div className="text-center py-3">
                 <div className="inline-flex items-center gap-2 bg-[#E1F5EE] text-[#0F6E56] px-4 py-2 rounded-full text-sm font-medium">
-                  ✓ ¡Listo! Redirigiendo a tu panel...
+                  {t('✓ ¡Listo! Redirigiendo a tu panel...')}
                 </div>
               </div>
             )}
@@ -143,7 +145,7 @@ export default function ProfessionalOnboardingPage() {
           <div className="px-3 py-2.5 border-t border-[#DDE1EE] bg-white flex gap-2">
             <input
               className="flex-1 px-3.5 py-2 border border-[#DDE1EE] rounded-full text-sm bg-[#F5F6FA] focus:outline-none focus:border-[#0F6E56] text-[#141820] placeholder-[#A0A8BF]"
-              placeholder="Escribe tu respuesta..."
+              placeholder={t('Escribe tu respuesta...')}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}

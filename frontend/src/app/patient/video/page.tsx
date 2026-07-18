@@ -13,6 +13,7 @@ import {
   VideoPresets,
 } from 'livekit-client'
 import { consultationsAPI, ratingsAPI } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface ChatMsg { from: 'me' | 'them'; text: string; time: string }
 
@@ -37,6 +38,7 @@ function StarPickerInline({ value, onChange }: { value: number; onChange: (v: nu
 }
 
 export default function PatientVideoPage() {
+  const { t } = useLanguage()
   const params = useSearchParams()
   const cid = params.get('cid') ?? ''
 
@@ -275,7 +277,7 @@ export default function PatientVideoPage() {
     <div className="fixed inset-0 bg-[#0D1117] flex items-center justify-center">
       <div className="text-center">
         <div className="w-12 h-12 border-2 border-[#185FA5] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-white text-sm">Conectando con el médico...</p>
+        <p className="text-white text-sm">{t('Conectando con el médico...')}</p>
       </div>
     </div>
   )
@@ -286,10 +288,10 @@ export default function PatientVideoPage() {
       <span className="text-5xl">⚠️</span>
       <p className="text-sm text-center max-w-xs text-[#A0A8BF]">{error}</p>
       <button onClick={() => { connectingRef.current = false; window.location.reload() }} className="px-5 py-2.5 bg-[#185FA5] text-white text-sm rounded-xl font-medium">
-        Reintentar
+        {t('Reintentar')}
       </button>
       <button onClick={() => window.location.href = '/patient/dashboard'} className="px-5 py-2.5 bg-white/10 text-white/70 text-sm rounded-xl hover:bg-white/20">
-        Volver al inicio
+        {t('Volver al inicio')}
       </button>
     </div>
   )
@@ -302,10 +304,10 @@ export default function PatientVideoPage() {
       {!showRatingModal && (
         <div className="text-center text-white animate-fade-up">
           <div className="text-6xl mb-4">✅</div>
-          <p className="font-semibold text-lg">Consulta finalizada</p>
-          <p className="text-white/50 text-sm mt-1">Gracias por usar MedicBolivia</p>
+          <p className="font-semibold text-lg">{t('Consulta finalizada')}</p>
+          <p className="text-white/50 text-sm mt-1">{t('Gracias por usar MedicBolivia')}</p>
           <button onClick={goToDashboard} className="mt-6 px-5 py-2.5 bg-[#185FA5] text-white text-sm rounded-xl font-medium">
-            Volver al inicio
+            {t('Volver al inicio')}
           </button>
         </div>
       )}
@@ -315,8 +317,8 @@ export default function PatientVideoPage() {
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-fade-up">
           <div className="text-center mb-4">
             <div className="text-4xl mb-2">⭐</div>
-            <h3 className="text-base font-semibold">¿Cómo fue tu consulta?</h3>
-            <p className="text-xs text-[#6B738A] mt-1">Tu opinión ayuda a otros pacientes</p>
+            <h3 className="text-base font-semibold">{t('¿Cómo fue tu consulta?')}</h3>
+            <p className="text-xs text-[#6B738A] mt-1">{t('Tu opinión ayuda a otros pacientes')}</p>
           </div>
 
           <div className="mb-4">
@@ -334,7 +336,7 @@ export default function PatientVideoPage() {
             <textarea
               className="w-full border border-[#DDE1EE] rounded-xl px-3 py-2 text-sm resize-none outline-none focus:border-[#185FA5] text-[#1C2133] placeholder:text-[#A0A8BF]"
               rows={3}
-              placeholder="Cuéntanos cómo estuvo la atención... (opcional)"
+              placeholder={t('Cuéntanos cómo estuvo la atención... (opcional)')}
               value={ratingComment}
               onChange={(e) => setRatingComment(e.target.value)}
               maxLength={500}
@@ -345,7 +347,7 @@ export default function PatientVideoPage() {
           {ratingError && (
             <div className="mb-3 bg-[#FCEBEB] border border-[#F09595] rounded-xl px-3 py-2">
               <p className="text-xs text-[#A32D2D]">⚠️ {ratingError}</p>
-              <p className="text-xs text-[#A32D2D] mt-0.5">Podrás calificar desde "Mis consultas".</p>
+              <p className="text-xs text-[#A32D2D] mt-0.5">{t('Podrás calificar desde "Mis consultas".')}</p>
             </div>
           )}
 
@@ -360,7 +362,7 @@ export default function PatientVideoPage() {
             onClick={skipRating}
             className="w-full py-2 text-sm text-[#6B738A] hover:text-[#1C2133] transition-colors"
           >
-            Calificar luego
+            {t('Calificar luego')}
           </button>
         </div>
       )}
@@ -369,13 +371,13 @@ export default function PatientVideoPage() {
       {showRatingModal && ratingDone && (
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-fade-up">
           <div className="text-5xl mb-3">🎉</div>
-          <h3 className="text-base font-semibold">¡Gracias por tu calificación!</h3>
-          <p className="text-xs text-[#6B738A] mt-1 mb-5">Tu opinión ayuda a mejorar el servicio</p>
+          <h3 className="text-base font-semibold">{t('¡Gracias por tu calificación!')}</h3>
+          <p className="text-xs text-[#6B738A] mt-1 mb-5">{t('Tu opinión ayuda a mejorar el servicio')}</p>
           <button onClick={goToDashboard} className="w-full py-2.5 bg-[#185FA5] text-white text-sm rounded-xl font-medium">
-            Volver al inicio
+            {t('Volver al inicio')}
           </button>
           <a href="/patient/history" className="block mt-2 text-xs text-[#185FA5] hover:underline">
-            Ver mis consultas
+            {t('Ver mis consultas')}
           </a>
         </div>
       )}
@@ -400,7 +402,7 @@ export default function PatientVideoPage() {
             <p className="text-white text-sm font-medium">
               {status === 'connecting' ? 'Conectando...' : 'Esperando al médico...'}
             </p>
-            <p className="text-[#6B738A] text-xs">La consulta comenzará en breve</p>
+            <p className="text-[#6B738A] text-xs">{t('La consulta comenzará en breve')}</p>
           </div>
         )}
 
@@ -445,7 +447,7 @@ export default function PatientVideoPage() {
               <button onClick={leaveCall} className="w-[60px] h-[60px] rounded-full bg-[#E24B4A] hover:bg-[#c93a39] text-white text-2xl flex items-center justify-center transition-all shadow-xl hover:scale-105">
                 📵
               </button>
-              <span className="text-white/70 text-[11px] font-medium">Salir</span>
+              <span className="text-white/70 text-[11px] font-medium">{t('Salir')}</span>
             </div>
 
             <div className="flex flex-col items-center gap-1.5">
@@ -455,7 +457,7 @@ export default function PatientVideoPage() {
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#E24B4A] rounded-full text-xs flex items-center justify-center font-bold">{unread}</span>
                 )}
               </button>
-              <span className="text-white/70 text-[11px] font-medium">Chat</span>
+              <span className="text-white/70 text-[11px] font-medium">{t('Chat')}</span>
             </div>
 
           </div>
@@ -466,12 +468,12 @@ export default function PatientVideoPage() {
       {chatOpen && (
         <div className="w-72 bg-[#161B22] border-l border-white/10 flex flex-col flex-shrink-0 z-30">
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-            <p className="text-white text-sm font-semibold">Chat con el médico</p>
+            <p className="text-white text-sm font-semibold">{t('Chat con el médico')}</p>
             <button onClick={() => setChatOpen(false)} className="text-white/50 hover:text-white text-lg leading-none">✕</button>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {messages.length === 0 && (
-              <p className="text-white/30 text-xs text-center mt-6">Los mensajes solo duran durante esta llamada</p>
+              <p className="text-white/30 text-xs text-center mt-6">{t('Los mensajes solo duran durante esta llamada')}</p>
             )}
             {messages.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.from === 'me' ? 'items-end' : 'items-start'}`}>
@@ -489,7 +491,7 @@ export default function PatientVideoPage() {
               value={inputText}
               onChange={e => setInputText(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              placeholder="Escribe un mensaje..."
+              placeholder={t('Escribe un mensaje...')}
               className="flex-1 bg-white/10 text-white text-sm px-3 py-2 rounded-xl outline-none placeholder:text-white/30 focus:bg-white/15"
             />
             <button onClick={sendMessage} disabled={!inputText.trim()} className="w-9 h-9 bg-[#185FA5] hover:bg-[#0C447C] disabled:opacity-40 text-white rounded-xl flex items-center justify-center text-sm transition-colors">

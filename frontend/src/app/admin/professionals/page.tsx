@@ -8,6 +8,7 @@ import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, Alert } from '@/components/ui'
 import { api, adminAPI, specialtiesAPI, getErrorMessage, type CommissionPeriod, type CatalogItem, type ProfessionalMembership } from '@/lib/api'
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 // ── Selector de fecha en español, semana empieza en lunes ──────────────
 // El <input type="date"> nativo usa el idioma/región del SISTEMA
@@ -194,6 +195,7 @@ function DocThumbnail({ doc, onExpand, onReview, reviewing }: {
   onReview: (status: 'APPROVED' | 'REJECTED') => void
   reviewing: boolean
 }) {
+  const { t } = useLanguage()
   const pdf = isPdfUrl(doc.url)
   const isNew = doc.status === 'PENDING' && isRecentlyUploaded(doc.created_at)
   return (
@@ -202,7 +204,7 @@ function DocThumbnail({ doc, onExpand, onReview, reviewing }: {
     }`}>
       {isNew && (
         <span className="absolute -top-2 -right-2 bg-[#185FA5] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
-          Nuevo
+          {t('Nuevo')}
         </span>
       )}
       <button
@@ -219,7 +221,7 @@ function DocThumbnail({ doc, onExpand, onReview, reviewing }: {
           <img src={doc.url} alt={DOC_LABELS[doc.doc_type] || doc.doc_type} className="w-full h-full object-cover" />
         )}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-          <span className="opacity-0 group-hover:opacity-100 text-white text-[10px] font-medium transition-opacity">Ver completo</span>
+          <span className="opacity-0 group-hover:opacity-100 text-white text-[10px] font-medium transition-opacity">{t('Ver completo')}</span>
         </div>
       </button>
       <div>
@@ -236,14 +238,14 @@ function DocThumbnail({ doc, onExpand, onReview, reviewing }: {
             disabled={reviewing}
             className="flex-1 bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] py-1 rounded-md text-[10px] font-medium disabled:opacity-50"
           >
-            Aprobar
+            {t('Aprobar')}
           </button>
           <button
             onClick={() => onReview('REJECTED')}
             disabled={reviewing}
             className="flex-1 bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] py-1 rounded-md text-[10px] font-medium disabled:opacity-50"
           >
-            Rechazar
+            {t('Rechazar')}
           </button>
         </div>
       )}
@@ -253,7 +255,7 @@ function DocThumbnail({ doc, onExpand, onReview, reviewing }: {
           disabled={reviewing}
           className="text-[10px] text-[#A0A8BF] hover:text-[#A32D2D] disabled:opacity-50"
         >
-          Revertir aprobación
+          {t('Revertir aprobación')}
         </button>
       )}
     </div>
@@ -261,6 +263,7 @@ function DocThumbnail({ doc, onExpand, onReview, reviewing }: {
 }
 
 function DocViewerModal({ doc, onClose }: { doc: ProfessionalDocItem; onClose: () => void }) {
+  const { t } = useLanguage()
   const pdf = isPdfUrl(doc.url)
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4" onClick={onClose}>
@@ -279,7 +282,7 @@ function DocViewerModal({ doc, onClose }: { doc: ProfessionalDocItem; onClose: (
         </div>
         <div className="p-3 border-t border-[#DDE1EE] flex justify-end">
           <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#185FA5] hover:underline">
-            Abrir en pestaña nueva ↗
+            {t('Abrir en pestaña nueva ↗')}
           </a>
         </div>
       </div>
@@ -297,6 +300,7 @@ interface PenaltyDetailItem {
 }
 
 function PenaltyDetailSection({ professionalId, penalty }: { professionalId: string; penalty: PenaltyInfo }) {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const [expanded, setExpanded] = useState(false)
   const [confirmingReset, setConfirmingReset] = useState(false)
@@ -358,11 +362,11 @@ function PenaltyDetailSection({ professionalId, penalty }: { professionalId: str
               onClick={() => setConfirmingReset(true)}
               className="text-xs font-medium px-2.5 py-1 rounded-lg bg-white/70 hover:bg-white transition-colors"
             >
-              🧹 Limpiar penalizaciones
+              {t('🧹 Limpiar penalizaciones')}
             </button>
           ) : (
             <div className="flex items-center gap-1.5">
-              <span className="text-xs">¿Seguro?</span>
+              <span className="text-xs">{t('¿Seguro?')}</span>
               <button
                 type="button"
                 onClick={() => resetMutation.mutate()}
@@ -376,7 +380,7 @@ function PenaltyDetailSection({ professionalId, penalty }: { professionalId: str
                 onClick={() => setConfirmingReset(false)}
                 className="text-xs font-medium px-2 py-1 rounded-lg bg-white/70 hover:bg-white transition-colors"
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
             </div>
           )}
@@ -385,9 +389,9 @@ function PenaltyDetailSection({ professionalId, penalty }: { professionalId: str
 
       {expanded && (
         <div className="mt-2 space-y-1.5 max-h-64 overflow-y-auto">
-          {isLoading && <p className="text-xs text-[#6B738A] text-center py-3">Cargando detalle...</p>}
+          {isLoading && <p className="text-xs text-[#6B738A] text-center py-3">{t('Cargando detalle...')}</p>}
           {!isLoading && data?.items.length === 0 && (
-            <p className="text-xs text-[#6B738A] text-center py-3">No hay consultas penalizadas en este período.</p>
+            <p className="text-xs text-[#6B738A] text-center py-3">{t('No hay consultas penalizadas en este período.')}</p>
           )}
           {!isLoading && data?.items.map((item, i) => (
             <div key={`${item.consultation_id}-${item.reason}-${i}`} className="bg-[#F5F6FA] rounded-lg p-2 flex items-center justify-between gap-2">
@@ -407,6 +411,7 @@ function PenaltyDetailSection({ professionalId, penalty }: { professionalId: str
 }
 
 function ProfessionalDocsSection({ professionalId }: { professionalId: string }) {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const [expandedDoc, setExpandedDoc] = useState<ProfessionalDocItem | null>(null)
   const [docError, setDocError] = useState('')
@@ -430,7 +435,7 @@ function ProfessionalDocsSection({ professionalId }: { professionalId: string })
   })
 
   if (isLoading) {
-    return <p className="text-xs text-[#6B738A] py-4 text-center">Cargando documentos...</p>
+    return <p className="text-xs text-[#6B738A] py-4 text-center">{t('Cargando documentos...')}</p>
   }
 
   const missing = REQUIRED_DOC_TYPES.filter((t) => !docs.some((d) => d.doc_type === t))
@@ -438,7 +443,7 @@ function ProfessionalDocsSection({ professionalId }: { professionalId: string })
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Documentos de verificación</p>
+        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">{t('Documentos de verificación')}</p>
         <span className="text-[10px] text-[#A0A8BF]">{docs.length} subido{docs.length !== 1 ? 's' : ''}</span>
       </div>
 
@@ -446,7 +451,7 @@ function ProfessionalDocsSection({ professionalId }: { professionalId: string })
 
       {docs.length === 0 ? (
         <p className="text-sm text-[#6B738A] bg-[#F5F6FA] rounded-xl p-3 text-center">
-          Este profesional todavía no subió ningún documento
+          {t('Este profesional todavía no subió ningún documento')}
         </p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -482,6 +487,7 @@ function fmtDate(iso: string) {
 // Si no hay ninguna activa, se le aplica la comisión global de la plataforma
 // (o la promo global vigente, si hay una).
 function ProfessionalCommissionSection({ professionalId }: { professionalId: string }) {
+  const { t } = useLanguage()
   const [periods, setPeriods] = useState<CommissionPeriod[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -564,7 +570,7 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Comisión individual</p>
+        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">{t('Comisión individual')}</p>
         <button onClick={() => setOpen((v) => !v)} className="text-xs text-[#185FA5] hover:underline">
           {open ? 'Ocultar' : current ? 'Editar' : 'Configurar'}
         </button>
@@ -580,7 +586,7 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
           </p>
         </div>
       ) : (
-        <p className="text-xs text-[#A0A8BF] mb-2">Sin comisión individual — usa la comisión general de la plataforma.</p>
+        <p className="text-xs text-[#A0A8BF] mb-2">{t('Sin comisión individual — usa la comisión general de la plataforma.')}</p>
       )}
 
       {open && (
@@ -592,13 +598,13 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
               onClick={() => setMode('permanent')}
               className={`flex-1 py-1.5 ${mode === 'permanent' ? 'bg-[#185FA5] text-white' : 'bg-white text-[#6B738A]'}`}
             >
-              Permanente
+              {t('Permanente')}
             </button>
             <button
               onClick={() => setMode('promo')}
               className={`flex-1 py-1.5 ${mode === 'promo' ? 'bg-[#185FA5] text-white' : 'bg-white text-[#6B738A]'}`}
             >
-              Promoción con fecha
+              {t('Promoción con fecha')}
             </button>
           </div>
           <p className="text-[10px] text-[#A0A8BF]">
@@ -609,13 +615,13 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs text-[#6B738A] mb-1">% comisión</label>
+              <label className="block text-xs text-[#6B738A] mb-1">{t('% comisión')}</label>
               <input type="number" min={0} max={100} value={percent}
                 onChange={(e) => setPercent(e.target.value)}
                 className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
             </div>
             <div>
-              <label className="block text-xs text-[#6B738A] mb-1">Etiqueta (opcional)</label>
+              <label className="block text-xs text-[#6B738A] mb-1">{t('Etiqueta (opcional)')}</label>
               <input value={label} onChange={(e) => setLabel(e.target.value)}
                 placeholder={mode === 'permanent' ? 'Comisión fija' : 'Bienvenida'}
                 className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
@@ -623,12 +629,12 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
             {mode === 'promo' && (
               <>
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">Desde</label>
+                  <label className="block text-xs text-[#6B738A] mb-1">{t('Desde')}</label>
                   <input type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)}
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">Hasta (opcional)</label>
+                  <label className="block text-xs text-[#6B738A] mb-1">{t('Hasta (opcional)')}</label>
                   <input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)}
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
                 </div>
@@ -651,7 +657,7 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
                   </span>
                   {p.active && (
                     <button onClick={() => deactivate(p.id)} className="text-[#A32D2D] hover:underline">
-                      Desactivar
+                      {t('Desactivar')}
                     </button>
                   )}
                 </div>
@@ -669,6 +675,7 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
 // cobra dentro de la plataforma — el admin la activa manualmente cuando
 // confirma que el profesional pagó por fuera, y queda un registro por mes.
 function ProfessionalMembershipSection({ professionalId }: { professionalId: string }) {
+  const { t } = useLanguage()
   const [memberships, setMemberships] = useState<ProfessionalMembership[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -826,7 +833,7 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs text-[#6B738A] mb-1">Inicio</label>
+                  <label className="block text-xs text-[#6B738A] mb-1">{t('Inicio')}</label>
                   <div className="flex items-center gap-3 mb-1">
                     <label className="flex items-center gap-1 text-xs text-[#3A4256]">
                       <input type="radio" checked={startMode === 'today'}
@@ -882,6 +889,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   professional: Professional; onClose: () => void
   onAction: (id: string, status: string) => void; loading: boolean
 }) {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const [local, setLocal] = useState(pro) // copia mostrada, se actualiza tras guardar
   const [editing, setEditing] = useState(false)
@@ -1028,7 +1036,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
               <StatusBadge status={local.status} />
-              <p className="text-xs text-[#6B738A] mt-1">Estado</p>
+              <p className="text-xs text-[#6B738A] mt-1">{t('Estado')}</p>
             </div>
             <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
               <p className="text-lg font-bold text-[#EF9F27]">{Number(local.rating).toFixed(1)} ★</p>
@@ -1036,7 +1044,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
             </div>
             <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
               <p className="text-lg font-bold text-[#185FA5]">{local.total_consultations}</p>
-              <p className="text-xs text-[#6B738A]">Consultas</p>
+              <p className="text-xs text-[#6B738A]">{t('Consultas')}</p>
             </div>
           </div>
 
@@ -1050,41 +1058,41 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Datos personales y profesionales</p>
+              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">{t('Datos personales y profesionales')}</p>
               {!editing && (
-                <button onClick={startEdit} className="text-xs text-[#185FA5] hover:underline">Editar</button>
+                <button onClick={startEdit} className="text-xs text-[#185FA5] hover:underline">{t('Editar')}</button>
               )}
             </div>
 
             {!editing ? (
               <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-2 gap-3">
-                <div><p className="text-xs text-[#A0A8BF]">Telefono</p><p className="text-sm font-medium">{local.phone || 'No disponible'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Email</p><p className="text-sm font-medium truncate">{local.email || 'No especificado'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Cedula</p><p className="text-sm font-medium">{local.ci || 'No disponible'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Fecha de nacimiento</p><p className="text-sm font-medium">{local.birth_date ? new Date(local.birth_date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' }) : 'No especificada'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Edad</p><p className="text-sm font-medium">{age ? `${age} anios` : 'No especificada'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Ciudad / Departamento</p><p className="text-sm font-medium">{local.department || 'No especificado'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Genero</p><p className="text-sm font-medium">{local.gender || 'No especificado'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Especialidad</p><p className="text-sm font-medium">{local.specialty}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Experiencia</p><p className="text-sm font-medium">{local.years_experience ? `${local.years_experience} anios` : 'No especificada'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Idiomas</p><p className="text-sm font-medium">{local.languages?.join(', ') || 'Espanol'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Sub-especialidades</p><p className="text-sm font-medium">{local.sub_specialties?.length ? local.sub_specialties.join(', ') : 'No especificadas'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Matrícula CMB</p><p className="text-sm font-medium">{local.cmb_matricula || 'No especificada'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Registro SEDES</p><p className="text-sm font-medium">{local.sedes_number || 'No especificado'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Registrado el</p><p className="text-sm font-medium">{new Date(local.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">Estado de cuenta</p><p className="text-sm font-medium">{local.user_status === 'ACTIVE' ? 'Activa' : local.user_status === 'SUSPENDED' ? 'Suspendida' : (local.user_status || 'No disponible')}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Telefono')}</p><p className="text-sm font-medium">{local.phone || 'No disponible'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Email')}</p><p className="text-sm font-medium truncate">{local.email || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Cedula')}</p><p className="text-sm font-medium">{local.ci || 'No disponible'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Fecha de nacimiento')}</p><p className="text-sm font-medium">{local.birth_date ? new Date(local.birth_date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' }) : 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Edad')}</p><p className="text-sm font-medium">{age ? `${age} anios` : 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Ciudad / Departamento')}</p><p className="text-sm font-medium">{local.department || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Genero')}</p><p className="text-sm font-medium">{local.gender || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Especialidad')}</p><p className="text-sm font-medium">{local.specialty}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Experiencia')}</p><p className="text-sm font-medium">{local.years_experience ? `${local.years_experience} anios` : 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Idiomas')}</p><p className="text-sm font-medium">{local.languages?.join(', ') || 'Espanol'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Sub-especialidades')}</p><p className="text-sm font-medium">{local.sub_specialties?.length ? local.sub_specialties.join(', ') : 'No especificadas'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Matrícula CMB')}</p><p className="text-sm font-medium">{local.cmb_matricula || 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Registro SEDES')}</p><p className="text-sm font-medium">{local.sedes_number || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Registrado el')}</p><p className="text-sm font-medium">{new Date(local.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                <div><p className="text-xs text-[#A0A8BF]">{t('Estado de cuenta')}</p><p className="text-sm font-medium">{local.user_status === 'ACTIVE' ? 'Activa' : local.user_status === 'SUSPENDED' ? 'Suspendida' : (local.user_status || 'No disponible')}</p></div>
               </div>
             ) : (
               <div className="bg-[#F5F6FA] rounded-xl p-3 space-y-3">
                 {saveError && <Alert type="error" message={saveError} />}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Nombre</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Nombre')}</label>
                     <input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Apellido</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Apellido')}</label>
                     <input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
@@ -1094,24 +1102,24 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Fecha de nacimiento</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Fecha de nacimiento')}</label>
                     <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Departamento</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Departamento')}</label>
                     <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
                       {DEPARTMENTS.filter((d) => d !== 'Todos').map((d) => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Género</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Género')}</label>
                     <input value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Especialidad</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Especialidad')}</label>
                     <select value={form.specialty}
                       onChange={(e) => setForm({ ...form, specialty: e.target.value, sub_specialties: [] })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
@@ -1124,34 +1132,34 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Años de experiencia</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Años de experiencia')}</label>
                     <input type="number" min={0} max={80} value={form.years_experience}
                       onChange={(e) => setForm({ ...form, years_experience: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Idiomas (coma)</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Idiomas (coma)')}</label>
                     <input value={form.languages} onChange={(e) => setForm({ ...form, languages: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Matrícula CMB</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Matrícula CMB')}</label>
                     <input value={form.cmb_matricula} onChange={(e) => setForm({ ...form, cmb_matricula: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Registro SEDES</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Registro SEDES')}</label>
                     <input value={form.sedes_number} onChange={(e) => setForm({ ...form, sedes_number: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">Sub-especialidades</label>
+                  <label className="block text-xs text-[#6B738A] mb-1">{t('Sub-especialidades')}</label>
                   {!selectedSpecialtyId ? (
-                    <p className="text-xs text-[#A0A8BF]">Elige una especialidad del catálogo para ver sus sub-especialidades.</p>
+                    <p className="text-xs text-[#A0A8BF]">{t('Elige una especialidad del catálogo para ver sus sub-especialidades.')}</p>
                   ) : subSpecialtyCatalog.length === 0 ? (
-                    <p className="text-xs text-[#A0A8BF]">Esta especialidad no tiene sub-especialidades en el catálogo.</p>
+                    <p className="text-xs text-[#A0A8BF]">{t('Esta especialidad no tiene sub-especialidades en el catálogo.')}</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {subSpecialtyCatalog.map((s: CatalogItem) => (
@@ -1171,29 +1179,29 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                 </div>
 
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">Presentación / bio</label>
+                  <label className="block text-xs text-[#6B738A] mb-1">{t('Presentación / bio')}</label>
                   <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} rows={3}
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white resize-none" />
                 </div>
 
                 {/* Precios */}
                 <div>
-                  <p className="text-xs text-[#6B738A] mb-1">Precios de consulta (Bs.)</p>
+                  <p className="text-xs text-[#6B738A] mb-1">{t('Precios de consulta (Bs.)')}</p>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="block text-[10px] text-[#A0A8BF] mb-1">General</label>
+                      <label className="block text-[10px] text-[#A0A8BF] mb-1">{t('General')}</label>
                       <input type="number" min={0} value={form.price_general}
                         onChange={(e) => setForm({ ...form, price_general: e.target.value })}
                         className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-[#A0A8BF] mb-1">Urgente</label>
+                      <label className="block text-[10px] text-[#A0A8BF] mb-1">{t('Urgente')}</label>
                       <input type="number" min={0} value={form.price_urgent}
                         onChange={(e) => setForm({ ...form, price_urgent: e.target.value })}
                         className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-[#A0A8BF] mb-1">Seguimiento</label>
+                      <label className="block text-[10px] text-[#A0A8BF] mb-1">{t('Seguimiento')}</label>
                       <input type="number" min={0} value={form.price_follow_up}
                         onChange={(e) => setForm({ ...form, price_follow_up: e.target.value })}
                         className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
@@ -1202,7 +1210,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                 </div>
 
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">Email</label>
+                  <label className="block text-xs text-[#6B738A] mb-1">{t('Email')}</label>
                   <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                 </div>
@@ -1214,7 +1222,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                     entrar con el número anterior — asegúrate de avisarle.
                   </p>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Teléfono</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Teléfono')}</label>
                     <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
@@ -1222,13 +1230,13 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                     <label className="flex items-start gap-2 text-[11px] text-[#854F0B]">
                       <input type="checkbox" checked={confirmLogin} onChange={(e) => setConfirmLogin(e.target.checked)}
                         className="mt-0.5" />
-                      Entiendo que esto cambia cómo el profesional inicia sesión.
+                      {t('Entiendo que esto cambia cómo el profesional inicia sesión.')}
                     </label>
                   )}
                 </div>
 
                 <div className="flex gap-2 justify-end">
-                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs py-1.5 px-3">Cancelar</button>
+                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs py-1.5 px-3">{t('Cancelar')}</button>
                   <button
                     onClick={() => saveMutation.mutate()}
                     disabled={saveMutation.isPending || (loginFieldChanged && !confirmLogin)}
@@ -1247,11 +1255,11 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
 
           {!editing && (
             <div>
-              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Precios de consulta</p>
+              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Precios de consulta')}</p>
               <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-3 gap-3">
-                <div className="text-center"><p className="text-sm font-bold text-[#185FA5]">Bs. {local.price_general || 0}</p><p className="text-xs text-[#6B738A]">General</p></div>
-                <div className="text-center"><p className="text-sm font-bold text-[#A32D2D]">Bs. {local.price_urgent || 0}</p><p className="text-xs text-[#6B738A]">Urgente</p></div>
-                <div className="text-center"><p className="text-sm font-bold text-[#0F6E56]">Bs. {local.price_follow_up || 0}</p><p className="text-xs text-[#6B738A]">Seguimiento</p></div>
+                <div className="text-center"><p className="text-sm font-bold text-[#185FA5]">Bs. {local.price_general || 0}</p><p className="text-xs text-[#6B738A]">{t('General')}</p></div>
+                <div className="text-center"><p className="text-sm font-bold text-[#A32D2D]">Bs. {local.price_urgent || 0}</p><p className="text-xs text-[#6B738A]">{t('Urgente')}</p></div>
+                <div className="text-center"><p className="text-sm font-bold text-[#0F6E56]">Bs. {local.price_follow_up || 0}</p><p className="text-xs text-[#6B738A]">{t('Seguimiento')}</p></div>
               </div>
             </div>
           )}
@@ -1264,7 +1272,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
           </div>
           {!editing && local.bio && (
             <div>
-              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Presentacion</p>
+              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Presentacion')}</p>
               <p className="text-sm text-[#3A4155] bg-[#F5F6FA] rounded-xl p-3 leading-relaxed">{local.bio}</p>
             </div>
           )}
@@ -1275,23 +1283,23 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
             <ConsultationHistorySection endpoint={`/admin/professionals/${local.id}/history`} counterpartField="patient_name" />
           </div>
           <div className="pt-2 border-t border-[#DDE1EE]">
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-3">Acciones</p>
+            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-3">{t('Acciones')}</p>
             <div className="flex gap-2 flex-wrap">
               {(local.status === 'PENDING_DOCS' || local.status === 'UNDER_REVIEW') && (<>
                 <button onClick={() => onAction(local.id,'APPROVED')} disabled={loading}
-                  className="flex-1 bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] py-2 rounded-lg text-xs font-medium disabled:opacity-50">Aprobar</button>
+                  className="flex-1 bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Aprobar')}</button>
                 <button onClick={() => onAction(local.id,'REJECTED')} disabled={loading}
-                  className="flex-1 bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] py-2 rounded-lg text-xs font-medium disabled:opacity-50">Rechazar</button>
+                  className="flex-1 bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Rechazar')}</button>
               </>)}
               {local.status === 'APPROVED' && (
                 <button onClick={() => onAction(local.id,'SUSPENDED')} disabled={loading}
-                  className="bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">Suspender cuenta</button>
+                  className="bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Suspender cuenta')}</button>
               )}
               {local.status === 'SUSPENDED' && (
                 <button onClick={() => onAction(local.id,'APPROVED')} disabled={loading}
-                  className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">Reactivar cuenta</button>
+                  className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Reactivar cuenta')}</button>
               )}
-              <button onClick={onClose} className="btn-secondary text-xs px-4 py-2">Cerrar</button>
+              <button onClick={onClose} className="btn-secondary text-xs px-4 py-2">{t('Cerrar')}</button>
             </div>
           </div>
         </div>
@@ -1387,6 +1395,7 @@ function MembershipsTabPanel({ professionals, membershipByPro, loading }: {
 }
 
 export default function AdminProfessionalsPage() {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const searchParams = useSearchParams()
   // Permite llegar directo a una pestaña desde otra página, ej. el aviso
@@ -1468,8 +1477,8 @@ export default function AdminProfessionalsPage() {
     <DashboardLayout navItems={NAV} activeHref="/admin/professionals" role="ADMIN">
       <div className="max-w-4xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Gestion de profesionales</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">Clic en un profesional para ver su detalle completo</p>
+          <h1 className="text-base font-semibold">{t('Gestion de profesionales')}</h1>
+          <p className="text-xs text-[#6B738A] mt-0.5">{t('Clic en un profesional para ver su detalle completo')}</p>
         </div>
 
         {success && <div className="mb-4"><Alert type="success" message={success} /></div>}
@@ -1502,7 +1511,7 @@ export default function AdminProfessionalsPage() {
           <div className="relative flex-1 min-w-48">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A0A8BF]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input className="w-full pl-8 pr-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
-              placeholder="Buscar por nombre, especialidad o celular..."
+              placeholder={t('Buscar por nombre, especialidad o celular...')}
               value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
@@ -1511,10 +1520,10 @@ export default function AdminProfessionalsPage() {
           </select>
           <select className="px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
             value={penaltyFilter} onChange={(e) => setPenaltyFilter(e.target.value as typeof penaltyFilter)}>
-            <option value="Todos">Todas las penalizaciones</option>
-            <option value="yellow">🟡 Leve</option>
-            <option value="orange">🟠 Moderado</option>
-            <option value="red">🔴 Grave</option>
+            <option value="Todos">{t('Todas las penalizaciones')}</option>
+            <option value="yellow">{t('🟡 Leve')}</option>
+            <option value="orange">{t('🟠 Moderado')}</option>
+            <option value="red">{t('🔴 Grave')}</option>
           </select>
         </div>
 
@@ -1527,7 +1536,7 @@ export default function AdminProfessionalsPage() {
         ) : isLoading ? <LoadingScreen /> : (
           <div className="card">
             {filtered.length === 0 ? (
-              <p className="text-sm text-[#6B738A] text-center py-8">No hay profesionales en este estado</p>
+              <p className="text-sm text-[#6B738A] text-center py-8">{t('No hay profesionales en este estado')}</p>
             ) : (
               <div className="divide-y divide-[#DDE1EE]">
                 {filtered.map((pro: Professional) => {

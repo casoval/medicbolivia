@@ -10,6 +10,7 @@ import { LoadingScreen, EmptyState, SectionTitle, Alert } from '@/components/ui'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { api, adminAPI, getErrorMessage } from '@/lib/api'
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const DEPARTMENTS = [
   'Todos', 'La Paz', 'Santa Cruz', 'Cochabamba', 'Oruro',
@@ -38,6 +39,7 @@ interface Patient {
 
 // Modal de detalle del paciente
 function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: Patient; onClose: () => void; onSuspend: (userId: string) => void; onReactivate: (userId: string) => void }) {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [local, setLocal] = useState(patient) // copia mostrada en pantalla, se actualiza tras guardar
@@ -135,16 +137,16 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
           {/* Datos personales */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Datos personales</p>
+              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">{t('Datos personales')}</p>
               {!editing && (
-                <button onClick={startEdit} className="text-xs text-[#185FA5] hover:underline">Editar</button>
+                <button onClick={startEdit} className="text-xs text-[#185FA5] hover:underline">{t('Editar')}</button>
               )}
             </div>
 
             {!editing ? (
               <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">Fecha de nacimiento</p>
+                  <p className="text-xs text-[#A0A8BF]">{t('Fecha de nacimiento')}</p>
                   <p className="text-sm font-medium">
                     {local.birth_date
                       ? new Date(local.birth_date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -152,27 +154,27 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">Edad</p>
+                  <p className="text-xs text-[#A0A8BF]">{t('Edad')}</p>
                   <p className="text-sm font-medium">{age ? `${age} años` : 'No especificada'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">Género</p>
+                  <p className="text-xs text-[#A0A8BF]">{t('Género')}</p>
                   <p className="text-sm font-medium">{local.gender || 'No especificado'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">Teléfono</p>
+                  <p className="text-xs text-[#A0A8BF]">{t('Teléfono')}</p>
                   <p className="text-sm font-medium">{local.phone || 'No disponible'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">Email</p>
+                  <p className="text-xs text-[#A0A8BF]">{t('Email')}</p>
                   <p className="text-sm font-medium truncate">{local.email || 'No especificado'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">Departamento</p>
+                  <p className="text-xs text-[#A0A8BF]">{t('Departamento')}</p>
                   <p className="text-sm font-medium">{local.department}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">Registrado</p>
+                  <p className="text-xs text-[#A0A8BF]">{t('Registrado')}</p>
                   <p className="text-sm font-medium">
                     {new Date(local.created_at).toLocaleDateString('es-BO', {
                       day: 'numeric', month: 'short', year: 'numeric'
@@ -185,12 +187,12 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                 {saveError && <Alert type="error" message={saveError} />}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Nombre</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Nombre')}</label>
                     <input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Apellido</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Apellido')}</label>
                     <input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
@@ -200,24 +202,24 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Fecha de nacimiento</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Fecha de nacimiento')}</label>
                     <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Departamento</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Departamento')}</label>
                     <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
                       {DEPARTMENTS.filter((d) => d !== 'Todos').map((d) => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Género</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Género')}</label>
                     <input value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Email</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Email')}</label>
                     <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
@@ -230,7 +232,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                     entrar con el número anterior — asegúrate de avisarle.
                   </p>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">Teléfono</label>
+                    <label className="block text-xs text-[#6B738A] mb-1">{t('Teléfono')}</label>
                     <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
@@ -238,13 +240,13 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                     <label className="flex items-start gap-2 text-[11px] text-[#854F0B]">
                       <input type="checkbox" checked={confirmLogin} onChange={(e) => setConfirmLogin(e.target.checked)}
                         className="mt-0.5" />
-                      Entiendo que esto cambia cómo el paciente inicia sesión.
+                      {t('Entiendo que esto cambia cómo el paciente inicia sesión.')}
                     </label>
                   )}
                 </div>
 
                 <div className="flex gap-2 justify-end">
-                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs py-1.5 px-3">Cancelar</button>
+                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs py-1.5 px-3">{t('Cancelar')}</button>
                   <button
                     onClick={() => saveMutation.mutate()}
                     disabled={saveMutation.isPending || (loginFieldChanged && !confirmLogin)}
@@ -259,12 +261,12 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
 
           {/* Historial médico */}
           <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Historial médico</p>
+            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Historial médico')}</p>
             <div className="space-y-2">
 
               {/* Alergias */}
               <div className="bg-[#FCEBEB] rounded-xl p-3">
-                <p className="text-xs font-medium text-[#A32D2D] mb-1">⚠ Alergias</p>
+                <p className="text-xs font-medium text-[#A32D2D] mb-1">{t('⚠ Alergias')}</p>
                 {local.allergies && local.allergies.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
                     {local.allergies.map((a, i) => (
@@ -274,13 +276,13 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-[#6B738A]">Sin alergias registradas</p>
+                  <p className="text-xs text-[#6B738A]">{t('Sin alergias registradas')}</p>
                 )}
               </div>
 
               {/* Condiciones crónicas */}
               <div className="bg-[#FAEEDA] rounded-xl p-3">
-                <p className="text-xs font-medium text-[#854F0B] mb-1">🏥 Condiciones crónicas</p>
+                <p className="text-xs font-medium text-[#854F0B] mb-1">{t('🏥 Condiciones crónicas')}</p>
                 {local.chronic_conditions && local.chronic_conditions.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
                     {local.chronic_conditions.map((c, i) => (
@@ -290,13 +292,13 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-[#6B738A]">Sin condiciones crónicas</p>
+                  <p className="text-xs text-[#6B738A]">{t('Sin condiciones crónicas')}</p>
                 )}
               </div>
 
               {/* Medicación actual */}
               <div className="bg-[#E6F1FB] rounded-xl p-3">
-                <p className="text-xs font-medium text-[#185FA5] mb-1">💊 Medicación actual</p>
+                <p className="text-xs font-medium text-[#185FA5] mb-1">{t('💊 Medicación actual')}</p>
                 {local.current_medications && local.current_medications.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
                     {local.current_medications.map((m, i) => (
@@ -306,7 +308,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-[#6B738A]">Sin medicación registrada</p>
+                  <p className="text-xs text-[#6B738A]">{t('Sin medicación registrada')}</p>
                 )}
               </div>
             </div>
@@ -314,18 +316,18 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
 
           {/* Estadísticas */}
           <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Actividad</p>
+            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Actividad')}</p>
             <div className="bg-[#F5F6FA] rounded-xl p-3 flex gap-4">
               <div className="text-center flex-1">
                 <p className="text-xl font-bold text-[#185FA5]">{local.total_consultations || 0}</p>
-                <p className="text-xs text-[#6B738A]">Consultas</p>
+                <p className="text-xs text-[#6B738A]">{t('Consultas')}</p>
               </div>
               <div className="w-px bg-[#DDE1EE]" />
               <div className="text-center flex-1">
                 <p className="text-xs font-medium text-[#0F6E56] mt-1">
                   {local.status === 'ACTIVE' ? '✓ Activo' : '✗ Inactivo'}
                 </p>
-                <p className="text-xs text-[#6B738A]">Estado</p>
+                <p className="text-xs text-[#6B738A]">{t('Estado')}</p>
               </div>
             </div>
           </div>
@@ -343,18 +345,18 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                 onClick={() => onSuspend(local.user_id)}
                 className="bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-[#F7C1C1] transition-colors"
               >
-                Suspender cuenta
+                {t('Suspender cuenta')}
               </button>
             ) : local.status === 'SUSPENDED' ? (
               <button
                 onClick={() => onReactivate(local.user_id)}
                 className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-[#9FE1CB] transition-colors"
               >
-                Reactivar cuenta
+                {t('Reactivar cuenta')}
               </button>
             ) : null}
           </div>
-          <button onClick={onClose} className="btn-secondary text-xs">Cerrar</button>
+          <button onClick={onClose} className="btn-secondary text-xs">{t('Cerrar')}</button>
         </div>
       </div>
     </div>
@@ -362,6 +364,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
 }
 
 export default function AdminPatientsPage() {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const [search, setSearch]         = useState('')
   const [department, setDepartment] = useState('Todos')
@@ -402,7 +405,7 @@ export default function AdminPatientsPage() {
     <DashboardLayout navItems={NAV} activeHref="/admin/patients" role="ADMIN">
       <div className="max-w-4xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Gestión de pacientes</h1>
+          <h1 className="text-base font-semibold">{t('Gestión de pacientes')}</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">
             {patients.length} pacientes registrados
           </p>
@@ -433,7 +436,7 @@ export default function AdminPatientsPage() {
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A0A8BF]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input
               className="w-full pl-8 pr-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
-              placeholder="Buscar por nombre, CI o teléfono..."
+              placeholder={t('Buscar por nombre, CI o teléfono...')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -459,7 +462,7 @@ export default function AdminPatientsPage() {
             action={
               <button onClick={() => { setSearch(''); setDepartment('Todos') }}
                 className="btn-secondary text-xs">
-                Limpiar filtros
+                {t('Limpiar filtros')}
               </button>
             }
           />
@@ -498,12 +501,12 @@ export default function AdminPatientsPage() {
                     <div className="flex gap-1.5 flex-shrink-0">
                       {p.allergies && p.allergies.length > 0 && (
                         <span className="badge-red text-[10px]" title="Tiene alergias">
-                          ⚠ Alergia
+                          {t('⚠ Alergia')}
                         </span>
                       )}
                       {p.chronic_conditions && p.chronic_conditions.length > 0 && (
                         <span className="badge-amber text-[10px]" title="Condición crónica">
-                          🏥 Crónico
+                          {t('🏥 Crónico')}
                         </span>
                       )}
                     </div>

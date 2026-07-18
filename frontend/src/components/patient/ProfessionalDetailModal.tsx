@@ -5,6 +5,7 @@
 
 import { Avatar, Stars, StatusBadge } from '@/components/ui'
 import type { Professional } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface ProfessionalDetailModalProps {
   professional: Professional
@@ -32,6 +33,7 @@ export function ProfessionalDetailModal({
   onConsult,
   consultLoading,
 }: ProfessionalDetailModalProps) {
+  const { t } = useLanguage()
   const color = SPECIALTY_COLORS[pro.specialty] || 'blue'
   const initials = `${pro.first_name[0]}${pro.last_name[0]}`
   const isOnline = pro.availability === 'ONLINE_NOW'
@@ -115,22 +117,22 @@ export function ProfessionalDetailModal({
           <div className="grid grid-cols-3 gap-2 py-4 border-y border-[#DDE1EE] text-center">
             <div>
               <p className="text-sm font-semibold text-[#141820]">{pro.years_experience}</p>
-              <p className="text-[10px] text-[#A0A8BF]">años de exp.</p>
+              <p className="text-[10px] text-[#A0A8BF]">{t('años de exp.')}</p>
             </div>
             <div>
               <p className="text-sm font-semibold text-[#141820]">{pro.total_consultations}</p>
-              <p className="text-[10px] text-[#A0A8BF]">consultas</p>
+              <p className="text-[10px] text-[#A0A8BF]">{t('consultas')}</p>
             </div>
             <div>
               <p className="text-sm font-semibold text-[#141820] truncate">{pro.languages.join(', ')}</p>
-              <p className="text-[10px] text-[#A0A8BF]">idiomas</p>
+              <p className="text-[10px] text-[#A0A8BF]">{t('idiomas')}</p>
             </div>
           </div>
 
           {/* Biografía completa, sin recortar */}
           {pro.bio && (
             <div className="mt-4">
-              <h3 className="text-xs font-semibold text-[#3C4257] mb-1">Sobre mí</h3>
+              <h3 className="text-xs font-semibold text-[#3C4257] mb-1">{t('Sobre mí')}</h3>
               <p className="text-sm text-[#6B738A] whitespace-pre-line">{pro.bio}</p>
             </div>
           )}
@@ -142,7 +144,7 @@ export function ProfessionalDetailModal({
                 onClick={onBook}
                 className="btn-secondary text-xs py-2 px-3 w-full"
               >
-                Agendar cita
+                {t('Agendar cita')}
               </button>
               <span className="text-xs font-semibold text-[#3C4257]">Bs. {parseFloat(pro.price_general).toFixed(0)}</span>
             </div>

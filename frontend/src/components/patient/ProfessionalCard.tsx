@@ -8,6 +8,7 @@ import { BookAppointmentModal } from './BookAppointmentModal'
 import { ProfessionalDetailModal } from './ProfessionalDetailModal'
 import { patientLinksAPI } from '@/lib/api'
 import type { Professional } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const SPECIALTY_COLORS: Record<string, 'blue' | 'teal' | 'purple' | 'coral' | 'amber'> = {
   'Cardiología':       'coral',
@@ -28,6 +29,7 @@ interface ProfessionalCardProps {
 }
 
 export function ProfessionalCard({ professional: pro, onConsult, loading, compact }: ProfessionalCardProps) {
+  const { t } = useLanguage()
   const color = SPECIALTY_COLORS[pro.specialty] || 'blue'
   const initials = `${pro.first_name[0]}${pro.last_name[0]}`
   const isOnline = pro.availability === 'ONLINE_NOW'
@@ -190,7 +192,7 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
             onClick={() => setShowBooking(true)}
             className="btn-secondary text-xs py-1.5 px-3 w-full"
           >
-            Agendar cita
+            {t('Agendar cita')}
           </button>
           <span className="text-xs font-semibold text-[#3C4257]">Bs. {parseFloat(pro.price_general).toFixed(0)}</span>
         </div>

@@ -9,6 +9,7 @@ import { Alert } from '@/components/ui'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { clinicalNotesAPI, consultationsAPI, getErrorMessage } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 function fmtFecha(iso: string) {
   const s = iso.endsWith('Z') ? iso : iso + 'Z'
@@ -34,6 +35,7 @@ const SOAP_LABELS: { key: keyof ClinicalNote; label: string; icon: string }[] = 
 ]
 
 function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => void }) {
+  const { t } = useLanguage()
   const [open, setOpen]       = useState(false)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving]   = useState(false)
@@ -111,10 +113,10 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {!note.is_visible_to_patient && (
-            <span className="text-[10px] bg-[#F5F0FF] text-[#6B3FA0] px-2 py-0.5 rounded-full font-medium">Interna</span>
+            <span className="text-[10px] bg-[#F5F0FF] text-[#6B3FA0] px-2 py-0.5 rounded-full font-medium">{t('Interna')}</span>
           )}
           {note.shared_with_professionals && (
-            <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium">Compartida</span>
+            <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium">{t('Compartida')}</span>
           )}
           <span className="text-[#6B738A] text-xs">{open ? '▲' : '▼'}</span>
         </div>
@@ -125,7 +127,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
 
           <div className="flex items-center justify-between">
             <p className="text-[11px] text-[#A0A8BF]">
-              Consulta: <span className="font-mono">{note.consultation_id}</span>
+              {t('Consulta:')} <span className="font-mono">{note.consultation_id}</span>
             </p>
             {isEditable ? (
               <button
@@ -161,7 +163,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
                 rows={3}
                 value={addendumText}
                 onChange={e => setAddendumText(e.target.value)}
-                placeholder="Ej: Se corrige dosis indicada en el plan, era 500mg y no 50mg."
+                placeholder={t('Ej: Se corrige dosis indicada en el plan, era 500mg y no 50mg.')}
               />
               {addendumMsg && <p className="text-xs text-[#A32D2D]">{addendumMsg}</p>}
               <button
@@ -200,7 +202,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
                   checked={form.is_visible_to_patient}
                   onChange={e => setForm(p => ({ ...p, is_visible_to_patient: e.target.checked }))}
                 />
-                Visible para el paciente en su historial
+                {t('Visible para el paciente en su historial')}
               </label>
               <button
                 onClick={handleSave}
@@ -215,7 +217,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
             <>
               {filledFields.length === 0 ? (
                 <p className="text-xs text-[#A0A8BF] text-center py-2">
-                  Esta nota no tiene contenido. Pulsa "Editar nota" para completarla.
+                  {t('Esta nota no tiene contenido. Pulsa "Editar nota" para completarla.')}
                 </p>
               ) : (
                 filledFields.map(f => (
@@ -327,6 +329,7 @@ function NewNoteForm({
   onCreated: () => void
   onCancel: () => void
 }) {
+  const { t } = useLanguage()
   const [consultationId, setConsultationId] = useState('')
   const [form, setForm] = useState({
     subjective: '', objective: '', assessment: '', plan: '', is_visible_to_patient: true,
@@ -356,27 +359,27 @@ function NewNoteForm({
   return (
     <div className="card mb-4">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-semibold text-[#1A1F2E]">Nueva historia clínica</p>
-        <button onClick={onCancel} className="text-xs text-[#6B738A] hover:underline">Cancelar</button>
+        <p className="text-sm font-semibold text-[#1A1F2E]">{t('Nueva historia clínica')}</p>
+        <button onClick={onCancel} className="text-xs text-[#6B738A] hover:underline">{t('Cancelar')}</button>
       </div>
 
       {error && <div className="mb-3"><Alert type="error" message={error} /></div>}
 
       {consultations.length === 0 ? (
         <p className="text-xs text-[#6B738A]">
-          No tienes consultas completadas sin historia clínica pendiente. Todas tus consultas completadas o en curso ya tienen una registrada.
+          {t('No tienes consultas completadas sin historia clínica pendiente. Todas tus consultas completadas o en curso ya tienen una registrada.')}
         </p>
       ) : (
         <form onSubmit={handleCreate} className="space-y-3">
           <div>
-            <label className="text-[11px] text-[#6B738A] mb-1 block">Consulta</label>
+            <label className="text-[11px] text-[#6B738A] mb-1 block">{t('Consulta')}</label>
             <select
               className="w-full border border-[#DDE1EE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#185FA5]"
               value={consultationId}
               onChange={e => setConsultationId(e.target.value)}
               required
             >
-              <option value="">Seleccionar consulta sin historia clínica...</option>
+              <option value="">{t('Seleccionar consulta sin historia clínica...')}</option>
               {consultations.map(c => {
                 const patientName = [c.patient_first_name, c.patient_last_name].filter(Boolean).join(' ')
                 const when = c.scheduled_at || c.created_at
@@ -407,7 +410,7 @@ function NewNoteForm({
               checked={form.is_visible_to_patient}
               onChange={e => setForm(p => ({ ...p, is_visible_to_patient: e.target.checked }))}
             />
-            Visible para el paciente en su historial
+            {t('Visible para el paciente en su historial')}
           </label>
 
           <button
@@ -424,6 +427,7 @@ function NewNoteForm({
 }
 
 export default function ProfessionalClinicalNotesPage() {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'date' | 'patient'>('patient')
@@ -504,9 +508,9 @@ export default function ProfessionalClinicalNotesPage() {
       <div className="max-w-2xl">
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-base font-semibold">Mis notas clínicas</h1>
+            <h1 className="text-base font-semibold">{t('Mis notas clínicas')}</h1>
             <p className="text-xs text-[#6B738A] mt-0.5">
-              Puedes consultarlas si un paciente regresa.
+              {t('Puedes consultarlas si un paciente regresa.')}
             </p>
           </div>
           {!showNewNote && (
@@ -514,7 +518,7 @@ export default function ProfessionalClinicalNotesPage() {
               onClick={() => setShowNewNote(true)}
               className="text-xs font-medium text-white bg-[#185FA5] hover:bg-[#0C447C] px-3 py-2 rounded-lg transition-colors flex-shrink-0"
             >
-              + Nueva historia clínica
+              {t('+ Nueva historia clínica')}
             </button>
           )}
         </div>
@@ -531,7 +535,7 @@ export default function ProfessionalClinicalNotesPage() {
         <div className="relative mb-4">
           <input
             type="text"
-            placeholder="Buscar por paciente o contenido..."
+            placeholder={t('Buscar por paciente o contenido...')}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full border border-[#DDE1EE] rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#185FA5] transition-colors"
@@ -555,7 +559,7 @@ export default function ProfessionalClinicalNotesPage() {
         ) : totalPatients === 0 && !search ? (
           <div className="card text-center py-14">
             <p className="text-4xl mb-3">📋</p>
-            <p className="text-sm font-semibold text-[#1A1F2E]">Sin notas clínicas aún</p>
+            <p className="text-sm font-semibold text-[#1A1F2E]">{t('Sin notas clínicas aún')}</p>
             <p className="text-xs text-[#6B738A] mt-1 max-w-xs mx-auto">
               Puedes crear la historia clínica de un paciente durante la videollamada usando el botón 📋,
               o usar "+ Nueva historia clínica" arriba para cualquier consulta ya completada.
@@ -576,13 +580,13 @@ export default function ProfessionalClinicalNotesPage() {
                   onClick={() => setViewMode('date')}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
                 >
-                  🕐 Por fecha
+                  {t('🕐 Por fecha')}
                 </button>
                 <button
                   onClick={() => setViewMode('patient')}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'patient' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
                 >
-                  👤 Por paciente
+                  {t('👤 Por paciente')}
                 </button>
               </div>
             </div>

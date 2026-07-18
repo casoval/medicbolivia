@@ -6,6 +6,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { LoadingScreen, SectionTitle, EmptyState, Alert } from '@/components/ui'
 import { specialtiesAPI, getErrorMessage } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface Proposal {
   id: string
@@ -38,14 +39,16 @@ interface SpecialtyWithSubs {
 }
 
 function TypeBadge({ type }: { type: 'SPECIALTY' | 'SUB_SPECIALTY' }) {
+  const { t } = useLanguage()
   return type === 'SPECIALTY' ? (
-    <span className="badge-blue">Especialidad</span>
+    <span className="badge-blue">{t('Especialidad')}</span>
   ) : (
-    <span className="badge-amber">Subespecialidad</span>
+    <span className="badge-amber">{t('Subespecialidad')}</span>
   )
 }
 
 export default function AdminSpecialtiesPage() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<'catalog' | 'proposals'>('catalog')
 
@@ -175,9 +178,9 @@ export default function AdminSpecialtiesPage() {
     <DashboardLayout navItems={NAV} activeHref="/admin/specialties" role="ADMIN">
       <div className="max-w-4xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Especialidades y subespecialidades</h1>
+          <h1 className="text-base font-semibold">{t('Especialidades y subespecialidades')}</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">
-            Gestiona el catálogo y revisa las propuestas enviadas por profesionales
+            {t('Gestiona el catálogo y revisa las propuestas enviadas por profesionales')}
           </p>
         </div>
 
@@ -191,7 +194,7 @@ export default function AdminSpecialtiesPage() {
                 : 'bg-white border-[#DDE1EE] text-[#6B738A]'
             }`}
           >
-            Catálogo
+            {t('Catálogo')}
           </button>
           <button
             onClick={() => setTab('proposals')}
@@ -201,7 +204,7 @@ export default function AdminSpecialtiesPage() {
                 : 'bg-white border-[#DDE1EE] text-[#6B738A]'
             }`}
           >
-            Propuestas
+            {t('Propuestas')}
           </button>
         </div>
 
@@ -215,11 +218,11 @@ export default function AdminSpecialtiesPage() {
 
             {/* Crear especialidad nueva */}
             <div className="card mb-4">
-              <SectionTitle>Nueva especialidad</SectionTitle>
+              <SectionTitle>{t('Nueva especialidad')}</SectionTitle>
               <div className="flex gap-2 mt-2">
                 <input
                   className="flex-1 px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
-                  placeholder="Ej. Medicina General"
+                  placeholder={t('Ej. Medicina General')}
                   value={newSpecialtyName}
                   onChange={(e) => setNewSpecialtyName(e.target.value)}
                   onKeyDown={(e) => {
@@ -281,7 +284,7 @@ export default function AdminSpecialtiesPage() {
                               </span>
                             )}
 
-                            {!s.is_active && <span className="badge-red">Inactiva</span>}
+                            {!s.is_active && <span className="badge-red">{t('Inactiva')}</span>}
 
                             {isEditingThis ? (
                               <>
@@ -289,13 +292,13 @@ export default function AdminSpecialtiesPage() {
                                   className="text-xs text-[#185FA5] font-medium flex-shrink-0"
                                   onClick={() => editingSpecialty.name.trim() && updateSpecialtyMutation.mutate({ id: s.id, data: { name: editingSpecialty.name.trim() } })}
                                 >
-                                  Guardar
+                                  {t('Guardar')}
                                 </button>
                                 <button
                                   className="text-xs text-[#6B738A] flex-shrink-0"
                                   onClick={() => setEditingSpecialty(null)}
                                 >
-                                  Cancelar
+                                  {t('Cancelar')}
                                 </button>
                               </>
                             ) : (
@@ -304,7 +307,7 @@ export default function AdminSpecialtiesPage() {
                                   className="text-xs text-[#185FA5] flex-shrink-0"
                                   onClick={() => setEditingSpecialty({ id: s.id, name: s.name })}
                                 >
-                                  Editar
+                                  {t('Editar')}
                                 </button>
                                 <button
                                   className={`text-xs flex-shrink-0 ${s.is_active ? 'text-[#A32D2D]' : 'text-[#0F6E56]'}`}
@@ -320,7 +323,7 @@ export default function AdminSpecialtiesPage() {
                           {isExpanded && (
                             <div className="ml-6 mt-2 space-y-1.5">
                               {s.sub_specialties.length === 0 && (
-                                <p className="text-xs text-[#A0A8BF]">Sin subespecialidades todavía</p>
+                                <p className="text-xs text-[#A0A8BF]">{t('Sin subespecialidades todavía')}</p>
                               )}
                               {s.sub_specialties.map((sub) => {
                                 const isEditingSub = editingSub?.id === sub.id
@@ -345,7 +348,7 @@ export default function AdminSpecialtiesPage() {
                                       </span>
                                     )}
 
-                                    {!sub.is_active && <span className="badge-red">Inactiva</span>}
+                                    {!sub.is_active && <span className="badge-red">{t('Inactiva')}</span>}
 
                                     {isEditingSub ? (
                                       <>
@@ -353,13 +356,13 @@ export default function AdminSpecialtiesPage() {
                                           className="text-xs text-[#185FA5] font-medium flex-shrink-0"
                                           onClick={() => editingSub.name.trim() && updateSubMutation.mutate({ id: sub.id, data: { name: editingSub.name.trim() } })}
                                         >
-                                          Guardar
+                                          {t('Guardar')}
                                         </button>
                                         <button
                                           className="text-xs text-[#6B738A] flex-shrink-0"
                                           onClick={() => setEditingSub(null)}
                                         >
-                                          Cancelar
+                                          {t('Cancelar')}
                                         </button>
                                       </>
                                     ) : (
@@ -368,7 +371,7 @@ export default function AdminSpecialtiesPage() {
                                           className="text-xs text-[#185FA5] flex-shrink-0"
                                           onClick={() => setEditingSub({ id: sub.id, name: sub.name })}
                                         >
-                                          Editar
+                                          {t('Editar')}
                                         </button>
                                         <button
                                           className={`text-xs flex-shrink-0 ${sub.is_active ? 'text-[#A32D2D]' : 'text-[#0F6E56]'}`}
@@ -387,7 +390,7 @@ export default function AdminSpecialtiesPage() {
                               <div className="flex gap-2 mt-2">
                                 <input
                                   className="flex-1 px-2 py-1 border border-[#DDE1EE] rounded text-xs focus:outline-none focus:border-[#185FA5]"
-                                  placeholder="Nueva subespecialidad..."
+                                  placeholder={t('Nueva subespecialidad...')}
                                   value={newSubName[s.id] || ''}
                                   onChange={(e) => setNewSubName((prev) => ({ ...prev, [s.id]: e.target.value }))}
                                   onKeyDown={(e) => {
@@ -405,7 +408,7 @@ export default function AdminSpecialtiesPage() {
                                     if (val) createSubMutation.mutate({ specialtyId: s.id, name: val })
                                   }}
                                 >
-                                  + Agregar
+                                  {t('+ Agregar')}
                                 </button>
                               </div>
                             </div>
@@ -464,7 +467,7 @@ export default function AdminSpecialtiesPage() {
                         <p className="text-xs text-[#6B738A] mt-1">
                           de {p.parent_specialty_name || p.parent_proposal_name || 'especialidad sin determinar'}
                           {p.depends_on_pending_specialty && (
-                            <span className="text-[#854F0B]"> · depende de una propuesta aún pendiente</span>
+                            <span className="text-[#854F0B]"> {t('· depende de una propuesta aún pendiente')}</span>
                           )}
                         </p>
                       )}
@@ -480,7 +483,7 @@ export default function AdminSpecialtiesPage() {
                         onClick={() => openReview(p)}
                         className="btn-secondary text-xs py-1.5 px-3 flex-shrink-0"
                       >
-                        Revisar
+                        {t('Revisar')}
                       </button>
                     ) : (
                       <span className={p.status === 'APPROVED' ? 'badge-green' : 'badge-red'}>
@@ -529,7 +532,7 @@ export default function AdminSpecialtiesPage() {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-[#6B738A] mb-1">
-                  Nombre final (puedes corregirlo)
+                  {t('Nombre final (puedes corregirlo)')}
                 </label>
                 <input
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
@@ -540,7 +543,7 @@ export default function AdminSpecialtiesPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#6B738A] mb-1">
-                  Nota (opcional, visible para el profesional)
+                  {t('Nota (opcional, visible para el profesional)')}
                 </label>
                 <textarea
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] resize-none"
@@ -557,14 +560,14 @@ export default function AdminSpecialtiesPage() {
                 className="flex-1 btn-secondary text-sm py-2"
                 disabled={reviewMutation.isPending}
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button
                 onClick={handleReject}
                 className="flex-1 bg-[#FCEBEB] text-[#A32D2D] hover:bg-[#F9D8D8] rounded-lg text-sm py-2 font-medium transition-colors disabled:opacity-50"
                 disabled={reviewMutation.isPending}
               >
-                Rechazar
+                {t('Rechazar')}
               </button>
               <button
                 onClick={handleApprove}

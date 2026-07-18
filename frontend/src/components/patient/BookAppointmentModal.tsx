@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { scheduleAPI, consultationsAPI, getErrorMessage } from '@/lib/api'
 import { Alert } from '@/components/ui'
 import type { Professional } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface BookAppointmentModalProps {
   professional: Professional
@@ -125,6 +126,7 @@ function MiniCalendar({
 }
 
 export function BookAppointmentModal({ professional, onClose }: BookAppointmentModalProps) {
+  const { t } = useLanguage()
   const router = useRouter()
   const [date, setDate] = useState(toISO(todayLocal()))
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
@@ -187,7 +189,7 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-base font-semibold">Agendar cita</h3>
+          <h3 className="text-base font-semibold">{t('Agendar cita')}</h3>
           <button onClick={onClose} className="text-[#A0A8BF] hover:text-[#6B738A] text-xl leading-none">×</button>
         </div>
         <p className="text-xs text-[#6B738A] mb-4">
@@ -226,11 +228,11 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
           </p>
         )}
 
-        <label className="block text-xs font-medium text-[#6B738A] mb-2">Fecha</label>
+        <label className="block text-xs font-medium text-[#6B738A] mb-2">{t('Fecha')}</label>
         <MiniCalendar selected={date} onSelect={handleDateSelect} />
         <p className="text-xs text-[#185FA5] font-medium -mt-2 mb-4">{dateLabel}</p>
 
-        <label className="block text-xs font-medium text-[#6B738A] mb-2">Horarios disponibles</label>
+        <label className="block text-xs font-medium text-[#6B738A] mb-2">{t('Horarios disponibles')}</label>
         {loadingSlots ? (
           <div className="grid grid-cols-3 gap-2 mb-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -239,7 +241,7 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
           </div>
         ) : slots.length === 0 ? (
           <p className="text-sm text-[#6B738A] mb-4">
-            No hay horarios disponibles ese día. Prueba otra fecha.
+            {t('No hay horarios disponibles ese día. Prueba otra fecha.')}
           </p>
         ) : (
           <div className="grid grid-cols-3 gap-2 mb-4 max-h-48 overflow-y-auto">
@@ -260,19 +262,19 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
         )}
 
         <label className="block text-xs font-medium text-[#6B738A] mb-1">
-          Motivo de consulta (opcional)
+          {t('Motivo de consulta (opcional)')}
         </label>
         <textarea
           value={chiefComplaint}
           onChange={(e) => setChiefComplaint(e.target.value)}
           rows={2}
-          placeholder="Ej. control de presión, dolor de cabeza recurrente..."
+          placeholder={t('Ej. control de presión, dolor de cabeza recurrente...')}
           className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] resize-none mb-4"
         />
 
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 btn-secondary text-sm py-2">
-            Cancelar
+            {t('Cancelar')}
           </button>
           <button
             onClick={() => createMutation.mutate()}
@@ -287,7 +289,7 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
           </button>
         </div>
         <p className="text-[10px] text-[#A0A8BF] mt-2 text-center">
-          El profesional debe confirmar tu solicitud antes de pagar.
+          {t('El profesional debe confirmar tu solicitud antes de pagar.')}
         </p>
       </div>
     </div>

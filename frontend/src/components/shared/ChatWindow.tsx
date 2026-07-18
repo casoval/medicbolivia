@@ -12,6 +12,7 @@ import { chatAPI, CHAT_PAGE_SIZE, getErrorMessage } from '@/lib/api'
 import { useChatSocket } from '@/lib/useChatSocket'
 import { Alert, Spinner } from '@/components/ui'
 import type { ChatConversationSummary } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconSend = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
 const IconClip = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a5.5 5.5 0 01-7.78-7.78l9.19-9.19a3.5 3.5 0 014.95 4.95l-9.2 9.19a1.5 1.5 0 01-2.12-2.12l8.49-8.48"/></svg>
@@ -47,6 +48,7 @@ interface ChatWindowProps {
 }
 
 export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindowProps) {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -308,7 +310,7 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
                   onClick={() => setConfirmBlockOpen(false)}
                   className="px-4 py-2 text-sm text-[#6B7280] hover:bg-[#F5F6FA] rounded-lg"
                 >
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
                 <button
                   onClick={handleConfirmBlock}
@@ -374,7 +376,7 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
                     ) : (
                       <div className="flex items-center gap-2">
                         <a href={m.attachment_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 underline">
-                          <IconFile /> Ver documento
+                          <IconFile /> {t('Ver documento')}
                         </a>
                         <button
                           onClick={() => handleDownload(m.attachment_url!)}

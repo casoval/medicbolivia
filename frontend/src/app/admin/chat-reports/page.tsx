@@ -11,6 +11,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { Alert, EmptyState, LoadingScreen } from '@/components/ui'
 import { adminAPI, getErrorMessage, type ChatReport } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const CATEGORY_LABELS: Record<string, string> = {
   HARASSMENT: 'Acoso',
@@ -116,6 +117,7 @@ function ReportCard({ report, onReviewed }: { report: ChatReport; onReviewed: ()
 }
 
 export default function AdminChatReportsPage() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<'pending' | 'reviewed'>('pending')
 
@@ -143,7 +145,7 @@ export default function AdminChatReportsPage() {
             onClick={() => setTab('pending')}
             className={`text-xs font-medium px-3 py-1.5 rounded-lg ${tab === 'pending' ? 'bg-[#185FA5] text-white' : 'bg-[#F5F6FA] text-[#6B738A]'}`}
           >
-            Pendientes
+            {t('Pendientes')}
           </button>
           <button
             onClick={() => setTab('reviewed')}

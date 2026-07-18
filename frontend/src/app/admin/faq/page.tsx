@@ -9,6 +9,7 @@ import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { LoadingScreen, SectionTitle, EmptyState, Alert } from '@/components/ui'
 import { faqAPI, getErrorMessage } from '@/lib/api'
 import type { FAQ, FAQAudience } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const AUDIENCE_LABEL: Record<FAQAudience, string> = {
   GENERAL: 'General',
@@ -41,6 +42,7 @@ const EMPTY_FORM: FormState = {
 }
 
 export default function AdminFAQPage() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [error, setError] = useState('')
@@ -116,7 +118,7 @@ export default function AdminFAQPage() {
 
   return (
     <DashboardLayout navItems={NAV} activeHref="/admin/faq" role="ADMIN">
-      <SectionTitle>Preguntas frecuentes</SectionTitle>
+      <SectionTitle>{t('Preguntas frecuentes')}</SectionTitle>
       <p className="text-sm text-[#6B738A] mb-4">
         Estas preguntas se muestran en la página principal (medicbolivia.com), visibles para
         cualquier visitante sin necesidad de iniciar sesión.
@@ -131,42 +133,42 @@ export default function AdminFAQPage() {
         {error && <Alert type="error" message={error} />}
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">Pregunta</label>
+          <label className="text-xs font-medium text-[#6B738A]">{t('Pregunta')}</label>
           <input
             className="input mt-1"
             value={form.question}
             onChange={(e) => setForm({ ...form, question: e.target.value })}
-            placeholder="Ej: ¿Cómo pago la consulta?"
+            placeholder={t('Ej: ¿Cómo pago la consulta?')}
             maxLength={300}
           />
         </div>
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">Respuesta</label>
+          <label className="text-xs font-medium text-[#6B738A]">{t('Respuesta')}</label>
           <textarea
             className="input mt-1 min-h-[90px]"
             value={form.answer}
             onChange={(e) => setForm({ ...form, answer: e.target.value })}
-            placeholder="Respuesta completa que verá el visitante..."
+            placeholder={t('Respuesta completa que verá el visitante...')}
           />
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">Audiencia</label>
+            <label className="text-xs font-medium text-[#6B738A]">{t('Audiencia')}</label>
             <select
               className="input mt-1"
               value={form.audience}
               onChange={(e) => setForm({ ...form, audience: e.target.value as FAQAudience })}
             >
-              <option value="GENERAL">General (quiénes somos, etc.)</option>
-              <option value="PATIENT">Paciente</option>
-              <option value="PROFESSIONAL">Profesional</option>
+              <option value="GENERAL">{t('General (quiénes somos, etc.)')}</option>
+              <option value="PATIENT">{t('Paciente')}</option>
+              <option value="PROFESSIONAL">{t('Profesional')}</option>
             </select>
           </div>
 
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">Orden</label>
+            <label className="text-xs font-medium text-[#6B738A]">{t('Orden')}</label>
             <input
               type="number"
               className="input mt-1"
@@ -182,7 +184,7 @@ export default function AdminFAQPage() {
                 checked={form.is_active}
                 onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
               />
-              Visible en el sitio
+              {t('Visible en el sitio')}
             </label>
           </div>
         </div>
@@ -193,7 +195,7 @@ export default function AdminFAQPage() {
           </button>
           {form.id && (
             <button type="button" className="btn-secondary" onClick={cancelEdit}>
-              Cancelar
+              {t('Cancelar')}
             </button>
           )}
         </div>
@@ -228,7 +230,7 @@ export default function AdminFAQPage() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <span className={AUDIENCE_BADGE[faq.audience]}>{AUDIENCE_LABEL[faq.audience]}</span>
-                  {!faq.is_active && <span className="badge-gray">Oculta</span>}
+                  {!faq.is_active && <span className="badge-gray">{t('Oculta')}</span>}
                   <span className="text-[10px] text-[#6B738A]">orden: {faq.display_order}</span>
                 </div>
                 <p className="text-sm font-medium text-[#141820]">{faq.question}</p>
@@ -236,7 +238,7 @@ export default function AdminFAQPage() {
               </div>
               <div className="flex flex-col gap-1.5 flex-shrink-0">
                 <button className="text-xs text-[#185FA5] hover:underline" onClick={() => startEdit(faq)}>
-                  Editar
+                  {t('Editar')}
                 </button>
                 <button
                   className="text-xs text-[#854F0B] hover:underline"
@@ -252,7 +254,7 @@ export default function AdminFAQPage() {
                     }
                   }}
                 >
-                  Eliminar
+                  {t('Eliminar')}
                 </button>
               </div>
             </div>

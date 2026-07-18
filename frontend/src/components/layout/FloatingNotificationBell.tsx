@@ -20,12 +20,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { notificationsAPI } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const SIZE = 52
 const MARGIN = 20
 const DRAG_THRESHOLD = 5 // px — por debajo de esto, se considera clic y no arrastre
 
 export function FloatingNotificationBell() {
+  const { t } = useLanguage()
   const { user } = useAuthStore()
   const role = user?.role
   const enabled = role === 'PATIENT' || role === 'PROFESSIONAL'
@@ -175,7 +177,7 @@ export function FloatingNotificationBell() {
                 ${openUp ? 'bottom-[62px]' : 'top-[62px]'} ${alignRight ? 'right-0' : 'left-0'}`}
             >
               <div className="p-3 border-b border-[#DDE1EE] flex items-center justify-between">
-                <p className="text-xs font-semibold">Notificaciones</p>
+                <p className="text-xs font-semibold">{t('Notificaciones')}</p>
                 {unread.length > 0 && (
                   <button onClick={markAllRead} className="text-[10px] text-[#0F6E56] font-medium hover:underline">
                     Marcar todas leídas
@@ -183,7 +185,7 @@ export function FloatingNotificationBell() {
                 )}
               </div>
               {notifications.length === 0 ? (
-                <p className="text-xs text-[#6B738A] text-center py-6">No tenés notificaciones todavía</p>
+                <p className="text-xs text-[#6B738A] text-center py-6">{t('No tenés notificaciones todavía')}</p>
               ) : (
                 <div className="divide-y divide-[#DDE1EE]">
                   {notifications.slice(0, 10).map((n) => (

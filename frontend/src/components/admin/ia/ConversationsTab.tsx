@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { SectionTitle, Alert, LoadingScreen, EmptyState, Toggle } from '@/components/ui'
 import { whatsappAPI, getErrorMessage } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const AUDIENCE_LABEL: Record<string, string> = { PATIENT: 'Paciente', PROFESSIONAL: 'Profesional', ADMIN: 'Admin', PUBLIC: 'Público' }
 const AUDIENCE_BADGE: Record<string, string> = { PATIENT: 'badge-blue', PROFESSIONAL: 'badge-green', ADMIN: 'badge-gray', PUBLIC: 'badge-gray' }
@@ -44,6 +45,7 @@ interface AgentConfig {
 }
 
 export function ConversationsTab() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [audienceFilter, setAudienceFilter] = useState<'ALL' | 'PATIENT' | 'PROFESSIONAL' | 'ADMIN' | 'PUBLIC'>('ALL')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -98,7 +100,7 @@ export function ConversationsTab() {
     <div className="space-y-4">
       {/* ── Configuración global del agente ── */}
       <div className="card p-4">
-        <SectionTitle>Configuración del agente IA (Medi)</SectionTitle>
+        <SectionTitle>{t('Configuración del agente IA (Medi)')}</SectionTitle>
         {error && <div className="mb-2"><Alert type="error" message={error} /></div>}
         {agentConfig && (
           <div className="space-y-0">
@@ -118,7 +120,7 @@ export function ConversationsTab() {
                   </div>
                   {locked ? (
                     <div className="flex items-center gap-2">
-                      <span className="badge-red text-[10px]">Bloqueado</span>
+                      <span className="badge-red text-[10px]">{t('Bloqueado')}</span>
                       <Toggle on={on} disabled />
                     </div>
                   ) : (
@@ -134,7 +136,7 @@ export function ConversationsTab() {
       {/* ── Inbox ── */}
       <div className="card p-0 overflow-hidden">
         <div className="p-4 pb-0">
-          <SectionTitle>Conversaciones</SectionTitle>
+          <SectionTitle>{t('Conversaciones')}</SectionTitle>
         </div>
         <div className="flex gap-2 px-4 pb-3 flex-wrap">
           {(['ALL', 'PATIENT', 'PROFESSIONAL', 'ADMIN', 'PUBLIC'] as const).map((f) => (
@@ -173,7 +175,7 @@ export function ConversationsTab() {
                   <p className="text-xs text-[#6B738A] truncate">{c.phone}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className={`${AUDIENCE_BADGE[c.audience] || 'badge-gray'} text-[9px]`}>{AUDIENCE_LABEL[c.audience] || c.audience}</span>
-                    {!c.agent_enabled && <span className="badge-gray text-[9px]">Bot off</span>}
+                    {!c.agent_enabled && <span className="badge-gray text-[9px]">{t('Bot off')}</span>}
                   </div>
                   <p className="text-xs text-[#6B738A] mt-1 truncate">{c.last_message_preview || '—'}</p>
                 </button>
@@ -185,7 +187,7 @@ export function ConversationsTab() {
           <div className="flex flex-col max-h-[420px]">
             {!selectedId ? (
               <div className="flex-1 flex items-center justify-center">
-                <p className="text-sm text-[#6B738A]">Elegí una conversación para ver el historial</p>
+                <p className="text-sm text-[#6B738A]">{t('Elegí una conversación para ver el historial')}</p>
               </div>
             ) : loadingThread ? (
               <LoadingScreen text="Cargando mensajes..." />
@@ -197,7 +199,7 @@ export function ConversationsTab() {
                     <p className="text-xs text-[#6B738A]">{thread.conversation.phone}</p>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-[#6B738A]">
-                    Agente en este chat
+                    {t('Agente en este chat')}
                     <Toggle
                       on={thread.conversation.agent_enabled}
                       onChange={(v) => toggleChatAgentMutation.mutate({ id: thread.conversation.id, agent_enabled: v })}
@@ -226,13 +228,13 @@ export function ConversationsTab() {
                   <div className="flex gap-2">
                     <input
                       className="input flex-1"
-                      placeholder="Responder manualmente (toma control del chat)..."
+                      placeholder={t('Responder manualmente (toma control del chat)...')}
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim()) sendMutation.mutate() }}
                     />
                     <button className="btn-primary" disabled={sendMutation.isPending || !draft.trim()} onClick={() => sendMutation.mutate()}>
-                      Enviar
+                      {t('Enviar')}
                     </button>
                   </div>
                 </div>

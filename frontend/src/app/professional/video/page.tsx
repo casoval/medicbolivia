@@ -14,6 +14,7 @@ import {
 } from 'livekit-client'
 import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, getErrorMessage } from '@/lib/api'
 import type { Medication } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface ChatMsg { from: 'me' | 'them'; text: string; time: string }
 
@@ -21,6 +22,7 @@ const EMPTY_MED: Medication = { name: '', presentation: '', dosage: '', frequenc
 
 // ── Panel lateral: emitir receta SIN salir de la videollamada ──────────
 function PrescriptionPanel({ consultationId, onClose }: { consultationId: string; onClose: () => void }) {
+  const { t } = useLanguage()
   const [medications, setMedications] = useState<Medication[]>([{ ...EMPTY_MED }])
   const [instructions, setInstructions] = useState('')
   const [saving, setSaving] = useState(false)
@@ -56,7 +58,7 @@ function PrescriptionPanel({ consultationId, onClose }: { consultationId: string
   return (
     <div className="w-80 bg-[#161B22] border-l border-white/10 flex flex-col flex-shrink-0 z-30 overflow-y-auto">
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 sticky top-0 bg-[#161B22]">
-        <p className="text-white text-sm font-semibold">💊 Receta digital</p>
+        <p className="text-white text-sm font-semibold">{t('💊 Receta digital')}</p>
         <button onClick={onClose} className="text-white/50 hover:text-white text-lg leading-none">✕</button>
       </div>
       <form onSubmit={handleSubmit} className="p-4 space-y-3">
@@ -69,33 +71,33 @@ function PrescriptionPanel({ consultationId, onClose }: { consultationId: string
               <p className="text-[11px] font-medium text-white/50">Medicamento {i + 1}</p>
               {medications.length > 1 && (
                 <button type="button" onClick={() => removeMed(i)} className="text-[11px] text-[#F09595] hover:underline">
-                  Eliminar
+                  {t('Eliminar')}
                 </button>
               )}
             </div>
             <input
               className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
-              placeholder="Nombre (ej: Amoxicilina 500mg)"
+              placeholder={t('Nombre (ej: Amoxicilina 500mg)')}
               value={med.name}
               onChange={e => updateMed(i, 'name', e.target.value)}
             />
             <div className="grid grid-cols-2 gap-2">
               <input
                 className="bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
-                placeholder="Dosis"
+                placeholder={t('Dosis')}
                 value={med.dosage}
                 onChange={e => updateMed(i, 'dosage', e.target.value)}
               />
               <input
                 className="bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
-                placeholder="Frecuencia"
+                placeholder={t('Frecuencia')}
                 value={med.frequency}
                 onChange={e => updateMed(i, 'frequency', e.target.value)}
               />
             </div>
             <input
               className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
-              placeholder="Duración (ej: 7 días)"
+              placeholder={t('Duración (ej: 7 días)')}
               value={med.duration}
               onChange={e => updateMed(i, 'duration', e.target.value)}
             />
@@ -103,12 +105,12 @@ function PrescriptionPanel({ consultationId, onClose }: { consultationId: string
         ))}
 
         <button type="button" onClick={addMed} className="text-xs text-[#7CB4E8] hover:underline">
-          + Agregar otro medicamento
+          {t('+ Agregar otro medicamento')}
         </button>
 
         <textarea
           className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
-          placeholder="Indicaciones adicionales..."
+          placeholder={t('Indicaciones adicionales...')}
           rows={3}
           value={instructions}
           onChange={e => setInstructions(e.target.value)}
@@ -128,6 +130,7 @@ function PrescriptionPanel({ consultationId, onClose }: { consultationId: string
 
 // ── Panel lateral: historia clínica con autosave, SIN salir de la llamada ──
 function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string; onClose: () => void }) {
+  const { t } = useLanguage()
   const [noteId, setNoteId] = useState<string | null>(null)
   const [subjective, setSubjective] = useState('')
   const [objective, setObjective] = useState('')
@@ -187,14 +190,14 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
     <div className="w-80 bg-[#161B22] border-l border-white/10 flex flex-col flex-shrink-0 z-30 overflow-y-auto">
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 sticky top-0 bg-[#161B22]">
         <div>
-          <p className="text-white text-sm font-semibold">📋 Historia clínica</p>
+          <p className="text-white text-sm font-semibold">{t('📋 Historia clínica')}</p>
           {saveLabel && <p className="text-[10px] text-white/40 mt-0.5">{saveLabel}</p>}
         </div>
         <button onClick={onClose} className="text-white/50 hover:text-white text-lg leading-none">✕</button>
       </div>
       <div className="p-4 space-y-3">
         <div>
-          <label className="text-[11px] text-white/50 mb-1 block">Subjetivo — lo que relata el paciente</label>
+          <label className="text-[11px] text-white/50 mb-1 block">{t('Subjetivo — lo que relata el paciente')}</label>
           <textarea
             className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
             rows={2}
@@ -203,7 +206,7 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
           />
         </div>
         <div>
-          <label className="text-[11px] text-white/50 mb-1 block">Objetivo — hallazgos del examen</label>
+          <label className="text-[11px] text-white/50 mb-1 block">{t('Objetivo — hallazgos del examen')}</label>
           <textarea
             className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
             rows={2}
@@ -212,7 +215,7 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
           />
         </div>
         <div>
-          <label className="text-[11px] text-white/50 mb-1 block">Evaluación — impresión clínica</label>
+          <label className="text-[11px] text-white/50 mb-1 block">{t('Evaluación — impresión clínica')}</label>
           <textarea
             className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
             rows={2}
@@ -221,7 +224,7 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
           />
         </div>
         <div>
-          <label className="text-[11px] text-white/50 mb-1 block">Plan — indicaciones y seguimiento</label>
+          <label className="text-[11px] text-white/50 mb-1 block">{t('Plan — indicaciones y seguimiento')}</label>
           <textarea
             className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
             rows={2}
@@ -237,10 +240,10 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
             onChange={e => setIsVisibleToPatient(e.target.checked)}
             className="mt-0.5"
           />
-          Visible para el paciente en su historial (desmárcalo si es una nota interna)
+          {t('Visible para el paciente en su historial (desmárcalo si es una nota interna)')}
         </label>
         <p className="text-[10px] text-white/30">
-          Se guarda automáticamente mientras escribes. El paciente decide después si la comparte con otros médicos.
+          {t('Se guarda automáticamente mientras escribes. El paciente decide después si la comparte con otros médicos.')}
         </p>
       </div>
     </div>
@@ -248,6 +251,7 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
 }
 
 export default function ProfessionalVideoPage() {
+  const { t } = useLanguage()
   const params = useSearchParams()
 
   const token          = params.get('token') ?? ''
@@ -477,11 +481,11 @@ export default function ProfessionalVideoPage() {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-[#161B22] border border-white/10 rounded-2xl p-6 max-w-xs w-full mx-4 text-center">
             <p className="text-3xl mb-2">🏁</p>
-            <p className="text-white font-semibold mb-1">¿Finalizar la consulta?</p>
-            <p className="text-white/50 text-xs mb-5">Esta acción termina la consulta para el paciente también. No se puede deshacer.</p>
+            <p className="text-white font-semibold mb-1">{t('¿Finalizar la consulta?')}</p>
+            <p className="text-white/50 text-xs mb-5">{t('Esta acción termina la consulta para el paciente también. No se puede deshacer.')}</p>
             <div className="flex gap-3">
               <button onClick={() => setShowEndConfirm(false)} className="flex-1 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition-colors">
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button onClick={endConsultation} disabled={ending} className="flex-1 py-2 rounded-xl bg-[#E24B4A] hover:bg-[#c93a39] text-white text-sm font-medium transition-colors disabled:opacity-60">
                 {ending ? 'Finalizando...' : 'Finalizar'}
@@ -496,19 +500,19 @@ export default function ProfessionalVideoPage() {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-[#161B22] border border-white/10 rounded-2xl p-6 max-w-xs w-full mx-4 text-center">
             <p className="text-3xl mb-2">💊</p>
-            <p className="text-white font-semibold mb-1">¿Deseas emitir una receta?</p>
+            <p className="text-white font-semibold mb-1">{t('¿Deseas emitir una receta?')}</p>
             <p className="text-white/50 text-xs mb-5">
-              La consulta finalizó y todavía no emitiste ninguna receta para este paciente.
+              {t('La consulta finalizó y todavía no emitiste ninguna receta para este paciente.')}
             </p>
             <div className="flex gap-3">
               <button onClick={leaveWithoutPrescription} className="flex-1 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition-colors">
-                Salir sin receta
+                {t('Salir sin receta')}
               </button>
               <button
                 onClick={() => { setPendingRxWarning(false); setSidePanel('rx') }}
                 className="flex-1 py-2 rounded-xl bg-[#185FA5] hover:bg-[#0C447C] text-white text-sm font-medium transition-colors"
               >
-                Emitir receta
+                {t('Emitir receta')}
               </button>
             </div>
           </div>
@@ -520,19 +524,19 @@ export default function ProfessionalVideoPage() {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-[#161B22] border border-white/10 rounded-2xl p-6 max-w-xs w-full mx-4 text-center">
             <p className="text-3xl mb-2">📋</p>
-            <p className="text-white font-semibold mb-1">¿Deseas dejar una nota en la historia clínica?</p>
+            <p className="text-white font-semibold mb-1">{t('¿Deseas dejar una nota en la historia clínica?')}</p>
             <p className="text-white/50 text-xs mb-5">
-              La consulta finalizó y todavía no registraste ninguna nota clínica para este paciente.
+              {t('La consulta finalizó y todavía no registraste ninguna nota clínica para este paciente.')}
             </p>
             <div className="flex gap-3">
               <button onClick={leaveWithoutClinicalNote} className="flex-1 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition-colors">
-                Salir sin nota
+                {t('Salir sin nota')}
               </button>
               <button
                 onClick={() => { setPendingNoteWarning(false); setSidePanel('note') }}
                 className="flex-1 py-2 rounded-xl bg-[#185FA5] hover:bg-[#0C447C] text-white text-sm font-medium transition-colors"
               >
-                Registrar historia clínica
+                {t('Registrar historia clínica')}
               </button>
             </div>
           </div>
@@ -551,7 +555,7 @@ export default function ProfessionalVideoPage() {
             <p className="text-white text-sm font-medium">
               {status === 'connecting' ? 'Conectando...' : 'Esperando al paciente...'}
             </p>
-            {status === 'connected' && <p className="text-[#6B738A] text-xs">El paciente entrará automáticamente</p>}
+            {status === 'connected' && <p className="text-[#6B738A] text-xs">{t('El paciente entrará automáticamente')}</p>}
           </div>
         )}
 
@@ -599,7 +603,7 @@ export default function ProfessionalVideoPage() {
               <button onClick={leaveCall} disabled={ending} className="w-[60px] h-[60px] rounded-full bg-[#E24B4A] hover:bg-[#c93a39] text-white text-2xl flex items-center justify-center transition-all shadow-xl disabled:opacity-60 hover:scale-105">
                 📵
               </button>
-              <span className="text-white/70 text-[11px] font-medium">Salir</span>
+              <span className="text-white/70 text-[11px] font-medium">{t('Salir')}</span>
             </div>
 
             {/* Finalizar */}
@@ -607,7 +611,7 @@ export default function ProfessionalVideoPage() {
               <button onClick={() => setShowEndConfirm(true)} disabled={ending} className="w-[52px] h-[52px] rounded-full bg-white/20 hover:bg-red-900/70 backdrop-blur-sm text-white text-xl flex items-center justify-center transition-all shadow-lg disabled:opacity-60">
                 🏁
               </button>
-              <span className="text-white/70 text-[11px] font-medium">Finalizar</span>
+              <span className="text-white/70 text-[11px] font-medium">{t('Finalizar')}</span>
             </div>
 
             {/* Receta */}
@@ -618,7 +622,7 @@ export default function ProfessionalVideoPage() {
               >
                 💊
               </button>
-              <span className="text-white/70 text-[11px] font-medium">Receta</span>
+              <span className="text-white/70 text-[11px] font-medium">{t('Receta')}</span>
             </div>
 
             {/* Historia clínica */}
@@ -629,7 +633,7 @@ export default function ProfessionalVideoPage() {
               >
                 📋
               </button>
-              <span className="text-white/70 text-[11px] font-medium">Historia</span>
+              <span className="text-white/70 text-[11px] font-medium">{t('Historia')}</span>
             </div>
 
             {/* Chat */}
@@ -640,7 +644,7 @@ export default function ProfessionalVideoPage() {
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#E24B4A] rounded-full text-xs flex items-center justify-center font-bold">{unread}</span>
                 )}
               </button>
-              <span className="text-white/70 text-[11px] font-medium">Chat</span>
+              <span className="text-white/70 text-[11px] font-medium">{t('Chat')}</span>
             </div>
 
           </div>
@@ -651,12 +655,12 @@ export default function ProfessionalVideoPage() {
       {chatOpen && (
         <div className="w-72 bg-[#161B22] border-l border-white/10 flex flex-col flex-shrink-0 z-30">
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-            <p className="text-white text-sm font-semibold">Chat con paciente</p>
+            <p className="text-white text-sm font-semibold">{t('Chat con paciente')}</p>
             <button onClick={() => setChatOpen(false)} className="text-white/50 hover:text-white text-lg leading-none">✕</button>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {messages.length === 0 && (
-              <p className="text-white/30 text-xs text-center mt-6">Los mensajes solo duran durante esta llamada</p>
+              <p className="text-white/30 text-xs text-center mt-6">{t('Los mensajes solo duran durante esta llamada')}</p>
             )}
             {messages.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.from === 'me' ? 'items-end' : 'items-start'}`}>
@@ -674,7 +678,7 @@ export default function ProfessionalVideoPage() {
               value={inputText}
               onChange={e => setInputText(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              placeholder="Escribe un mensaje..."
+              placeholder={t('Escribe un mensaje...')}
               className="flex-1 bg-white/10 text-white text-sm px-3 py-2 rounded-xl outline-none placeholder:text-white/30 focus:bg-white/15"
             />
             <button onClick={sendMessage} disabled={!inputText.trim()} className="w-9 h-9 bg-[#185FA5] hover:bg-[#0C447C] disabled:opacity-40 text-white rounded-xl flex items-center justify-center text-sm transition-colors">

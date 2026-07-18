@@ -8,6 +8,7 @@ import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { Alert } from '@/components/ui'
 import { consultationsAPI, professionalsAPI, getErrorMessage } from '@/lib/api'
 import type { Payment, ConsultationStatus, Consultation } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 // Flujo INMEDIATA: médico acepta → paciente paga → videollamada
 const STATUS_STEPS_IMMEDIATE = [
@@ -88,6 +89,7 @@ function SlotPicker({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const { t } = useLanguage()
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -199,7 +201,7 @@ function SlotPicker({
               <div className="w-4 h-4 border-2 border-[#185FA5] border-t-transparent rounded-full animate-spin" />
             </div>
           ) : slots.length === 0 ? (
-            <p className="text-xs text-[#A0A8BF] text-center py-2">No hay horarios disponibles este día</p>
+            <p className="text-xs text-[#A0A8BF] text-center py-2">{t('No hay horarios disponibles este día')}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {slots.map(slot => (
@@ -225,13 +227,13 @@ function SlotPicker({
           disabled={!value}
           className="flex-1 py-2 bg-[#185FA5] text-white text-xs font-medium rounded-lg disabled:opacity-40 hover:bg-[#0d4a85] transition-colors"
         >
-          Enviar propuesta
+          {t('Enviar propuesta')}
         </button>
         <button
           onClick={onCancel}
           className="px-4 py-2 text-xs text-[#6B738A] border border-[#DDE1EE] rounded-lg hover:bg-[#F5F6FA] transition-colors"
         >
-          Cancelar
+          {t('Cancelar')}
         </button>
       </div>
     </div>
@@ -239,6 +241,7 @@ function SlotPicker({
 }
 
 function ScheduledAcceptDeadlineTimer({ createdAt, scheduledAt }: { createdAt: string; scheduledAt?: string | null }) {
+  const { t } = useLanguage()
   const [secs, setSecs] = useState(0)
   const [limitedByAppointment, setLimitedByAppointment] = useState(false)
   useEffect(() => {
@@ -270,7 +273,7 @@ function ScheduledAcceptDeadlineTimer({ createdAt, scheduledAt }: { createdAt: s
 
   return (
     <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 mb-3 ${isUrgent ? 'bg-[#FBEAEA] border border-[#F3A6A5]' : 'bg-[#FAEEDA] border border-[#FAC775]'}`}>
-      <span className={`text-xs ${isUrgent ? 'text-[#9B2C2B]' : 'text-[#854F0B]'}`}>Plazo para confirmar</span>
+      <span className={`text-xs ${isUrgent ? 'text-[#9B2C2B]' : 'text-[#854F0B]'}`}>{t('Plazo para confirmar')}</span>
       <span className={`font-bold text-sm font-mono ${isUrgent ? 'text-[#9B2C2B]' : 'text-[#854F0B]'}`}>
         {days > 0 && `${days}d `}{hours.toString().padStart(2, '0')}h {mins.toString().padStart(2, '0')}m {s.toString().padStart(2, '0')}s
       </span>
@@ -279,6 +282,7 @@ function ScheduledAcceptDeadlineTimer({ createdAt, scheduledAt }: { createdAt: s
 }
 
 function QRTimer({ expiresAt, onExpired }: { expiresAt: string; onExpired: () => void }) {
+  const { t } = useLanguage()
   const [secs, setSecs] = useState(0)
   useEffect(() => {
     const expiry = new Date(expiresAt.endsWith('Z') ? expiresAt : expiresAt + 'Z').getTime()
@@ -296,10 +300,10 @@ function QRTimer({ expiresAt, onExpired }: { expiresAt: string; onExpired: () =>
   return (
     <div className="flex items-center gap-2 justify-center">
       <div className="bg-[#FAEEDA] border border-[#FAC775] rounded-full px-3 py-1 flex items-center gap-2">
-        <span className="text-[#854F0B] text-xs">Expira en</span>
+        <span className="text-[#854F0B] text-xs">{t('Expira en')}</span>
         <span className="text-[#854F0B] font-bold text-sm font-mono">{m}:{s.toString().padStart(2, '0')}</span>
       </div>
-      {secs === 0 && <span className="text-xs text-red-500 font-medium">QR expirado</span>}
+      {secs === 0 && <span className="text-xs text-red-500 font-medium">{t('QR expirado')}</span>}
     </div>
   )
 }
@@ -325,6 +329,7 @@ function WaitingForDoctor({
   error: string
   actionMessage: string
 }) {
+  const { t } = useLanguage()
   const [tipIndex, setTipIndex]   = useState(0)
   const [fade, setFade]           = useState(true)
   const [elapsedSecs, setElapsed] = useState(0)
@@ -376,12 +381,12 @@ function WaitingForDoctor({
         </div>
       </div>
 
-      <p className="text-base font-bold text-[#141820] mb-1">El médico está preparándose</p>
-      <p className="text-xs text-[#6B738A] mb-4">Iniciará la videollamada en unos momentos. Por favor no cerrés esta página.</p>
+      <p className="text-base font-bold text-[#141820] mb-1">{t('El médico está preparándose')}</p>
+      <p className="text-xs text-[#6B738A] mb-4">{t('Iniciará la videollamada en unos momentos. Por favor no cerrés esta página.')}</p>
 
       {/* Timer de espera */}
       <div className="inline-flex items-center gap-2 bg-[#E6F1FB] border border-[#B8D4F0] rounded-full px-4 py-1.5 mb-5">
-        <span className="text-[#185FA5] text-xs">⏱ Tiempo de espera</span>
+        <span className="text-[#185FA5] text-xs">{t('⏱ Tiempo de espera')}</span>
         <span className="text-[#185FA5] font-bold text-sm font-mono">
           {mins}:{secs.toString().padStart(2, '0')}
         </span>
@@ -413,7 +418,7 @@ function WaitingForDoctor({
             style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
           />
         ))}
-        <span className="text-xs text-[#6B738A] ml-1">Conectando con el médico...</span>
+        <span className="text-xs text-[#6B738A] ml-1">{t('Conectando con el médico...')}</span>
       </div>
 
       {/* Tip rotativo */}
@@ -421,7 +426,7 @@ function WaitingForDoctor({
         className="bg-[#F5F6FA] rounded-xl px-4 py-3 text-left transition-opacity duration-400"
         style={{ opacity: fade ? 1 : 0 }}
       >
-        <p className="text-xs text-[#6B738A] mb-1 font-medium uppercase tracking-wide">Mientras esperás</p>
+        <p className="text-xs text-[#6B738A] mb-1 font-medium uppercase tracking-wide">{t('Mientras esperás')}</p>
         <div className="flex items-start gap-2">
           <span className="text-base leading-none mt-0.5">{tip.icon}</span>
           <p className="text-sm text-[#141820]">{tip.text}</p>
@@ -440,7 +445,7 @@ function WaitingForDoctor({
       </div>
 
       <p className="text-xs text-[#A0A8BF] mt-4">
-        🔒 Tu pago está confirmado · La consulta está garantizada
+        {t('🔒 Tu pago está confirmado · La consulta está garantizada')}
       </p>
 
       {/* GAP 1: cancelación voluntaria — habilitada a los 15 min del pago */}
@@ -451,7 +456,7 @@ function WaitingForDoctor({
             disabled={cancelling}
             className="text-xs text-[#A32D2D] hover:underline disabled:opacity-50"
           >
-            El médico no inició la videollamada — cancelar y pedir devolución
+            {t('El médico no inició la videollamada — cancelar y pedir devolución')}
           </button>
         ) : (
           <p className="text-xs text-[#A0A8BF]">
@@ -464,7 +469,7 @@ function WaitingForDoctor({
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl p-6 mx-4 max-w-sm w-full text-left">
-            <h3 className="text-base font-semibold text-[#1C2340] mb-2">¿Cancelar y pedir devolución?</h3>
+            <h3 className="text-base font-semibold text-[#1C2340] mb-2">{t('¿Cancelar y pedir devolución?')}</h3>
             <p className="text-sm text-[#6B738A] mb-4">
               Ya pasaron {GRACE_MINUTES} minutos desde tu pago y el médico no inició la videollamada.
               Si cancelas, recibirás la devolución completa de tu dinero.
@@ -474,7 +479,7 @@ function WaitingForDoctor({
                 onClick={() => setShowCancelConfirm(false)}
                 className="flex-1 text-sm text-[#6B738A] border border-[#DDE1EE] rounded-xl py-2.5 hover:bg-[#F5F6FA] transition-colors"
               >
-                Seguir esperando
+                {t('Seguir esperando')}
               </button>
               <button
                 onClick={() => { setShowCancelConfirm(false); onCancelNoVideo() }}
@@ -494,6 +499,7 @@ function WaitingForDoctor({
 // Tarjeta para citas AGENDADAS ya pagadas — distinta de WaitingForDoctor porque
 // no hay que "esperar que inicie en cualquier momento": la cita es a futuro.
 function AppointmentCountdown({ scheduledAt }: { scheduledAt: Date }) {
+  const { t } = useLanguage()
   const [, setTick] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 1000)
@@ -516,7 +522,7 @@ function AppointmentCountdown({ scheduledAt }: { scheduledAt: Date }) {
 
   return (
     <div className="mb-4">
-      <p className="text-xs text-[#6B738A] mb-2">Tu cita comienza en</p>
+      <p className="text-xs text-[#6B738A] mb-2">{t('Tu cita comienza en')}</p>
       <div className="flex justify-center gap-2">
         {parts.map(({ label, value }) => (
           <div key={label} className="flex flex-col items-center bg-[#F0F5FB] rounded-xl px-3 py-2 min-w-[52px]">
@@ -552,6 +558,7 @@ function ScheduledConfirmedCard({
   onCancelNoVideo: () => void
   cancellingNoVideo: boolean
 }) {
+  const { t } = useLanguage()
   const scheduledAt = consultation?.scheduled_at ? new Date(consultation.scheduled_at) : null
   const now = Date.now()
   const timeArrived = scheduledAt ? now >= scheduledAt.getTime() : false
@@ -586,7 +593,7 @@ function ScheduledConfirmedCard({
       <div className="w-16 h-16 rounded-full bg-[#E6F1FB] border-2 border-[#185FA5] flex items-center justify-center text-2xl mx-auto mb-3">
         {isProfessionalScheduled && isInPerson ? '🏥' : '📅'}
       </div>
-      <p className="text-sm font-semibold mb-1">Tu cita está confirmada</p>
+      <p className="text-sm font-semibold mb-1">{t('Tu cita está confirmada')}</p>
       {scheduledAt && (
         <p className="text-base text-[#185FA5] font-bold mb-1">
           {scheduledAt.toLocaleString('es-BO', {
@@ -632,17 +639,17 @@ function ScheduledConfirmedCard({
           </p>
           <div className="flex gap-2">
             <button onClick={() => onRespondReschedule('ACCEPT')} className="flex-1 text-xs bg-[#1D9E75] text-white py-1.5 rounded-lg">
-              Aceptar
+              {t('Aceptar')}
             </button>
             <button onClick={() => onRespondReschedule('REJECT')} className="flex-1 text-xs bg-white border border-[#DDE1EE] text-[#6B738A] py-1.5 rounded-lg">
-              Rechazar
+              {t('Rechazar')}
             </button>
           </div>
         </div>
       )}
 
       {hasOwnPendingProposal && (
-        <p className="text-xs text-[#A0A8BF] mb-4">Propusiste otro horario — esperando respuesta del profesional.</p>
+        <p className="text-xs text-[#A0A8BF] mb-4">{t('Propusiste otro horario — esperando respuesta del profesional.')}</p>
       )}
 
       {/* Acciones: reportar inasistencia (solo si ya llegó la hora + gracia) */}
@@ -653,7 +660,7 @@ function ScheduledConfirmedCard({
           title={!graceOk ? 'Disponible 60 min después de la hora de la cita' : ''}
           className="w-full py-2 px-4 bg-[#FCEBEB] hover:bg-[#F9D8D8] text-[#A32D2D] text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed mb-2"
         >
-          El profesional no llegó
+          {t('El profesional no llegó')}
         </button>
       )}
 
@@ -689,7 +696,7 @@ function ScheduledConfirmedCard({
             ) : (
               <div>
                 <button onClick={() => setReschedulingOpen(true)} className="w-full btn-secondary text-sm py-2">
-                  Proponer otro horario
+                  {t('Proponer otro horario')}
                 </button>
                 <p className="text-xs text-[#A0A8BF] mt-1">
                   Te quedan {attemptsRemaining} propuesta(s) de reprogramación.
@@ -699,12 +706,12 @@ function ScheduledConfirmedCard({
           )}
           {!consultation?.reschedule_used && attemptsRemaining === 0 && (
             <p className="text-xs text-[#A0A8BF]">
-              Ya se alcanzó el máximo de propuestas de reprogramación para esta cita.
+              {t('Ya se alcanzó el máximo de propuestas de reprogramación para esta cita.')}
             </p>
           )}
           {canCancelWithRefund && (
             <button onClick={onCancelWithRefund} className="w-full text-xs text-[#A32D2D] hover:underline py-1">
-              Cancelar y recibir devolución (aviso ≥24h)
+              {t('Cancelar y recibir devolución (aviso ≥24h)')}
             </button>
           )}
         </div>
@@ -716,6 +723,7 @@ function ScheduledConfirmedCard({
 }
 
 export default function WaitingRoomPage() {
+  const { t } = useLanguage()
   const params = useSearchParams()
   const router = useRouter()
   const consultationIdFromUrl = params.get('consultationId')
@@ -996,11 +1004,11 @@ export default function WaitingRoomPage() {
     return (
       <DashboardLayout navItems={NAV} activeHref="/patient/waiting-room" role="PATIENT">
         <div className="max-w-xl text-center py-16">
-          <p className="text-sm font-semibold mb-2">No tienes ninguna consulta en curso</p>
-          <p className="text-xs text-[#6B738A] mb-5">Inicia una consulta con el agente o busca un profesional.</p>
+          <p className="text-sm font-semibold mb-2">{t('No tienes ninguna consulta en curso')}</p>
+          <p className="text-xs text-[#6B738A] mb-5">{t('Inicia una consulta con el agente o busca un profesional.')}</p>
           <div className="flex gap-3 justify-center">
-            <a href="/patient/agent" className="btn-primary text-xs">Hablar con Medi</a>
-            <a href="/patient/search" className="btn-secondary text-xs">Buscar médico</a>
+            <a href="/patient/agent" className="btn-primary text-xs">{t('Hablar con Medi')}</a>
+            <a href="/patient/search" className="btn-secondary text-xs">{t('Buscar médico')}</a>
           </div>
         </div>
       </DashboardLayout>
@@ -1012,8 +1020,8 @@ export default function WaitingRoomPage() {
       <div className="max-w-xl">
 
         <div className="mb-5">
-          <h1 className="text-base font-semibold">Sala de espera virtual</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">Tu consulta está siendo coordinada</p>
+          <h1 className="text-base font-semibold">{t('Sala de espera virtual')}</h1>
+          <p className="text-xs text-[#6B738A] mt-0.5">{t('Tu consulta está siendo coordinada')}</p>
         </div>
 
         {/* Pestañas — solo si hay más de una consulta activa */}
@@ -1048,7 +1056,7 @@ export default function WaitingRoomPage() {
 
         {/* Timeline */}
         <div className="card mb-4">
-          <h2 className="text-sm font-semibold mb-3">Estado de tu consulta</h2>
+          <h2 className="text-sm font-semibold mb-3">{t('Estado de tu consulta')}</h2>
           {/* Badge que diferencia el tipo de flujo */}
           <div className="flex items-center gap-1.5 flex-wrap mb-3">
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -1110,7 +1118,7 @@ export default function WaitingRoomPage() {
             </div>
             {isScheduled ? (
               <>
-                <p className="text-sm font-semibold mb-1">Esperando confirmación de tu cita</p>
+                <p className="text-sm font-semibold mb-1">{t('Esperando confirmación de tu cita')}</p>
                 {consultation?.scheduled_at && (
                   <p className="text-xs text-[#185FA5] font-medium mb-1">
                     🗓 {new Date(consultation.scheduled_at).toLocaleString('es-BO', {
@@ -1118,7 +1126,7 @@ export default function WaitingRoomPage() {
                     })}
                   </p>
                 )}
-                <p className="text-xs text-[#6B738A] mb-2">El profesional debe confirmar tu solicitud antes de que llegue la hora de tu cita</p>
+                <p className="text-xs text-[#6B738A] mb-2">{t('El profesional debe confirmar tu solicitud antes de que llegue la hora de tu cita')}</p>
                 {consultationCreatedAt && (
                   <ScheduledAcceptDeadlineTimer createdAt={consultationCreatedAt} scheduledAt={consultation?.scheduled_at} />
                 )}
@@ -1127,7 +1135,7 @@ export default function WaitingRoomPage() {
                     onClick={() => setShowCancelConfirm(true)}
                     className="text-xs text-[#A0A8BF] hover:text-[#E24B4A] transition-colors underline"
                   >
-                    Cancelar solicitud
+                    {t('Cancelar solicitud')}
                   </button>
                 </div>
 
@@ -1135,16 +1143,16 @@ export default function WaitingRoomPage() {
                 {showCancelConfirm && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
                     <div className="bg-white rounded-2xl shadow-xl p-6 mx-4 max-w-sm w-full text-left">
-                      <h3 className="text-base font-semibold text-[#1C2340] mb-2">¿Cancelar la solicitud?</h3>
+                      <h3 className="text-base font-semibold text-[#1C2340] mb-2">{t('¿Cancelar la solicitud?')}</h3>
                       <p className="text-sm text-[#6B738A] mb-4">
-                        El médico aún no ha confirmado tu cita. Si cancelas ahora, no se realizará ningún cobro.
+                        {t('El médico aún no ha confirmado tu cita. Si cancelas ahora, no se realizará ningún cobro.')}
                       </p>
                       <div className="flex gap-2">
                         <button
                           onClick={() => setShowCancelConfirm(false)}
                           className="flex-1 text-sm text-[#6B738A] border border-[#DDE1EE] rounded-xl py-2.5 hover:bg-[#F5F6FA] transition-colors"
                         >
-                          Mantener cita
+                          {t('Mantener cita')}
                         </button>
                         <button
                           onClick={cancelRequest}
@@ -1160,21 +1168,21 @@ export default function WaitingRoomPage() {
               </>
             ) : (
               <>
-                <p className="text-sm font-semibold mb-1">Esperando respuesta del médico</p>
-                <p className="text-xs text-[#6B738A] mb-3">El médico tiene 2 minutos para aceptar tu solicitud</p>
+                <p className="text-sm font-semibold mb-1">{t('Esperando respuesta del médico')}</p>
+                <p className="text-xs text-[#6B738A] mb-3">{t('El médico tiene 2 minutos para aceptar tu solicitud')}</p>
                 <CountdownTimer
                   seconds={professionalTimeoutSecs}
                   label="Tiempo restante"
                   onExpired={() => setConsultationStatus('CANCELLED')}
                 />
-                <p className="text-xs text-[#A0A8BF] mt-3">Si no responde, la consulta se cancelará automáticamente sin costo</p>
+                <p className="text-xs text-[#A0A8BF] mt-3">{t('Si no responde, la consulta se cancelará automáticamente sin costo')}</p>
               </>
             )}
 
             {/* DEV: simular aceptación del médico */}
             {isDev && (
               <div className="mt-4 pt-4 border-t border-dashed border-[#DDE1EE]">
-                <p className="text-xs text-[#A0A8BF] mb-2">🛠️ Modo desarrollo</p>
+                <p className="text-xs text-[#A0A8BF] mb-2">{t('🛠️ Modo desarrollo')}</p>
                 <button
                   onClick={async () => {
                     await consultationsAPI.acceptConsultation(resolvedId!)
@@ -1184,7 +1192,7 @@ export default function WaitingRoomPage() {
                   }}
                   className="w-full py-2 px-4 bg-[#185FA5] hover:bg-[#0d4a85] text-white text-sm font-medium rounded-lg transition-colors"
                 >
-                  🩺 Simular que el médico acepta
+                  {t('🩺 Simular que el médico acepta')}
                 </button>
               </div>
             )}
@@ -1194,11 +1202,11 @@ export default function WaitingRoomPage() {
         {/* QR de pago */}
         {consultationStatus === 'WAITING_PAYMENT' && (
           <div className="card text-center">
-            <h2 className="text-sm font-semibold mb-1">Pago QR</h2>
+            <h2 className="text-sm font-semibold mb-1">{t('Pago QR')}</h2>
             {isScheduled ? (
-              <p className="text-xs text-[#185FA5] mb-3">🗓 Confirmá tu cita pagando ahora — el profesional la aceptará después</p>
+              <p className="text-xs text-[#185FA5] mb-3">{t('🗓 Confirmá tu cita pagando ahora — el profesional la aceptará después')}</p>
             ) : (
-              <p className="text-xs text-[#1D9E75] mb-3">✅ El médico aceptó tu consulta</p>
+              <p className="text-xs text-[#1D9E75] mb-3">{t('✅ El médico aceptó tu consulta')}</p>
             )}
 
             {error && (
@@ -1210,7 +1218,7 @@ export default function WaitingRoomPage() {
             {loadingQR ? (
               <div className="py-8 flex flex-col items-center gap-2">
                 <div className="w-6 h-6 border-2 border-[#185FA5] border-t-transparent rounded-full animate-spin" />
-                <p className="text-xs text-[#6B738A]">Generando QR...</p>
+                <p className="text-xs text-[#6B738A]">{t('Generando QR...')}</p>
               </div>
             ) : payment ? (
               <>
@@ -1223,7 +1231,7 @@ export default function WaitingRoomPage() {
                 <p className="text-xs text-[#6B738A] mb-3">Consulta con {payment.professional_name}</p>
                 <QRTimer expiresAt={payment.expires_at} onExpired={() => setQrExpired(true)} />
                 {qrExpired && (
-                  <p className="text-xs text-[#A32D2D] mt-2">El tiempo de pago expiró. La consulta fue cancelada automáticamente.</p>
+                  <p className="text-xs text-[#A32D2D] mt-2">{t('El tiempo de pago expiró. La consulta fue cancelada automáticamente.')}</p>
                 )}
                 <div className="flex flex-wrap gap-1.5 justify-center mt-3">
                   {['BNB', 'Banco Unión', 'Banco Sol', 'Tigo Money', 'Banco Fie'].map((b) => (
@@ -1260,14 +1268,14 @@ export default function WaitingRoomPage() {
 
             {isDev && (
               <div className="mt-4 pt-4 border-t border-dashed border-[#DDE1EE]">
-                <p className="text-xs text-[#A0A8BF] mb-2">🛠️ Modo desarrollo</p>
+                <p className="text-xs text-[#A0A8BF] mb-2">{t('🛠️ Modo desarrollo')}</p>
                 <div className="flex flex-col gap-2">
                   {!payment && !loadingQR && (
                     <button
                       onClick={() => { qrGeneratedRef.current = false; generateQR() }}
                       className="w-full py-2 px-4 bg-[#185FA5] hover:bg-[#0d4a85] text-white text-sm font-medium rounded-lg transition-colors"
                     >
-                      🔄 Reintentar generar QR
+                      {t('🔄 Reintentar generar QR')}
                     </button>
                   )}
                   <button
@@ -1321,9 +1329,9 @@ export default function WaitingRoomPage() {
                 <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
               </svg>
             </div>
-            <p className="text-sm font-semibold text-[#3C4257] mb-1">Consulta cancelada</p>
-            <p className="text-xs text-[#6B738A] mb-5">No se realizó ningún cobro.</p>
-            <a href="/patient/search" className="btn-primary text-sm px-6">Buscar otro médico</a>
+            <p className="text-sm font-semibold text-[#3C4257] mb-1">{t('Consulta cancelada')}</p>
+            <p className="text-xs text-[#6B738A] mb-5">{t('No se realizó ningún cobro.')}</p>
+            <a href="/patient/search" className="btn-primary text-sm px-6">{t('Buscar otro médico')}</a>
           </div>
         )}
 
@@ -1335,24 +1343,24 @@ export default function WaitingRoomPage() {
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
             </div>
-            <p className="text-base font-semibold text-[#1C2340] mb-1">Cita cancelada por el médico</p>
+            <p className="text-base font-semibold text-[#1C2340] mb-1">{t('Cita cancelada por el médico')}</p>
             <p className="text-sm text-[#6B738A] mb-4">
-              El profesional canceló la cita. Tu pago será reembolsado en los próximos minutos.
+              {t('El profesional canceló la cita. Tu pago será reembolsado en los próximos minutos.')}
             </p>
 
             <div className="bg-[#F0FBF6] border border-[#A8DFC8] rounded-xl px-4 py-3 mb-6 text-left">
-              <p className="text-xs font-semibold text-[#0F6E56] mb-1">💰 Sobre tu reembolso</p>
+              <p className="text-xs font-semibold text-[#0F6E56] mb-1">{t('💰 Sobre tu reembolso')}</p>
               <p className="text-xs text-[#1D9E75]">
-                El monto pagado será devuelto automáticamente. Si tienes algún problema, contacta al soporte de MedicBolivia.
+                {t('El monto pagado será devuelto automáticamente. Si tienes algún problema, contacta al soporte de MedicBolivia.')}
               </p>
             </div>
 
             <div className="flex flex-col gap-2">
               <a href="/patient/search" className="btn-primary text-sm py-2.5">
-                Buscar otro médico
+                {t('Buscar otro médico')}
               </a>
               <a href="/patient/history" className="btn-secondary text-sm py-2.5">
-                Ver mis consultas
+                {t('Ver mis consultas')}
               </a>
             </div>
           </div>

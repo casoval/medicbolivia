@@ -9,6 +9,7 @@ import {
   adminAPI, getErrorMessage,
   type PlatformSettings, type PlatformSettingsUpdate, type CommissionPeriod,
 } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 // El backend usa snake_case; el formulario usa camelCase plano.
 // Estas dos funciones son el único lugar donde se traduce entre ambos formatos.
@@ -55,6 +56,7 @@ function fmtDate(iso: string) {
 // (scope=GLOBAL). Para comisiones individuales por profesional, ver el
 // perfil de cada profesional en Admin → Profesionales.
 function CommissionPeriodsSection() {
+  const { t } = useLanguage()
   const [periods, setPeriods] = useState<CommissionPeriod[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -119,19 +121,19 @@ function CommissionPeriodsSection() {
 
   return (
     <div className="card lg:col-span-2">
-      <SectionTitle>Promociones de comisión (toda la plataforma)</SectionTitle>
+      <SectionTitle>{t('Promociones de comisión (toda la plataforma)')}</SectionTitle>
       <p className="text-xs text-[#6B738A] mb-3">
         Crea periodos con % distinto al de la comisión por defecto de arriba — por ejemplo, 10% este mes y 15% el próximo.
         Las consultas ya cobradas conservan el % que estaba vigente cuando se generaron, nunca se recalculan.
         Para dar un % distinto a un profesional puntual (ej. promo de bienvenida), hazlo desde su perfil en{' '}
-        <span className="font-medium">Profesionales</span>.
+        <span className="font-medium">{t('Profesionales')}</span>.
       </p>
 
       {error && <div className="mb-3"><Alert type="error" message={error} /></div>}
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end mb-4 bg-[#F5F6FA] rounded-lg p-3">
         <div>
-          <label className="block text-xs font-medium text-[#6B738A] mb-1">% comisión</label>
+          <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('% comisión')}</label>
           <input
             type="number" min={0} max={100}
             className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
@@ -140,16 +142,16 @@ function CommissionPeriodsSection() {
           />
         </div>
         <div className="col-span-2 sm:col-span-1">
-          <label className="block text-xs font-medium text-[#6B738A] mb-1">Etiqueta (opcional)</label>
+          <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Etiqueta (opcional)')}</label>
           <input
             className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
-            placeholder="Promo julio"
+            placeholder={t('Promo julio')}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#6B738A] mb-1">Desde</label>
+          <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Desde')}</label>
           <input
             type="date"
             className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
@@ -158,7 +160,7 @@ function CommissionPeriodsSection() {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#6B738A] mb-1">Hasta (opcional)</label>
+          <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Hasta (opcional)')}</label>
           <input
             type="date"
             className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
@@ -178,7 +180,7 @@ function CommissionPeriodsSection() {
       {loading ? (
         <div className="h-16 animate-pulse bg-[#F5F6FA] rounded-lg" />
       ) : periods.length === 0 ? (
-        <p className="text-xs text-[#A0A8BF]">No hay promociones globales configuradas. Se usa la comisión por defecto.</p>
+        <p className="text-xs text-[#A0A8BF]">{t('No hay promociones globales configuradas. Se usa la comisión por defecto.')}</p>
       ) : (
         <div className="space-y-2">
           {periods.map((p) => {
@@ -198,20 +200,20 @@ function CommissionPeriodsSection() {
                 </div>
                 <div className="flex items-center gap-2">
                   {!p.active ? (
-                    <span className="text-xs text-[#A0A8BF]">Desactivada</span>
+                    <span className="text-xs text-[#A0A8BF]">{t('Desactivada')}</span>
                   ) : isCurrent ? (
-                    <span className="text-xs text-[#0F6E56] font-medium">● Vigente ahora</span>
+                    <span className="text-xs text-[#0F6E56] font-medium">{t('● Vigente ahora')}</span>
                   ) : isFuture ? (
-                    <span className="text-xs text-[#185FA5] font-medium">Programada</span>
+                    <span className="text-xs text-[#185FA5] font-medium">{t('Programada')}</span>
                   ) : (
-                    <span className="text-xs text-[#A0A8BF]">Finalizada</span>
+                    <span className="text-xs text-[#A0A8BF]">{t('Finalizada')}</span>
                   )}
                   {p.active && (
                     <button
                       onClick={() => deactivate(p.id)}
                       className="text-xs text-[#A32D2D] hover:underline"
                     >
-                      Desactivar
+                      {t('Desactivar')}
                     </button>
                   )}
                 </div>
@@ -225,6 +227,7 @@ function CommissionPeriodsSection() {
 }
 
 export default function AdminSettingsPage() {
+  const { t } = useLanguage()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -307,8 +310,8 @@ export default function AdminSettingsPage() {
     <DashboardLayout navItems={NAV} activeHref="/admin/settings" role="ADMIN">
       <div className="max-w-3xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Configuración de la plataforma</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">Ajustes generales de MedicBolivia</p>
+          <h1 className="text-base font-semibold">{t('Configuración de la plataforma')}</h1>
+          <p className="text-xs text-[#6B738A] mt-0.5">{t('Ajustes generales de MedicBolivia')}</p>
         </div>
 
         {error && <div className="mb-4"><Alert type="error" message={error} /></div>}
@@ -325,10 +328,10 @@ export default function AdminSettingsPage() {
             <>
               {/* Configuración general */}
               <div className="card">
-                <SectionTitle>General</SectionTitle>
+                <SectionTitle>{t('General')}</SectionTitle>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#6B738A] mb-1">Nombre de la plataforma</label>
+                    <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Nombre de la plataforma')}</label>
                     <input
                       className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] disabled:opacity-60"
                       value={appName}
@@ -338,7 +341,7 @@ export default function AdminSettingsPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-[#6B738A] mb-1">
-                      Comisión de la plataforma (%)
+                      {t('Comisión de la plataforma (%)')}
                     </label>
                     <div className="flex items-center gap-2">
                       <input
@@ -360,22 +363,22 @@ export default function AdminSettingsPage() {
                   <div className="space-y-3 pt-2 border-t border-[#DDE1EE]">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium">Registro de pacientes</p>
-                        <p className="text-xs text-[#6B738A]">Permite nuevos registros</p>
+                        <p className="text-sm font-medium">{t('Registro de pacientes')}</p>
+                        <p className="text-xs text-[#6B738A]">{t('Permite nuevos registros')}</p>
                       </div>
                       <Toggle on={openRegistration} onChange={setOpenRegistration} disabled={saving} />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium">Registro de profesionales</p>
-                        <p className="text-xs text-[#6B738A]">Permite nuevos profesionales</p>
+                        <p className="text-sm font-medium">{t('Registro de profesionales')}</p>
+                        <p className="text-xs text-[#6B738A]">{t('Permite nuevos profesionales')}</p>
                       </div>
                       <Toggle on={openProfessionals} onChange={setOpenProfessionals} disabled={saving} />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium">Modo mantenimiento</p>
-                        <p className="text-xs text-[#A32D2D]">Bloquea el acceso a usuarios</p>
+                        <p className="text-sm font-medium">{t('Modo mantenimiento')}</p>
+                        <p className="text-xs text-[#A32D2D]">{t('Bloquea el acceso a usuarios')}</p>
                       </div>
                       <Toggle on={maintenance} onChange={setMaintenance} disabled={saving} />
                     </div>
@@ -395,7 +398,7 @@ export default function AdminSettingsPage() {
 
           {/* Chat interno: ventana post-consulta y adjuntos por rol */}
           <div className="card">
-            <SectionTitle>Chat</SectionTitle>
+            <SectionTitle>{t('Chat')}</SectionTitle>
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-[#6B738A] mb-1">
@@ -414,7 +417,7 @@ export default function AdminSettingsPage() {
                       if (!Number.isNaN(n)) setChatWindowDays(Math.min(90, Math.max(1, n)))
                     }}
                   />
-                  <span className="text-xs text-[#6B738A]">días</span>
+                  <span className="text-xs text-[#6B738A]">{t('días')}</span>
                 </div>
                 <p className="text-xs text-[#A0A8BF] mt-1">
                   Aplica solo a consultas nuevas creadas a partir de guardar — las conversaciones
@@ -454,7 +457,7 @@ export default function AdminSettingsPage() {
 
           {/* Info del sistema — datos reales desde /admin/system-info, no hardcodeados */}
           <div className="card lg:col-span-2">
-            <SectionTitle>Información del sistema</SectionTitle>
+            <SectionTitle>{t('Información del sistema')}</SectionTitle>
             {loadingSystemInfo ? (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -479,14 +482,14 @@ export default function AdminSettingsPage() {
                   </div>
                 ))}
                 <div className="bg-[#F5F6FA] rounded-lg p-3 text-center col-span-2 sm:col-span-4">
-                  <p className="text-xs text-[#6B738A]">Hora del servidor (UTC)</p>
+                  <p className="text-xs text-[#6B738A]">{t('Hora del servidor (UTC)')}</p>
                   <p className="text-sm font-semibold mt-1">
                     {new Date(systemInfo.server_time_utc).toLocaleString('es-BO', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'medium' })}
                   </p>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-[#6B738A] text-center py-4">No se pudo cargar la información del sistema</p>
+              <p className="text-sm text-[#6B738A] text-center py-4">{t('No se pudo cargar la información del sistema')}</p>
             )}
           </div>
         </div>

@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { SectionTitle, Alert, LoadingScreen } from '@/components/ui'
 import { whatsappAPI, getErrorMessage } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const STATE_LABEL: Record<string, string> = {
   CONNECTED: 'Conectado',
@@ -27,6 +28,7 @@ const STATE_BADGE: Record<string, string> = {
 }
 
 export function BotTab() {
+  const { t } = useLanguage()
   const [testPhone, setTestPhone] = useState('')
   const [testError, setTestError] = useState('')
   const [testOk, setTestOk] = useState(false)
@@ -62,11 +64,11 @@ export function BotTab() {
         <SectionTitle
           action={
             <button className="text-xs text-[#185FA5] hover:underline" onClick={() => refetch()}>
-              Actualizar
+              {t('Actualizar')}
             </button>
           }
         >
-          Estado del bot
+          {t('Estado del bot')}
         </SectionTitle>
 
         {!reachable && (
@@ -81,7 +83,7 @@ export function BotTab() {
             <div className={`w-2.5 h-2.5 rounded-full ${state === 'CONNECTED' ? 'bg-[#0F6E56]' : state === 'DOWN' || state === 'ERROR' ? 'bg-[#A32D2D]' : 'bg-[#185FA5] animate-pulse'}`} />
             <div>
               <p className="text-sm font-medium">{STATE_LABEL[state] || state}</p>
-              <p className="text-xs text-[#6B738A]">Número vinculado vía whatsapp-service (Baileys)</p>
+              <p className="text-xs text-[#6B738A]">{t('Número vinculado vía whatsapp-service (Baileys)')}</p>
             </div>
             <span className={`ml-auto ${STATE_BADGE[state] || 'badge-gray'}`}>{state}</span>
           </div>
@@ -97,7 +99,7 @@ export function BotTab() {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={qrData.qr_data_url} alt="QR de vinculación de WhatsApp" className="mx-auto rounded-lg" width={220} height={220} />
             ) : (
-              <button className="btn-secondary text-xs" onClick={() => refetchQR()}>Buscar QR</button>
+              <button className="btn-secondary text-xs" onClick={() => refetchQR()}>{t('Buscar QR')}</button>
             )}
           </div>
         )}
@@ -105,7 +107,7 @@ export function BotTab() {
 
       {/* ── Mensaje de prueba ── */}
       <div className="card p-4">
-        <SectionTitle>Mensaje de prueba</SectionTitle>
+        <SectionTitle>{t('Mensaje de prueba')}</SectionTitle>
         <p className="text-xs text-[#6B738A] mb-3">
           Manda un WhatsApp real a un número para confirmar que todo el pipeline funciona
           (backend → Celery → whatsapp-service → WhatsApp).
@@ -115,7 +117,7 @@ export function BotTab() {
         <div className="flex gap-2">
           <input
             className="input flex-1"
-            placeholder="Ej: 59169625434"
+            placeholder={t('Ej: 59169625434')}
             value={testPhone}
             onChange={(e) => { setTestPhone(e.target.value); setTestOk(false) }}
           />
@@ -131,11 +133,11 @@ export function BotTab() {
 
       {/* ── Notas de configuración ── */}
       <div className="card p-4">
-        <SectionTitle>Configuración</SectionTitle>
+        <SectionTitle>{t('Configuración')}</SectionTitle>
         <ul className="text-xs text-[#6B738A] space-y-1.5 list-disc list-inside">
-          <li>La sesión de WhatsApp vive en <code>whatsapp-service/auth_info/</code> — respaldala aparte, no está en git.</li>
-          <li>Si aparece &quot;Desconectado&quot; sin QR, revisá los logs de PM2: <code>pm2 logs medicbolivia-whatsapp-service</code>.</li>
-          <li>Un cierre de sesión desde el celular obliga a volver a escanear el QR.</li>
+          <li>{t('La sesión de WhatsApp vive en')} <code>whatsapp-service/auth_info/</code> {t('— respaldala aparte, no está en git.')}</li>
+          <li>Si aparece &quot;Desconectado&quot; sin QR, revisá los logs de PM2: <code>{t('pm2 logs medicbolivia-whatsapp-service')}</code>.</li>
+          <li>{t('Un cierre de sesión desde el celular obliga a volver a escanear el QR.')}</li>
         </ul>
       </div>
     </div>

@@ -8,6 +8,7 @@ import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { Alert, SectionTitle } from '@/components/ui'
 import { professionalsAPI, api, getErrorMessage } from '@/lib/api'
 import { NotificationsBell } from '@/components/shared/NotificationsBell'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconCamera = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
 const IconRefresh = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
@@ -62,6 +63,7 @@ function MyDocViewerModal({ label, url, onClose }: { label: string; url: string;
 }
 
 export default function ProfilePage() {
+  const { t } = useLanguage()
   const [docStatuses, setDocStatuses] = useState<Record<string, UploadStatus>>({})
   const [docErrors, setDocErrors]     = useState<Record<string, string>>({})
   const [profileSuccess, setProfileSuccess] = useState('')
@@ -293,8 +295,8 @@ export default function ProfilePage() {
       <div className="max-w-3xl">
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h1 className="text-base font-semibold">Perfil y documentos</h1>
-            <p className="text-xs text-[#6B738A] mt-0.5">Tu perfil público y estado de verificación</p>
+            <h1 className="text-base font-semibold">{t('Perfil y documentos')}</h1>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Tu perfil público y estado de verificación')}</p>
           </div>
 
           <NotificationsBell role="PROFESSIONAL" />
@@ -305,22 +307,22 @@ export default function ProfilePage() {
           {/* Datos de registro — solo lectura, así el profesional recuerda qué colocó */}
           {registrationData && (
             <div className="card lg:col-span-2">
-              <SectionTitle>Datos de registro</SectionTitle>
+              <SectionTitle>{t('Datos de registro')}</SectionTitle>
               <p className="text-xs text-[#6B738A] mb-3">
                 Esta es la información que colocaste al registrarte. Para corregir tu CI, fecha de
                 nacimiento, departamento o contacto, escribe a soporte.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">Nombre completo</p>
+                  <p className="text-xs font-medium text-[#6B738A]">{t('Nombre completo')}</p>
                   <p className="text-sm">{registrationData.first_name} {registrationData.last_name}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">Cédula de identidad</p>
+                  <p className="text-xs font-medium text-[#6B738A]">{t('Cédula de identidad')}</p>
                   <p className="text-sm">{registrationData.ci || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">Fecha de nacimiento</p>
+                  <p className="text-xs font-medium text-[#6B738A]">{t('Fecha de nacimiento')}</p>
                   <p className="text-sm">
                     {registrationData.birth_date
                       ? new Date(registrationData.birth_date).toLocaleDateString('es-BO')
@@ -328,19 +330,19 @@ export default function ProfilePage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">Departamento</p>
+                  <p className="text-xs font-medium text-[#6B738A]">{t('Departamento')}</p>
                   <p className="text-sm">{registrationData.department || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">Género</p>
+                  <p className="text-xs font-medium text-[#6B738A]">{t('Género')}</p>
                   <p className="text-sm">{registrationData.gender || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">Especialidad</p>
+                  <p className="text-xs font-medium text-[#6B738A]">{t('Especialidad')}</p>
                   <p className="text-sm">{registrationData.specialty || '—'}</p>
                 </div>
                 <div className="sm:col-span-2 md:col-span-1">
-                  <p className="text-xs font-medium text-[#6B738A]">Subespecialidades</p>
+                  <p className="text-xs font-medium text-[#6B738A]">{t('Subespecialidades')}</p>
                   <p className="text-sm">
                     {registrationData.sub_specialties && registrationData.sub_specialties.length > 0
                       ? registrationData.sub_specialties.join(', ')
@@ -348,22 +350,22 @@ export default function ProfilePage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">Correo electrónico</p>
+                  <p className="text-xs font-medium text-[#6B738A]">{t('Correo electrónico')}</p>
                   <p className="text-sm">{registrationData.email || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">Celular</p>
+                  <p className="text-xs font-medium text-[#6B738A]">{t('Celular')}</p>
                   <p className="text-sm">{registrationData.phone || '—'}</p>
                 </div>
                 {registrationData.cmb_matricula && (
                   <div>
-                    <p className="text-xs font-medium text-[#6B738A]">Matrícula CMB</p>
+                    <p className="text-xs font-medium text-[#6B738A]">{t('Matrícula CMB')}</p>
                     <p className="text-sm">{registrationData.cmb_matricula}</p>
                   </div>
                 )}
                 {registrationData.sedes_number && (
                   <div>
-                    <p className="text-xs font-medium text-[#6B738A]">N° SEDES</p>
+                    <p className="text-xs font-medium text-[#6B738A]">{t('N° SEDES')}</p>
                     <p className="text-sm">{registrationData.sedes_number}</p>
                   </div>
                 )}
@@ -373,13 +375,13 @@ export default function ProfilePage() {
 
           {/* Perfil público */}
           <div className="card">
-            <SectionTitle>Datos del perfil público</SectionTitle>
+            <SectionTitle>{t('Datos del perfil público')}</SectionTitle>
             {profileSuccess && <div className="mb-3"><Alert type="success" message={profileSuccess} /></div>}
             {profileError   && <div className="mb-3"><Alert type="error"   message={profileError} /></div>}
 
             {/* Foto de perfil */}
             <div className="flex flex-col items-center mb-4">
-              <p className="text-xs font-medium text-[#6B738A] mb-2 self-start">Foto de perfil</p>
+              <p className="text-xs font-medium text-[#6B738A] mb-2 self-start">{t('Foto de perfil')}</p>
               <div className="relative">
                 <div className="w-24 h-24 rounded-full border-2 border-[#DDE1EE] overflow-hidden bg-[#F5F6FA] flex items-center justify-center">
                   {photoPreview ? (
@@ -396,7 +398,7 @@ export default function ProfilePage() {
                   className="absolute bottom-0 right-0 w-8 h-8 bg-[#185FA5] rounded-full flex items-center justify-center shadow-md hover:bg-[#0C447C] transition-colors"
                 >
                   <IconCamera />
-                  <span className="sr-only">Cambiar foto</span>
+                  <span className="sr-only">{t('Cambiar foto')}</span>
                 </button>
                 <input
                   type="file"
@@ -422,13 +424,13 @@ export default function ProfilePage() {
                     disabled={photoUploading}
                     className="btn-secondary text-xs py-1 px-3"
                   >
-                    Cancelar
+                    {t('Cancelar')}
                   </button>
                 </div>
               )}
-              <p className="text-xs text-[#A0A8BF] mt-1">JPG, PNG o WebP · Máximo 5MB</p>
+              <p className="text-xs text-[#A0A8BF] mt-1">{t('JPG, PNG o WebP · Máximo 5MB')}</p>
               <p className="text-xs text-[#185FA5] mt-0.5 text-center">
-                Una foto profesional aumenta la confianza de los pacientes
+                {t('Una foto profesional aumenta la confianza de los pacientes')}
               </p>
             </div>
 
@@ -436,12 +438,12 @@ export default function ProfilePage() {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-[#6B738A] mb-1">
-                  Presentación (visible al paciente)
+                  {t('Presentación (visible al paciente)')}
                 </label>
                 <textarea
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] resize-none"
                   rows={4}
-                  placeholder="Describe tu experiencia, especialidades y estilo de atención..."
+                  placeholder={t('Describe tu experiencia, especialidades y estilo de atención...')}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   maxLength={400}
@@ -450,18 +452,18 @@ export default function ProfilePage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Idiomas de atención</label>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Idiomas de atención')}</label>
                 <input
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
-                  placeholder="Español, Aymara, Quechua..."
+                  placeholder={t('Español, Aymara, Quechua...')}
                   value={langs}
                   onChange={(e) => setLangs(e.target.value)}
                 />
-                <p className="text-xs text-[#A0A8BF] mt-1">Separa con comas</p>
+                <p className="text-xs text-[#A0A8BF] mt-1">{t('Separa con comas')}</p>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Años de experiencia</label>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Años de experiencia')}</label>
                 <input
                   type="number" min={0} max={50}
                   className="w-24 px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
@@ -471,16 +473,16 @@ export default function ProfilePage() {
               </div>
 
               <button onClick={saveProfile} className="btn-primary text-xs py-1.5 px-3">
-                Guardar cambios
+                {t('Guardar cambios')}
               </button>
             </div>
           </div>
 
           {/* Precios de consulta */}
           <div className="card">
-            <SectionTitle>Precios de consulta</SectionTitle>
+            <SectionTitle>{t('Precios de consulta')}</SectionTitle>
             <p className="text-xs text-[#6B738A] mb-3">
-              Define cuánto cobras según el tipo de consulta. El paciente ve el precio correspondiente antes de confirmar.
+              {t('Define cuánto cobras según el tipo de consulta. El paciente ve el precio correspondiente antes de confirmar.')}
             </p>
 
             {pricesError   && <div className="mb-3"><Alert type="error"   message={pricesError} /></div>}
@@ -489,7 +491,7 @@ export default function ProfilePage() {
             {commission && (
               <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-4">
                 <p className="text-xs text-[#185FA5]">
-                  Comisión de la plataforma: <span className="font-semibold">{commission.percent}%</span>
+                  {t('Comisión de la plataforma:')} <span className="font-semibold">{commission.percent}%</span>
                   {' '}— recibes el <span className="font-semibold">{(100 - commission.percent).toFixed(2)}%</span> de cada consulta.
                   {commission.source === 'PROFESSIONAL' && (
                     <> Tarifa promocional exclusiva para ti{commission.label ? ` (${commission.label})` : ''}.</>
@@ -511,7 +513,7 @@ export default function ProfilePage() {
                 onChange={(e) => handleSamePriceToggle(e.target.checked)}
                 className="w-4 h-4 accent-[#185FA5]"
               />
-              <span className="text-xs text-[#3C4257]">Cobrar el mismo precio para las 3 consultas</span>
+              <span className="text-xs text-[#3C4257]">{t('Cobrar el mismo precio para las 3 consultas')}</span>
             </label>
 
             <div className="space-y-3">
@@ -530,7 +532,7 @@ export default function ProfilePage() {
                   <p className="text-xs text-[#0F6E56] mt-1 font-medium">Recibes Bs. {netOfPrice(priceGeneral)}</p>
                 )}
                 {!samePriceAll && (
-                  <p className="text-xs text-[#A0A8BF] mt-1">El paciente agenda una cita para más adelante</p>
+                  <p className="text-xs text-[#A0A8BF] mt-1">{t('El paciente agenda una cita para más adelante')}</p>
                 )}
               </div>
 
@@ -538,7 +540,7 @@ export default function ProfilePage() {
                 <>
                   <div>
                     <label className="block text-xs font-medium text-[#6B738A] mb-1">
-                      Consulta inmediata (Bs.)
+                      {t('Consulta inmediata (Bs.)')}
                     </label>
                     <input
                       type="text" inputMode="numeric"
@@ -550,12 +552,12 @@ export default function ProfilePage() {
                     {netOfPrice(priceUrgent) && (
                       <p className="text-xs text-[#0F6E56] mt-1 font-medium">Recibes Bs. {netOfPrice(priceUrgent)}</p>
                     )}
-                    <p className="text-xs text-[#A0A8BF] mt-1">El paciente entra ahora mismo, sin cita previa</p>
+                    <p className="text-xs text-[#A0A8BF] mt-1">{t('El paciente entra ahora mismo, sin cita previa')}</p>
                   </div>
 
                   <div>
                     <label className="block text-xs font-medium text-[#6B738A] mb-1">
-                      Consulta de seguimiento (Bs.)
+                      {t('Consulta de seguimiento (Bs.)')}
                     </label>
                     <input
                       type="text" inputMode="numeric"
@@ -568,14 +570,14 @@ export default function ProfilePage() {
                       <p className="text-xs text-[#0F6E56] mt-1 font-medium">Recibes Bs. {netOfPrice(priceFollowUp)}</p>
                     )}
                     <p className="text-xs text-[#A0A8BF] mt-1">
-                      Solo la ven pacientes que ya tuvieron una consulta completada contigo, y también se agenda con fecha y hora
+                      {t('Solo la ven pacientes que ya tuvieron una consulta completada contigo, y también se agenda con fecha y hora')}
                     </p>
                   </div>
                 </>
               )}
 
               <button onClick={savePrices} className="btn-primary text-xs py-1.5 px-3">
-                Guardar precios
+                {t('Guardar precios')}
               </button>
             </div>
           </div>
@@ -611,7 +613,7 @@ export default function ProfilePage() {
 
             {membership && membership.history.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Historial</p>
+                <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Historial')}</p>
                 <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                   {membership.history.map((m) => (
                     <div key={m.id} className="flex items-center justify-between gap-2 bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
@@ -637,10 +639,10 @@ export default function ProfilePage() {
 
           {/* Documentos de verificación */}
           <div className="card">
-            <SectionTitle>Documentos de verificación</SectionTitle>
+            <SectionTitle>{t('Documentos de verificación')}</SectionTitle>
             <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-3">
               <p className="text-xs text-[#185FA5]">
-                La revisión toma entre 24 y 72 horas hábiles. Te avisaremos por SMS cuando tu perfil sea aprobado.
+                {t('La revisión toma entre 24 y 72 horas hábiles. Te avisaremos por SMS cuando tu perfil sea aprobado.')}
               </p>
             </div>
             <div className="space-y-2.5">
@@ -671,7 +673,7 @@ export default function ProfilePage() {
                         )}
                         {!isUploading && !isLocalError && serverStatus === 'REJECTED' && record?.review_note && (
                           <p className="text-xs text-[#A32D2D] mt-1.5 bg-white/60 rounded px-2 py-1">
-                            <span className="font-medium">Motivo:</span> {record.review_note}
+                            <span className="font-medium">{t('Motivo:')}</span> {record.review_note}
                           </p>
                         )}
                       </div>
@@ -693,31 +695,31 @@ export default function ProfilePage() {
                             onClick={() => fileRefs.current[type]?.click()}
                             className="btn-secondary text-xs py-1 px-2.5"
                           >
-                            Reintentar
+                            {t('Reintentar')}
                           </button>
                         ) : serverStatus === 'APPROVED' ? (
                           <div className="flex items-center gap-1.5">
-                            <span className="badge-green">✓ Aprobado</span>
+                            <span className="badge-green">{t('✓ Aprobado')}</span>
                             {record?.url && (
                               <button
                                 onClick={() => setViewingDoc({ label, url: record.url! })}
                                 className="text-xs text-[#6B738A] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
                                 title="Ver el documento que subiste"
                               >
-                                Ver
+                                {t('Ver')}
                               </button>
                             )}
                           </div>
                         ) : serverStatus === 'REJECTED' ? (
                           <div className="flex items-center gap-1.5">
-                            <span className="badge-red">✕ Rechazado</span>
+                            <span className="badge-red">{t('✕ Rechazado')}</span>
                             {record?.url && (
                               <button
                                 onClick={() => setViewingDoc({ label, url: record.url! })}
                                 className="text-xs text-[#6B738A] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
                                 title="Ver el documento que subiste"
                               >
-                                Ver
+                                {t('Ver')}
                               </button>
                             )}
                             <button
@@ -726,13 +728,13 @@ export default function ProfilePage() {
                               title="Subir un documento corregido"
                             >
                               <IconRefresh />
-                              Volver a subir
+                              {t('Volver a subir')}
                             </button>
                           </div>
                         ) : serverStatus === 'PENDING' ? (
                           <div className="flex items-center gap-1.5">
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-[#FEF3E0] text-[#854F0B] border-[#F2D49A]">
-                              En revisión
+                              {t('En revisión')}
                             </span>
                             {record?.url && (
                               <button
@@ -740,7 +742,7 @@ export default function ProfilePage() {
                                 className="text-xs text-[#6B738A] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
                                 title="Ver el documento que subiste"
                               >
-                                Ver
+                                {t('Ver')}
                               </button>
                             )}
                             <button
@@ -749,7 +751,7 @@ export default function ProfilePage() {
                               title="Subir un documento diferente"
                             >
                               <IconRefresh />
-                              Reemplazar
+                              {t('Reemplazar')}
                             </button>
                           </div>
                         ) : (
@@ -757,7 +759,7 @@ export default function ProfilePage() {
                             onClick={() => fileRefs.current[type]?.click()}
                             className="btn-secondary text-xs py-1 px-2.5"
                           >
-                            Subir
+                            {t('Subir')}
                           </button>
                         )}
                       </div>

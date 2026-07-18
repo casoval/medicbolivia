@@ -15,6 +15,7 @@ import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, getErrorMessage }
 import type { ClinicalNote } from '@/lib/api'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, fmtHora, wasActuallyRefunded } from '@/lib/consultationHistory'
 import { useState, useEffect } from 'react'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 // Nombre e iniciales del paciente, para que el profesional tenga registro de quién fue cada consulta
 function patientNameOf(c: any): string | null {
@@ -25,6 +26,7 @@ const IconClose = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="no
 
 // ── Modal Ver Receta (emitida por mí) ─────────────────
 function PrescriptionModal({ consultationId, onClose }: { consultationId: string; onClose: () => void }) {
+  const { t } = useLanguage()
   const { data, isLoading } = useQuery({
     queryKey: ['rx-by-consultation-pro', consultationId],
     queryFn: async () => {
@@ -36,24 +38,24 @@ function PrescriptionModal({ consultationId, onClose }: { consultationId: string
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold">Recetas de esta consulta</h3>
+          <h3 className="text-base font-semibold">{t('Recetas de esta consulta')}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">Cargando recetas...</p>}
+        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando recetas...')}</p>}
         {data && data.length === 0 && (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">💊</p>
-            <p className="text-sm text-[#6B738A]">No hay recetas para esta consulta</p>
+            <p className="text-sm text-[#6B738A]">{t('No hay recetas para esta consulta')}</p>
           </div>
         )}
         {data && data.map((rx: any) => (
           <div key={rx.id} className="border border-[#DDE1EE] rounded-xl p-4 mb-3">
             <div className="border-b border-[#DDE1EE] pb-3 mb-3">
-              <p className="text-xs text-[#6B738A]">Paciente</p>
+              <p className="text-xs text-[#6B738A]">{t('Paciente')}</p>
               <p className="font-semibold text-sm">{rx.patient_name || 'Paciente'}</p>
               {rx.patient_age != null && <p className="text-xs text-[#6B738A]">{rx.patient_age} años{rx.patient_ci ? ` · CI ${rx.patient_ci}` : ''}</p>}
             </div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Medicamentos</p>
+            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Medicamentos')}</p>
             <div className="space-y-2 mb-3">
               {rx.medications?.map((m: any, i: number) => (
                 <div key={i} className="bg-[#F5F6FA] rounded-lg p-2">
@@ -68,7 +70,7 @@ function PrescriptionModal({ consultationId, onClose }: { consultationId: string
             </div>
             {rx.instructions && (
               <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg p-2 mb-3">
-                <p className="text-xs font-medium text-[#854F0B] mb-1">Indicaciones</p>
+                <p className="text-xs font-medium text-[#854F0B] mb-1">{t('Indicaciones')}</p>
                 <p className="text-xs">{rx.instructions}</p>
               </div>
             )}
@@ -77,7 +79,7 @@ function PrescriptionModal({ consultationId, onClose }: { consultationId: string
             )}
           </div>
         ))}
-        <button onClick={onClose} className="btn-secondary w-full mt-2">Cerrar</button>
+        <button onClick={onClose} className="btn-secondary w-full mt-2">{t('Cerrar')}</button>
       </div>
     </div>,
     document.body
@@ -86,6 +88,7 @@ function PrescriptionModal({ consultationId, onClose }: { consultationId: string
 
 // ── Modal Ver Historia clínica (escrita por mí) ───────
 function ClinicalNoteModal({ consultationId, onClose }: { consultationId: string; onClose: () => void }) {
+  const { t } = useLanguage()
   const { data: note, isLoading } = useQuery({
     queryKey: ['clinical-note-by-consultation-pro', consultationId],
     queryFn: async () => {
@@ -106,21 +109,21 @@ function ClinicalNoteModal({ consultationId, onClose }: { consultationId: string
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold">Historia clínica de esta consulta</h3>
+          <h3 className="text-base font-semibold">{t('Historia clínica de esta consulta')}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">Cargando historia clínica...</p>}
+        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando historia clínica...')}</p>}
         {!isLoading && !note && (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">📋</p>
-            <p className="text-sm text-[#6B738A]">Aún no registraste historia clínica para esta consulta</p>
+            <p className="text-sm text-[#6B738A]">{t('Aún no registraste historia clínica para esta consulta')}</p>
           </div>
         )}
         {note && (
           <>
             {note.patient_name && (
               <div className="border-b border-[#DDE1EE] pb-3 mb-3">
-                <p className="text-xs text-[#6B738A]">Paciente</p>
+                <p className="text-xs text-[#6B738A]">{t('Paciente')}</p>
                 <p className="font-semibold text-sm">{note.patient_name}</p>
               </div>
             )}
@@ -129,11 +132,11 @@ function ClinicalNoteModal({ consultationId, onClose }: { consultationId: string
             {field('Diagnóstico (Evaluación)', note.assessment)}
             {field('Plan / Indicaciones', note.plan)}
             {!note.subjective && !note.objective && !note.assessment && !note.plan && (
-              <p className="text-sm text-[#6B738A] text-center py-4">Aún no completaste el detalle.</p>
+              <p className="text-sm text-[#6B738A] text-center py-4">{t('Aún no completaste el detalle.')}</p>
             )}
           </>
         )}
-        <button onClick={onClose} className="btn-secondary w-full mt-4">Cerrar</button>
+        <button onClick={onClose} className="btn-secondary w-full mt-4">{t('Cerrar')}</button>
       </div>
     </div>,
     document.body
@@ -141,6 +144,7 @@ function ClinicalNoteModal({ consultationId, onClose }: { consultationId: string
 }
 
 function AwaitingPatientPaymentTimer({ acceptedAt }: { acceptedAt: string }) {
+  const { t } = useLanguage()
   const PAYMENT_TIMEOUT_SECS = 5 * 60
   const [secsLeft, setSecsLeft] = useState(PAYMENT_TIMEOUT_SECS)
   useEffect(() => {
@@ -158,7 +162,7 @@ function AwaitingPatientPaymentTimer({ acceptedAt }: { acceptedAt: string }) {
   const isUrgent  = secsLeft <= 60
   const isWarning = secsLeft <= 120
 
-  if (secsLeft === 0) return <span className="text-xs text-[#E24B4A] font-semibold">Tiempo agotado</span>
+  if (secsLeft === 0) return <span className="text-xs text-[#E24B4A] font-semibold">{t('Tiempo agotado')}</span>
   return (
     <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold
       ${isUrgent ? 'bg-[#FCEBEB] text-[#E24B4A] animate-pulse' :
@@ -171,6 +175,7 @@ function AwaitingPatientPaymentTimer({ acceptedAt }: { acceptedAt: string }) {
 }
 
 export default function ConsultationsPage() {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const router = useRouter()
   const [error, setError] = useState('')
@@ -265,8 +270,8 @@ export default function ConsultationsPage() {
     <DashboardLayout navItems={NAV} activeHref="/professional/consultations" role="PROFESSIONAL">
       <div className="max-w-3xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Consultas inmediatas</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">Solicitudes bajo demanda, activas e historial. Las citas agendadas se gestionan en "Citas agendadas"</p>
+          <h1 className="text-base font-semibold">{t('Consultas inmediatas')}</h1>
+          <p className="text-xs text-[#6B738A] mt-0.5">{t('Solicitudes bajo demanda, activas e historial. Las citas agendadas se gestionan en "Citas agendadas"')}</p>
         </div>
 
         {error && (
@@ -279,19 +284,19 @@ export default function ConsultationsPage() {
         <div className="grid grid-cols-4 gap-3 mb-5">
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#E24B4A]">{pending.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">En espera</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('En espera')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#185FA5]">{active.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">En curso</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('En curso')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#0F6E56]">{completedHistory.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Completadas</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Completadas')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#6B738A]">{cancelledHistory.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Canceladas</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Canceladas')}</p>
           </div>
         </div>
 
@@ -319,7 +324,7 @@ export default function ConsultationsPage() {
                 : 'text-[#6B738A]'
             }`}
           >
-            Historial
+            {t('Historial')}
           </button>
         </div>
 
@@ -330,7 +335,7 @@ export default function ConsultationsPage() {
             {/* Activas */}
             {active.length > 0 && (
               <>
-                <SectionTitle>En curso ahora</SectionTitle>
+                <SectionTitle>{t('En curso ahora')}</SectionTitle>
                 <div className="divide-y divide-[#DDE1EE] mb-4">
                   {active.map((c) => (
                     <div key={c.id} className="py-3 flex items-center gap-3">
@@ -351,7 +356,7 @@ export default function ConsultationsPage() {
                         onClick={() => updateMutation.mutate({ id: c.id, status: 'COMPLETED' })}
                         className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] text-xs px-3 py-1.5 rounded-lg"
                       >
-                        Finalizar
+                        {t('Finalizar')}
                       </button>
                     </div>
                   ))}
@@ -362,7 +367,7 @@ export default function ConsultationsPage() {
             {/* Solicitudes inmediatas esperando aceptar/rechazar */}
             {incomingImmediate.length > 0 && (
               <>
-                <SectionTitle>Solicitudes inmediatas nuevas</SectionTitle>
+                <SectionTitle>{t('Solicitudes inmediatas nuevas')}</SectionTitle>
                 <div className="divide-y divide-[#DDE1EE] mb-4">
                   {incomingImmediate.map((c) => (
                     <div key={c.id} className="py-3">
@@ -374,11 +379,11 @@ export default function ConsultationsPage() {
                             {c.specialty ? `${c.specialty} · ` : ''}Bs. {parseFloat(c.amount).toFixed(2)}
                           </p>
                         </div>
-                        <span className="badge-amber text-[10px]">Tienes 2 min</span>
+                        <span className="badge-amber text-[10px]">{t('Tienes 2 min')}</span>
                       </div>
                       {c.chief_complaint && (
                         <div className="ml-12 mt-2 bg-[#F5F6FA] rounded-lg px-3 py-2">
-                          <p className="text-xs text-[#A0A8BF] mb-0.5">Motivo de la consulta</p>
+                          <p className="text-xs text-[#A0A8BF] mb-0.5">{t('Motivo de la consulta')}</p>
                           <p className="text-xs text-[#141820]">{c.chief_complaint}</p>
                         </div>
                       )}
@@ -395,14 +400,14 @@ export default function ConsultationsPage() {
                           disabled={acceptMutation.isPending}
                           className="flex-1 py-1.5 bg-[#1D9E75] hover:bg-[#0F6E56] text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-60"
                         >
-                          ✓ Aceptar
+                          {t('✓ Aceptar')}
                         </button>
                         <button
                           onClick={() => rejectMutation.mutate(c.id)}
                           disabled={rejectMutation.isPending}
                           className="py-1.5 px-4 bg-[#F5F6FA] hover:bg-[#DDE1EE] text-[#6B738A] text-xs font-medium rounded-lg transition-colors"
                         >
-                          Rechazar
+                          {t('Rechazar')}
                         </button>
                       </div>
                     </div>
@@ -414,7 +419,7 @@ export default function ConsultationsPage() {
             {/* Esperando pago del paciente */}
             {waitingPayment.length > 0 && (
               <>
-                <SectionTitle>⏳ Esperando pago del paciente</SectionTitle>
+                <SectionTitle>{t('⏳ Esperando pago del paciente')}</SectionTitle>
                 <div className="divide-y divide-[#DDE1EE] mb-4">
                   {waitingPayment.map((c: any) => (
                     <div key={c.id} className="py-3">
@@ -426,7 +431,7 @@ export default function ConsultationsPage() {
                             {c.specialty ? `${c.specialty} · ` : ''}Bs. {parseFloat(c.amount).toFixed(2)}
                           </p>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className="badge-yellow text-[10px]">Esperando pago</span>
+                            <span className="badge-yellow text-[10px]">{t('Esperando pago')}</span>
                             {c.updated_at && <AwaitingPatientPaymentTimer acceptedAt={c.updated_at} />}
                           </div>
                           {c.chief_complaint && (
@@ -435,7 +440,7 @@ export default function ConsultationsPage() {
                         </div>
                       </div>
                       <p className="text-xs text-[#B97A00] mt-2 ml-12 bg-[#FFF8EC] rounded px-2 py-1.5">
-                        💳 El paciente está completando el pago QR. Recibirás una notificación cuando se confirme.
+                        {t('💳 El paciente está completando el pago QR. Recibirás una notificación cuando se confirme.')}
                       </p>
                     </div>
                   ))}
@@ -446,7 +451,7 @@ export default function ConsultationsPage() {
             {/* Pagadas — inmediatas listas para iniciar */}
             {readyImmediate.length > 0 && (
               <>
-                <SectionTitle>Listas para atender</SectionTitle>
+                <SectionTitle>{t('Listas para atender')}</SectionTitle>
                 <div className="divide-y divide-[#DDE1EE] mb-4">
                   {readyImmediate.map((c) => (
                     <div key={c.id} className="py-3">
@@ -460,7 +465,7 @@ export default function ConsultationsPage() {
                             {' · '}Bs. {parseFloat(c.amount).toFixed(2)}
                           </p>
                           <div className="flex gap-2 mt-1">
-                            <span className="badge-green text-[10px]">Pago confirmado</span>
+                            <span className="badge-green text-[10px]">{t('Pago confirmado')}</span>
                           </div>
                         </div>
                         <button
@@ -473,7 +478,7 @@ export default function ConsultationsPage() {
                       </div>
                       {c.chief_complaint && (
                         <div className="ml-12 mt-2 bg-[#F5F6FA] rounded-lg px-3 py-2">
-                          <p className="text-xs text-[#A0A8BF] mb-0.5">Motivo de la consulta</p>
+                          <p className="text-xs text-[#A0A8BF] mb-0.5">{t('Motivo de la consulta')}</p>
                           <p className="text-xs text-[#141820]">{c.chief_complaint}</p>
                         </div>
                       )}
@@ -493,7 +498,7 @@ export default function ConsultationsPage() {
         ) : (
           /* Historial */
           <div className="card">
-            <SectionTitle>Historial de consultas</SectionTitle>
+            <SectionTitle>{t('Historial de consultas')}</SectionTitle>
             {history.length === 0 ? (
               <EmptyState
                 title="No hay consultas completadas aún"
@@ -534,7 +539,7 @@ export default function ConsultationsPage() {
                         )}
                         {!isCancelled && c.payment_status === 'DISPUTED' && (
                           <p className="text-xs text-[#A32D2D] font-medium mt-1">
-                            ⚠️ El paciente reportó un problema — un admin está revisando el pago
+                            {t('⚠️ El paciente reportó un problema — un admin está revisando el pago')}
                           </p>
                         )}
                         {isCancelled && (
@@ -568,7 +573,7 @@ export default function ConsultationsPage() {
                                 onClick={() => setRxConsultationId(c.id)}
                                 className="btn-secondary text-xs py-1 px-3"
                               >
-                                💊 Ver receta
+                                {t('💊 Ver receta')}
                               </button>
                             )}
                             {hasHistoria(c.id) && (
@@ -576,7 +581,7 @@ export default function ConsultationsPage() {
                                 onClick={() => setNoteConsultationId(c.id)}
                                 className="btn-secondary text-xs py-1 px-3"
                               >
-                                📋 Ver historia clínica
+                                {t('📋 Ver historia clínica')}
                               </button>
                             )}
                           </div>

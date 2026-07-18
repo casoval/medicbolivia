@@ -14,6 +14,7 @@ import { ConsultationTypeBadge, ModalityBadge } from '@/components/shared/Consul
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { professionalsAPI, getErrorMessage } from '@/lib/api'
 import type { ProfessionalEarningItem } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 function fmtFechaHora(iso?: string | null): string {
   if (!iso) return '—'
@@ -103,6 +104,7 @@ const STATUS_TABS: { key: string; label: string }[] = [
 
 
 export default function ProfessionalEarningsPage() {
+  const { t } = useLanguage()
   const [statusFilter, setStatusFilter] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -119,7 +121,7 @@ export default function ProfessionalEarningsPage() {
     <DashboardLayout navItems={NAV} activeHref="/professional/earnings" role="PROFESSIONAL">
       <div className="max-w-4xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Mis pagos</h1>
+          <h1 className="text-base font-semibold">{t('Mis pagos')}</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">
             Todo lo que cobraste, consulta por consulta: cuánto recibiste, cuánto está en garantía y cuánto se
             llevó la plataforma.
@@ -140,19 +142,19 @@ export default function ProfessionalEarningsPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
               <div className="card py-3 text-center">
                 <p className="text-xl font-bold text-[#0F6E56]">Bs. {stats?.total_recibido.toFixed(2) ?? '0.00'}</p>
-                <p className="text-xs text-[#6B738A] mt-0.5">Total recibido</p>
+                <p className="text-xs text-[#6B738A] mt-0.5">{t('Total recibido')}</p>
               </div>
               <div className="card py-3 text-center">
                 <p className="text-xl font-bold text-[#185FA5]">{stats?.consultas_cobradas ?? 0}</p>
-                <p className="text-xs text-[#6B738A] mt-0.5">Consultas cobradas</p>
+                <p className="text-xs text-[#6B738A] mt-0.5">{t('Consultas cobradas')}</p>
               </div>
               <div className="card py-3 text-center">
                 <p className="text-xl font-bold text-[#854F0B]">Bs. {stats?.total_retenido.toFixed(2) ?? '0.00'}</p>
-                <p className="text-xs text-[#6B738A] mt-0.5">En garantía (retenido)</p>
+                <p className="text-xs text-[#6B738A] mt-0.5">{t('En garantía (retenido)')}</p>
               </div>
               <div className="card py-3 text-center">
                 <p className="text-xl font-bold text-[#6B738A]">Bs. {stats?.total_comision_plataforma.toFixed(2) ?? '0.00'}</p>
-                <p className="text-xs text-[#6B738A] mt-0.5">Comisión de la plataforma</p>
+                <p className="text-xs text-[#6B738A] mt-0.5">{t('Comisión de la plataforma')}</p>
               </div>
             </div>
 
@@ -213,8 +215,8 @@ export default function ProfessionalEarningsPage() {
 
             <div className="card">
               <div className="flex items-center justify-between">
-                <SectionTitle>Detalle de pagos recibidos</SectionTitle>
-                {isFetching && <span className="text-[10px] text-[#A0A8BF]">Actualizando...</span>}
+                <SectionTitle>{t('Detalle de pagos recibidos')}</SectionTitle>
+                {isFetching && <span className="text-[10px] text-[#A0A8BF]">{t('Actualizando...')}</span>}
               </div>
 
               {items.length === 0 ? (
@@ -280,30 +282,30 @@ export default function ProfessionalEarningsPage() {
 
                             <div className="grid grid-cols-2 gap-3 text-xs">
                               <div>
-                                <p className="text-[#A0A8BF]">Monto cobrado al paciente</p>
+                                <p className="text-[#A0A8BF]">{t('Monto cobrado al paciente')}</p>
                                 <p className="text-[#3C4257] font-medium">Bs. {p.amount.toFixed(2)}</p>
                               </div>
                               <div>
-                                <p className="text-[#A0A8BF]">Comisión de la plataforma</p>
+                                <p className="text-[#A0A8BF]">{t('Comisión de la plataforma')}</p>
                                 <p className="text-[#3C4257]">Bs. {p.platform_fee.toFixed(2)}</p>
                               </div>
                               <div>
-                                <p className="text-[#A0A8BF]">Tu neto</p>
+                                <p className="text-[#A0A8BF]">{t('Tu neto')}</p>
                                 <p className={`font-medium ${earningAmountColorClass(p.status, p.payment_channel)}`}>Bs. {p.professional_net.toFixed(2)}</p>
                               </div>
                               <div>
-                                <p className="text-[#A0A8BF]">Fecha de pago del paciente</p>
+                                <p className="text-[#A0A8BF]">{t('Fecha de pago del paciente')}</p>
                                 <p className="text-[#3C4257]">{fmtFechaHora(p.paid_at || p.created_at)}</p>
                               </div>
                               {p.released_at && (
                                 <div>
-                                  <p className="text-[#A0A8BF]">Fecha en que se te liberó</p>
+                                  <p className="text-[#A0A8BF]">{t('Fecha en que se te liberó')}</p>
                                   <p className="text-[#3C4257]">{fmtFechaHora(p.released_at)}</p>
                                 </div>
                               )}
                               {p.scheduled_at && (
                                 <div>
-                                  <p className="text-[#A0A8BF]">Fecha de la cita</p>
+                                  <p className="text-[#A0A8BF]">{t('Fecha de la cita')}</p>
                                   <p className="text-[#3C4257]">{fmtFecha(p.scheduled_at)}</p>
                                 </div>
                               )}
@@ -312,11 +314,11 @@ export default function ProfessionalEarningsPage() {
                             {p.refunded_at && (
                               <div className="pt-2 border-t border-[#DDE1EE] grid grid-cols-2 gap-3 text-xs">
                                 <div>
-                                  <p className="text-[#A0A8BF]">Fecha de reembolso al paciente</p>
+                                  <p className="text-[#A0A8BF]">{t('Fecha de reembolso al paciente')}</p>
                                   <p className="text-[#3C4257]">{fmtFechaHora(p.refunded_at)}</p>
                                 </div>
                                 <div>
-                                  <p className="text-[#A0A8BF]">Monto devuelto al paciente</p>
+                                  <p className="text-[#A0A8BF]">{t('Monto devuelto al paciente')}</p>
                                   <p className="text-[#3C4257]">
                                     Bs. {p.refunded_amount != null ? p.refunded_amount.toFixed(2) : p.amount.toFixed(2)}
                                   </p>
@@ -327,18 +329,18 @@ export default function ProfessionalEarningsPage() {
                             {p.disputed_at && (
                               <div className="pt-2 border-t border-[#DDE1EE] grid grid-cols-2 gap-3 text-xs">
                                 <div>
-                                  <p className="text-[#A0A8BF]">Fecha del reclamo</p>
+                                  <p className="text-[#A0A8BF]">{t('Fecha del reclamo')}</p>
                                   <p className="text-[#3C4257]">{fmtFechaHora(p.disputed_at)}</p>
                                 </div>
                                 <div>
-                                  <p className="text-[#A0A8BF]">Categoría</p>
+                                  <p className="text-[#A0A8BF]">{t('Categoría')}</p>
                                   <p className="text-[#3C4257]">
                                     {DISPUTE_CATEGORY_LABELS[p.dispute_category || ''] || p.dispute_category || '—'}
                                   </p>
                                 </div>
                                 {p.resolution_note && (
                                   <div className="col-span-2">
-                                    <p className="text-[#A0A8BF]">Resolución del administrador</p>
+                                    <p className="text-[#A0A8BF]">{t('Resolución del administrador')}</p>
                                     <p className="text-[#3C4257]">{p.resolution_note}</p>
                                   </div>
                                 )}

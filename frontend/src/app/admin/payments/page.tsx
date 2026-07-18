@@ -7,6 +7,7 @@ import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, Alert, SectionTitle } from '@/components/ui'
 import { api, adminAPI, getErrorMessage } from '@/lib/api'
 import type { DisputedPayment, DisputeResolution } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const DISPUTE_CATEGORY_LABELS: Record<string, string> = {
   NO_SHOW: 'El profesional no llegó',
@@ -77,6 +78,7 @@ const SLA_TIER_STYLES: Record<string, string> = {
 const SLA_TIER_ICON: Record<string, string> = { ok: '⏱', warning: '⚠', critical: '🔴' }
 
 export default function AdminPaymentsPage() {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
@@ -174,8 +176,8 @@ export default function AdminPaymentsPage() {
     <DashboardLayout navItems={NAV} activeHref="/admin/payments" role="ADMIN">
       <div className="max-w-4xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Pagos y finanzas</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">Transacciones QR y gestion de reembolsos</p>
+          <h1 className="text-base font-semibold">{t('Pagos y finanzas')}</h1>
+          <p className="text-xs text-[#6B738A] mt-0.5">{t('Transacciones QR y gestion de reembolsos')}</p>
         </div>
 
         {success && <div className="mb-4"><Alert type="success" message={success} /></div>}
@@ -184,19 +186,19 @@ export default function AdminPaymentsPage() {
         <div className="grid grid-cols-4 gap-3 mb-5">
           <div className="card py-3 text-center">
             <p className="text-xl font-bold text-[#0F6E56]">Bs. {totalConfirmed.toFixed(2)}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Total recaudado</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Total recaudado')}</p>
           </div>
           <div className="card py-3 text-center">
             <p className="text-xl font-bold text-[#185FA5]">Bs. {totalPlatform.toFixed(2)}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Comision plataforma</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Comision plataforma')}</p>
           </div>
           <div className="card py-3 text-center">
             <p className="text-xl font-bold text-[#854F0B]">{pendingCount}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Pendientes</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Pendientes')}</p>
           </div>
           <div className="card py-3 text-center">
             <p className="text-xl font-bold text-[#A32D2D]">{disputedPayments.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">En disputa</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('En disputa')}</p>
           </div>
         </div>
 
@@ -208,7 +210,7 @@ export default function AdminPaymentsPage() {
               activeTab === 'transactions' ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#6B738A]'
             }`}
           >
-            Transacciones
+            {t('Transacciones')}
           </button>
           <button
             onClick={() => setActiveTab('disputes')}
@@ -227,7 +229,7 @@ export default function AdminPaymentsPage() {
         {activeTab === 'disputes' ? (
           isLoadingDisputes ? <LoadingScreen /> : (
             <div className="card">
-              <SectionTitle>Pagos congelados por reclamo del paciente</SectionTitle>
+              <SectionTitle>{t('Pagos congelados por reclamo del paciente')}</SectionTitle>
               {disputedError ? (
                 <div className="my-3"><Alert type="error" message={`No se pudo cargar la cola de disputas: ${getErrorMessage(disputedError)}`} /></div>
               ) : disputedPayments.length === 0 ? (
@@ -288,7 +290,7 @@ export default function AdminPaymentsPage() {
                           }}
                           className="btn-secondary text-xs py-1 px-3"
                         >
-                          Resolver disputa
+                          {t('Resolver disputa')}
                         </button>
                       </div>
                     )
@@ -300,14 +302,14 @@ export default function AdminPaymentsPage() {
         ) : isLoading ? <LoadingScreen /> : (
           <div className="card">
             <div className="flex items-center justify-between">
-              <SectionTitle>Ultimas transacciones QR</SectionTitle>
-              {isFetching && <span className="text-[10px] text-[#A0A8BF]">Actualizando...</span>}
+              <SectionTitle>{t('Ultimas transacciones QR')}</SectionTitle>
+              {isFetching && <span className="text-[10px] text-[#A0A8BF]">{t('Actualizando...')}</span>}
             </div>
 
             {/* Filtros */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 pb-4 border-b border-[#DDE1EE]">
               <div>
-                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">Desde</label>
+                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">{t('Desde')}</label>
                 <input
                   type="date"
                   className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-xs focus:outline-none focus:border-[#185FA5]"
@@ -316,7 +318,7 @@ export default function AdminPaymentsPage() {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">Hasta</label>
+                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">{t('Hasta')}</label>
                 <input
                   type="date"
                   className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-xs focus:outline-none focus:border-[#185FA5]"
@@ -325,20 +327,20 @@ export default function AdminPaymentsPage() {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">Paciente</label>
+                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">{t('Paciente')}</label>
                 <input
                   type="text"
-                  placeholder="Nombre o apellido"
+                  placeholder={t('Nombre o apellido')}
                   className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-xs focus:outline-none focus:border-[#185FA5]"
                   value={filterPatient}
                   onChange={(e) => setFilterPatient(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">Profesional</label>
+                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">{t('Profesional')}</label>
                 <input
                   type="text"
-                  placeholder="Nombre o apellido"
+                  placeholder={t('Nombre o apellido')}
                   className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-xs focus:outline-none focus:border-[#185FA5]"
                   value={filterProfessional}
                   onChange={(e) => setFilterProfessional(e.target.value)}
@@ -350,7 +352,7 @@ export default function AdminPaymentsPage() {
                     {payments.length} transacción{payments.length !== 1 ? 'es' : ''} encontrada{payments.length !== 1 ? 's' : ''} con estos filtros
                   </p>
                   <button onClick={clearFilters} className="text-xs text-[#185FA5] hover:underline">
-                    Limpiar filtros
+                    {t('Limpiar filtros')}
                   </button>
                 </div>
               )}
@@ -382,8 +384,8 @@ export default function AdminPaymentsPage() {
                         <div className="text-right flex-shrink-0">
                           {p.status === 'CANCELLED_NO_CHARGE' ? (
                             <>
-                              <p className="text-sm font-bold text-[#A0A8BF]">Bs. 0.00</p>
-                              <p className="text-xs text-[#A0A8BF]">prof. 0.00</p>
+                              <p className="text-sm font-bold text-[#A0A8BF]">{t('Bs. 0.00')}</p>
+                              <p className="text-xs text-[#A0A8BF]">{t('prof. 0.00')}</p>
                             </>
                           ) : (
                             <>
@@ -406,7 +408,7 @@ export default function AdminPaymentsPage() {
                             onClick={(e) => { e.stopPropagation(); setRefundModal({ id: p.id, amount: p.amount }) }}
                             className="text-xs text-[#A32D2D] hover:underline flex-shrink-0"
                           >
-                            Reembolsar
+                            {t('Reembolsar')}
                           </button>
                         )}
                         <svg
@@ -421,39 +423,39 @@ export default function AdminPaymentsPage() {
                         <div className="pb-4 px-2 -mt-1">
                           <div className="bg-[#F5F6FA] rounded-lg p-3 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-xs">
                             <div>
-                              <p className="text-[#A0A8BF]">ID de pago</p>
+                              <p className="text-[#A0A8BF]">{t('ID de pago')}</p>
                               <p className="font-mono text-[10px] text-[#3C4257] break-all">{p.id}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">ID de consulta</p>
+                              <p className="text-[#A0A8BF]">{t('ID de consulta')}</p>
                               <p className="font-mono text-[10px] text-[#3C4257] break-all">{p.consultation_id || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">Tipo de consulta</p>
+                              <p className="text-[#A0A8BF]">{t('Tipo de consulta')}</p>
                               <p className="text-[#3C4257]">{p.consultation_type || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">Paciente</p>
+                              <p className="text-[#A0A8BF]">{t('Paciente')}</p>
                               <p className="text-[#3C4257]">{p.patient_name || '—'} {p.patient_ci && `(CI ${p.patient_ci})`}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">Profesional</p>
+                              <p className="text-[#A0A8BF]">{t('Profesional')}</p>
                               <p className="text-[#3C4257]">{p.professional_name || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">Especialidad</p>
+                              <p className="text-[#A0A8BF]">{t('Especialidad')}</p>
                               <p className="text-[#3C4257]">{p.specialty || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">Monto total</p>
+                              <p className="text-[#A0A8BF]">{t('Monto total')}</p>
                               <p className="text-[#3C4257]">Bs. {p.status === 'CANCELLED_NO_CHARGE' ? '0.00' : Number(p.amount).toFixed(2)}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">Comisión plataforma</p>
+                              <p className="text-[#A0A8BF]">{t('Comisión plataforma')}</p>
                               <p className="text-[#3C4257]">Bs. {p.status === 'CANCELLED_NO_CHARGE' ? '0.00' : Number(p.platform_fee).toFixed(2)}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">Neto profesional</p>
+                              <p className="text-[#A0A8BF]">{t('Neto profesional')}</p>
                               <p className="text-[#3C4257]">Bs. {p.status === 'CANCELLED_NO_CHARGE' ? '0.00' : Number(p.professional_net).toFixed(2)}</p>
                             </div>
                             {p.status === 'CANCELLED_NO_CHARGE' && (
@@ -465,50 +467,50 @@ export default function AdminPaymentsPage() {
                             )}
                             {p.outcome_note && (
                               <div className="col-span-2 sm:col-span-3">
-                                <p className="text-[#A0A8BF]">Qué pasó</p>
+                                <p className="text-[#A0A8BF]">{t('Qué pasó')}</p>
                                 <p className="text-[#3C4257]">{formatOutcomeNote(p.outcome_note)}</p>
                               </div>
                             )}
                             <div>
-                              <p className="text-[#A0A8BF]">Banco</p>
+                              <p className="text-[#A0A8BF]">{t('Banco')}</p>
                               <p className="text-[#3C4257]">{p.bank_name || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">ID transacción bancaria</p>
+                              <p className="text-[#A0A8BF]">{t('ID transacción bancaria')}</p>
                               <p className="text-[#3C4257]">{p.bank_tx_id || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">Estado de la consulta</p>
+                              <p className="text-[#A0A8BF]">{t('Estado de la consulta')}</p>
                               <p className="text-[#3C4257]">{p.consultation_status || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">Fecha de creación</p>
+                              <p className="text-[#A0A8BF]">{t('Fecha de creación')}</p>
                               <p className="text-[#3C4257]">{new Date(p.created_at).toLocaleString('es-BO')}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">Fecha de pago</p>
+                              <p className="text-[#A0A8BF]">{t('Fecha de pago')}</p>
                               <p className="text-[#3C4257]">{p.paid_at ? new Date(p.paid_at).toLocaleString('es-BO') : '—'}</p>
                             </div>
                             {p.scheduled_at && (
                               <div>
-                                <p className="text-[#A0A8BF]">Horario agendado</p>
+                                <p className="text-[#A0A8BF]">{t('Horario agendado')}</p>
                                 <p className="text-[#3C4257]">{new Date(p.scheduled_at).toLocaleString('es-BO')}</p>
                               </div>
                             )}
                             {p.refunded_at && (
                               <>
                                 <div>
-                                  <p className="text-[#A0A8BF]">Fecha de reembolso</p>
+                                  <p className="text-[#A0A8BF]">{t('Fecha de reembolso')}</p>
                                   <p className="text-[#3C4257]">{new Date(p.refunded_at).toLocaleString('es-BO')}</p>
                                 </div>
                                 <div>
-                                  <p className="text-[#A0A8BF]">Monto reembolsado</p>
+                                  <p className="text-[#A0A8BF]">{t('Monto reembolsado')}</p>
                                   <p className="text-[#3C4257]">
                                     {p.refunded_amount != null ? `Bs. ${Number(p.refunded_amount).toFixed(2)}` : '— (registro anterior, ver bitácora)'}
                                   </p>
                                 </div>
                                 <div className="col-span-2">
-                                  <p className="text-[#A0A8BF]">Motivo del reembolso</p>
+                                  <p className="text-[#A0A8BF]">{t('Motivo del reembolso')}</p>
                                   <p className="text-[#3C4257]">{p.refund_note || '—'}</p>
                                 </div>
                               </>
@@ -516,20 +518,20 @@ export default function AdminPaymentsPage() {
                             {p.disputed_at && (
                               <>
                                 <div>
-                                  <p className="text-[#A0A8BF]">Fecha de disputa</p>
+                                  <p className="text-[#A0A8BF]">{t('Fecha de disputa')}</p>
                                   <p className="text-[#3C4257]">{new Date(p.disputed_at).toLocaleString('es-BO')}</p>
                                 </div>
                                 <div>
-                                  <p className="text-[#A0A8BF]">Categoría de disputa</p>
+                                  <p className="text-[#A0A8BF]">{t('Categoría de disputa')}</p>
                                   <p className="text-[#3C4257]">{DISPUTE_CATEGORY_LABELS[p.dispute_category] || p.dispute_category || '—'}</p>
                                 </div>
                                 <div className="col-span-2 sm:col-span-3">
-                                  <p className="text-[#A0A8BF]">Motivo del paciente</p>
+                                  <p className="text-[#A0A8BF]">{t('Motivo del paciente')}</p>
                                   <p className="text-[#3C4257]">{p.dispute_reason || '—'}</p>
                                 </div>
                                 {p.resolution_note && (
                                   <div className="col-span-2 sm:col-span-3">
-                                    <p className="text-[#A0A8BF]">Nota de resolución del admin</p>
+                                    <p className="text-[#A0A8BF]">{t('Nota de resolución del admin')}</p>
                                     <p className="text-[#3C4257]">{p.resolution_note}</p>
                                   </div>
                                 )}
@@ -549,16 +551,16 @@ export default function AdminPaymentsPage() {
         {refundModal && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-              <h3 className="text-base font-semibold mb-1">Procesar reembolso</h3>
+              <h3 className="text-base font-semibold mb-1">{t('Procesar reembolso')}</h3>
               <p className="text-xs text-[#6B738A] mb-4">
                 Monto: Bs. {Number(refundModal.amount).toFixed(2)}
               </p>
               <div className="mb-4">
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Motivo</label>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Motivo')}</label>
                 <textarea
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] resize-none"
                   rows={3}
-                  placeholder="Describe el motivo del reembolso (minimo 10 caracteres)..."
+                  placeholder={t('Describe el motivo del reembolso (minimo 10 caracteres)...')}
                   value={refundReason}
                   onChange={(e) => setRefundReason(e.target.value)}
                 />
@@ -568,7 +570,7 @@ export default function AdminPaymentsPage() {
                   onClick={() => { setRefundModal(null); setRefundReason('') }}
                   className="flex-1 btn-secondary text-xs"
                 >
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
                 <button
                   onClick={() => refundMutation.mutate({ id: refundModal.id, type: 'FULL', reason: refundReason })}
@@ -585,7 +587,7 @@ export default function AdminPaymentsPage() {
         {resolveModal && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-              <h3 className="text-base font-semibold mb-1">Resolver disputa</h3>
+              <h3 className="text-base font-semibold mb-1">{t('Resolver disputa')}</h3>
               <p className="text-xs text-[#6B738A] mb-4">
                 Monto en disputa: Bs. {resolveModal.amount.toFixed(2)} · profesional recibiría Bs. {resolveModal.professional_net.toFixed(2)}
               </p>
@@ -593,21 +595,21 @@ export default function AdminPaymentsPage() {
               <div className="mb-4 space-y-2">
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="radio" checked={resolution === 'RELEASE'} onChange={() => setResolution('RELEASE')} />
-                  Liberar el pago al profesional
+                  {t('Liberar el pago al profesional')}
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="radio" checked={resolution === 'REFUND_FULL'} onChange={() => setResolution('REFUND_FULL')} />
-                  Reembolso total al paciente
+                  {t('Reembolso total al paciente')}
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="radio" checked={resolution === 'REFUND_PARTIAL'} onChange={() => setResolution('REFUND_PARTIAL')} />
-                  Reembolso parcial al paciente
+                  {t('Reembolso parcial al paciente')}
                 </label>
               </div>
 
               {resolution === 'REFUND_PARTIAL' && (
                 <div className="mb-4">
-                  <label className="block text-xs font-medium text-[#6B738A] mb-1">Monto a reembolsar (Bs.)</label>
+                  <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Monto a reembolsar (Bs.)')}</label>
                   <input
                     type="number"
                     min="0.01"
@@ -621,11 +623,11 @@ export default function AdminPaymentsPage() {
               )}
 
               <div className="mb-4">
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">Nota de resolución (mínimo 10 caracteres)</label>
+                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Nota de resolución (mínimo 10 caracteres)')}</label>
                 <textarea
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] resize-none"
                   rows={3}
-                  placeholder="Explica brevemente el motivo de la decisión..."
+                  placeholder={t('Explica brevemente el motivo de la decisión...')}
                   value={resolveNote}
                   onChange={(e) => setResolveNote(e.target.value)}
                 />
@@ -636,7 +638,7 @@ export default function AdminPaymentsPage() {
                   onClick={() => setResolveModal(null)}
                   className="flex-1 btn-secondary text-xs"
                 >
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
                 <button
                   onClick={() => resolveMutation.mutate({

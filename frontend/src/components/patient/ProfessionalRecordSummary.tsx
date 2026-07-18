@@ -10,6 +10,7 @@
 
 import type { Prescription } from '@/types'
 import type { ClinicalNote } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 function fmtDate(d?: string | null) {
   if (!d) return ''
@@ -49,13 +50,14 @@ export function ProfessionalRecordSummary({
   prescriptions: Prescription[]
   notes: ClinicalNote[]
 }) {
+  const { t } = useLanguage()
   const nothingAtAll = prescriptions.length === 0 && notes.length === 0
 
   if (nothingAtAll) {
     return (
       <div className="text-center py-6">
         <p className="text-3xl mb-2">🗂️</p>
-        <p className="text-sm text-[#6B738A]">Todavía no hay recetas ni historias clínicas con este profesional.</p>
+        <p className="text-sm text-[#6B738A]">{t('Todavía no hay recetas ni historias clínicas con este profesional.')}</p>
       </div>
     )
   }
@@ -76,10 +78,10 @@ export function ProfessionalRecordSummary({
                 <Field label="Diagnóstico (A)" value={note.assessment} />
                 <Field label="Plan (P)" value={note.plan} />
                 {!note.subjective && !note.objective && !note.assessment && !note.plan && (
-                  <p className="text-xs text-[#A0A8BF]">El médico aún no completó el detalle.</p>
+                  <p className="text-xs text-[#A0A8BF]">{t('El médico aún no completó el detalle.')}</p>
                 )}
                 {note.shared_with_professionals && (
-                  <p className="text-[10px] text-[#185FA5] mt-1.5">🔗 Compartida con otros médicos de la plataforma</p>
+                  <p className="text-[10px] text-[#185FA5] mt-1.5">{t('🔗 Compartida con otros médicos de la plataforma')}</p>
                 )}
                 <Addenda addenda={note.addenda} />
               </div>

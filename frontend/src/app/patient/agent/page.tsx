@@ -10,6 +10,7 @@ import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { agentAPI, consultationsAPI, getErrorMessage } from '@/lib/api'
 import { useAgentStore } from '@/lib/store'
 import type { Professional } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const QUICK_REPLIES = [
   'Tengo dolor de cabeza',
@@ -126,6 +127,7 @@ function formatMsgTime(timestamp: Date | string) {
 }
 
 function ProfessionalCard({ pro, onSelect }: { pro: Professional; onSelect: (pro: Professional) => void }) {
+  const { t } = useLanguage()
   return (
     <div
       className="bg-white border border-[#DDE1EE] rounded-xl p-3 flex items-start gap-3 hover:border-[#185FA5] transition-colors cursor-pointer"
@@ -139,18 +141,19 @@ function ProfessionalCard({ pro, onSelect }: { pro: Professional; onSelect: (pro
         <p className="text-xs text-[#6B738A]">{pro.specialty}</p>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-[#EF9F27] text-xs">★ {parseFloat(pro.average_rating).toFixed(1)}</span>
-          <span className="badge-green text-[10px]">En línea</span>
+          <span className="badge-green text-[10px]">{t('En línea')}</span>
         </div>
       </div>
       <div className="text-right flex-shrink-0">
         <p className="text-sm font-semibold">Bs. {parseFloat(pro.price_general).toFixed(0)}</p>
-        <button className="btn-primary text-xs py-1 px-2 mt-1">Consultar</button>
+        <button className="btn-primary text-xs py-1 px-2 mt-1">{t('Consultar')}</button>
       </div>
     </div>
   )
 }
 
 export default function AgentPage() {
+  const { t } = useLanguage()
   const router = useRouter()
   const {
     sessionId, messages, isTyping, availableProfessionals,
@@ -369,10 +372,10 @@ export default function AgentPage() {
 
         <div className="hidden sm:flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-base font-semibold">Agente de orientación médica</h1>
+            <h1 className="text-base font-semibold">{t('Agente de orientación médica')}</h1>
             <p className="text-xs text-[#6B738A]">
               Te guío para encontrar al especialista correcto ·{' '}
-              <span className="text-[#A32D2D] font-medium">No emite diagnósticos</span>
+              <span className="text-[#A32D2D] font-medium">{t('No emite diagnósticos')}</span>
             </p>
           </div>
         </div>
@@ -383,10 +386,10 @@ export default function AgentPage() {
           <div className="px-4 py-3 bg-white border-b border-[#DDE1EE] flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-[#185FA5] text-white flex items-center justify-center text-xs font-bold">IA</div>
             <div>
-              <p className="text-sm font-semibold">Medi · Agente MedicBolivia</p>
+              <p className="text-sm font-semibold">{t('Medi · Agente MedicBolivia')}</p>
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-[#22C27A] animate-pulse" />
-                <p className="text-xs text-[#22C27A]">En línea</p>
+                <p className="text-xs text-[#22C27A]">{t('En línea')}</p>
               </div>
             </div>
 
@@ -400,14 +403,14 @@ export default function AgentPage() {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
                   </svg>
-                  Colgar
+                  {t('Colgar')}
                 </button>
               ) : callStatus === 'connecting' ? (
                 <button disabled className="flex items-center gap-1.5 px-3.5 py-2 sm:px-3 sm:py-1.5 bg-[#185FA5] text-white rounded-full text-xs font-medium">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="animate-bounce">
                     <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
                   </svg>
-                  Llamando...
+                  {t('Llamando...')}
                 </button>
               ) : (
                 <button
@@ -418,10 +421,10 @@ export default function AgentPage() {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
                   </svg>
-                  Llamar a Medi
+                  {t('Llamar a Medi')}
                 </button>
               )}
-              <span className="badge-red">No diagnostica</span>
+              <span className="badge-red">{t('No diagnostica')}</span>
             </div>
           </div>
 
@@ -429,7 +432,7 @@ export default function AgentPage() {
           {callStatus === 'connecting' && (
             <div className="px-4 py-2 bg-[#EEF4FF] border-b border-[#185FA5]/30 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#185FA5] animate-ping flex-shrink-0" />
-              <span className="text-xs text-[#185FA5] font-medium">Llamando a Medi… escucharás un tono</span>
+              <span className="text-xs text-[#185FA5] font-medium">{t('Llamando a Medi… escucharás un tono')}</span>
             </div>
           )}
           {callStatus === 'active' && (
@@ -479,7 +482,7 @@ export default function AgentPage() {
             {(isTyping || processingVoice) && (
               <div className="flex justify-start">
                 <div className="bg-white border border-[#DDE1EE] px-3.5 py-2.5 rounded-xl rounded-bl-sm flex gap-1 items-center">
-                  {processingVoice && <span className="text-xs text-[#6B738A] mr-1">Procesando...</span>}
+                  {processingVoice && <span className="text-xs text-[#6B738A] mr-1">{t('Procesando...')}</span>}
                   <span className="w-1.5 h-1.5 bg-[#A0A8BF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                   <span className="w-1.5 h-1.5 bg-[#A0A8BF] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                   <span className="w-1.5 h-1.5 bg-[#A0A8BF] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -489,7 +492,7 @@ export default function AgentPage() {
 
             {availableProfessionals.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs text-[#6B738A] font-medium">Profesionales disponibles ahora:</p>
+                <p className="text-xs text-[#6B738A] font-medium">{t('Profesionales disponibles ahora:')}</p>
                 {availableProfessionals.map((pro: Professional) => (
                   <ProfessionalCard key={pro.id} pro={pro} onSelect={selectProfessional} />
                 ))}
@@ -521,7 +524,7 @@ export default function AgentPage() {
               <>
                 <div className="flex-1 flex items-center gap-3 bg-[#FCEBEB] border border-[#F09595] rounded-full px-4 py-2">
                   <div className="w-2 h-2 rounded-full bg-[#E24B4A] animate-pulse flex-shrink-0" />
-                  <span className="text-xs text-[#A32D2D] font-medium flex-1">Grabando...</span>
+                  <span className="text-xs text-[#A32D2D] font-medium flex-1">{t('Grabando...')}</span>
                   <span className="text-xs text-[#A32D2D] font-mono">{recordingSeconds}s</span>
                 </div>
                 <button
@@ -539,7 +542,7 @@ export default function AgentPage() {
               <>
                 <input
                   className="flex-1 px-3.5 py-2 border border-[#DDE1EE] rounded-full text-sm bg-[#F5F6FA] focus:outline-none focus:border-[#185FA5] text-[#141820] placeholder-[#A0A8BF]"
-                  placeholder="Escribe o mantén 🎤 para grabar..."
+                  placeholder={t('Escribe o mantén 🎤 para grabar...')}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}

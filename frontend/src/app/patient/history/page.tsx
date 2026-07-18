@@ -15,6 +15,7 @@ import type { Consultation, Rating } from '@/types'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
 import { CreatorBadge } from '@/components/shared/CreatorBadge'
 import { PaymentBadge } from '@/components/shared/ConsultationBadges'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconClose  = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
 
@@ -66,28 +67,29 @@ function RatingModal({ consultation, onClose, onSave, loading }: {
   onSave: (score: number, comment: string) => void
   loading?: boolean
 }) {
+  const { t } = useLanguage()
   const [score, setScore] = useState(5)
   const [comment, setComment] = useState('')
   return createPortal(
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-base font-semibold">Califica tu consulta</h3>
+          <h3 className="text-base font-semibold">{t('Califica tu consulta')}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
         <p className="text-xs text-[#6B738A] mb-4">
           {fmtFecha(consultation.created_at)} · Bs. {parseFloat(consultation.amount).toFixed(2)}
         </p>
         <div className="mb-4">
-          <p className="text-xs text-[#6B738A] mb-2">¿Cómo fue tu experiencia?</p>
+          <p className="text-xs text-[#6B738A] mb-2">{t('¿Cómo fue tu experiencia?')}</p>
           <StarPicker value={score} onChange={setScore} />
         </div>
         <div className="mb-5">
-          <label className="label">Comentario (opcional)</label>
+          <label className="label">{t('Comentario (opcional)')}</label>
           <textarea
             className="input resize-none"
             rows={3}
-            placeholder="Cuéntanos cómo estuvo la atención..."
+            placeholder={t('Cuéntanos cómo estuvo la atención...')}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             maxLength={500}
@@ -95,7 +97,7 @@ function RatingModal({ consultation, onClose, onSave, loading }: {
           <p className="text-xs text-[#A0A8BF] mt-1 text-right">{comment.length}/500</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={onClose} className="btn-secondary flex-1" disabled={loading}>Calificar luego</button>
+          <button onClick={onClose} className="btn-secondary flex-1" disabled={loading}>{t('Calificar luego')}</button>
           <button
             onClick={() => onSave(score, comment)}
             disabled={score === 0 || loading}
@@ -115,11 +117,12 @@ function RatingDetailModal({ rating, onClose }: {
   rating: Rating
   onClose: () => void
 }) {
+  const { t } = useLanguage()
   return createPortal(
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-base font-semibold">Tu calificación</h3>
+          <h3 className="text-base font-semibold">{t('Tu calificación')}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
         <p className="text-xs text-[#6B738A] mb-4">{fmtFecha(rating.created_at)}</p>
@@ -127,10 +130,10 @@ function RatingDetailModal({ rating, onClose }: {
           <Stars score={rating.score} size="lg" />
         </div>
         <div className="bg-[#F5F6FA] rounded-xl p-3 mb-5">
-          <p className="text-xs text-[#6B738A] mb-1">Comentario</p>
+          <p className="text-xs text-[#6B738A] mb-1">{t('Comentario')}</p>
           <p className="text-sm">{rating.comment || 'Sin comentario'}</p>
         </div>
-        <button onClick={onClose} className="btn-secondary w-full">Cerrar</button>
+        <button onClick={onClose} className="btn-secondary w-full">{t('Cerrar')}</button>
       </div>
     </div>,
     document.body
@@ -187,6 +190,7 @@ function DisputeModal({ consultation, onClose, onSave, loading, error }: {
   loading?: boolean
   error?: string
 }) {
+  const { t } = useLanguage()
   const [category, setCategory] = useState<DisputeCategory>('MALA_CALIDAD')
   const [reason, setReason] = useState('')
   const deadline = disputeDeadline(consultation)
@@ -195,7 +199,7 @@ function DisputeModal({ consultation, onClose, onSave, loading, error }: {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-base font-semibold">Reportar un problema</h3>
+          <h3 className="text-base font-semibold">{t('Reportar un problema')}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
         <p className="text-xs text-[#6B738A] mb-4">
@@ -209,7 +213,7 @@ function DisputeModal({ consultation, onClose, onSave, loading, error }: {
         {error && <div className="mb-3"><Alert type="error" message={error} /></div>}
 
         <div className="mb-4">
-          <label className="label">¿Qué pasó?</label>
+          <label className="label">{t('¿Qué pasó?')}</label>
           <select
             className="input"
             value={category}
@@ -222,11 +226,11 @@ function DisputeModal({ consultation, onClose, onSave, loading, error }: {
         </div>
 
         <div className="mb-5">
-          <label className="label">Cuéntanos más (mínimo 10 caracteres)</label>
+          <label className="label">{t('Cuéntanos más (mínimo 10 caracteres)')}</label>
           <textarea
             className="input resize-none"
             rows={4}
-            placeholder="Describe lo que ocurrió con el mayor detalle posible..."
+            placeholder={t('Describe lo que ocurrió con el mayor detalle posible...')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             maxLength={1000}
@@ -235,7 +239,7 @@ function DisputeModal({ consultation, onClose, onSave, loading, error }: {
         </div>
 
         <div className="flex gap-2">
-          <button onClick={onClose} className="btn-secondary flex-1" disabled={loading}>Cancelar</button>
+          <button onClick={onClose} className="btn-secondary flex-1" disabled={loading}>{t('Cancelar')}</button>
           <button
             onClick={() => onSave(category, reason)}
             disabled={reason.trim().length < 10 || loading}
@@ -254,11 +258,12 @@ function SummaryModal({ consultation, onClose }: {
   consultation: Consultation
   onClose: () => void
 }) {
+  const { t } = useLanguage()
   return createPortal(
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold">Resumen de consulta</h3>
+          <h3 className="text-base font-semibold">{t('Resumen de consulta')}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
         <div className="space-y-3 text-sm">
@@ -270,24 +275,24 @@ function SummaryModal({ consultation, onClose }: {
                 photoUrl={consultation.professional_photo_url}
               />
               <div>
-                <p className="text-xs text-[#6B738A] mb-0.5">Médico</p>
+                <p className="text-xs text-[#6B738A] mb-0.5">{t('Médico')}</p>
                 <p className="font-medium">{doctorNameOf(consultation)}</p>
               </div>
             </div>
           )}
           <div className="bg-[#F5F6FA] rounded-xl p-3">
-            <p className="text-xs text-[#6B738A] mb-1">Especialidad</p>
+            <p className="text-xs text-[#6B738A] mb-1">{t('Especialidad')}</p>
             <p className="font-medium">{consultation.specialty || 'Consulta médica general'}</p>
           </div>
           {consultation.professional_sub_specialties && consultation.professional_sub_specialties.length > 0 && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
-              <p className="text-xs text-[#6B738A] mb-1">Subespecialidad</p>
+              <p className="text-xs text-[#6B738A] mb-1">{t('Subespecialidad')}</p>
               <p className="font-medium">{consultation.professional_sub_specialties.join(', ')}</p>
             </div>
           )}
           {consultation.professional_department && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
-              <p className="text-xs text-[#6B738A] mb-1">Departamento</p>
+              <p className="text-xs text-[#6B738A] mb-1">{t('Departamento')}</p>
               <p className="font-medium">{consultation.professional_department}</p>
             </div>
           )}
@@ -305,7 +310,7 @@ function SummaryModal({ consultation, onClose }: {
           </div>
           {(consultation as any).outcome_note && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
-              <p className="text-xs text-[#6B738A] mb-1">Detalle</p>
+              <p className="text-xs text-[#6B738A] mb-1">{t('Detalle')}</p>
               <p className="font-medium text-xs">
                 {outcomeLabel(consultation, 'PATIENT')}
               </p>
@@ -313,27 +318,27 @@ function SummaryModal({ consultation, onClose }: {
           )}
           {!!consultation.duration_minutes && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
-              <p className="text-xs text-[#6B738A] mb-1">Duración</p>
+              <p className="text-xs text-[#6B738A] mb-1">{t('Duración')}</p>
               <p className="font-medium">{consultation.duration_minutes} minutos</p>
             </div>
           )}
           <div className="bg-[#F5F6FA] rounded-xl p-3">
-            <p className="text-xs text-[#6B738A] mb-1">Monto pagado</p>
+            <p className="text-xs text-[#6B738A] mb-1">{t('Monto pagado')}</p>
             <p className="font-medium text-[#0F6E56]">Bs. {parseFloat(consultation.amount).toFixed(2)}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-xl p-3">
-            <p className="text-xs text-[#6B738A] mb-1">Estado</p>
+            <p className="text-xs text-[#6B738A] mb-1">{t('Estado')}</p>
             <StatusBadge status={consultation.status} createdByRole={consultation.created_by_role} />
             <div className="mt-1"><PaymentBadge consultation={consultation} viewerRole="PATIENT" /></div>
           </div>
           {(consultation as any).notes && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
-              <p className="text-xs text-[#6B738A] mb-1">Notas del médico</p>
+              <p className="text-xs text-[#6B738A] mb-1">{t('Notas del médico')}</p>
               <p className="text-sm">{(consultation as any).notes}</p>
             </div>
           )}
         </div>
-        <button onClick={onClose} className="btn-secondary w-full mt-4">Cerrar</button>
+        <button onClick={onClose} className="btn-secondary w-full mt-4">{t('Cerrar')}</button>
       </div>
     </div>,
     document.body
@@ -345,6 +350,7 @@ function PrescriptionModal({ consultationId, onClose }: {
   consultationId: string
   onClose: () => void
 }) {
+  const { t } = useLanguage()
   const { data, isLoading } = useQuery({
     queryKey: ['rx-by-consultation', consultationId],
     queryFn: async () => {
@@ -357,25 +363,25 @@ function PrescriptionModal({ consultationId, onClose }: {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold">Recetas de esta consulta</h3>
+          <h3 className="text-base font-semibold">{t('Recetas de esta consulta')}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">Cargando recetas...</p>}
+        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando recetas...')}</p>}
         {data && data.length === 0 && (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">💊</p>
-            <p className="text-sm text-[#6B738A]">No hay recetas para esta consulta</p>
+            <p className="text-sm text-[#6B738A]">{t('No hay recetas para esta consulta')}</p>
           </div>
         )}
         {data && data.map((rx: any) => (
           <div key={rx.id} className="border border-[#DDE1EE] rounded-xl p-4 mb-3">
             <div className="border-b border-[#DDE1EE] pb-3 mb-3">
-              <p className="text-xs text-[#6B738A]">Dr./Dra.</p>
+              <p className="text-xs text-[#6B738A]">{t('Dr./Dra.')}</p>
               <p className="font-semibold text-sm">{rx.professional_name || 'Médico'}</p>
               {rx.professional_specialty && <p className="text-xs text-[#6B738A]">{rx.professional_specialty}</p>}
               {rx.cmb_matricula && <p className="text-xs text-[#6B738A]">Mat. CMB: {rx.cmb_matricula}</p>}
             </div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Medicamentos</p>
+            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Medicamentos')}</p>
             <div className="space-y-2 mb-3">
               {rx.medications?.map((m: any, i: number) => (
                 <div key={i} className="bg-[#F5F6FA] rounded-lg p-2">
@@ -390,7 +396,7 @@ function PrescriptionModal({ consultationId, onClose }: {
             </div>
             {rx.instructions && (
               <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg p-2 mb-3">
-                <p className="text-xs font-medium text-[#854F0B] mb-1">Indicaciones</p>
+                <p className="text-xs font-medium text-[#854F0B] mb-1">{t('Indicaciones')}</p>
                 <p className="text-xs">{rx.instructions}</p>
               </div>
             )}
@@ -404,7 +410,7 @@ function PrescriptionModal({ consultationId, onClose }: {
             </div>
           </div>
         ))}
-        <button onClick={onClose} className="btn-secondary w-full mt-2">Cerrar</button>
+        <button onClick={onClose} className="btn-secondary w-full mt-2">{t('Cerrar')}</button>
       </div>
     </div>,
     document.body
@@ -416,6 +422,7 @@ function ClinicalNoteModal({ consultationId, onClose }: {
   consultationId: string
   onClose: () => void
 }) {
+  const { t } = useLanguage()
   const { data: note, isLoading } = useQuery({
     queryKey: ['clinical-note-by-consultation', consultationId],
     queryFn: async () => {
@@ -440,21 +447,21 @@ function ClinicalNoteModal({ consultationId, onClose }: {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold">Historia clínica de esta consulta</h3>
+          <h3 className="text-base font-semibold">{t('Historia clínica de esta consulta')}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">Cargando historia clínica...</p>}
+        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando historia clínica...')}</p>}
         {!isLoading && !note && (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">📋</p>
-            <p className="text-sm text-[#6B738A]">No hay historia clínica para esta consulta</p>
+            <p className="text-sm text-[#6B738A]">{t('No hay historia clínica para esta consulta')}</p>
           </div>
         )}
         {note && (
           <>
             {(note.professional_name || note.professional_specialty) && (
               <div className="border-b border-[#DDE1EE] pb-3 mb-3">
-                <p className="text-xs text-[#6B738A]">Dr./Dra.</p>
+                <p className="text-xs text-[#6B738A]">{t('Dr./Dra.')}</p>
                 <p className="font-semibold text-sm">{note.professional_name || 'Médico'}</p>
                 {note.professional_specialty && <p className="text-xs text-[#6B738A]">{note.professional_specialty}</p>}
               </div>
@@ -464,14 +471,14 @@ function ClinicalNoteModal({ consultationId, onClose }: {
             {field('Diagnóstico (Evaluación)', note.assessment)}
             {field('Plan / Indicaciones', note.plan)}
             {!note.subjective && !note.objective && !note.assessment && !note.plan && (
-              <p className="text-sm text-[#6B738A] text-center py-4">El médico aún no completó el detalle.</p>
+              <p className="text-sm text-[#6B738A] text-center py-4">{t('El médico aún no completó el detalle.')}</p>
             )}
             <p className="text-xs text-[#A0A8BF] mt-2">
               Registrada el {fmtFecha(note.created_at)}
             </p>
           </>
         )}
-        <button onClick={onClose} className="btn-secondary w-full mt-4">Cerrar</button>
+        <button onClick={onClose} className="btn-secondary w-full mt-4">{t('Cerrar')}</button>
       </div>
     </div>,
     document.body
@@ -480,6 +487,7 @@ function ClinicalNoteModal({ consultationId, onClose }: {
 
 // ── Página principal ──────────────────────────────────
 export default function HistoryPage() {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const [ratingConsultation, setRatingConsultation]     = useState<Consultation | null>(null)
   const [viewRating, setViewRating]                     = useState<Rating | null>(null)
@@ -609,8 +617,8 @@ export default function HistoryPage() {
     <DashboardLayout navItems={NAV} activeHref="/patient/history" role="PATIENT">
       <div className={activeTab === 'calendar' ? 'max-w-5xl' : 'max-w-2xl'}>
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Mis consultas</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">Todas tus consultas y citas agendadas, en un solo lugar</p>
+          <h1 className="text-base font-semibold">{t('Mis consultas')}</h1>
+          <p className="text-xs text-[#6B738A] mt-0.5">{t('Todas tus consultas y citas agendadas, en un solo lugar')}</p>
         </div>
 
         {success && <div className="mb-4"><Alert type="success" message={success} /></div>}
@@ -620,15 +628,15 @@ export default function HistoryPage() {
         <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#185FA5]">{consultations.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Total</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Total')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#0F6E56]">{completed.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Completadas</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Completadas')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#854F0B]">Bs. {totalSpent.toFixed(0)}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Total gastado</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Total gastado')}</p>
           </div>
         </div>
 
@@ -684,7 +692,7 @@ export default function HistoryPage() {
                 : 'text-[#6B738A]'
             }`}
           >
-            🗓 Calendario
+            {t('🗓 Calendario')}
           </button>
         </div>
 
@@ -694,11 +702,11 @@ export default function HistoryPage() {
           <EmptyState
             title="Aún no tienes consultas"
             description="Cuando hagas tu primera consulta aparecerá aquí"
-            action={<a href="/patient/agent" className="btn-primary text-xs">Hacer mi primera consulta</a>}
+            action={<a href="/patient/agent" className="btn-primary text-xs">{t('Hacer mi primera consulta')}</a>}
           />
         ) : activeTab === 'active' ? (
           <div className="card">
-            <SectionTitle>En curso o pendientes</SectionTitle>
+            <SectionTitle>{t('En curso o pendientes')}</SectionTitle>
             {active.length === 0 ? (
               <EmptyState title="No tienes consultas activas en este momento" />
             ) : (
@@ -749,12 +757,12 @@ export default function HistoryPage() {
                         </div>
                         {c.status === 'WAITING_PAYMENT' && (
                           <a href={`/patient/waiting-room?consultationId=${c.id}`} className="btn-primary text-xs py-1 px-2">
-                            Pagar
+                            {t('Pagar')}
                           </a>
                         )}
                         {isScheduled && c.status !== 'WAITING_PAYMENT' && (
                           <a href={`/patient/waiting-room?consultationId=${c.id}`} className="btn-secondary text-xs py-1 px-2">
-                            Gestionar cita
+                            {t('Gestionar cita')}
                           </a>
                         )}
                       </div>
@@ -765,9 +773,9 @@ export default function HistoryPage() {
           </div>
         ) : activeTab === 'history' ? (
           <div className="card">
-            <SectionTitle>Historial de consultas completadas</SectionTitle>
+            <SectionTitle>{t('Historial de consultas completadas')}</SectionTitle>
             {completed.length === 0 ? (
-              <p className="text-sm text-[#6B738A] text-center py-3">No hay consultas completadas aún</p>
+              <p className="text-sm text-[#6B738A] text-center py-3">{t('No hay consultas completadas aún')}</p>
             ) : (
               <div className="divide-y divide-[#DDE1EE]">
                   {completed.map((c) => {
@@ -826,7 +834,7 @@ export default function HistoryPage() {
                             onClick={() => setSummaryConsultation(c)}
                             className="btn-secondary text-xs py-1 px-3"
                           >
-                            📋 Ver resumen
+                            {t('📋 Ver resumen')}
                           </button>
 
                           {/* Ver receta — solo si tiene receta */}
@@ -835,7 +843,7 @@ export default function HistoryPage() {
                               onClick={() => setRxConsultationId(c.id)}
                               className="btn-secondary text-xs py-1 px-3"
                             >
-                              💊 Ver receta
+                              {t('💊 Ver receta')}
                             </button>
                           )}
 
@@ -845,20 +853,20 @@ export default function HistoryPage() {
                               onClick={() => setNoteConsultationId(c.id)}
                               className="btn-secondary text-xs py-1 px-3"
                             >
-                              📋 Ver historia clínica
+                              {t('📋 Ver historia clínica')}
                             </button>
                           )}
 
                           {/* Reportar un problema — solo dentro de la ventana y si el pago sigue disponible */}
                           {isDisputed(c) ? (
-                            <span className="text-xs text-[#A32D2D] font-medium">⚠️ En disputa</span>
+                            <span className="text-xs text-[#A32D2D] font-medium">{t('⚠️ En disputa')}</span>
                           ) : canDispute(c) ? (
                             <span className="flex items-center gap-2">
                               <button
                                 onClick={() => { setDisputeError(''); setDisputeConsultation(c) }}
                                 className="text-xs text-[#A32D2D] hover:underline font-medium"
                               >
-                                ⚠️ Reportar un problema
+                                {t('⚠️ Reportar un problema')}
                               </button>
                               {(() => {
                                 const deadline = disputeDeadline(c)
@@ -884,7 +892,7 @@ export default function HistoryPage() {
                               onClick={() => setRatingConsultation(c)}
                               className="ml-auto text-xs text-[#185FA5] hover:underline font-medium"
                             >
-                              ⭐ Calificar →
+                              {t('⭐ Calificar →')}
                             </button>
                           )}
                         </div>
@@ -896,7 +904,7 @@ export default function HistoryPage() {
           </div>
         ) : activeTab === 'cancelled' ? (
           <div className="card">
-            <SectionTitle>Canceladas o reembolsadas</SectionTitle>
+            <SectionTitle>{t('Canceladas o reembolsadas')}</SectionTitle>
             {cancelledOrRefunded.length === 0 ? (
               <EmptyState title="No tienes consultas canceladas" />
             ) : (
@@ -952,7 +960,7 @@ export default function HistoryPage() {
           </div>
         ) : (
           <div className="card">
-            <SectionTitle>Calendario de citas agendadas</SectionTitle>
+            <SectionTitle>{t('Calendario de citas agendadas')}</SectionTitle>
             <AppointmentsCalendar consultations={consultations} role="PATIENT" />
           </div>
         )}

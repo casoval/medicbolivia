@@ -9,6 +9,7 @@ import { Alert, SectionTitle } from '@/components/ui'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { prescriptionsAPI, consultationsAPI, getErrorMessage, buildPrescriptionVerifyUrl } from '@/lib/api'
 import type { Medication, Prescription } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const EMPTY_MED: Medication = { name: '', presentation: '', dosage: '', frequency: '', duration: '', notes: '' }
 
@@ -45,6 +46,7 @@ function PrescriptionCard({
   onReissue: (rx: Prescription) => void
   isVoiding: boolean
 }) {
+  const { t } = useLanguage()
   const [open, setOpen]           = useState(false)
   const [copied, setCopied]       = useState(false)
   const [voidPanel, setVoidPanel] = useState(false)
@@ -82,13 +84,13 @@ function PrescriptionCard({
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {isVoided && (
-            <span className="text-[10px] bg-[#F5E6E6] text-[#A32D2D] px-2 py-0.5 rounded-full font-medium">Anulada</span>
+            <span className="text-[10px] bg-[#F5E6E6] text-[#A32D2D] px-2 py-0.5 rounded-full font-medium">{t('Anulada')}</span>
           )}
           {!isVoided && rx.replaces_prescription_id && (
-            <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium">Corregida</span>
+            <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium">{t('Corregida')}</span>
           )}
           {!isVoided && alreadyReplaced && (
-            <span className="text-[10px] bg-[#FAEEDA] text-[#854F0B] px-2 py-0.5 rounded-full font-medium">Reemplazada</span>
+            <span className="text-[10px] bg-[#FAEEDA] text-[#854F0B] px-2 py-0.5 rounded-full font-medium">{t('Reemplazada')}</span>
           )}
           <span className="hidden sm:block text-[10px] font-mono text-[#6B738A] bg-[#F5F6FA] px-2 py-0.5 rounded-full">
             {rx.qr_verify_code}
@@ -109,7 +111,7 @@ function PrescriptionCard({
                 </p>
                 {rx.void_reason && <p className="text-xs text-[#A32D2D] mt-0.5">Motivo: {rx.void_reason}</p>}
                 <p className="text-[10px] text-[#A32D2D] mt-1">
-                  Esta receta ya no es válida. El hash y QR se conservan solo como registro histórico.
+                  {t('Esta receta ya no es válida. El hash y QR se conservan solo como registro histórico.')}
                 </p>
               </div>
             )}
@@ -137,7 +139,7 @@ function PrescriptionCard({
             {/* Indicaciones */}
             {rx.instructions && (
               <div className="bg-[#FAEEDA] rounded-lg px-3 py-2">
-                <p className="text-xs font-semibold text-[#854F0B] mb-0.5">📌 Indicaciones</p>
+                <p className="text-xs font-semibold text-[#854F0B] mb-0.5">{t('📌 Indicaciones')}</p>
                 <p className="text-xs text-[#854F0B]">{rx.instructions}</p>
               </div>
             )}
@@ -147,11 +149,11 @@ function PrescriptionCard({
               <QRCode value={buildPrescriptionVerifyUrl(rx.qr_verify_code)} size={110} />
               <div className="flex-1 space-y-2">
                 <div>
-                  <p className="text-xs font-semibold text-[#1A1F2E]">Código QR de verificación</p>
-                  <p className="text-[10px] text-[#6B738A] mt-0.5">La farmacia puede escanear este QR para verificar la autenticidad de la receta.</p>
+                  <p className="text-xs font-semibold text-[#1A1F2E]">{t('Código QR de verificación')}</p>
+                  <p className="text-[10px] text-[#6B738A] mt-0.5">{t('La farmacia puede escanear este QR para verificar la autenticidad de la receta.')}</p>
                 </div>
                 <div className="bg-[#F5F6FA] rounded px-2 py-1.5">
-                  <p className="text-[9px] text-[#6B738A] font-semibold mb-0.5">Hash SHA-256</p>
+                  <p className="text-[9px] text-[#6B738A] font-semibold mb-0.5">{t('Hash SHA-256')}</p>
                   <p className="text-[9px] font-mono text-[#185FA5] break-all">{rx.digital_hash}</p>
                 </div>
                 <button onClick={copyCode} className={`w-full py-1.5 rounded text-[10px] font-medium transition-colors ${copied ? 'bg-[#E1F5EE] text-[#0F6E56]' : 'bg-[#E6F1FB] text-[#185FA5] hover:bg-[#B5D4F4]'}`}>
@@ -164,11 +166,11 @@ function PrescriptionCard({
             {!isVoided && !alreadyReplaced && (
               voidPanel ? (
                 <div className="bg-white border border-[#DDE1EE] rounded-lg p-3 space-y-2">
-                  <p className="text-xs font-semibold text-[#1A1F2E]">¿Por qué anulas esta receta?</p>
+                  <p className="text-xs font-semibold text-[#1A1F2E]">{t('¿Por qué anulas esta receta?')}</p>
                   <textarea
                     className="input text-xs resize-none"
                     rows={2}
-                    placeholder="Motivo (opcional, ej: error en la dosis)"
+                    placeholder={t('Motivo (opcional, ej: error en la dosis)')}
                     value={voidReason}
                     onChange={e => setVoidReason(e.target.value)}
                   />
@@ -184,7 +186,7 @@ function PrescriptionCard({
                       onClick={() => { setVoidPanel(false); setVoidReason('') }}
                       className="px-3 py-1.5 text-xs text-[#6B738A] hover:underline"
                     >
-                      Cancelar
+                      {t('Cancelar')}
                     </button>
                   </div>
                 </div>
@@ -193,7 +195,7 @@ function PrescriptionCard({
                   onClick={() => setVoidPanel(true)}
                   className="w-full py-1.5 text-xs font-medium text-[#A32D2D] border border-[#F0D9D9] rounded-lg hover:bg-[#F5E6E6] transition-colors"
                 >
-                  ⛔ Anular receta (por error o corrección)
+                  {t('⛔ Anular receta (por error o corrección)')}
                 </button>
               )
             )}
@@ -203,7 +205,7 @@ function PrescriptionCard({
                 onClick={() => onReissue(rx)}
                 className="w-full py-1.5 text-xs font-medium text-white bg-[#185FA5] hover:bg-[#0C447C] rounded-lg transition-colors"
               >
-                ✍️ Reemitir receta corregida
+                {t('✍️ Reemitir receta corregida')}
               </button>
             )}
 
@@ -269,6 +271,7 @@ function PatientRxGroup({
 }
 
 export default function PrescriptionsPage() {
+  const { t } = useLanguage()
   const qc = useQueryClient()
 
   const [consultationId, setConsultationId] = useState('')
@@ -394,9 +397,9 @@ export default function PrescriptionsPage() {
     <DashboardLayout navItems={NAV} activeHref="/professional/prescriptions" role="PROFESSIONAL">
       <div className="max-w-4xl">
         <div className="mb-5">
-          <h1 className="text-base font-semibold">Recetario digital</h1>
+          <h1 className="text-base font-semibold">{t('Recetario digital')}</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">
-            Las recetas se firman con SHA-256 vinculado a tu matrícula CMB y quedan disponibles para el paciente
+            {t('Las recetas se firman con SHA-256 vinculado a tu matrícula CMB y quedan disponibles para el paciente')}
           </p>
         </div>
 
@@ -413,11 +416,11 @@ export default function PrescriptionsPage() {
             {rxBeingReplaced && (
               <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-3 flex items-start justify-between gap-2">
                 <p className="text-xs text-[#185FA5]">
-                  📝 Corrigiendo la receta anulada de <strong>{rxBeingReplaced.patient_name}</strong> ({fmtFecha(rxBeingReplaced.signed_at)}).
+                  {t('📝 Corrigiendo la receta anulada de')} <strong>{rxBeingReplaced.patient_name}</strong> ({fmtFecha(rxBeingReplaced.signed_at)}).
                   Los campos se prellenaron; ajústalos y firma de nuevo.
                 </p>
                 <button onClick={cancelReissue} className="text-xs text-[#185FA5] hover:underline flex-shrink-0">
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
               </div>
             )}
@@ -426,7 +429,7 @@ export default function PrescriptionsPage() {
 
               {/* Consulta asociada */}
               <div>
-                <label className="label">Consulta asociada</label>
+                <label className="label">{t('Consulta asociada')}</label>
                 {loadingConsultations ? (
                   <div className="h-9 bg-[#F5F6FA] rounded-lg animate-pulse" />
                 ) : completedConsultations.length === 0 ? (
@@ -444,7 +447,7 @@ export default function PrescriptionsPage() {
                     onChange={e => setConsultationId(e.target.value)}
                     required
                   >
-                    <option value="">Seleccionar consulta...</option>
+                    <option value="">{t('Seleccionar consulta...')}</option>
                     {completedConsultations.map((c: any) => {
                       const patientName = [c.patient_first_name, c.patient_last_name].filter(Boolean).join(' ')
                       const when = c.scheduled_at || c.created_at
@@ -461,9 +464,9 @@ export default function PrescriptionsPage() {
               {/* Medicamentos */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="label mb-0">Medicamentos</label>
+                  <label className="label mb-0">{t('Medicamentos')}</label>
                   <button type="button" onClick={addMedication} className="text-xs text-[#185FA5] hover:underline font-medium">
-                    + Agregar otro
+                    {t('+ Agregar otro')}
                   </button>
                 </div>
                 <div className="space-y-3">
@@ -473,34 +476,34 @@ export default function PrescriptionsPage() {
                         <p className="text-xs font-medium text-[#6B738A]">Medicamento {i + 1}</p>
                         {medications.length > 1 && (
                           <button type="button" onClick={() => removeMedication(i)} className="text-xs text-[#A32D2D] hover:underline">
-                            Eliminar
+                            {t('Eliminar')}
                           </button>
                         )}
                       </div>
                       <input
                         className="input bg-white text-sm"
-                        placeholder="Nombre (ej: Amoxicilina 500mg)"
+                        placeholder={t('Nombre (ej: Amoxicilina 500mg)')}
                         value={med.name}
                         onChange={e => updateMed(i, 'name', e.target.value)}
                         required
                       />
                       <input
                         className="input bg-white text-sm"
-                        placeholder="Presentación (ej: cápsulas)"
+                        placeholder={t('Presentación (ej: cápsulas)')}
                         value={med.presentation}
                         onChange={e => updateMed(i, 'presentation', e.target.value)}
                       />
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           className="input bg-white text-sm"
-                          placeholder="Dosis (ej: 1 cápsula)"
+                          placeholder={t('Dosis (ej: 1 cápsula)')}
                           value={med.dosage}
                           onChange={e => updateMed(i, 'dosage', e.target.value)}
                           required
                         />
                         <input
                           className="input bg-white text-sm"
-                          placeholder="Frecuencia (ej: cada 8 hrs)"
+                          placeholder={t('Frecuencia (ej: cada 8 hrs)')}
                           value={med.frequency}
                           onChange={e => updateMed(i, 'frequency', e.target.value)}
                           required
@@ -508,7 +511,7 @@ export default function PrescriptionsPage() {
                       </div>
                       <input
                         className="input bg-white text-sm"
-                        placeholder="Duración (ej: 7 días)"
+                        placeholder={t('Duración (ej: 7 días)')}
                         value={med.duration}
                         onChange={e => updateMed(i, 'duration', e.target.value)}
                       />
@@ -519,11 +522,11 @@ export default function PrescriptionsPage() {
 
               {/* Indicaciones */}
               <div>
-                <label className="label">Indicaciones adicionales</label>
+                <label className="label">{t('Indicaciones adicionales')}</label>
                 <textarea
                   className="input resize-none"
                   rows={3}
-                  placeholder="Indicaciones para el paciente: horarios, restricciones, controles..."
+                  placeholder={t('Indicaciones para el paciente: horarios, restricciones, controles...')}
                   value={instructions}
                   onChange={e => setInstructions(e.target.value)}
                 />
@@ -554,7 +557,7 @@ export default function PrescriptionsPage() {
           {/* ── Recetas emitidas ── */}
           <div className="card">
             <div className="flex items-center justify-between mb-3">
-              <SectionTitle>Recetas emitidas</SectionTitle>
+              <SectionTitle>{t('Recetas emitidas')}</SectionTitle>
               {myPrescriptions.length > 0 && (
                 <span className="text-xs text-[#6B738A] bg-[#F5F6FA] px-2 py-0.5 rounded-full">
                   {myPrescriptions.length} total
@@ -568,13 +571,13 @@ export default function PrescriptionsPage() {
                   onClick={() => setViewMode('date')}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
                 >
-                  🕐 Por fecha
+                  {t('🕐 Por fecha')}
                 </button>
                 <button
                   onClick={() => setViewMode('patient')}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'patient' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
                 >
-                  👤 Por paciente
+                  {t('👤 Por paciente')}
                 </button>
               </div>
             )}
@@ -586,8 +589,8 @@ export default function PrescriptionsPage() {
             ) : myPrescriptions.length === 0 ? (
               <div className="text-center py-10">
                 <p className="text-3xl mb-2">📋</p>
-                <p className="text-sm font-medium text-[#1A1F2E]">Aún no has emitido recetas</p>
-                <p className="text-xs text-[#6B738A] mt-1">Las recetas aparecerán aquí una vez que las emitas</p>
+                <p className="text-sm font-medium text-[#1A1F2E]">{t('Aún no has emitido recetas')}</p>
+                <p className="text-xs text-[#6B738A] mt-1">{t('Las recetas aparecerán aquí una vez que las emitas')}</p>
               </div>
             ) : viewMode === 'date' ? (
               <div className="space-y-2">

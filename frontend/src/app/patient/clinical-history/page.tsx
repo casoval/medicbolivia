@@ -8,6 +8,7 @@ import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { Alert, Toggle } from '@/components/ui'
 import { clinicalNotesAPI, getErrorMessage } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 function fmtFecha(iso: string) {
   const s = iso.endsWith('Z') ? iso : iso + 'Z'
@@ -60,6 +61,7 @@ function ShareToggle({ note, onToggled }: { note: ClinicalNote; onToggled: () =>
 }
 
 function ClinicalNoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => void }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
 
   const fields: { label: string; value?: string | null; icon: string }[] = [
@@ -86,7 +88,7 @@ function ClinicalNoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: 
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {note.shared_with_professionals && (
-            <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium">Compartida</span>
+            <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium">{t('Compartida')}</span>
           )}
           <span className="text-[#6B738A] text-xs">{open ? '▲' : '▼'}</span>
         </div>
@@ -95,7 +97,7 @@ function ClinicalNoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: 
       {open && (
         <div className="bg-[#FAFBFC] border-t border-[#DDE1EE] px-4 py-4 space-y-3">
           {fields.length === 0 ? (
-            <p className="text-xs text-[#A0A8BF] text-center py-2">El médico no agregó detalles en esta nota.</p>
+            <p className="text-xs text-[#A0A8BF] text-center py-2">{t('El médico no agregó detalles en esta nota.')}</p>
           ) : (
             fields.map(f => (
               <div key={f.label} className="bg-white rounded-lg border border-[#DDE1EE] p-3">
@@ -158,6 +160,7 @@ function ProfessionalGroup({
 }
 
 export default function PatientClinicalHistoryPage() {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const [viewMode, setViewMode] = useState<'date' | 'professional'>('date')
 
@@ -198,9 +201,9 @@ export default function PatientClinicalHistoryPage() {
     <DashboardLayout navItems={NAV} activeHref="/patient/clinical-history" role="PATIENT">
       <div className="max-w-2xl">
         <div className="mb-5">
-          <h1 className="text-base font-semibold">Mi historia clínica</h1>
+          <h1 className="text-base font-semibold">{t('Mi historia clínica')}</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">
-            Notas que tus médicos fueron registrando durante tus consultas. Tú decides si compartirlas con otros profesionales de la plataforma.
+            {t('Notas que tus médicos fueron registrando durante tus consultas. Tú decides si compartirlas con otros profesionales de la plataforma.')}
           </p>
         </div>
 
@@ -221,9 +224,9 @@ export default function PatientClinicalHistoryPage() {
         ) : sorted.length === 0 ? (
           <div className="card text-center py-14">
             <p className="text-4xl mb-3">📋</p>
-            <p className="text-sm font-semibold text-[#1A1F2E]">Sin historia clínica aún</p>
+            <p className="text-sm font-semibold text-[#1A1F2E]">{t('Sin historia clínica aún')}</p>
             <p className="text-xs text-[#6B738A] mt-1 max-w-xs mx-auto">
-              Las notas que tu médico registre durante tus consultas aparecerán aquí.
+              {t('Las notas que tu médico registre durante tus consultas aparecerán aquí.')}
             </p>
           </div>
         ) : (
@@ -237,13 +240,13 @@ export default function PatientClinicalHistoryPage() {
                   onClick={() => setViewMode('date')}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
                 >
-                  🕐 Por fecha
+                  {t('🕐 Por fecha')}
                 </button>
                 <button
                   onClick={() => setViewMode('professional')}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'professional' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
                 >
-                  🩺 Por profesional
+                  {t('🩺 Por profesional')}
                 </button>
               </div>
             </div>

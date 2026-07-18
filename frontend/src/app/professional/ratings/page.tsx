@@ -6,8 +6,10 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { Stars, SectionTitle, EmptyState, LoadingScreen } from '@/components/ui'
 import { ratingsAPI } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 export default function RatingsPage() {
+  const { t } = useLanguage()
   const { data, isLoading, error } = useQuery({
     queryKey: ['ratings', 'my'],
     queryFn: () => ratingsAPI.getMy().then(r => r.data),
@@ -31,8 +33,8 @@ export default function RatingsPage() {
     <DashboardLayout navItems={NAV} activeHref="/professional/ratings" role="PROFESSIONAL">
       <div className="max-w-3xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Mis calificaciones</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">Lo que los pacientes piensan de tu atención</p>
+          <h1 className="text-base font-semibold">{t('Mis calificaciones')}</h1>
+          <p className="text-xs text-[#6B738A] mt-0.5">{t('Lo que los pacientes piensan de tu atención')}</p>
         </div>
 
         {isLoading ? (
@@ -40,15 +42,15 @@ export default function RatingsPage() {
         ) : error ? (
           <div className="card text-center py-8">
             <p className="text-2xl mb-2">⚠️</p>
-            <p className="text-sm text-[#E24B4A]">Error al cargar calificaciones</p>
-            <p className="text-xs text-[#6B738A] mt-1">Intenta recargar la página</p>
+            <p className="text-sm text-[#E24B4A]">{t('Error al cargar calificaciones')}</p>
+            <p className="text-xs text-[#6B738A] mt-1">{t('Intenta recargar la página')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
             {/* Resumen */}
             <div className="card">
-              <SectionTitle>Resumen</SectionTitle>
+              <SectionTitle>{t('Resumen')}</SectionTitle>
               {total === 0 ? (
                 <EmptyState
                   title="Aún no tienes calificaciones"
@@ -85,11 +87,11 @@ export default function RatingsPage() {
                   <div className="grid grid-cols-2 gap-2 pt-3 border-t border-[#DDE1EE]">
                     <div className="bg-[#F5F6FA] rounded-lg p-2.5 text-center">
                       <p className="text-sm font-bold text-[#0F6E56]">{recommendPct}%</p>
-                      <p className="text-xs text-[#6B738A]">recomendarían</p>
+                      <p className="text-xs text-[#6B738A]">{t('recomendarían')}</p>
                     </div>
                     <div className="bg-[#F5F6FA] rounded-lg p-2.5 text-center">
                       <p className="text-sm font-bold text-[#185FA5]">{average.toFixed(1)}</p>
-                      <p className="text-xs text-[#6B738A]">promedio general</p>
+                      <p className="text-xs text-[#6B738A]">{t('promedio general')}</p>
                     </div>
                   </div>
                 </>
@@ -98,7 +100,7 @@ export default function RatingsPage() {
 
             {/* Comentarios recientes */}
             <div className="card">
-              <SectionTitle>Comentarios recientes</SectionTitle>
+              <SectionTitle>{t('Comentarios recientes')}</SectionTitle>
               {ratings.length === 0 ? (
                 <EmptyState
                   title="Sin comentarios aún"

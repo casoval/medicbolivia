@@ -15,6 +15,7 @@ import { SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
 import { Alert } from '@/components/ui'
 import { consultationsAPI, getErrorMessage } from '@/lib/api'
 import type { PatientLink } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface Props {
   link: PatientLink
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Props) {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const [scheduledAt, setScheduledAt] = useState('')
   const [chiefComplaint, setChiefComplaint] = useState('')
@@ -83,7 +85,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
           </div>
 
           <div>
-            <label className="block text-xs text-[#6B738A] mb-1">Motivo de consulta (opcional)</label>
+            <label className="block text-xs text-[#6B738A] mb-1">{t('Motivo de consulta (opcional)')}</label>
             <input
               value={chiefComplaint}
               onChange={(e) => setChiefComplaint(e.target.value)}
@@ -181,7 +183,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
         </div>
 
         <div className="flex items-center justify-end gap-2 mt-5">
-          <button onClick={onClose} className="btn-secondary text-xs py-1.5 px-3">Cancelar</button>
+          <button onClick={onClose} className="btn-secondary text-xs py-1.5 px-3">{t('Cancelar')}</button>
           <button
             onClick={submit}
             disabled={scheduleMutation.isPending}

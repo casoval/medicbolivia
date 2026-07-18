@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { SectionTitle, Alert, LoadingScreen, EmptyState, Toggle } from '@/components/ui'
 import { whatsappAPI, getErrorMessage } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface BackupConfig {
   is_active: boolean
@@ -33,6 +34,7 @@ function utcHourToLocalLabel(hourUtc: number): string {
 }
 
 export function AutomationTab() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [error, setError] = useState('')
   const [emailInput, setEmailInput] = useState('')
@@ -84,21 +86,21 @@ export function AutomationTab() {
   return (
     <div className="space-y-4">
       <div className="card p-4">
-        <SectionTitle>Backups automáticos a Gmail</SectionTitle>
+        <SectionTitle>{t('Backups automáticos a Gmail')}</SectionTitle>
         <p className="text-xs text-[#6B738A] mb-3">
           Genera un dump comprimido de la base de datos y lo manda por correo con la frecuencia que definas acá.
           Si el dump supera el límite de adjunto de Gmail (~20MB), se sube automáticamente a almacenamiento
           privado y el correo lleva un link de descarga en vez del archivo.
           Requiere que el backend tenga configurado <code>GMAIL_SENDER_ADDRESS</code> y{' '}
-          <code>GMAIL_APP_PASSWORD</code> (contraseña de aplicación, no la contraseña normal de Gmail).
+          <code>GMAIL_APP_PASSWORD</code> {t('(contraseña de aplicación, no la contraseña normal de Gmail).')}
         </p>
 
         {error && <div className="mb-3"><Alert type="error" message={error} /></div>}
 
         <div className="flex items-center justify-between py-3 border-b border-[#DDE1EE]">
           <div>
-            <p className="text-sm font-medium">Backups activos</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Si está apagado, no se manda nada automáticamente</p>
+            <p className="text-sm font-medium">{t('Backups activos')}</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Si está apagado, no se manda nada automáticamente')}</p>
           </div>
           <Toggle
             on={localConfig.is_active}
@@ -108,18 +110,18 @@ export function AutomationTab() {
 
         <div className="grid grid-cols-2 gap-3 py-3 border-b border-[#DDE1EE]">
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">Frecuencia</label>
+            <label className="text-xs font-medium text-[#6B738A]">{t('Frecuencia')}</label>
             <select
               className="input mt-1"
               value={localConfig.frequency}
               onChange={(e) => setLocalConfig({ ...localConfig, frequency: e.target.value as 'DAILY' | 'WEEKLY' })}
             >
-              <option value="DAILY">Diaria</option>
-              <option value="WEEKLY">Semanal (lunes)</option>
+              <option value="DAILY">{t('Diaria')}</option>
+              <option value="WEEKLY">{t('Semanal (lunes)')}</option>
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">Hora (UTC)</label>
+            <label className="text-xs font-medium text-[#6B738A]">{t('Hora (UTC)')}</label>
             <input
               type="number" min={0} max={23} className="input mt-1"
               value={localConfig.hour_utc}
@@ -130,15 +132,15 @@ export function AutomationTab() {
         </div>
 
         <div className="py-3">
-          <label className="text-xs font-medium text-[#6B738A]">Correos destinatarios</label>
+          <label className="text-xs font-medium text-[#6B738A]">{t('Correos destinatarios')}</label>
           <div className="flex gap-2 mt-1">
             <input
-              className="input flex-1" type="email" placeholder="tu-correo@gmail.com"
+              className="input flex-1" type="email" placeholder={t('tu-correo@gmail.com')}
               value={emailInput}
               onChange={(e) => setEmailInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEmail() } }}
             />
-            <button type="button" className="btn-secondary" onClick={addEmail}>Agregar</button>
+            <button type="button" className="btn-secondary" onClick={addEmail}>{t('Agregar')}</button>
           </div>
           <div className="flex flex-wrap gap-1.5 mt-2">
             {localConfig.recipient_emails.map((email) => (
@@ -147,7 +149,7 @@ export function AutomationTab() {
                 <button onClick={() => removeEmail(email)} className="text-[#185FA5] hover:text-[#A32D2D]">×</button>
               </span>
             ))}
-            {localConfig.recipient_emails.length === 0 && <p className="text-xs text-[#6B738A]">Sin destinatarios todavía</p>}
+            {localConfig.recipient_emails.length === 0 && <p className="text-xs text-[#6B738A]">{t('Sin destinatarios todavía')}</p>}
           </div>
         </div>
 
@@ -162,7 +164,7 @@ export function AutomationTab() {
       </div>
 
       <div className="card p-4">
-        <SectionTitle>Historial de envíos</SectionTitle>
+        <SectionTitle>{t('Historial de envíos')}</SectionTitle>
         {loadingLogs ? (
           <LoadingScreen text="Cargando historial..." />
         ) : logs.length === 0 ? (

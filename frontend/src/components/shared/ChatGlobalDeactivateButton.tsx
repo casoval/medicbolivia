@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { chatAPI, getErrorMessage } from '@/lib/api'
 import { Alert } from '@/components/ui'
 import { CHAT_REASON_CATEGORY_LABELS, type ChatReasonCategory } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconBan = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -17,6 +18,7 @@ const IconBan = () => (
 )
 
 export function ChatGlobalDeactivateButton() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
   const [reportChecked, setReportChecked] = useState(false)
@@ -120,7 +122,7 @@ export function ChatGlobalDeactivateButton() {
             {reportChecked && (
               <div className="space-y-3 pl-6">
                 <div>
-                  <label className="text-xs text-[#6B7280] block mb-1">Motivo</label>
+                  <label className="text-xs text-[#6B7280] block mb-1">{t('Motivo')}</label>
                   <select
                     value={reasonCategory}
                     onChange={(e) => setReasonCategory(e.target.value as ChatReasonCategory)}
@@ -150,7 +152,7 @@ export function ChatGlobalDeactivateButton() {
                 onClick={() => setModalOpen(false)}
                 className="px-4 py-2 text-sm text-[#6B7280] hover:bg-[#F5F6FA] rounded-lg"
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button
                 onClick={handleSubmitDeactivate}

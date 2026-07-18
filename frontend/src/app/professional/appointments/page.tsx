@@ -20,6 +20,7 @@ import { SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
 import { ProfessionalScheduleModal } from '@/components/professional/ProfessionalScheduleModal'
 import { groupByPatient, hasEffectiveLink, linkForSchedule } from '@/lib/patientGrouping'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 function patientNameOf(c: any): string | null {
   return c.patient_first_name ? `${c.patient_first_name} ${c.patient_last_name || ''}`.trim() : null
@@ -67,6 +68,7 @@ function ScheduledAcceptDeadlineTimer({ createdAt, scheduledAt }: { createdAt: s
 }
 
 export default function ProfessionalAppointmentsPage() {
+  const { t } = useLanguage()
   const qc = useQueryClient()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -175,8 +177,8 @@ export default function ProfessionalAppointmentsPage() {
     <DashboardLayout navItems={NAV} activeHref="/professional/appointments" role="PROFESSIONAL">
       <div className={activeTab === 'calendar' ? 'max-w-5xl' : 'max-w-3xl'}>
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Citas agendadas</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">Todas tus citas con horario fijo, pasadas y futuras</p>
+          <h1 className="text-base font-semibold">{t('Citas agendadas')}</h1>
+          <p className="text-xs text-[#6B738A] mt-0.5">{t('Todas tus citas con horario fijo, pasadas y futuras')}</p>
         </div>
 
         {error && <div className="mb-4"><Alert type="error" message={error} /></div>}
@@ -219,7 +221,7 @@ export default function ProfessionalAppointmentsPage() {
                 : 'text-[#6B738A]'
             }`}
           >
-            🗓 Calendario
+            {t('🗓 Calendario')}
           </button>
         </div>
 
@@ -265,7 +267,7 @@ export default function ProfessionalAppointmentsPage() {
 
                         {c.chief_complaint && (
                           <div className="ml-12 mt-2 bg-[#F5F6FA] rounded-lg px-3 py-2">
-                            <p className="text-xs text-[#A0A8BF] mb-0.5">Motivo de la consulta</p>
+                            <p className="text-xs text-[#A0A8BF] mb-0.5">{t('Motivo de la consulta')}</p>
                             <p className="text-xs text-[#141820]">{c.chief_complaint}</p>
                           </div>
                         )}
@@ -286,13 +288,13 @@ export default function ProfessionalAppointmentsPage() {
                                 onClick={() => acceptMutation.mutate(c.id)}
                                 className="flex-1 py-1.5 bg-[#1D9E75] hover:bg-[#0F6E56] text-white text-xs font-medium rounded-lg"
                               >
-                                ✓ Aceptar cita
+                                {t('✓ Aceptar cita')}
                               </button>
                               <button
                                 onClick={() => rejectMutation.mutate(c.id)}
                                 className="py-1.5 px-4 bg-[#F5F6FA] hover:bg-[#DDE1EE] text-[#6B738A] text-xs font-medium rounded-lg"
                               >
-                                Rechazar
+                                {t('Rechazar')}
                               </button>
                             </div>
                             <div className="mt-1.5">
@@ -332,16 +334,16 @@ export default function ProfessionalAppointmentsPage() {
                                 </p>
                                 <div className="flex gap-2 mt-2">
                                   <button onClick={() => respondRescheduleMutation.mutate({ id: c.id, decision: 'ACCEPT' })} className="text-xs bg-[#1D9E75] text-white px-3 py-1 rounded-lg">
-                                    Aceptar
+                                    {t('Aceptar')}
                                   </button>
                                   <button onClick={() => respondRescheduleMutation.mutate({ id: c.id, decision: 'REJECT' })} className="text-xs bg-white border border-[#DDE1EE] text-[#6B738A] px-3 py-1 rounded-lg">
-                                    Rechazar
+                                    {t('Rechazar')}
                                   </button>
                                 </div>
                               </div>
                             )}
                             {hasOwnPendingProposal && (
-                              <p className="text-xs text-[#A0A8BF] mb-2">Propusiste otro horario — esperando respuesta del paciente.</p>
+                              <p className="text-xs text-[#A0A8BF] mb-2">{t('Propusiste otro horario — esperando respuesta del paciente.')}</p>
                             )}
 
                             {c.created_by_role === 'PROFESSIONAL' && (
@@ -363,13 +365,13 @@ export default function ProfessionalAppointmentsPage() {
                                         disabled={!newDateTime}
                                         className="text-xs text-[#185FA5] font-medium disabled:opacity-50"
                                       >
-                                        Enviar
+                                        {t('Enviar')}
                                       </button>
-                                      <button onClick={() => setReschedulingId(null)} className="text-xs text-[#6B738A]">Cancelar</button>
+                                      <button onClick={() => setReschedulingId(null)} className="text-xs text-[#6B738A]">{t('Cancelar')}</button>
                                     </div>
                                   ) : (
                                     <button onClick={() => { setReschedulingId(c.id); setNewDateTime('') }} className="text-xs text-[#185FA5] font-medium">
-                                      Proponer otro horario
+                                      {t('Proponer otro horario')}
                                     </button>
                                   )
                                 )}
@@ -380,7 +382,7 @@ export default function ProfessionalAppointmentsPage() {
                                     title={!graceOk ? 'Disponible 10 min después de la hora de la cita' : ''}
                                     className="text-xs text-[#A32D2D] disabled:opacity-40"
                                   >
-                                    El paciente no llegó
+                                    {t('El paciente no llegó')}
                                   </button>
                                 )}
                               </div>
@@ -457,7 +459,7 @@ export default function ProfessionalAppointmentsPage() {
         ) : (
           <div className="card">
             <div className="flex items-center justify-between gap-2 mb-1">
-              <SectionTitle>Calendario de citas agendadas</SectionTitle>
+              <SectionTitle>{t('Calendario de citas agendadas')}</SectionTitle>
               {membershipActive && (
                 <button
                   onClick={() => { setPatientSearch(''); setShowPatientPicker(true) }}
@@ -512,7 +514,7 @@ export default function ProfessionalAppointmentsPage() {
               )}
             </div>
             <button onClick={() => setShowPatientPicker(false)} className="btn-secondary text-xs py-1.5 px-3 mt-3 self-end">
-              Cerrar
+              {t('Cerrar')}
             </button>
           </div>
         </div>

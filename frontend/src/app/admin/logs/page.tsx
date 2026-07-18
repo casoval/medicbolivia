@@ -6,6 +6,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { LoadingScreen, SectionTitle } from '@/components/ui'
 import { api } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const DOT_COLORS: Record<string, string> = {
   PAYMENT:  '#1D9E75',
@@ -25,6 +26,7 @@ function getDotColor(action: string): string {
 }
 
 export default function AdminLogsPage() {
+  const { t } = useLanguage()
   const [filter, setFilter] = useState('')
 
   const { data: logs = [], isLoading } = useQuery({
@@ -53,8 +55,8 @@ export default function AdminLogsPage() {
     <DashboardLayout navItems={NAV} activeHref="/admin/logs" role="ADMIN">
       <div className="max-w-4xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Auditoría y logs</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">Registro completo de todas las acciones del sistema</p>
+          <h1 className="text-base font-semibold">{t('Auditoría y logs')}</h1>
+          <p className="text-xs text-[#6B738A] mt-0.5">{t('Registro completo de todas las acciones del sistema')}</p>
         </div>
 
         {/* Filtros */}
@@ -76,7 +78,7 @@ export default function AdminLogsPage() {
             onClick={exportCSV}
             className="ml-auto btn-secondary text-xs py-1.5 px-3"
           >
-            Exportar CSV
+            {t('Exportar CSV')}
           </button>
         </div>
 
@@ -86,7 +88,7 @@ export default function AdminLogsPage() {
               {logs.length} registro{logs.length !== 1 ? 's' : ''}
             </SectionTitle>
             {logs.length === 0 ? (
-              <p className="text-sm text-[#6B738A] text-center py-8">No hay registros con este filtro</p>
+              <p className="text-sm text-[#6B738A] text-center py-8">{t('No hay registros con este filtro')}</p>
             ) : (
               <div className="divide-y divide-[#DDE1EE]">
                 {logs.map((l: any) => (

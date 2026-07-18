@@ -11,11 +11,13 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { LoadingScreen } from '@/components/ui'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 export default function MembershipRedirectPage() {
   const router = useRouter()
+  const { t } = useLanguage()
   useEffect(() => {
     router.replace('/professional/patients')
   }, [router])
-  return <LoadingScreen text="Redirigiendo..." />
+  return <LoadingScreen text={t('Redirigiendo...')} />
 }

@@ -10,6 +10,7 @@ import { ProfessionalCard } from '@/components/patient/ProfessionalCard'
 import { LoadingScreen, EmptyState, Alert } from '@/components/ui'
 import { professionalsAPI, consultationsAPI } from '@/lib/api'
 import type { Professional } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const SPECIALTIES = [
   'Todos', 'Medicina General', 'Cardiología', 'Psicología',
@@ -18,6 +19,7 @@ const SPECIALTIES = [
 ]
 
 export default function SearchPage() {
+  const { t } = useLanguage()
   const router = useRouter()
   const [search, setSearch]           = useState('')
   const [specialty, setSpecialty]     = useState('Todos')
@@ -73,11 +75,11 @@ export default function SearchPage() {
 
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-4">
           <div>
-            <h1 className="text-base font-semibold">Profesionales disponibles</h1>
-            <p className="text-xs text-[#6B738A] mt-0.5">Consulta inmediata o agenda una cita</p>
+            <h1 className="text-base font-semibold">{t('Profesionales disponibles')}</h1>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Consulta inmediata o agenda una cita')}</p>
           </div>
           <a href="/patient/agent" className="text-xs bg-[#E6F1FB] text-[#185FA5] border border-[#85B7EB] px-3 py-1.5 rounded-lg hover:bg-[#B5D4F4] transition-colors">
-            No sé qué especialista →
+            {t('No sé qué especialista →')}
           </a>
         </div>
 
@@ -91,22 +93,22 @@ export default function SearchPage() {
         {/* Banner consulta activa — amigable */}
         {hasActiveConsultation && (
           <div className="mb-4 bg-[#FAEEDA] border border-[#FAC775] rounded-xl p-4">
-            <p className="text-sm font-semibold text-[#854F0B] mb-1">Ya tienes una consulta en curso</p>
+            <p className="text-sm font-semibold text-[#854F0B] mb-1">{t('Ya tienes una consulta en curso')}</p>
             <p className="text-xs text-[#854F0B] mb-3">
-              Debes finalizar o cancelar tu consulta actual antes de iniciar una nueva.
+              {t('Debes finalizar o cancelar tu consulta actual antes de iniciar una nueva.')}
             </p>
             <div className="flex gap-2">
               <a
                 href={activeConsultationId ? `/patient/waiting-room?consultationId=${activeConsultationId}` : '/patient/waiting-room'}
                 className="text-xs bg-[#854F0B] text-white px-3 py-1.5 rounded-lg hover:bg-[#6b3e08] transition-colors"
               >
-                Ir a mi consulta →
+                {t('Ir a mi consulta →')}
               </a>
               <button
                 onClick={() => setHasActiveConsultation(false)}
                 className="text-xs text-[#854F0B] hover:underline"
               >
-                Cerrar
+                {t('Cerrar')}
               </button>
             </div>
           </div>
@@ -118,7 +120,7 @@ export default function SearchPage() {
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A0A8BF]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input
               className="input pl-8"
-              placeholder="Buscar por nombre o especialidad..."
+              placeholder={t('Buscar por nombre o especialidad...')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -153,7 +155,7 @@ export default function SearchPage() {
             }`}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${availableNow ? 'bg-[#1D9E75]' : 'bg-[#A0A8BF]'}`} />
-            Disponibles ahora
+            {t('Disponibles ahora')}
           </button>
           {professionals.length > 0 && (
             <p className="text-xs text-[#6B738A]">
@@ -172,7 +174,7 @@ export default function SearchPage() {
             action={
               <button onClick={() => { setSpecialty('Todos'); setAvailableNow(false); setSearch('') }}
                 className="btn-secondary text-xs">
-                Limpiar filtros
+                {t('Limpiar filtros')}
               </button>
             }
           />

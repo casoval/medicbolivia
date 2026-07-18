@@ -7,6 +7,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { prescriptionsAPI, buildPrescriptionVerifyUrl } from '@/lib/api'
 import type { Medication, Prescription } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 function QRCode({ value, size = 140 }: { value: string; size?: number }) {
   const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=8&color=042C53`
@@ -22,6 +23,7 @@ function QRCode({ value, size = 140 }: { value: string; size?: number }) {
 }
 
 function PrescriptionCard({ rx }: { rx: Prescription }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const meds: Medication[] = Array.isArray(rx.medications) ? rx.medications : []
@@ -72,7 +74,7 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
           <div className="bg-[#042C53] px-4 sm:px-5 py-4 text-white">
             <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
               <div>
-                <p className="text-xs text-white/60 uppercase tracking-wide mb-0.5">Médico tratante</p>
+                <p className="text-xs text-white/60 uppercase tracking-wide mb-0.5">{t('Médico tratante')}</p>
                 <p className="font-bold text-base">{rx.professional_name ?? '—'}</p>
                 <p className="text-sm text-white/80">
                   {rx.professional_specialty}
@@ -84,11 +86,11 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
                   <p className="text-xs text-white/60 mt-0.5">{rx.professional_department}</p>
                 )}
                 {rx.cmb_matricula && (
-                  <p className="text-xs text-white/60 mt-1">Matrícula CMB: <span className="text-white/90 font-mono">{rx.cmb_matricula}</span></p>
+                  <p className="text-xs text-white/60 mt-1">{t('Matrícula CMB:')} <span className="text-white/90 font-mono">{rx.cmb_matricula}</span></p>
                 )}
               </div>
               <div className="text-left sm:text-right flex-shrink-0">
-                <p className="text-xs text-white/60 uppercase tracking-wide mb-0.5">Paciente</p>
+                <p className="text-xs text-white/60 uppercase tracking-wide mb-0.5">{t('Paciente')}</p>
                 <p className="text-sm font-semibold">{rx.patient_name}</p>
                 <p className="text-xs text-white/70">CI: {rx.patient_ci}</p>
                 <p className="text-xs text-white/70">{rx.patient_age} años</p>
@@ -103,7 +105,7 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
 
             {/* Medicamentos */}
             <div>
-              <p className="text-xs font-bold text-[#6B738A] uppercase tracking-wide mb-2">Medicamentos prescritos</p>
+              <p className="text-xs font-bold text-[#6B738A] uppercase tracking-wide mb-2">{t('Medicamentos prescritos')}</p>
               <div className="space-y-2">
                 {meds.map((m, i) => (
                   <div key={i} className="bg-white rounded-xl border border-[#DDE1EE] p-3.5">
@@ -128,26 +130,26 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
             {/* Indicaciones */}
             {rx.instructions && (
               <div className="bg-[#FAEEDA] rounded-xl px-4 py-3 border border-[#F3D08A]">
-                <p className="text-xs font-bold text-[#854F0B] mb-1">📌 Indicaciones del médico</p>
+                <p className="text-xs font-bold text-[#854F0B] mb-1">{t('📌 Indicaciones del médico')}</p>
                 <p className="text-sm text-[#854F0B] leading-relaxed">{rx.instructions}</p>
               </div>
             )}
 
             {/* QR + firma digital */}
             <div className="bg-white rounded-xl border border-[#DDE1EE] p-4">
-              <p className="text-xs font-bold text-[#6B738A] uppercase tracking-wide mb-4">Verificación y firma digital</p>
+              <p className="text-xs font-bold text-[#6B738A] uppercase tracking-wide mb-4">{t('Verificación y firma digital')}</p>
 
               <div className="flex flex-col sm:flex-row gap-5 items-start">
                 <div className="flex-shrink-0">
                   <QRCode value={buildPrescriptionVerifyUrl(rx.qr_verify_code)} size={130} />
                   <p className="text-[10px] text-[#6B738A] text-center mt-1 max-w-[130px]">
-                    Presenta en farmacia para verificar
+                    {t('Presenta en farmacia para verificar')}
                   </p>
                 </div>
 
                 <div className="flex-1 space-y-3">
                   <div>
-                    <p className="text-xs font-semibold text-[#1A1F2E] mb-1">¿Cómo funciona la firma?</p>
+                    <p className="text-xs font-semibold text-[#1A1F2E] mb-1">{t('¿Cómo funciona la firma?')}</p>
                     <p className="text-xs text-[#6B738A] leading-relaxed">
                       Esta receta fue firmada criptográficamente con el algoritmo SHA-256.
                       El hash combina tu CI, los medicamentos, la matrícula del médico y la fecha exacta de emisión.
@@ -156,7 +158,7 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
                   </div>
 
                   <div className="bg-[#F5F6FA] rounded-lg p-2.5">
-                    <p className="text-[10px] text-[#6B738A] font-semibold mb-1">Hash SHA-256</p>
+                    <p className="text-[10px] text-[#6B738A] font-semibold mb-1">{t('Hash SHA-256')}</p>
                     <p className="text-[10px] font-mono text-[#185FA5] break-all leading-relaxed">
                       {rx.digital_hash}
                     </p>
@@ -221,6 +223,7 @@ function ProfessionalRxGroup({ group }: { group: { key: string; professionalName
 }
 
 export default function PatientPrescriptionsPage() {
+  const { t } = useLanguage()
   const [viewMode, setViewMode] = useState<'date' | 'professional'>('date')
 
   const { data: prescriptions = [], isLoading } = useQuery({
@@ -258,9 +261,9 @@ export default function PatientPrescriptionsPage() {
     <DashboardLayout navItems={NAV} activeHref="/patient/prescriptions" role="PATIENT">
       <div className="max-w-2xl">
         <div className="mb-5">
-          <h1 className="text-base font-semibold">Mis recetas</h1>
+          <h1 className="text-base font-semibold">{t('Mis recetas')}</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">
-            Recetas médicas digitales firmadas. Presenta el código QR en cualquier farmacia para verificarlas.
+            {t('Recetas médicas digitales firmadas. Presenta el código QR en cualquier farmacia para verificarlas.')}
           </p>
         </div>
 
@@ -271,9 +274,9 @@ export default function PatientPrescriptionsPage() {
         ) : prescriptions.length === 0 ? (
           <div className="card text-center py-14">
             <p className="text-4xl mb-3">📋</p>
-            <p className="text-sm font-semibold text-[#1A1F2E]">Sin recetas aún</p>
+            <p className="text-sm font-semibold text-[#1A1F2E]">{t('Sin recetas aún')}</p>
             <p className="text-xs text-[#6B738A] mt-1 max-w-xs mx-auto">
-              Las recetas que te emita tu médico durante las consultas aparecerán aquí.
+              {t('Las recetas que te emita tu médico durante las consultas aparecerán aquí.')}
             </p>
           </div>
         ) : (
@@ -287,13 +290,13 @@ export default function PatientPrescriptionsPage() {
                   onClick={() => setViewMode('date')}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
                 >
-                  🕐 Por fecha
+                  {t('🕐 Por fecha')}
                 </button>
                 <button
                   onClick={() => setViewMode('professional')}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'professional' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
                 >
-                  🩺 Por profesional
+                  {t('🩺 Por profesional')}
                 </button>
               </div>
             </div>

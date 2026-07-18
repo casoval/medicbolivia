@@ -20,6 +20,7 @@ import type { PatientLink } from '@/lib/api'
 import { fmtFechaHora, fmtFechaHoraLocal } from '@/lib/consultationHistory'
 import { CHAT_REASON_CATEGORY_LABELS, type ChatReasonCategory } from '@/types'
 import { groupByPatient, hasEffectiveLink, linkForSchedule, type PatientGroup } from '@/lib/patientGrouping'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconDots = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
 const IconBan = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M4.9 4.9l14.2 14.2"/></svg>
@@ -35,6 +36,7 @@ const IconChevron = ({ open }: { open: boolean }) => (
 
 
 function BlockPatientMenu({ patientId, patientName }: { patientId: string; patientName: string }) {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [menuOpen, setMenuOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -146,7 +148,7 @@ function BlockPatientMenu({ patientId, patientName }: { patientId: string; patie
             {reportChecked && (
               <div className="space-y-3 pl-6">
                 <div>
-                  <label className="text-xs text-[#6B738A] block mb-1">Motivo</label>
+                  <label className="text-xs text-[#6B738A] block mb-1">{t('Motivo')}</label>
                   <select
                     value={reasonCategory}
                     onChange={(e) => setReasonCategory(e.target.value as ChatReasonCategory)}
@@ -173,7 +175,7 @@ function BlockPatientMenu({ patientId, patientName }: { patientId: string; patie
 
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-[#6B738A] hover:bg-[#F5F6FA] rounded-lg">
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button
                 onClick={handleSubmitBlock}
@@ -195,6 +197,7 @@ function PatientCard({ group, membershipActive, onSchedule }: {
   membershipActive: boolean
   onSchedule: (link: PatientLink) => void
 }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   // El agendamiento directo requiere membresía activa del profesional Y
   // que el paciente esté "efectivamente" vinculado (ver
@@ -238,7 +241,7 @@ function PatientCard({ group, membershipActive, onSchedule }: {
             )}
             {!isBlocked && group.isActive && (
               <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium flex-shrink-0">
-                ● Activo ahora
+                {t('● Activo ahora')}
               </span>
             )}
             {!isBlocked && group.linkWasRevoked && (
@@ -260,7 +263,7 @@ function PatientCard({ group, membershipActive, onSchedule }: {
             onClick={(e) => { e.stopPropagation(); onSchedule(scheduleLink) }}
             className="btn-primary text-xs py-1.5 px-3"
           >
-            Agendar cita
+            {t('Agendar cita')}
           </button>
         )}
         <BlockPatientMenu patientId={group.patientId} patientName={group.name} />
@@ -299,7 +302,7 @@ function PatientCard({ group, membershipActive, onSchedule }: {
           {/* Recetas + historias clínicas mías, y compartidas si está activo */}
           <div>
             <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">
-              🗂️ Historial clínico
+              {t('🗂️ Historial clínico')}
             </p>
             <PatientRecordSummary patientId={group.patientId} showSharedFromOthers={group.isActive} />
           </div>
@@ -310,6 +313,7 @@ function PatientCard({ group, membershipActive, onSchedule }: {
 }
 
 export default function ProfessionalPatientsPage() {
+  const { t } = useLanguage()
   const [search, setSearch] = useState('')
   const [scheduling, setScheduling] = useState<PatientLink | null>(null)
 
@@ -357,7 +361,7 @@ export default function ProfessionalPatientsPage() {
     <DashboardLayout navItems={NAV} activeHref="/professional/patients" role="PROFESSIONAL">
       <div className="max-w-2xl">
         <div className="mb-4">
-          <h1 className="text-lg font-semibold text-[#141820]">Mis pacientes</h1>
+          <h1 className="text-lg font-semibold text-[#141820]">{t('Mis pacientes')}</h1>
           <p className="text-sm text-[#6B738A] mt-0.5">
             {allPatients.length} paciente{allPatients.length !== 1 ? 's' : ''}
             {activeCount > 0 ? ` · ${activeCount} activo${activeCount > 1 ? 's' : ''} ahora` : ''}
@@ -388,7 +392,7 @@ export default function ProfessionalPatientsPage() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar paciente por nombre..."
+            placeholder={t('Buscar paciente por nombre...')}
             className="w-full pl-9 pr-3 py-2.5 text-sm border border-[#DDE1EE] rounded-xl focus:outline-none focus:border-[#185FA5] bg-white"
           />
         </div>

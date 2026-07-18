@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { clinicalNotesAPI, getErrorMessage } from '@/lib/api'
 import type { ClinicalNote } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const SOAP_LABELS = [
   { key: 'subjective' as const, label: 'Relato del paciente', icon: '🗣️' },
@@ -26,6 +27,7 @@ function fmtFecha(iso: string) {
 }
 
 function NotePreview({ note }: { note: ClinicalNote }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
 
   const filled = SOAP_LABELS.filter(f => {
@@ -56,7 +58,7 @@ function NotePreview({ note }: { note: ClinicalNote }) {
       {open && (
         <div className="bg-[#FAFBFC] border-t border-[#DDE1EE] px-3 py-3 space-y-2">
           {filled.length === 0 ? (
-            <p className="text-[11px] text-[#A0A8BF]">Sin contenido registrado.</p>
+            <p className="text-[11px] text-[#A0A8BF]">{t('Sin contenido registrado.')}</p>
           ) : (
             filled.map(f => (
               <div key={f.key}>
@@ -78,6 +80,7 @@ interface Props {
 }
 
 export function PatientHistoryPanel({ patientId, patientName, currentConsultationId }: Props) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
 
   // Notas que este profesional escribió para este paciente (todas sus consultas previas)
@@ -131,14 +134,14 @@ export function PatientHistoryPanel({ patientId, patientName, currentConsultatio
 
           {!isLoading && ownPrior.length === 0 && otherShared.length === 0 && (
             <p className="text-[11px] text-[#A0A8BF] py-2">
-              No hay historial clínico previo disponible para este paciente.
+              {t('No hay historial clínico previo disponible para este paciente.')}
             </p>
           )}
 
           {ownPrior.length > 0 && (
             <div>
               <p className="text-[10px] font-semibold text-[#6B738A] mb-1.5 uppercase tracking-wide">
-                Mis notas anteriores
+                {t('Mis notas anteriores')}
               </p>
               <div className="space-y-1.5">
                 {ownPrior.map(n => <NotePreview key={n.id} note={n} />)}
@@ -149,7 +152,7 @@ export function PatientHistoryPanel({ patientId, patientName, currentConsultatio
           {otherShared.length > 0 && (
             <div>
               <p className="text-[10px] font-semibold text-[#6B738A] mb-1.5 uppercase tracking-wide">
-                De otros médicos (compartido por el paciente)
+                {t('De otros médicos (compartido por el paciente)')}
               </p>
               <div className="space-y-1.5">
                 {otherShared.map(n => <NotePreview key={n.id} note={n} />)}

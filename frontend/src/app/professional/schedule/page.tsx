@@ -8,6 +8,7 @@ import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { LoadingScreen, SectionTitle, Alert } from '@/components/ui'
 import { scheduleAPI, professionalsAPI, getErrorMessage } from '@/lib/api'
 import type { ScheduleBlock, ScheduleBlockInput } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const DAYS = [
   { value: 1, label: 'Lunes' },
@@ -28,6 +29,7 @@ function makeKey() {
 }
 
 export default function ProfessionalSchedulePage() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [blocks, setBlocks] = useState<EditableBlock[]>([])
   const [duration, setDuration] = useState(30)
@@ -105,7 +107,7 @@ export default function ProfessionalSchedulePage() {
     <DashboardLayout navItems={NAV} activeHref="/professional/schedule" role="PROFESSIONAL">
       <div className="max-w-3xl">
         <div className="mb-4">
-          <h1 className="text-base font-semibold">Mi horario semanal</h1>
+          <h1 className="text-base font-semibold">{t('Mi horario semanal')}</h1>
           <p className="text-xs text-[#6B738A] mt-0.5">
             Estos bloques se usan para sugerirle horarios al paciente cuando agenda una cita
             contigo, y también para el modo automático de disponibilidad.
@@ -125,9 +127,9 @@ export default function ProfessionalSchedulePage() {
 
         {/* Duración de cada cita */}
         <div className="card mb-4">
-          <SectionTitle>Duración de cada cita</SectionTitle>
+          <SectionTitle>{t('Duración de cada cita')}</SectionTitle>
           <p className="text-xs text-[#6B738A] mt-1 mb-3">
-            Se usa para calcular los horarios disponibles y detectar choques entre citas.
+            {t('Se usa para calcular los horarios disponibles y detectar choques entre citas.')}
           </p>
           <div className="flex items-center gap-2">
             <input
@@ -139,13 +141,13 @@ export default function ProfessionalSchedulePage() {
               onChange={(e) => setDuration(Number(e.target.value))}
               className="w-24 px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
             />
-            <span className="text-sm text-[#6B738A]">minutos</span>
+            <span className="text-sm text-[#6B738A]">{t('minutos')}</span>
           </div>
         </div>
 
         {/* Bloques por día */}
         <div className="card">
-          <SectionTitle>Bloques de disponibilidad</SectionTitle>
+          <SectionTitle>{t('Bloques de disponibilidad')}</SectionTitle>
           <div className="divide-y divide-[#DDE1EE] mt-2">
             {DAYS.map((day) => {
               const dayBlocks = blocks.filter((b) => b.day_of_week === day.value)
@@ -157,12 +159,12 @@ export default function ProfessionalSchedulePage() {
                       onClick={() => addBlock(day.value)}
                       className="text-xs text-[#185FA5] font-medium"
                     >
-                      + Agregar bloque
+                      {t('+ Agregar bloque')}
                     </button>
                   </div>
 
                   {dayBlocks.length === 0 ? (
-                    <p className="text-xs text-[#A0A8BF]">Sin horario este día</p>
+                    <p className="text-xs text-[#A0A8BF]">{t('Sin horario este día')}</p>
                   ) : (
                     <div className="space-y-2">
                       {dayBlocks.map((b) => (
@@ -184,7 +186,7 @@ export default function ProfessionalSchedulePage() {
                             onClick={() => removeBlock(b._key)}
                             className="text-xs text-[#A32D2D] ml-2"
                           >
-                            Eliminar
+                            {t('Eliminar')}
                           </button>
                         </div>
                       ))}

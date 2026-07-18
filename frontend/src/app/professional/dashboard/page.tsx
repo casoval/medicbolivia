@@ -18,6 +18,7 @@ import { PatientAvatar } from '@/components/shared/PatientAvatar'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, wasActuallyRefunded } from '@/lib/consultationHistory'
 import { SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
 import type { AvailabilityMode } from '@/types'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 // Timer cuenta regresiva para solicitudes entrantes
 function RequestTimer({ createdAt }: { createdAt: string }) {
@@ -118,6 +119,7 @@ function PaymentTimer({ confirmedAt }: { confirmedAt: string }) {
 // - Inmediata: 5 min (desde que el profesional aceptó)
 // - Agendada:  30 min (desde que el paciente creó la cita)
 function AwaitingPatientPaymentTimer({ acceptedAt, isScheduled }: { acceptedAt: string; isScheduled?: boolean }) {
+  const { t } = useLanguage()
   const PAYMENT_TIMEOUT_SECS = isScheduled ? 30 * 60 : 5 * 60
   const [secsLeft, setSecsLeft] = useState(PAYMENT_TIMEOUT_SECS)
   useEffect(() => {
@@ -136,7 +138,7 @@ function AwaitingPatientPaymentTimer({ acceptedAt, isScheduled }: { acceptedAt: 
   const isWarning = isScheduled ? secsLeft <= 300 : secsLeft <= 120
 
   if (secsLeft === 0) return (
-    <span className="text-xs text-[#E24B4A] font-semibold">Tiempo de pago agotado</span>
+    <span className="text-xs text-[#E24B4A] font-semibold">{t('Tiempo de pago agotado')}</span>
   )
   return (
     <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-mono font-bold
@@ -145,7 +147,7 @@ function AwaitingPatientPaymentTimer({ acceptedAt, isScheduled }: { acceptedAt: 
                     'bg-[#FFF8EC] text-[#B97A00]'}`}>
       <span>{isUrgent ? '🔴' : '⏳'}</span>
       <span>{mins}:{s.toString().padStart(2, '0')}</span>
-      <span className="font-normal opacity-75">para pagar</span>
+      <span className="font-normal opacity-75">{t('para pagar')}</span>
     </div>
   )
 }
@@ -159,6 +161,7 @@ const IconClose = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="no
 
 // ── Modal Ver Receta (emitida por mí) ─────────────────
 function PrescriptionModal({ consultationId, onClose }: { consultationId: string; onClose: () => void }) {
+  const { t } = useLanguage()
   const { data, isLoading } = useQuery({
     queryKey: ['rx-by-consultation-pro', consultationId],
     queryFn: async () => {
@@ -170,24 +173,24 @@ function PrescriptionModal({ consultationId, onClose }: { consultationId: string
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold">Recetas de esta consulta</h3>
+          <h3 className="text-base font-semibold">{t('Recetas de esta consulta')}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">Cargando recetas...</p>}
+        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando recetas...')}</p>}
         {data && data.length === 0 && (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">💊</p>
-            <p className="text-sm text-[#6B738A]">No hay recetas para esta consulta</p>
+            <p className="text-sm text-[#6B738A]">{t('No hay recetas para esta consulta')}</p>
           </div>
         )}
         {data && data.map((rx: any) => (
           <div key={rx.id} className="border border-[#DDE1EE] rounded-xl p-4 mb-3">
             <div className="border-b border-[#DDE1EE] pb-3 mb-3">
-              <p className="text-xs text-[#6B738A]">Paciente</p>
+              <p className="text-xs text-[#6B738A]">{t('Paciente')}</p>
               <p className="font-semibold text-sm">{rx.patient_name || 'Paciente'}</p>
               {rx.patient_age != null && <p className="text-xs text-[#6B738A]">{rx.patient_age} años{rx.patient_ci ? ` · CI ${rx.patient_ci}` : ''}</p>}
             </div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">Medicamentos</p>
+            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Medicamentos')}</p>
             <div className="space-y-2 mb-3">
               {rx.medications?.map((m: any, i: number) => (
                 <div key={i} className="bg-[#F5F6FA] rounded-lg p-2">
@@ -202,7 +205,7 @@ function PrescriptionModal({ consultationId, onClose }: { consultationId: string
             </div>
             {rx.instructions && (
               <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg p-2 mb-3">
-                <p className="text-xs font-medium text-[#854F0B] mb-1">Indicaciones</p>
+                <p className="text-xs font-medium text-[#854F0B] mb-1">{t('Indicaciones')}</p>
                 <p className="text-xs">{rx.instructions}</p>
               </div>
             )}
@@ -211,7 +214,7 @@ function PrescriptionModal({ consultationId, onClose }: { consultationId: string
             )}
           </div>
         ))}
-        <button onClick={onClose} className="btn-secondary w-full mt-2">Cerrar</button>
+        <button onClick={onClose} className="btn-secondary w-full mt-2">{t('Cerrar')}</button>
       </div>
     </div>,
     document.body
@@ -220,6 +223,7 @@ function PrescriptionModal({ consultationId, onClose }: { consultationId: string
 
 // ── Modal Ver Historia clínica (escrita por mí) ───────
 function ClinicalNoteModal({ consultationId, onClose }: { consultationId: string; onClose: () => void }) {
+  const { t } = useLanguage()
   const { data: note, isLoading } = useQuery({
     queryKey: ['clinical-note-by-consultation-pro', consultationId],
     queryFn: async () => {
@@ -240,21 +244,21 @@ function ClinicalNoteModal({ consultationId, onClose }: { consultationId: string
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold">Historia clínica de esta consulta</h3>
+          <h3 className="text-base font-semibold">{t('Historia clínica de esta consulta')}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">Cargando historia clínica...</p>}
+        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando historia clínica...')}</p>}
         {!isLoading && !note && (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">📋</p>
-            <p className="text-sm text-[#6B738A]">Aún no registraste historia clínica para esta consulta</p>
+            <p className="text-sm text-[#6B738A]">{t('Aún no registraste historia clínica para esta consulta')}</p>
           </div>
         )}
         {note && (
           <>
             {note.patient_name && (
               <div className="border-b border-[#DDE1EE] pb-3 mb-3">
-                <p className="text-xs text-[#6B738A]">Paciente</p>
+                <p className="text-xs text-[#6B738A]">{t('Paciente')}</p>
                 <p className="font-semibold text-sm">{note.patient_name}</p>
               </div>
             )}
@@ -263,11 +267,11 @@ function ClinicalNoteModal({ consultationId, onClose }: { consultationId: string
             {field('Diagnóstico (Evaluación)', note.assessment)}
             {field('Plan / Indicaciones', note.plan)}
             {!note.subjective && !note.objective && !note.assessment && !note.plan && (
-              <p className="text-sm text-[#6B738A] text-center py-4">Aún no completaste el detalle.</p>
+              <p className="text-sm text-[#6B738A] text-center py-4">{t('Aún no completaste el detalle.')}</p>
             )}
           </>
         )}
-        <button onClick={onClose} className="btn-secondary w-full mt-4">Cerrar</button>
+        <button onClick={onClose} className="btn-secondary w-full mt-4">{t('Cerrar')}</button>
       </div>
     </div>,
     document.body
@@ -292,6 +296,7 @@ function PatientHistoryModal({
   showSharedFromOthers: boolean
   onClose: () => void
 }) {
+  const { t } = useLanguage()
   return createPortal(
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto">
@@ -299,11 +304,11 @@ function PatientHistoryModal({
           <h3 className="text-base font-semibold">🗂️ Historial de {patientName}</h3>
           <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        <p className="text-xs text-[#6B738A] mb-4">Antecedentes para revisar antes de atender.</p>
+        <p className="text-xs text-[#6B738A] mb-4">{t('Antecedentes para revisar antes de atender.')}</p>
 
         <PatientRecordSummary patientId={patientId} showSharedFromOthers={showSharedFromOthers} />
 
-        <button onClick={onClose} className="btn-secondary w-full mt-4">Cerrar</button>
+        <button onClick={onClose} className="btn-secondary w-full mt-4">{t('Cerrar')}</button>
       </div>
     </div>,
     document.body
@@ -311,6 +316,7 @@ function PatientHistoryModal({
 }
 
 export default function ProfessionalDashboard() {
+  const { t } = useLanguage()
   const { user } = useAuthStore()
   const router = useRouter()
   const qc = useQueryClient()
@@ -509,7 +515,7 @@ export default function ProfessionalDashboard() {
             {getGreeting()}{user?.first_name ? `, Dr. ${user.first_name}` : ''} 👋
           </h1>
           <p className="text-sm text-[#6B738A] mt-0.5">
-            Vista general de tu actividad, citas y consultas del día
+            {t('Vista general de tu actividad, citas y consultas del día')}
           </p>
         </div>
 
@@ -517,7 +523,7 @@ export default function ProfessionalDashboard() {
         <div className="card mb-5">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <p className="text-sm font-semibold">Tu disponibilidad ahora</p>
+              <p className="text-sm font-semibold">{t('Tu disponibilidad ahora')}</p>
               <p className="text-xs text-[#6B738A] mt-0.5">
                 {autoAvailability
                   ? 'Modo automático: se calcula según tu horario semanal'
@@ -554,7 +560,7 @@ export default function ProfessionalDashboard() {
           </div>
           {autoAvailability && (
             <p className="text-xs text-[#A0A8BF] mt-2">
-              Define tus bloques en <a href="/professional/schedule" className="text-[#185FA5] hover:underline">Horarios</a> para que el modo automático funcione bien.
+              {t('Define tus bloques en')} <a href="/professional/schedule" className="text-[#185FA5] hover:underline">{t('Horarios')}</a> {t('para que el modo automático funcione bien.')}
             </p>
           )}
           {availError && <div className="mt-2"><Alert type="error" message={availError} /></div>}
@@ -564,15 +570,15 @@ export default function ProfessionalDashboard() {
         <div className="grid grid-cols-4 gap-3 mb-5">
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#185FA5]">{consultations.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Total</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Total')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#854F0B]">{incoming.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Pendientes</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Pendientes')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#0F6E56]">{completed.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">Completadas</p>
+            <p className="text-xs text-[#6B738A] mt-0.5">{t('Completadas')}</p>
           </div>
           <a href="/professional/ratings" className="bg-[#F5F6FA] rounded-lg p-3 text-center hover:bg-[#EEF0F7] transition-colors">
             <p className="text-xl font-bold text-[#F5A623]">
@@ -594,11 +600,11 @@ export default function ProfessionalDashboard() {
               🗓️
             </span>
             <div>
-              <p className="text-xs font-semibold text-[#141820]">Calendario de citas agendadas</p>
-              <p className="text-[11px] text-[#6B738A]">Mira tu agenda por día, semana o mes</p>
+              <p className="text-xs font-semibold text-[#141820]">{t('Calendario de citas agendadas')}</p>
+              <p className="text-[11px] text-[#6B738A]">{t('Mira tu agenda por día, semana o mes')}</p>
             </div>
           </div>
-          <span className="text-[#185FA5] text-xs font-medium">Abrir →</span>
+          <span className="text-[#185FA5] text-xs font-medium">{t('Abrir →')}</span>
         </a>
 
         {/* ── Solicitudes entrantes INMEDIATAS — requieren aceptar/rechazar en 2 min ── */}
@@ -631,14 +637,14 @@ export default function ProfessionalDashboard() {
                     disabled={acceptMutation.isPending}
                     className="flex-1 py-2 bg-[#1D9E75] hover:bg-[#0F6E56] text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-60"
                   >
-                    ✓ Aceptar consulta
+                    {t('✓ Aceptar consulta')}
                   </button>
                   <button
                     onClick={() => rejectMutation.mutate(c.id)}
                     disabled={rejectMutation.isPending}
                     className="py-2 px-4 bg-[#F5F6FA] hover:bg-[#DDE1EE] text-[#6B738A] text-xs font-medium rounded-lg transition-colors"
                   >
-                    Rechazar
+                    {t('Rechazar')}
                   </button>
                 </div>
               </div>
@@ -676,7 +682,7 @@ export default function ProfessionalDashboard() {
                 </div>
                 {c.chief_complaint && (
                   <div className="ml-12 mt-2 bg-[#F5F6FA] rounded-lg px-3 py-2">
-                    <p className="text-xs text-[#A0A8BF] mb-0.5">Motivo de la consulta</p>
+                    <p className="text-xs text-[#A0A8BF] mb-0.5">{t('Motivo de la consulta')}</p>
                     <p className="text-xs text-[#141820]">{c.chief_complaint}</p>
                   </div>
                 )}
@@ -686,14 +692,14 @@ export default function ProfessionalDashboard() {
                     disabled={acceptMutation.isPending}
                     className="flex-1 py-2 bg-[#1D9E75] hover:bg-[#0F6E56] text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-60"
                   >
-                    ✓ Aceptar cita
+                    {t('✓ Aceptar cita')}
                   </button>
                   <button
                     onClick={() => rejectMutation.mutate(c.id)}
                     disabled={rejectMutation.isPending}
                     className="py-2 px-4 bg-[#F5F6FA] hover:bg-[#DDE1EE] text-[#6B738A] text-xs font-medium rounded-lg transition-colors"
                   >
-                    Rechazar
+                    {t('Rechazar')}
                   </button>
                 </div>
               </div>
@@ -754,8 +760,8 @@ export default function ProfessionalDashboard() {
                     <div className="flex items-start gap-2 bg-[#FCEBEB] border border-[#F5BEBE] rounded-lg px-3 py-2 mb-2.5">
                       <span className="text-base leading-none mt-0.5">🔴</span>
                       <div>
-                        <p className="text-xs font-semibold text-[#E24B4A]">¡El paciente lleva más de 5 minutos esperando!</p>
-                        <p className="text-xs text-[#C03A39] mt-0.5">Ya realizó su pago. Iniciá la videollamada lo antes posible para no afectar tu calificación.</p>
+                        <p className="text-xs font-semibold text-[#E24B4A]">{t('¡El paciente lleva más de 5 minutos esperando!')}</p>
+                        <p className="text-xs text-[#C03A39] mt-0.5">{t('Ya realizó su pago. Iniciá la videollamada lo antes posible para no afectar tu calificación.')}</p>
                       </div>
                     </div>
                   )}
@@ -770,7 +776,7 @@ export default function ProfessionalDashboard() {
                         onClick={() => setHistoryPatient({ id: c.patient_id, name: patientNameOf(c) || 'el paciente' })}
                         className="text-xs text-[#185FA5] font-medium mt-0.5"
                       >
-                        🗂️ Ver historial del paciente
+                        {t('🗂️ Ver historial del paciente')}
                       </button>
                     </div>
                     <PaymentTimer confirmedAt={paidAt} />
@@ -825,7 +831,7 @@ export default function ProfessionalDashboard() {
                       if (!canStart) {
                         return (
                           <div className="flex-shrink-0 text-right">
-                            <p className="text-[10px] text-[#A0A8BF] mb-0.5">Inicia en</p>
+                            <p className="text-[10px] text-[#A0A8BF] mb-0.5">{t('Inicia en')}</p>
                             <p className="text-xs font-mono font-semibold text-[#185FA5]">{label}</p>
                           </div>
                         )
@@ -859,7 +865,7 @@ export default function ProfessionalDashboard() {
                       onClick={() => setHistoryPatient({ id: c.patient_id, name: patientNameOf(c) || 'el paciente' })}
                       className="text-xs text-[#185FA5] font-medium"
                     >
-                      🗂️ Ver historial del paciente
+                      {t('🗂️ Ver historial del paciente')}
                     </button>
                   </div>
 
@@ -877,13 +883,13 @@ export default function ProfessionalDashboard() {
                           onClick={() => respondRescheduleMutation.mutate({ id: c.id, decision: 'ACCEPT' })}
                           className="text-xs bg-[#1D9E75] text-white px-3 py-1 rounded-lg"
                         >
-                          Aceptar
+                          {t('Aceptar')}
                         </button>
                         <button
                           onClick={() => respondRescheduleMutation.mutate({ id: c.id, decision: 'REJECT' })}
                           className="text-xs bg-white border border-[#DDE1EE] text-[#6B738A] px-3 py-1 rounded-lg"
                         >
-                          Rechazar
+                          {t('Rechazar')}
                         </button>
                       </div>
                     </div>
@@ -891,7 +897,7 @@ export default function ProfessionalDashboard() {
 
                   {hasOwnPendingProposal && (
                     <p className="ml-12 mt-2 text-xs text-[#A0A8BF]">
-                      Propusiste cambiar el horario — esperando respuesta del paciente.
+                      {t('Propusiste cambiar el horario — esperando respuesta del paciente.')}
                     </p>
                   )}
 
@@ -910,10 +916,10 @@ export default function ProfessionalDashboard() {
                               disabled={!newDateTime || proposeRescheduleMutation.isPending}
                               className="text-xs text-[#185FA5] font-medium disabled:opacity-50"
                             >
-                              Enviar propuesta
+                              {t('Enviar propuesta')}
                             </button>
                             <button onClick={() => setReschedulingId(null)} className="text-xs text-[#6B738A]">
-                              Cancelar
+                              {t('Cancelar')}
                             </button>
                           </div>
                         ) : (
@@ -921,7 +927,7 @@ export default function ProfessionalDashboard() {
                             onClick={() => { setReschedulingId(c.id); setNewDateTime('') }}
                             className="text-xs text-[#185FA5] font-medium"
                           >
-                            Proponer otro horario
+                            {t('Proponer otro horario')}
                           </button>
                         )
                       )}
@@ -932,7 +938,7 @@ export default function ProfessionalDashboard() {
                           title={!graceOk ? 'Disponible 10 min después de la hora de la cita' : ''}
                           className="text-xs text-[#A32D2D] disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          El paciente no llegó
+                          {t('El paciente no llegó')}
                         </button>
                       )}
                       <button
@@ -944,7 +950,7 @@ export default function ProfessionalDashboard() {
                         disabled={cancelByProfessionalMutation.isPending}
                         className="text-xs text-[#A32D2D] font-medium border border-[#A32D2D] px-2 py-1 rounded-lg disabled:opacity-40"
                       >
-                        Cancelar cita
+                        {t('Cancelar cita')}
                       </button>
                     </div>
                   )}
@@ -957,7 +963,7 @@ export default function ProfessionalDashboard() {
         {/* ── En curso ── */}
         {active.length > 0 && (
           <div className="card mb-4">
-            <h2 className="text-sm font-semibold mb-3">En curso ahora</h2>
+            <h2 className="text-sm font-semibold mb-3">{t('En curso ahora')}</h2>
             {active.map((c: any) => (
               <div key={c.id} className="flex items-center gap-3 py-2.5 border-b border-[#DDE1EE] last:border-0">
                 <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#E1F5EE] text-[#0F6E56]" />
@@ -970,14 +976,14 @@ export default function ProfessionalDashboard() {
                     onClick={() => setHistoryPatient({ id: c.patient_id, name: patientNameOf(c) || 'el paciente' })}
                     className="text-xs text-[#185FA5] font-medium mt-0.5"
                   >
-                    🗂️ Ver historial del paciente
+                    {t('🗂️ Ver historial del paciente')}
                   </button>
                 </div>
                 <button
                   onClick={() => updateMutation.mutate({ id: c.id, status: 'COMPLETED' })}
                   className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] text-xs px-3 py-1.5 rounded-lg"
                 >
-                  Finalizar
+                  {t('Finalizar')}
                 </button>
                 <button
                   onClick={() => rejoinVideoMutation.mutate(c.id)}
@@ -993,9 +999,9 @@ export default function ProfessionalDashboard() {
 
         {/* Historial reciente */}
         <div className="card">
-          <h2 className="text-sm font-semibold mb-3">Consultas recientes</h2>
+          <h2 className="text-sm font-semibold mb-3">{t('Consultas recientes')}</h2>
           {consultations.length === 0 ? (
-            <p className="text-sm text-[#6B738A] text-center py-4">Aún no tienes consultas</p>
+            <p className="text-sm text-[#6B738A] text-center py-4">{t('Aún no tienes consultas')}</p>
           ) : (
             <div className="divide-y divide-[#DDE1EE]">
               {consultations.slice(0, 5).map((c: any) => {
@@ -1037,7 +1043,7 @@ export default function ProfessionalDashboard() {
                       )}
                       {!isCancelled && c.payment_status === 'DISPUTED' && (
                         <p className="text-[11px] text-[#A32D2D] font-medium mt-1">
-                          ⚠️ El paciente reportó un problema — en revisión
+                          {t('⚠️ El paciente reportó un problema — en revisión')}
                         </p>
                       )}
                       {(hasReceta(c.id) || hasHistoria(c.id)) && (
@@ -1047,7 +1053,7 @@ export default function ProfessionalDashboard() {
                               onClick={() => setRxConsultationId(c.id)}
                               className="btn-secondary text-xs py-1 px-3"
                             >
-                              💊 Ver receta
+                              {t('💊 Ver receta')}
                             </button>
                           )}
                           {hasHistoria(c.id) && (
@@ -1055,7 +1061,7 @@ export default function ProfessionalDashboard() {
                               onClick={() => setNoteConsultationId(c.id)}
                               className="btn-secondary text-xs py-1 px-3"
                             >
-                              📋 Ver historia clínica
+                              {t('📋 Ver historia clínica')}
                             </button>
                           )}
                         </div>
@@ -1102,14 +1108,14 @@ export default function ProfessionalDashboard() {
             </div>
 
             <h3 className="text-base font-semibold text-center text-[#1C2340] mb-1">
-              ¿Cancelar esta cita?
+              {t('¿Cancelar esta cita?')}
             </h3>
             <p className="text-xs text-center text-[#6B738A] mb-1">
-              Paciente: <span className="font-medium text-[#3C4257]">{cancelTarget.patientName}</span>
+              {t('Paciente:')} <span className="font-medium text-[#3C4257]">{cancelTarget.patientName}</span>
             </p>
             {cancelTarget.scheduledAt && (
               <p className="text-xs text-center text-[#6B738A] mb-4">
-                Fecha: <span className="font-medium text-[#3C4257]">
+                {t('Fecha:')} <span className="font-medium text-[#3C4257]">
                   {cancelTarget.scheduledAt.toLocaleString('es-BO', {
                     weekday: 'short', day: 'numeric', month: 'short',
                     hour: '2-digit', minute: '2-digit'
@@ -1119,9 +1125,9 @@ export default function ProfessionalDashboard() {
             )}
 
             <div className="bg-[#FFF8EC] border border-[#FAC775] rounded-xl px-4 py-3 mb-5">
-              <p className="text-xs text-[#854F0B] font-medium mb-1">💰 Reembolso automático</p>
+              <p className="text-xs text-[#854F0B] font-medium mb-1">{t('💰 Reembolso automático')}</p>
               <p className="text-xs text-[#6B4A1A]">
-                Si el paciente ya realizó el pago, el dinero le será devuelto automáticamente al cancelar.
+                {t('Si el paciente ya realizó el pago, el dinero le será devuelto automáticamente al cancelar.')}
               </p>
             </div>
 
@@ -1130,7 +1136,7 @@ export default function ProfessionalDashboard() {
                 onClick={() => setCancelTarget(null)}
                 className="flex-1 py-2.5 rounded-xl border border-[#DDE1EE] text-sm text-[#6B738A] hover:bg-[#F5F6FA] transition-colors"
               >
-                Volver
+                {t('Volver')}
               </button>
               <button
                 onClick={() => {

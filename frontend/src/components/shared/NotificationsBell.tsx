@@ -9,8 +9,10 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { notificationsAPI } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 export function NotificationsBell({ role }: { role: 'PATIENT' | 'PROFESSIONAL' }) {
+  const { t } = useLanguage()
   const [showNotifs, setShowNotifs] = useState(false)
   const queryClient = useQueryClient()
 
@@ -55,10 +57,10 @@ export function NotificationsBell({ role }: { role: 'PATIENT' | 'PROFESSIONAL' }
           <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)} />
           <div className="absolute right-0 mt-2 w-80 bg-white border border-[#DDE1EE] rounded-xl shadow-lg z-50 max-h-96 overflow-y-auto">
             <div className="p-3 border-b border-[#DDE1EE]">
-              <p className="text-xs font-semibold">Notificaciones</p>
+              <p className="text-xs font-semibold">{t('Notificaciones')}</p>
             </div>
             {notifications.length === 0 ? (
-              <p className="text-xs text-[#6B738A] text-center py-6">No tenés notificaciones todavía</p>
+              <p className="text-xs text-[#6B738A] text-center py-6">{t('No tenés notificaciones todavía')}</p>
             ) : (
               <div className="divide-y divide-[#DDE1EE]">
                 {notifications.map((n) => (
