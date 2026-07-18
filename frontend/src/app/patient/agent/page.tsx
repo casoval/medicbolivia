@@ -11,6 +11,7 @@ import { agentAPI, consultationsAPI, getErrorMessage } from '@/lib/api'
 import { useAgentStore } from '@/lib/store'
 import type { Professional } from '@/types'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { ProfessionalCard } from '@/components/patient/ProfessionalCard'
 
 const QUICK_REPLIES = [
   'Tengo dolor de cabeza',
@@ -126,32 +127,6 @@ function formatMsgTime(timestamp: Date | string) {
   return d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })
 }
 
-function ProfessionalCard({ pro, onSelect }: { pro: Professional; onSelect: (pro: Professional) => void }) {
-  const { t } = useLanguage()
-  return (
-    <div
-      className="bg-white border border-[#DDE1EE] rounded-xl p-3 flex items-start gap-3 hover:border-[#185FA5] transition-colors cursor-pointer"
-      onClick={() => onSelect(pro)}
-    >
-      <div className="w-9 h-9 rounded-full bg-[#E6F1FB] text-[#185FA5] flex items-center justify-center text-xs font-bold flex-shrink-0">
-        {pro.first_name[0]}{pro.last_name[0]}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">{pro.first_name} {pro.last_name}</p>
-        <p className="text-xs text-[#6B738A]">{pro.specialty}</p>
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-[#EF9F27] text-xs">★ {parseFloat(pro.average_rating).toFixed(1)}</span>
-          <span className="badge-green text-[10px]">{t('En línea')}</span>
-        </div>
-      </div>
-      <div className="text-right flex-shrink-0">
-        <p className="text-sm font-semibold">Bs. {parseFloat(pro.price_general).toFixed(0)}</p>
-        <button className="btn-primary text-xs py-1 px-2 mt-1">{t('Consultar')}</button>
-      </div>
-    </div>
-  )
-}
-
 export default function AgentPage() {
   const { t } = useLanguage()
   const router = useRouter()
@@ -200,17 +175,18 @@ export default function AgentPage() {
       onSearchProfessionals: async (specialty) => {
         // Medi (Gemini Live) invocó la función buscar_profesionales — hacemos
         // la búsqueda real contra el backend (mismo mecanismo que usa el
-        // chat de texto) y devolvemos el resultado para que Medi lo
-        // verbalice con datos reales, no con lo que imagine.
+        // chat de texto), separando quién está conectado ahora de quién solo
+        // se puede agendar, y devolvemos eso para que Medi lo verbalice con
+        // datos reales, no con lo que imagine.
         try {
           const res = await agentAPI.searchProfessionals(specialty)
-          const { count, professionals, professionals_public } = res.data
+          const { covered, count_online, count_offline, professionals, professionals_public } = res.data
           if (professionals_public && professionals_public.length > 0) {
             setAvailableProfessionals(professionals_public)
           }
-          return { count, professionals }
+          return { covered, count_online, count_offline, professionals }
         } catch {
-          return { count: 0, professionals: [] }
+          return { covered: false, count_online: 0, count_offline: 0, professionals: [] }
         }
       },
     })
@@ -492,9 +468,14 @@ export default function AgentPage() {
 
             {availableProfessionals.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs text-[#6B738A] font-medium">{t('Profesionales disponibles ahora:')}</p>
+                <p className="text-xs text-[#6B738A] font-medium">{t('Profesionales encontrados:')}</p>
                 {availableProfessionals.map((pro: Professional) => (
-                  <ProfessionalCard key={pro.id} pro={pro} onSelect={selectProfessional} />
+                  <ProfessionalCard
+                    key={pro.id}
+                    professional={pro}
+                    onConsult={selectProfessional}
+                    loading={creatingConsultation}
+                  />
                 ))}
               </div>
             )}

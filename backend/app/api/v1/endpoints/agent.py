@@ -9,12 +9,16 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from loguru import logger
 
 from app.db.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.config import settings
-from app.models.models import User, Patient, Professional, ProfessionalStatus, AvailabilityMode
+from app.models.models import (
+    User, Patient, Professional, ProfessionalStatus, AvailabilityMode,
+    Specialty, SubSpecialty,
+)
 from app.schemas.schemas import AgentChatRequest, AgentChatResponse, ProfessionalPublicResponse
 from app.agents.coordinator import (
     run_coordinator, run_onboarding, get_conversation_history
@@ -36,28 +40,99 @@ async def _get_patient_context(db: AsyncSession, user_id: str) -> dict | None:
     }
 
 
-async def _search_professionals(db: AsyncSession, specialty: str) -> list:
-    query = select(Professional).where(
-        Professional.status == ProfessionalStatus.APPROVED,
-        Professional.availability == AvailabilityMode.ONLINE_NOW,
+async def _resolve_specialty(db: AsyncSession, term: str) -> str | None:
+    """
+    Intenta mapear un término libre (dicho por el paciente o elegido por el
+    modelo) al nombre CANÓNICO de una especialidad activa del catálogo real
+    (tablas Specialty/SubSpecialty), en vez de confiar en una lista fija en
+    el prompt que se desactualiza apenas se agrega o cambia una especialidad.
+
+    Orden de intento:
+    1) Match exacto contra el nombre de una especialidad.
+    2) El término es en realidad una SUBespecialidad conocida (ej. paciente
+       o modelo dice "Electrofisiología cardíaca") -> devuelve la especialidad
+       padre ("Cardiología"), porque ahí es donde hay que buscar profesionales.
+    3) Coincidencia parcial en cualquier dirección contra especialidades
+       (cubre variantes de nombre, ej. "Ginecología" ⊂ "Ginecología y Obstetricia").
+    4) Coincidencia parcial contra subespecialidades -> especialidad padre.
+
+    Devuelve None si no se pudo mapear a nada del catálogo — en ese caso NO
+    se debe asumir que la especialidad existe en la plataforma.
+    """
+    term = (term or "").strip()
+    if not term:
+        return None
+    term_l = term.lower()
+
+    result = await db.execute(
+        select(Specialty).where(Specialty.is_active == True, func.lower(Specialty.name) == term_l)
     )
+    specialty = result.scalar_one_or_none()
     if specialty:
-        query = query.where(
-            func.lower(Professional.specialty).contains(specialty.lower())
-        )
-    result = await db.execute(query)
-    profs = result.scalars().all()
+        return specialty.name
 
-    if not profs and specialty:
-        result2 = await db.execute(
-            select(Professional).where(
-                Professional.status == ProfessionalStatus.APPROVED,
-                Professional.availability == AvailabilityMode.ONLINE_NOW,
-            )
-        )
-        profs = result2.scalars().all()
+    result = await db.execute(
+        select(SubSpecialty)
+        .options(selectinload(SubSpecialty.specialty))
+        .where(SubSpecialty.is_active == True, func.lower(SubSpecialty.name) == term_l)
+    )
+    sub = result.scalar_one_or_none()
+    if sub and sub.specialty and sub.specialty.is_active:
+        return sub.specialty.name
 
-    return [ProfessionalPublicResponse.model_validate(p) for p in profs[:5]]
+    result = await db.execute(select(Specialty).where(Specialty.is_active == True))
+    for s in result.scalars().all():
+        name_l = s.name.lower()
+        if term_l in name_l or name_l in term_l:
+            return s.name
+
+    result = await db.execute(
+        select(SubSpecialty).options(selectinload(SubSpecialty.specialty)).where(SubSpecialty.is_active == True)
+    )
+    for sub in result.scalars().all():
+        name_l = sub.name.lower()
+        if (term_l in name_l or name_l in term_l) and sub.specialty and sub.specialty.is_active:
+            return sub.specialty.name
+
+    return None
+
+
+async def _search_professionals(db: AsyncSession, specialty: str) -> dict:
+    """
+    Busca profesionales aprobados de una especialidad, sin inventar
+    sustitutos de otra especialidad cuando no hay cobertura real.
+
+    Devuelve:
+    - specialty_requested: el término tal como llegó
+    - specialty_resolved: nombre canónico del catálogo si se pudo mapear, o None
+    - covered: True si existe al menos un profesional aprobado (online u
+      offline) de esa especialidad en la plataforma
+    - online: aprobados y ONLINE_NOW ahora mismo (pueden dar consulta inmediata)
+    - offline: aprobados pero no conectados ahora (solo se pueden agendar)
+    """
+    resolved = await _resolve_specialty(db, specialty) if specialty else None
+    match_name = resolved or specialty
+
+    online, offline = [], []
+    if match_name:
+        query = select(Professional).where(
+            Professional.status == ProfessionalStatus.APPROVED,
+            (
+                func.lower(Professional.specialty).contains(match_name.lower())
+                | Professional.sub_specialties.any(match_name)
+            ),
+        )
+        result = await db.execute(query)
+        for p in result.scalars().all():
+            (online if p.availability == AvailabilityMode.ONLINE_NOW else offline).append(p)
+
+    return {
+        "specialty_requested": specialty,
+        "specialty_resolved": resolved,
+        "covered": bool(online or offline),
+        "online": [ProfessionalPublicResponse.model_validate(p) for p in online[:5]],
+        "offline": [ProfessionalPublicResponse.model_validate(p) for p in offline[:5]],
+    }
 
 
 # Cliente HTTP persistente para Google TTS (evita reconexión TCP/TLS por cada llamada)
@@ -153,30 +228,54 @@ async def agent_chat(
 
     if result.get("action") and result["action"].get("type") == "SEARCH_PROFESSIONALS":
         specialty = result["action"].get("param", "")
-        available_professionals = await _search_professionals(db, specialty)
+        search = await _search_professionals(db, specialty)
+        online, offline = search["online"], search["offline"]
+        resolved = search["specialty_resolved"] or specialty
 
-        if available_professionals:
-            profs_data = [
-                {
-                    "id": p.id,
-                    "nombre": f"{p.first_name} {p.last_name}",
-                    "especialidad": p.specialty,
-                    "precio_general": p.price_general,
-                    "experiencia_años": p.years_experience,
-                    "calificacion": p.average_rating,
-                }
-                for p in available_professionals
-            ]
+        def _brief(p):
+            return {
+                "id": p.id,
+                "nombre": f"{p.first_name} {p.last_name}",
+                "especialidad": p.specialty,
+                "precio_general": p.price_general,
+                "experiencia_años": p.years_experience,
+                "calificacion": p.average_rating,
+            }
+
+        # Se muestran tarjetas si hay online, offline, o ambos — la tarjeta
+        # real (frontend) ya distingue "Consultar ahora" (solo online) de
+        # "Agendar cita" (siempre disponible), así que mostrar offline no es
+        # engañoso, siempre que el mensaje del agente lo aclare.
+        available_professionals = (online + offline) or None
+
+        if online:
             followup_message = (
-                f"[SISTEMA] Se encontraron {len(profs_data)} profesional(es) disponible(s) "
-                f"para {specialty}:\n{profs_data}\n\n"
-                f"Preséntaselos al paciente de forma amigable con su nombre real, especialidad y precio. "
-                f"Pregúntale cuál prefiere."
+                f"[SISTEMA] Se encontraron {len(online)} profesional(es) de {resolved} "
+                f"CONECTADOS ahora mismo:\n{[_brief(p) for p in online]}\n\n"
+                f"Preséntaselos al paciente de forma amigable con su nombre real, especialidad y "
+                f"precio. Dile que puede tocar 'Consultar ahora' en la tarjeta para conectarse ya."
+            )
+        elif offline:
+            followup_message = (
+                f"[SISTEMA] Nadie de {resolved} está conectado ahora mismo, pero sí hay "
+                f"{len(offline)} profesional(es) de esa especialidad en la plataforma:\n"
+                f"{[_brief(p) for p in offline]}\n\n"
+                f"Explícale con honestidad al paciente que por ahora no hay nadie en línea, pero que "
+                f"puede tocar 'Agendar cita' en la tarjeta de abajo para reservar un horario. "
+                f"NUNCA digas que puede 'consultar ya' o que están disponibles ahora mismo."
+            )
+        elif search["specialty_resolved"]:
+            followup_message = (
+                f"[SISTEMA] Por ahora no tenemos ningún profesional de {resolved} en la plataforma, "
+                f"ni conectado ni para agendar. Dile esto con honestidad al paciente, sin prometer que "
+                f"aparecerá alguien pronto. Ofrécele como alternativa una primera evaluación con "
+                f"Medicina General, aclarando que ese médico lo puede orientar o derivar si hace falta."
             )
         else:
             followup_message = (
-                f"[SISTEMA] No hay profesionales de {specialty} disponibles en este momento. "
-                f"Informa al paciente amablemente y ofrece alternativas o sugerir intentar más tarde."
+                f"[SISTEMA] '{specialty}' no coincide con ninguna especialidad de nuestro catálogo. "
+                f"Pídele al paciente que te cuente un poco más sobre el síntoma para orientarlo mejor, "
+                f"o sugiere Medicina General como punto de partida."
             )
 
         result2 = await run_coordinator(
@@ -325,23 +424,28 @@ async def search_professionals_endpoint(
     directamente y así tener el mismo comportamiento real que el chat de
     texto, en vez de solo prometerlo por voz sin ejecutarlo.
     """
-    profs = await _search_professionals(db, specialty)
+    search = await _search_professionals(db, specialty)
+    online, offline = search["online"], search["offline"]
+
+    def _brief(p, en_linea: bool):
+        return {
+            "id": p.id,
+            "nombre": f"{p.first_name} {p.last_name}",
+            "especialidad": p.specialty,
+            "precio_general": float(p.price_general),
+            "experiencia_años": p.years_experience,
+            "calificacion": float(p.average_rating),
+            "en_linea": en_linea,
+        }
 
     return {
         "specialty_requested": specialty,
-        "count": len(profs),
-        "professionals": [
-            {
-                "id": p.id,
-                "nombre": f"{p.first_name} {p.last_name}",
-                "especialidad": p.specialty,
-                "precio_general": float(p.price_general),
-                "experiencia_años": p.years_experience,
-                "calificacion": p.average_rating,
-            }
-            for p in profs
-        ],
-        "professionals_public": [p.model_dump(mode="json") for p in profs],
+        "specialty_resolved": search["specialty_resolved"],
+        "covered": search["covered"],
+        "count_online": len(online),
+        "count_offline": len(offline),
+        "professionals": [_brief(p, True) for p in online] + [_brief(p, False) for p in offline],
+        "professionals_public": [p.model_dump(mode="json") for p in online] + [p.model_dump(mode="json") for p in offline],
     }
 
 # ── POST /api/v1/agent/onboarding ───────────────────

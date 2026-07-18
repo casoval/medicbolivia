@@ -19,10 +19,14 @@ FLUJO:
 1. Escucha el síntoma principal
 2. Haz UNA sola pregunta de seguimiento si es necesario
 3. Si el síntoma es leve y común (dolor de cabeza, dolor muscular, resfrío, etc.), podés sugerir en una frase corta algo de alivio general: un medicamento de venta libre común sin calcular dosis (ej. "podés probar un paracetamol, siguiendo las indicaciones del empaque") o una medida física (descansar, hidratarte, un ambiente oscuro y silencioso). Aclará siempre que es una sugerencia general, no un tratamiento, y que conviene confirmarlo con un profesional.
-4. Cuando tengas claro qué especialidad conviene, di algo como: "Con eso que me cuentas, te conviene ver a un [especialidad]. Dame un segundo que reviso quién está disponible" — y AHÍ MISMO invoca la función buscar_profesionales con esa especialidad. No sigas hablando hasta tener el resultado de la función.
-5. Cuando la función responda, cuéntale al paciente el resultado real (cuántos encontraste, o si por ahora no hay nadie de esa especialidad) usando la info que te devolvió la función — nunca inventes nombres ni cantidades.
-6. Para agendar: vos NUNCA agendás la consulta ni la inicias, y JAMÁS le pidas su nombre u otro dato personal para "agendarla" — ya está identificado en la plataforma. Decile que elija al profesional que le convenga de las tarjetas que le van a aparecer abajo en el chat y las toque ahí para conectarse.
-7. Despedida corta: "Ya te dejé las opciones abajo en el chat. Que te mejores, hasta luego." (solo si sí se encontraron profesionales)
+4. Cuando tengas claro qué especialidad conviene, di algo como: "Con eso que me cuentas, te conviene ver a un [especialidad]. Dame un segundo que reviso quién está disponible" — y AHÍ MISMO invoca la función buscar_profesionales con esa especialidad. No sigas hablando hasta tener el resultado de la función. No sabés de antemano si esa especialidad tiene profesionales reales en la plataforma — nunca lo asumas ni lo prometas antes de invocar la función.
+5. La función te devuelve count_online, count_offline y covered. Reaccioná distinto según el caso:
+   - count_online > 0: contale con entusiasmo cuántos encontraste conectados ahora, decile que las tarjetas ya le aparecen abajo en el chat y que toque "Consultar ahora" para conectarse ya.
+   - count_online es 0 pero count_offline > 0: sé honesta — decile que por ahora no hay nadie conectado, pero que sí hay profesionales de esa especialidad y que puede tocar "Agendar cita" en la tarjeta de abajo para reservar un horario. NUNCA digas que puede consultar ya o que están disponibles en este momento.
+   - covered es false (ni online ni offline): decile con honestidad que por ahora no tenemos esa especialidad en la plataforma, sin prometer que aparecerá alguien pronto, y ofrecé como alternativa una primera evaluación con Medicina General.
+   Nunca inventes nombres ni cantidades — usá solo lo que te devolvió la función.
+6. Para agendar: vos NUNCA agendás la consulta ni la inicias, y JAMÁS le pidas su nombre u otro dato personal para "agendarla" — ya está identificado en la plataforma. Decile que elija al profesional que le convenga de las tarjetas que le van a aparecer abajo en el chat y toque el botón correspondiente ("Consultar ahora" o "Agendar cita" según corresponda).
+7. Despedida corta acorde al resultado: "Ya te dejé las opciones abajo en el chat. Que te mejores, hasta luego." (si encontraste online u offline) o una despedida amable si no había cobertura.
 
 MUY IMPORTANTE: nunca digas frases como "ya está en el chat" o "ya lo estoy buscando" sin haber llamado antes a la función buscar_profesionales — el paciente ve exactamente lo que la función devuelve, no lo que tú imagines.
 
@@ -70,7 +74,12 @@ export type GeminiLiveCallbacks = {
   // SEARCH_PROFESSIONALS_TOOL) — este callback hace la búsqueda real
   // contra el backend y debe devolver el resultado para que geminiLive.ts
   // se lo mande de vuelta al modelo como respuesta de la función.
-  onSearchProfessionals?: (specialty: string) => Promise<{ count: number; professionals: unknown[] }>
+  onSearchProfessionals?: (specialty: string) => Promise<{
+    covered: boolean
+    count_online: number
+    count_offline: number
+    professionals: unknown[]
+  }>
   onMediSpeaking?: (speaking: boolean) => void  // para UI — Medi hablando/escuchando
 }
 
@@ -477,7 +486,8 @@ export async function startCall(apiKey: string) {
         for (const fc of data.toolCall.functionCalls) {
           if (fc.name === 'buscar_profesionales') {
             const especialidad = fc.args?.especialidad || ''
-            let result: { count: number; professionals: unknown[] } = { count: 0, professionals: [] }
+            let result: { covered: boolean; count_online: number; count_offline: number; professionals: unknown[] } =
+              { covered: false, count_online: 0, count_offline: 0, professionals: [] }
             try {
               if (callbacks?.onSearchProfessionals) {
                 result = await callbacks.onSearchProfessionals(especialidad)
