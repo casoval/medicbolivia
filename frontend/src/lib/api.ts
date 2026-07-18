@@ -774,6 +774,11 @@ export const agentAPI = {
     api.post('/agent/voice-chat', formData, {
       timeout: 30000,
     }),
+
+  // Usado por la llamada de voz (Gemini Live, function calling) — mismo
+  // mecanismo de búsqueda que usa el agente coordinador de texto.
+  searchProfessionals: (specialty: string) =>
+    api.get('/agent/search-professionals', { params: { specialty } }),
 }
 
 export const prescriptionsAPI = {

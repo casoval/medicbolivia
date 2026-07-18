@@ -197,20 +197,20 @@ export default function AgentPage() {
       onAudio: () => {},
       onError: (msg) => addMessage('agent', msg),
       onMediSpeaking: (speaking) => setMediSpeaking(speaking),
-      onRecommendation: async (specialty) => {
-        // Medi detectó una especialidad — buscar médicos disponibles en el backend
+      onSearchProfessionals: async (specialty) => {
+        // Medi (Gemini Live) invocó la función buscar_profesionales — hacemos
+        // la búsqueda real contra el backend (mismo mecanismo que usa el
+        // chat de texto) y devolvemos el resultado para que Medi lo
+        // verbalice con datos reales, no con lo que imagine.
         try {
-          const res = await agentAPI.chat(
-            `Busca médicos disponibles de especialidad: ${specialty}`,
-            sessionId || undefined
-          )
-          const { session_id, available_professionals } = res.data
-          if (!sessionId) setSessionId(session_id)
-          if (available_professionals && available_professionals.length > 0) {
-            setAvailableProfessionals(available_professionals)
+          const res = await agentAPI.searchProfessionals(specialty)
+          const { count, professionals, professionals_public } = res.data
+          if (professionals_public && professionals_public.length > 0) {
+            setAvailableProfessionals(professionals_public)
           }
+          return { count, professionals }
         } catch {
-          // silencioso — no interrumpir la llamada de voz
+          return { count: 0, professionals: [] }
         }
       },
     })

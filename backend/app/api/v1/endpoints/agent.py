@@ -308,6 +308,42 @@ async def text_to_speech_endpoint(
     return {"audio_base64": audio_b64, "audio_format": "mp3"}
 
 
+# ── GET /api/v1/agent/search-professionals ──────────
+@router.get(
+    "/search-professionals",
+    summary="Buscar profesionales disponibles por especialidad (usado por el agente de voz vía function calling)"
+)
+async def search_professionals_endpoint(
+    specialty: str = "",
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Mismo mecanismo de búsqueda que usa el agente coordinador de texto
+    ([ACTION:SEARCH_PROFESSIONALS:...]), expuesto como endpoint propio para
+    que el agente de voz (Gemini Live, function calling) pueda invocarlo
+    directamente y así tener el mismo comportamiento real que el chat de
+    texto, en vez de solo prometerlo por voz sin ejecutarlo.
+    """
+    profs = await _search_professionals(db, specialty)
+
+    return {
+        "specialty_requested": specialty,
+        "count": len(profs),
+        "professionals": [
+            {
+                "id": p.id,
+                "nombre": f"{p.first_name} {p.last_name}",
+                "especialidad": p.specialty,
+                "precio_general": float(p.price_general),
+                "experiencia_años": p.years_experience,
+                "calificacion": p.average_rating,
+            }
+            for p in profs
+        ],
+        "professionals_public": [p.model_dump(mode="json") for p in profs],
+    }
+
 # ── POST /api/v1/agent/onboarding ───────────────────
 @router.post(
     "/onboarding",

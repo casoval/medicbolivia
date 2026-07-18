@@ -18,12 +18,44 @@ ESTILO DE VOZ — muy importante:
 FLUJO:
 1. Escucha el síntoma principal
 2. Haz UNA sola pregunta de seguimiento si es necesario
-3. Cuando tengas suficiente info, di: "Con eso que me cuentas, te conviene ver a un [especialidad]. Ya estoy buscando uno disponible, en un momento aparece en el chat."
-4. Despedida corta: "Listo, ya está en el chat. Que te mejores, hasta luego."
+3. Cuando tengas claro qué especialidad conviene, di algo como: "Con eso que me cuentas, te conviene ver a un [especialidad]. Dame un segundo que reviso quién está disponible" — y AHÍ MISMO invoca la función buscar_profesionales con esa especialidad. No sigas hablando hasta tener el resultado de la función.
+4. Cuando la función responda, cuéntale al paciente el resultado real (cuántos encontraste, o si por ahora no hay nadie de esa especialidad) usando la info que te devolvió la función — nunca inventes nombres ni cantidades.
+5. Despedida corta: "Ya te dejé las opciones abajo en el chat. Que te mejores, hasta luego." (solo si sí se encontraron profesionales)
+
+MUY IMPORTANTE: nunca digas frases como "ya está en el chat" o "ya lo estoy buscando" sin haber llamado antes a la función buscar_profesionales — el paciente ve exactamente lo que la función devuelve, no lo que tú imagines.
 
 URGENCIAS: Si menciona dolor de pecho, dificultad para respirar o pérdida de conciencia → di inmediatamente: "Eso es urgente, llama al 165 ahora mismo."
 
 NUNCA: diagnósticos, medicamentos, listas, emojis, asteriscos.`
+
+// Declaración de función para Gemini Live — el modelo la invoca cuando
+// decide que ya tiene claro qué especialidad recomendar. Reemplaza la
+// detección por palabras clave sobre texto transcrito (frágil y, sin
+// outputTranscription habilitado, ni siquiera llegaba a ejecutarse: el
+// modelo hablaba en audio puro y no había texto que analizar).
+const SEARCH_PROFESSIONALS_TOOL = {
+  functionDeclarations: [
+    {
+      name: 'buscar_profesionales',
+      description:
+        'Busca en la plataforma MedicBolivia profesionales de salud disponibles de una especialidad ' +
+        'específica. Úsala apenas tengas clara la especialidad a recomendar, antes de decirle al ' +
+        'paciente que ya los encontraste.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          especialidad: {
+            type: 'STRING',
+            description:
+              'Nombre de la especialidad médica tal como se la mencionarías al paciente, ' +
+              'ej. "Pediatría", "Cardiología", "Ginecología y Obstetricia".',
+          },
+        },
+        required: ['especialidad'],
+      },
+    },
+  ],
+}
 
 export type CallStatus = 'idle' | 'connecting' | 'active'
 
@@ -32,7 +64,11 @@ export type GeminiLiveCallbacks = {
   onMessage: (text: string) => void
   onAudio: (pcm: ArrayBuffer) => void
   onError: (msg: string) => void
-  onRecommendation?: (specialty: string) => void
+  // El modelo invoca la función buscar_profesionales (ver
+  // SEARCH_PROFESSIONALS_TOOL) — este callback hace la búsqueda real
+  // contra el backend y debe devolver el resultado para que geminiLive.ts
+  // se lo mande de vuelta al modelo como respuesta de la función.
+  onSearchProfessionals?: (specialty: string) => Promise<{ count: number; professionals: unknown[] }>
   onMediSpeaking?: (speaking: boolean) => void  // para UI — Medi hablando/escuchando
 }
 
@@ -222,6 +258,11 @@ registerProcessor('mic-processor', MicProcessor)
 
 let workletNode: AudioWorkletNode | null = null
 
+// Acumula los fragmentos de outputAudioTranscription de un mismo turno —
+// llegan en streaming de a pedazos; se muestran como un solo mensaje de
+// chat recién al completarse el turno, no uno por fragmento.
+let currentTranscript = ''
+
 async function startMic(mediaStream: MediaStream, socket: WebSocket) {
   micCtx = new AudioContext({ sampleRate: 16000 })
 
@@ -283,40 +324,7 @@ function cleanupAudio() {
   try { playCtx?.close() } catch {}
   micCtx = null; playCtx = null; stream = null
   audioQueue = []; isPlaying = false; nextPlayTime = 0; mediIsSpeaking = false
-}
-
-// ── Detección de especialidad ─────────────────────
-
-const SPECIALTY_KEYWORDS: Record<string, string> = {
-  'cardiólogo': 'Cardiología', 'cardiología': 'Cardiología', 'corazón': 'Cardiología',
-  'dermatólogo': 'Dermatología', 'dermatología': 'Dermatología', 'piel': 'Dermatología',
-  'pediatra': 'Pediatría', 'pediatría': 'Pediatría',
-  'ginecólogo': 'Ginecología y Obstetricia', 'ginecología': 'Ginecología y Obstetricia',
-  'neurólogo': 'Neurología', 'neurología': 'Neurología',
-  'traumatólogo': 'Traumatología y Ortopedia', 'traumatología': 'Traumatología y Ortopedia', 'fractura': 'Traumatología y Ortopedia',
-  'psiquiatra': 'Psiquiatría', 'psiquiatría': 'Psiquiatría', 'ansiedad': 'Psiquiatría', 'depresión': 'Psiquiatría',
-  'psicólogo': 'Psicología', 'psicología': 'Psicología',
-  'médico general': 'Medicina General',
-  'internista': 'Medicina Interna', 'medicina interna': 'Medicina Interna',
-  'gastroenterólogo': 'Gastroenterología', 'estómago': 'Gastroenterología',
-  'urólogo': 'Urología', 'urología': 'Urología',
-  'oftalmólogo': 'Oftalmología', 'ojos': 'Oftalmología',
-  'otorrino': 'Otorrinolaringología', 'garganta': 'Otorrinolaringología',
-  'neumólogo': 'Neumología', 'pulmón': 'Neumología',
-  'endocrinólogo': 'Endocrinología', 'diabetes': 'Endocrinología', 'tiroides': 'Endocrinología',
-}
-
-let lastDetectedSpecialty = ''
-
-function detectSpecialty(text: string): string | null {
-  const lower = text.toLowerCase()
-  for (const [keyword, specialty] of Object.entries(SPECIALTY_KEYWORDS)) {
-    if (lower.includes(keyword) && specialty !== lastDetectedSpecialty) {
-      lastDetectedSpecialty = specialty
-      return specialty
-    }
-  }
-  return null
+  currentTranscript = ''
 }
 
 // ── API pública ───────────────────────────────────
@@ -376,7 +384,13 @@ export async function startCall(apiKey: string) {
           responseModalities: ['AUDIO'],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } } },
         },
+        // Los modelos de audio nativo de Live API SOLO devuelven audio —
+        // sin esto, serverContent.modelTurn.parts nunca trae texto y no hay
+        // forma de saber qué dijo el modelo desde el cliente. El texto llega
+        // aparte, en serverContent.outputTranscription.text (ver handleMessage).
+        outputAudioTranscription: {},
         systemInstruction: { parts: [{ text: MEDI_SYSTEM_PROMPT }] },
+        tools: [SEARCH_PROFESSIONALS_TOOL],
         realtimeInputConfig: {
           automaticActivityDetection: {
             disabled: false,
@@ -403,7 +417,6 @@ export async function startCall(apiKey: string) {
         setStarted(true)
         setStat('active')
         stopRingtone()
-        lastDetectedSpecialty = ''
         callbacks?.onStatusChange('active')
         await startMic(stream!, getWs()!)
         // Trigger saludo — con gemini-3.1 se usa realtime_input para texto en conversación
@@ -423,27 +436,70 @@ export async function startCall(apiKey: string) {
         }
       }
 
+      // Con responseModalities: ['AUDIO'], modelTurn.parts solo trae audio
+      // (inlineData) — nunca texto. El texto de lo que dice Medi llega
+      // aparte, en serverContent.outputAudioTranscription (streaming por
+      // chunks), gracias a haberlo habilitado en el setup.
       const parts = data.serverContent?.modelTurn?.parts
       if (parts) {
         for (const part of parts) {
           if (part.inlineData?.mimeType?.startsWith('audio/')) {
             enqueueAudio(base64ToArrayBuffer(part.inlineData.data))
           }
-          if (part.text) {
-            const specialty = detectSpecialty(part.text)
-            if (specialty) callbacks?.onRecommendation?.(specialty)
-          }
         }
+      }
+
+      const transcriptChunk = data.serverContent?.outputAudioTranscription?.text
+      if (transcriptChunk) {
+        currentTranscript += transcriptChunk
       }
 
       // Fin del turno de Medi
       if (data.serverContent?.turnComplete) {
         nextPlayTime = 0
+        if (currentTranscript.trim()) {
+          callbacks?.onMessage(currentTranscript.trim())
+          currentTranscript = ''
+        }
         // Dar un pequeño margen antes de marcar que Medi dejó de hablar
         setTimeout(() => {
           mediIsSpeaking = false
           callbacks?.onMediSpeaking?.(false)
         }, 300)
+      }
+
+      // El modelo decidió que ya sabe qué especialidad recomendar y llamó
+      // a buscar_profesionales — ejecutamos la búsqueda real contra el
+      // backend y le devolvemos el resultado para que lo verbalice.
+      if (data.toolCall?.functionCalls) {
+        for (const fc of data.toolCall.functionCalls) {
+          if (fc.name === 'buscar_profesionales') {
+            const especialidad = fc.args?.especialidad || ''
+            let result: { count: number; professionals: unknown[] } = { count: 0, professionals: [] }
+            try {
+              if (callbacks?.onSearchProfessionals) {
+                result = await callbacks.onSearchProfessionals(especialidad)
+              }
+            } catch (e) {
+              console.error('[GeminiLive] Error buscando profesionales:', e)
+            }
+
+            const socket = getWs()
+            if (socket && socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({
+                toolResponse: {
+                  functionResponses: [
+                    {
+                      id: fc.id,
+                      name: fc.name,
+                      response: { result },
+                    },
+                  ],
+                },
+              }))
+            }
+          }
+        }
       }
     }
 
