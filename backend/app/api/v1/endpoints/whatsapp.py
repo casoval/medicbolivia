@@ -9,7 +9,7 @@ Backend del menú "IA" del panel admin (4 pestañas):
   + POST /whatsapp/webhook/inbound          → llamado por whatsapp-service
     (Node/whatsapp-web.js) cada vez que llega un mensaje nuevo al número real.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List
 
 import httpx
