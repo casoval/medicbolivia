@@ -73,8 +73,8 @@ app = FastAPI(
     Usar `Bearer <token>` en el header `Authorization`.
     """,
     version=settings.APP_VERSION,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
     lifespan=lifespan,
 )
 
