@@ -88,6 +88,16 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             "servicios de emergencia de tu ciudad.",
             7,
         ),
+        (
+            "¿Qué tan confiable es MedicBolivia?",
+            "Somos una plataforma nueva, así que todavía no tenemos un historial largo de "
+            "calificaciones para mostrar — pero cada profesional pasa por un proceso real de "
+            "verificación de identidad y matrícula antes de poder atender, y tus datos médicos y "
+            "pagos están protegidos con cifrado. Además, somos la única plataforma en Bolivia que "
+            "ofrece orientación médica con agentes de inteligencia artificial por voz y por chat, "
+            "más recordatorios automáticos de medicación y seguimiento por WhatsApp.",
+            8,
+        ),
     ],
 
     # ── PATIENT: cómo usar la plataforma siendo paciente ──

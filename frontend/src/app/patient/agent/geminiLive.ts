@@ -26,9 +26,11 @@ FLUJO:
    - covered es false (ni online ni offline): decile con honestidad que por ahora no tenemos esa especialidad en la plataforma, sin prometer que aparecerá alguien pronto, y ofrecé como alternativa una primera evaluación con Medicina General.
    Nunca inventes nombres ni cantidades — usá solo lo que te devolvió la función.
 6. Para agendar: vos NUNCA agendás la consulta ni la inicias, y JAMÁS le pidas su nombre u otro dato personal para "agendarla" — ya está identificado en la plataforma. Decile que elija al profesional que le convenga de las tarjetas que le van a aparecer abajo en el chat y toque el botón correspondiente ("Consultar ahora" o "Agendar cita" según corresponda).
-7. Despedida corta acorde al resultado: "Ya te dejé las opciones abajo en el chat. Que te mejores, hasta luego." (si encontraste online u offline) o una despedida amable si no había cobertura.
+7. Despedida corta acorde al resultado: "Ya te dejé las opciones abajo en el chat. Que te mejores, hasta luego." (si encontraste online u offline) o una despedida amable si no había cobertura. Apenas termines de decir esa frase, invoca la función finalizar_llamada — vos cortás la llamada, no dejes que quede abierta esperando a que el paciente cuelgue.
 
 MUY IMPORTANTE: nunca digas frases como "ya está en el chat" o "ya lo estoy buscando" sin haber llamado antes a la función buscar_profesionales — el paciente ve exactamente lo que la función devuelve, no lo que tú imagines.
+
+CÓMO TERMINA LA LLAMADA — importante, no lo olvides: sos VOS quien corta, nunca dejes la llamada abierta esperando a que el paciente cuelgue. Esto aplica no solo después de mostrarle profesionales (paso 7), sino cualquier vez que la conversación llegue a un cierre natural — el paciente se despide, dice que ya no necesita nada más, o agradece y no sigue —: decí una despedida corta y cálida, y apenas termines de decirla, invoca finalizar_llamada.
 
 URGENCIAS: Si menciona dolor de pecho, dificultad para respirar o pérdida de conciencia → di inmediatamente: "Eso es urgente, llama al 165 ahora mismo."
 
@@ -59,6 +61,14 @@ const SEARCH_PROFESSIONALS_TOOL = {
         },
         required: ['especialidad'],
       },
+    },
+    {
+      name: 'finalizar_llamada',
+      description:
+        'Corta la llamada. Invócala SIEMPRE como tu última acción, inmediatamente después de haber ' +
+        'dicho en voz alta tu frase de despedida — nunca antes, y nunca sigas hablando después de ' +
+        'invocarla. El sistema corta la llamada apenas termine de reproducirse tu despedida.',
+      parameters: { type: 'OBJECT', properties: {} },
     },
   ],
 }
@@ -112,6 +122,11 @@ const setStarted = (v: boolean) => { if (typeof window !== 'undefined') window._
 // ── Variables de audio ────────────────────────────
 let micCtx: AudioContext | null = null
 let playCtx: AudioContext | null = null
+// Nodo de ganancia compartido por el que pasan todos los chunks — permite
+// hacer un fundido corto al interrumpir, en vez de cortar el AudioContext
+// en seco (lo que a veces parte la onda a mitad de sílaba y suena a corte
+// de cable, no a que alguien deja de hablar).
+let masterGain: GainNode | null = null
 let processor: ScriptProcessorNode | null = null
 let stream: MediaStream | null = null
 let callbacks: GeminiLiveCallbacks | null = null
@@ -158,6 +173,9 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
 function ensurePlayCtx() {
   if (!playCtx || playCtx.state === 'closed') {
     playCtx = new AudioContext({ sampleRate: 24000 })
+    masterGain = playCtx.createGain()
+    masterGain.gain.value = 1
+    masterGain.connect(playCtx.destination)
     nextPlayTime = 0
   }
 }
@@ -174,7 +192,7 @@ function scheduleChunk(data: ArrayBuffer) {
     buf.copyToChannel(float32, 0)
     const src = ctx.createBufferSource()
     src.buffer = buf
-    src.connect(ctx.destination)
+    src.connect(masterGain!)
 
     const startAt = Math.max(ctx.currentTime + 0.005, nextPlayTime)  // 5ms lookahead mínimo
     src.start(startAt)
@@ -201,16 +219,66 @@ function enqueueAudio(data: ArrayBuffer) {
 }
 
 // Interrupción (barge-in) — corta el audio de Medi si el paciente habla
+const INTERRUPT_FADE_SECONDS = 0.09  // ~90ms: corta rápido pero sin click ni tijeretazo
+
 function interruptPlayback() {
   if (!mediIsSpeaking) return
-  // Cerrar y recrear el AudioContext cancela todos los buffers schedulados
-  try { playCtx?.close() } catch {}
+  const ctxToFade = playCtx
+  const gainToFade = masterGain
+  if (ctxToFade && gainToFade && ctxToFade.state !== 'closed') {
+    try {
+      const now = ctxToFade.currentTime
+      gainToFade.gain.cancelScheduledValues(now)
+      gainToFade.gain.setValueAtTime(gainToFade.gain.value, now)
+      gainToFade.gain.linearRampToValueAtTime(0, now + INTERRUPT_FADE_SECONDS)
+    } catch {}
+    // Cerramos el contexto viejo recién después del fundido — si lo
+    // cerráramos ya, el fundido nunca terminaría de sonar.
+    setTimeout(() => { try { ctxToFade.close() } catch {} }, INTERRUPT_FADE_SECONDS * 1000 + 20)
+  } else {
+    try { ctxToFade?.close() } catch {}
+  }
   playCtx = null
+  masterGain = null
   audioQueue = []
   isPlaying = false
   nextPlayTime = 0
   mediIsSpeaking = false
   callbacks?.onMediSpeaking?.(false)
+  // El paciente volvió a hablar — si había un corte de llamada programado
+  // (Medi ya se había despedido), lo cancelamos: todavía tiene algo que decir.
+  cancelPendingHangup()
+  // Este modelo (gemini-3.1-flash-live-preview) tiene un bug reportado donde,
+  // tras una interrupción, a veces se queda mudo — recibe el audio del
+  // paciente pero nunca genera una respuesta nueva. Si no vuelve a hablar en
+  // unos segundos, lo empujamos con un mensaje de texto; si ni así reacciona,
+  // cortamos nosotros en vez de dejar al paciente esperando en silencio.
+  startSilenceWatchdog()
+}
+
+let nudgeTimer: ReturnType<typeof setTimeout> | null = null
+let deadCallTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearSilenceWatchdog() {
+  if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null }
+  if (deadCallTimer) { clearTimeout(deadCallTimer); deadCallTimer = null }
+}
+
+function startSilenceWatchdog() {
+  clearSilenceWatchdog()
+  nudgeTimer = setTimeout(() => {
+    const socket = getWs()
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        realtime_input: { text: 'Seguí la conversación, respondé ahora con algo breve.' }
+      }))
+    }
+  }, 4000)
+  deadCallTimer = setTimeout(() => {
+    // Ni siquiera el empujón funcionó — mejor cortar con prolijidad que
+    // dejar al paciente escuchando silencio indefinidamente.
+    endCall()
+  }, 10000)
 }
 
 // ── Tono de llamada ───────────────────────────────
@@ -274,6 +342,27 @@ let workletNode: AudioWorkletNode | null = null
 // chat recién al completarse el turno, no uno por fragmento.
 let currentTranscript = ''
 
+// El modelo invocó finalizar_llamada — hay que cortar apenas termine de
+// sonar el audio de la despedida ya encolado, no de inmediato (cortaría
+// la frase a la mitad).
+let hangupRequested = false
+let hangupTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleHangupIfNeeded() {
+  if (!hangupRequested) return
+  hangupRequested = false
+  const msLeft = playCtx ? Math.max(0, (nextPlayTime - playCtx.currentTime) * 1000) : 0
+  hangupTimer = setTimeout(() => { hangupTimer = null; endCall() }, msLeft + 400)
+}
+
+// Si el paciente vuelve a hablar (interrupción real, confirmada por el
+// servidor o detectada localmente) después de que Medi ya había invocado
+// finalizar_llamada, cancelamos el corte — la llamada sigue.
+function cancelPendingHangup() {
+  if (hangupTimer) { clearTimeout(hangupTimer); hangupTimer = null }
+  hangupRequested = false
+}
+
 async function startMic(mediaStream: MediaStream, socket: WebSocket) {
   micCtx = new AudioContext({ sampleRate: 16000 })
 
@@ -287,25 +376,42 @@ async function startMic(mediaStream: MediaStream, socket: WebSocket) {
   workletNode = new AudioWorkletNode(micCtx, 'mic-processor')
 
   let speakingDetected = false
+  let speechFrames = 0
+  // A ~16kHz con buffers de 512 muestras, cada frame son ~32ms — pedir 5
+  // frames seguidos por encima del umbral exige ~160ms de energía sostenida
+  // antes de interrumpir, en vez de reaccionar a un solo golpe de ruido.
+  const FRAMES_TO_CONFIRM_SPEECH = 5
+  const RMS_THRESHOLD = 0.03
 
   workletNode.port.onmessage = (e) => {
     if (!socket || socket.readyState !== WebSocket.OPEN) return
     const float32: Float32Array = e.data
 
-    // Barge-in — detectar voz del paciente mientras Medi habla
+    // Barge-in — detectar voz del paciente mientras Medi habla.
+    // Solo cortamos la reproducción LOCAL (por responsividad); ya no le
+    // mandamos activityEnd al servidor — ese mensaje manual es para cuando
+    // automaticActivityDetection está deshabilitado (no es nuestro caso) y
+    // mezclarlo con la detección automática del servidor podía ser parte de
+    // la confusión en ambientes ruidosos. El servidor igual recibe cada
+    // chunk de audio y decide por su cuenta con su propio VAD (ya ajustado
+    // arriba para ser menos sensible al ruido de fondo).
     if (mediIsSpeaking) {
       let rms = 0
       for (let i = 0; i < float32.length; i++) rms += float32[i] * float32[i]
       rms = Math.sqrt(rms / float32.length)
-      if (rms > 0.015) {
-        if (!speakingDetected) {
+      if (rms > RMS_THRESHOLD) {
+        speechFrames++
+        if (speechFrames >= FRAMES_TO_CONFIRM_SPEECH && !speakingDetected) {
           speakingDetected = true
           interruptPlayback()
-          socket.send(JSON.stringify({ realtimeInput: { activityEnd: {} } }))
         }
       } else {
+        speechFrames = 0
         speakingDetected = false
       }
+    } else {
+      speechFrames = 0
+      speakingDetected = false
     }
 
     const pcm16 = floatTo16BitPCM(float32)
@@ -333,9 +439,12 @@ function cleanupAudio() {
   processor = null
   try { micCtx?.close() } catch {}
   try { playCtx?.close() } catch {}
-  micCtx = null; playCtx = null; stream = null
+  micCtx = null; playCtx = null; masterGain = null; stream = null
   audioQueue = []; isPlaying = false; nextPlayTime = 0; mediIsSpeaking = false
   currentTranscript = ''
+  if (hangupTimer) { clearTimeout(hangupTimer); hangupTimer = null }
+  hangupRequested = false
+  clearSilenceWatchdog()
 }
 
 // ── API pública ───────────────────────────────────
@@ -405,10 +514,16 @@ export async function startCall(apiKey: string) {
         realtimeInputConfig: {
           automaticActivityDetection: {
             disabled: false,
-            startOfSpeechSensitivity: 'START_SENSITIVITY_HIGH',
-            endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
-            prefixPaddingMs: 20,
-            silenceDurationMs: 300,
+            // Antes: HIGH/HIGH + prefixPaddingMs 20 — igual a una configuración
+            // reportada en un issue conocido de este mismo modelo donde
+            // "Hello?" (o cualquier ruido de fondo) del que llama dispara el
+            // VAD y corta a Medi a mitad de frase, reiniciando la respuesta.
+            // LOW/LOW + más padding = requiere una señal de voz más clara y
+            // sostenida antes de considerar que el paciente empezó a hablar.
+            startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
+            endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
+            prefixPaddingMs: 300,
+            silenceDurationMs: 500,
           }
         }
       }
@@ -445,6 +560,15 @@ export async function startCall(apiKey: string) {
           mediIsSpeaking = true
           callbacks?.onMediSpeaking?.(true)
         }
+        clearSilenceWatchdog()
+      }
+
+      // Señal oficial del servidor: detectó que el paciente volvió a
+      // hablar y cortó la generación de Medi. Es más confiable que la
+      // detección local por volumen — si local ya había interrumpido,
+      // esto es un no-op (interruptPlayback corta temprano si !mediIsSpeaking).
+      if (data.serverContent?.interrupted) {
+        interruptPlayback()
       }
 
       // Con responseModalities: ['AUDIO'], modelTurn.parts solo trae audio
@@ -467,6 +591,10 @@ export async function startCall(apiKey: string) {
 
       // Fin del turno de Medi
       if (data.serverContent?.turnComplete) {
+        // OJO: hay que calcular el margen de hangup ANTES de resetear
+        // nextPlayTime más abajo, o el audio de la despedida se cortaría
+        // a la mitad (nextPlayTime en 0 = "no queda nada por reproducir").
+        scheduleHangupIfNeeded()
         nextPlayTime = 0
         if (currentTranscript.trim()) {
           callbacks?.onMessage(currentTranscript.trim())
@@ -483,7 +611,20 @@ export async function startCall(apiKey: string) {
       // a buscar_profesionales — ejecutamos la búsqueda real contra el
       // backend y le devolvemos el resultado para que lo verbalice.
       if (data.toolCall?.functionCalls) {
+        clearSilenceWatchdog()
         for (const fc of data.toolCall.functionCalls) {
+          if (fc.name === 'finalizar_llamada') {
+            const socket = getWs()
+            if (socket && socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({
+                toolResponse: {
+                  functionResponses: [{ id: fc.id, name: fc.name, response: { result: 'ok' } }],
+                },
+              }))
+            }
+            hangupRequested = true
+            continue
+          }
           if (fc.name === 'buscar_profesionales') {
             const especialidad = fc.args?.especialidad || ''
             let result: { covered: boolean; count_online: number; count_offline: number; professionals: unknown[] } =
