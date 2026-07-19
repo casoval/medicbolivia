@@ -154,6 +154,8 @@ function LandingHeader() {
           <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-6 sm:h-11 w-auto" priority />
         </div>
         <nav className="hidden sm:flex items-center gap-6 text-sm text-[#6B738A]">
+          <Link href="/especialidades" className="hover:text-[#141820]">{t('Especialidades')}</Link>
+          <Link href="/telemedicina" className="hover:text-[#141820]">{t('Telemedicina')}</Link>
           <a href="#faq" className="hover:text-[#141820]">{t('Preguntas frecuentes')}</a>
           <Link href="/verificar-receta" className="hover:text-[#141820]">{t('Verificar receta')}</Link>
           <a href="#contacto" className="hover:text-[#141820]">{t('Contacto')}</a>
@@ -714,6 +716,8 @@ function LandingFooter() {
           </a>
         </div>
         <div className="flex gap-4">
+          <Link href="/especialidades" className="hover:text-[#141820]">{t('Especialidades')}</Link>
+          <Link href="/telemedicina" className="hover:text-[#141820]">{t('Telemedicina')}</Link>
           <a href="#contacto" className="hover:text-[#141820]">{t('Contacto')}</a>
           <a href="#faq" className="hover:text-[#141820]">{t('Preguntas frecuentes')}</a>
           <Link href="/verificar-receta" className="hover:text-[#141820]">{t('Verificar receta')}</Link>
