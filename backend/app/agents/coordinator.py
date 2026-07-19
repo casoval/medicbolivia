@@ -3,6 +3,7 @@ app/agents/coordinator.py
 Agente Coordinador — cerebro principal del sistema de IA.
 Usa Gemini 2.5 Flash (Google) con el SDK google-genai.
 """
+import asyncio
 import json
 import re
 import time
@@ -251,18 +252,33 @@ def _parse_action(reply: str) -> dict:
     }
 
 
-def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> str:
-    """Llama a Gemini con el nuevo SDK google-genai y retorna el texto."""
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=system,
-            max_output_tokens=max_tokens,
-            temperature=0.7,
-        ),
-    )
-    return response.text
+async def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> str:
+    """Llama a Gemini con el nuevo SDK google-genai y retorna el texto.
+
+    Dos cuidados de concurrencia acá, no cosméticos:
+    1) client.models.generate_content (el cliente sync del SDK) es una
+       llamada de red BLOQUEANTE. Si se corriera directo, con uvicorn
+       --workers 2 cualquier otra request que caiga en el mismo worker
+       mientras tanto se queda esperando en cola — incluida
+       /agent/search-professionals, que usa el agente de voz. Por eso corre
+       en un hilo aparte con asyncio.to_thread.
+    2) El propio SDK tiene varios issues abiertos donde http_options.timeout
+       NO se respeta y la llamada puede colgarse indefinidamente (googleapis/
+       python-genai#911, #4031). No confiamos en eso: ponemos un timeout acá,
+       a nivel de asyncio, que no depende del SDK.
+    """
+    def _sync_call() -> str:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                max_output_tokens=max_tokens,
+                temperature=0.7,
+            ),
+        )
+        return response.text
+    return await asyncio.wait_for(asyncio.to_thread(_sync_call), timeout=25.0)
 
 
 # ─────────────────────────────────────────────────────
@@ -402,7 +418,7 @@ async def run_whatsapp_agent(
 
     contents = _build_contents(history or [], message)
     try:
-        reply = _call_gemini(system, contents, max_tokens=220)
+        reply = await _call_gemini(system, contents, max_tokens=220)
         clean_reply, escalation_reason = _parse_escalation_tag(reply)
         return {
             "message": clean_reply,
@@ -443,7 +459,7 @@ async def run_coordinator(
     contents = _build_contents(history, message)
 
     try:
-        reply = _call_gemini(system, contents, max_tokens=1000)
+        reply = await _call_gemini(system, contents, max_tokens=1000)
         latency_ms = int((time.time() - start) * 1000)
 
         history.append({"role": "user", "content": message})
@@ -549,7 +565,7 @@ async def run_onboarding(
     contents = _build_contents(history, message)
 
     try:
-        reply = _call_gemini(system, contents, max_tokens=800)
+        reply = await _call_gemini(system, contents, max_tokens=800)
 
         history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": reply})
@@ -604,7 +620,7 @@ Receta emitida: {"Sí" if has_prescription else "No"}"""
     contents = _build_contents([], context)
 
     try:
-        return _call_gemini(POST_CONSULTATION_SYSTEM, contents, max_tokens=400)
+        return await _call_gemini(POST_CONSULTATION_SYSTEM, contents, max_tokens=400)
     except Exception as e:
         logger.error(f"Error en agente post-consulta (Gemini): {e}")
         return f"Tu consulta con {professional_name} ha finalizado. ¡Gracias por usar MedicBolivia!"
@@ -637,7 +653,7 @@ async def run_help(
     contents = _build_contents(history, message)
 
     try:
-        reply = _call_gemini(system, contents, max_tokens=700)
+        reply = await _call_gemini(system, contents, max_tokens=700)
 
         history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": reply})

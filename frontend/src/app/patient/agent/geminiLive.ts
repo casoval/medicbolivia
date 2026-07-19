@@ -1,16 +1,9 @@
 // geminiLive.ts — Gestor de Gemini Live completamente fuera de React
 
-// Antes: 'gemini-3.1-flash-live-preview'. Cambiado a este modelo porque
-// Google no ofrece hoy ningún Live model "half-cascade" (los más confiables
-// para function calling quedaron dados de baja) — entre los dos modelos de
-// audio nativo disponibles, este (2.5) es más maduro (lleva meses más en
-// producción) y su propia ficha de Google destaca "function calling
-// robusto" como mejora explícita. El 3.1 es más nuevo y tiene bugs
-// reportados de fiabilidad de tool-calling y de sesión. Si seguís viendo
-// que no invoca las funciones o se queda mudo, este cambio no lo va a
-// arreglar del todo — la solución de fondo es dejar de depender del tool
-// calling nativo en audio (ver nota en el chat).
-const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025'
+// gemini-3.1-flash-live-preview: más rápido en la práctica que el 2.5. Se
+// probó cambiar a 2.5 buscando más confiabilidad de tool-calling, pero
+// empeoró la experiencia (más lento) — se revierte a 3.1.
+const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview'
 
 const MEDI_SYSTEM_PROMPT = `Eres Medi, agente de orientación médica de MedicBolivia.
 Hablas en español boliviano, de forma cálida y natural, como si fuera una llamada telefónica real.
@@ -230,8 +223,10 @@ function enqueueAudio(data: ArrayBuffer) {
     isPlaying = true
     flushAudioQueue()
   } else {
-    // Ya está schedulando — agregar directo
-    scheduleChunk(audioQueue.pop()!)
+    // Ya está schedulando — agregar directo. OJO: shift() (el más viejo
+    // primero), no pop() — el audio tiene que salir en el orden en que
+    // llegó, o los chunks se reproducirían fuera de orden.
+    scheduleChunk(audioQueue.shift()!)
   }
 }
 
@@ -272,9 +267,8 @@ function interruptPlayback() {
   // cortamos nosotros en vez de dejar al paciente esperando en silencio.
   // OJO: si hay una búsqueda de profesionales en curso contra nuestro backend,
   // NO arrancamos este vigilante acá — el silencio es esperado (Medi está
-  // esperando el resultado real, no está "mudo"), y si el request tarda no
-  // queremos cortar la llamada antes de que llegue. Ese caso lo cubre su
-  // propio vigilante, que arranca recién cuando le mandamos el resultado.
+  // esperando el resultado real, no está "mudo"), y no queremos cortar la
+  // llamada antes de que el resultado llegue.
   if (!searchInFlight) {
     startSilenceWatchdog()
   }
@@ -701,13 +695,6 @@ export async function startCall(apiKey: string) {
                 },
               }))
             }
-            // Mismo bug de "se queda mudo" que en interruptPlayback, pero acá
-            // aplica incluso sin interrupción previa: a veces el modelo recibe
-            // el resultado de buscar_profesionales y no retoma la conversación
-            // solo — el paciente tiene que volver a hablar para que reaccione.
-            // Arrancamos el vigilante recién ahora (no antes), para no restarle
-            // tiempo al request real de arriba.
-            startSilenceWatchdog()
           }
         }
       }
