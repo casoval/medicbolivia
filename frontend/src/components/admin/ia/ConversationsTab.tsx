@@ -24,6 +24,8 @@ interface Conversation {
   last_message_at: string | null
   last_message_preview: string | null
   unread_count: number
+  needs_admin_attention: boolean
+  escalation_reason: string | null
 }
 
 interface Message {
@@ -81,6 +83,12 @@ export function ConversationsTab() {
 
   const toggleChatAgentMutation = useMutation({
     mutationFn: (vars: { id: string; agent_enabled: boolean }) => whatsappAPI.toggleConversationAgent(vars.id, vars.agent_enabled),
+    onSuccess: () => { invalidateList(); invalidateThread() },
+    onError: (err) => setError(getErrorMessage(err)),
+  })
+
+  const resolveEscalationMutation = useMutation({
+    mutationFn: (id: string) => whatsappAPI.resolveEscalation(id),
     onSuccess: () => { invalidateList(); invalidateThread() },
     onError: (err) => setError(getErrorMessage(err)),
   })
@@ -164,7 +172,7 @@ export function ConversationsTab() {
                 <button
                   key={c.id}
                   onClick={() => setSelectedId(c.id)}
-                  className={`w-full text-left px-4 py-3 border-b border-[#DDE1EE] hover:bg-[#F5F6FA] transition-colors ${selectedId === c.id ? 'bg-[#F5F6FA]' : ''}`}
+                  className={`w-full text-left px-4 py-3 border-b border-[#DDE1EE] hover:bg-[#F5F6FA] transition-colors ${selectedId === c.id ? 'bg-[#F5F6FA]' : ''} ${c.needs_admin_attention ? 'bg-[#FFF7ED]' : ''}`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium truncate">{c.display_name}</p>
@@ -173,9 +181,10 @@ export function ConversationsTab() {
                   {/* Número siempre visible además del nombre, para identificación rápida
                       y para distinguir contactos que compartan nombre. */}
                   <p className="text-xs text-[#6B738A] truncate">{c.phone}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <span className={`${AUDIENCE_BADGE[c.audience] || 'badge-gray'} text-[9px]`}>{AUDIENCE_LABEL[c.audience] || c.audience}</span>
                     {!c.agent_enabled && <span className="badge-gray text-[9px]">{t('Bot off')}</span>}
+                    {c.needs_admin_attention && <span className="badge-amber text-[9px]">🚩 {t('Para administración')}</span>}
                   </div>
                   <p className="text-xs text-[#6B738A] mt-1 truncate">{c.last_message_preview || '—'}</p>
                 </button>
@@ -206,6 +215,21 @@ export function ConversationsTab() {
                     />
                   </label>
                 </div>
+
+                {thread.conversation.needs_admin_attention && (
+                  <div className="px-4 py-2 bg-[#FAEEDA] border-b border-[#DDE1EE] flex items-center justify-between gap-3">
+                    <p className="text-xs text-[#854F0B]">
+                      🚩 {t('Derivada a administración')}: {thread.conversation.escalation_reason || t('sin motivo especificado')}
+                    </p>
+                    <button
+                      onClick={() => resolveEscalationMutation.mutate(thread.conversation.id)}
+                      disabled={resolveEscalationMutation.isPending}
+                      className="text-xs font-medium text-[#854F0B] underline hover:no-underline whitespace-nowrap disabled:opacity-50"
+                    >
+                      {t('Marcar como resuelta')}
+                    </button>
+                  </div>
+                )}
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
                   {thread.messages.map((m) => (

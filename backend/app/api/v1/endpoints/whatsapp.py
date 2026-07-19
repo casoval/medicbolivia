@@ -306,7 +306,9 @@ async def list_conversations(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin),
 ):
-    query = select(WhatsAppConversation).order_by(desc(WhatsAppConversation.last_message_at))
+    query = select(WhatsAppConversation).order_by(
+        desc(WhatsAppConversation.needs_admin_attention), desc(WhatsAppConversation.last_message_at)
+    )
     if audience:
         query = query.where(WhatsAppConversation.audience == audience)
     result = await db.execute(query)
@@ -321,6 +323,8 @@ async def list_conversations(
             "audience": c.audience, "agent_enabled": c.agent_enabled,
             "last_message_at": c.last_message_at, "last_message_preview": c.last_message_preview,
             "unread_count": c.unread_count,
+            "needs_admin_attention": c.needs_admin_attention,
+            "escalation_reason": c.escalation_reason,
         }
         for c in conversations
     ]
@@ -350,6 +354,8 @@ async def get_conversation_messages(
         "conversation": {
             "id": conversation.id, "phone": conversation.phone, "contact_name": conversation.contact_name,
             "display_name": display_name, "agent_enabled": conversation.agent_enabled,
+            "needs_admin_attention": conversation.needs_admin_attention,
+            "escalation_reason": conversation.escalation_reason,
         },
         "messages": [
             {"id": m.id, "direction": m.direction, "body": m.body, "sent_by": m.sent_by,
@@ -399,6 +405,21 @@ async def toggle_conversation_agent(
     conversation.agent_enabled = data.agent_enabled
     await db.commit()
     return {"status": "updated", "agent_enabled": conversation.agent_enabled}
+
+
+@router.patch("/conversations/{conversation_id}/resolve-escalation", summary="Marcar como resuelta la derivación a administración")
+async def resolve_conversation_escalation(
+    conversation_id: str,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_admin),
+):
+    result = await db.execute(select(WhatsAppConversation).where(WhatsAppConversation.id == conversation_id))
+    conversation = result.scalar_one_or_none()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+    conversation.needs_admin_attention = False
+    conversation.escalation_reason = None
+    await db.commit()
+    return {"status": "updated", "needs_admin_attention": conversation.needs_admin_attention}
 
 
 class AgentConfigIn(BaseModel):
@@ -610,7 +631,24 @@ async def receive_inbound_message(
         ]
 
         from app.agents.coordinator import run_whatsapp_agent
-        reply_text = await run_whatsapp_agent(conversation.id, payload.message, history)
+
+        platform_names = await _resolve_platform_names(db, [conversation.user_id])
+        display_name = _display_name(platform_names.get(conversation.user_id), conversation.contact_name, conversation.phone)
+
+        result = await run_whatsapp_agent(
+            conversation.id, payload.message, history,
+            contact_name=display_name if display_name != conversation.phone else None,
+            audience=audience,
+            db=db,
+        )
+        reply_text = result["message"]
+
+        if result["escalate"]:
+            conversation.needs_admin_attention = True
+            conversation.escalation_reason = result["escalation_reason"]
+            await db.commit()
+            from app.tasks.whatsapp_tasks import notify_admin_of_whatsapp_escalation
+            notify_admin_of_whatsapp_escalation.delay(conversation_id=conversation.id)
 
         # No se inserta el WhatsAppMessage acá: send_whatsapp_message ya
         # deja el registro OUT al efectivamente mandarlo (ver

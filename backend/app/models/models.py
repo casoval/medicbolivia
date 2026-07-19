@@ -914,6 +914,12 @@ class WhatsAppConversation(Base):
     # admin tome el control manual de un chat específico sin apagar el
     # bot para todos los demás contactos.
     agent_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Se marca cuando el agente de WhatsApp detecta algo que no puede
+    # resolver (sugerencia, propuesta de negocio, reclamo grave, etc.) y
+    # necesita que un admin humano tome la conversación. Ver
+    # [ESCALATE_ADMIN:...] en WHATSAPP_SYSTEM (app/agents/coordinator.py).
+    needs_admin_attention: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    escalation_reason: Mapped[Optional[str]] = mapped_column(String(300))
     last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     last_message_preview: Mapped[Optional[str]] = mapped_column(String(300))
     unread_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -870,6 +870,8 @@ export const whatsappAPI = {
     api.post(`/whatsapp/conversations/${id}/send`, { message }),
   toggleConversationAgent: (id: string, agent_enabled: boolean) =>
     api.patch(`/whatsapp/conversations/${id}/agent`, { agent_enabled }),
+  resolveEscalation: (id: string) =>
+    api.patch(`/whatsapp/conversations/${id}/resolve-escalation`),
   getAgentConfig: () => api.get('/whatsapp/agent-config'),
   updateAgentConfig: (data: {
     is_active: boolean; auto_reply_public: boolean; auto_reply_patients: boolean

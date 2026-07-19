@@ -184,3 +184,48 @@ def send_whatsapp_message(
         ))
     finally:
         asyncio.run(engine.dispose())
+
+
+async def _notify_admin_of_whatsapp_escalation(conversation_id: str):
+    """
+    Avisa a todos los usuarios con rol ADMIN que el agente de WhatsApp
+    derivó una conversación (sugerencia, propuesta de negocio, reclamo que
+    no pudo resolver, o pedido explícito de hablar con un humano) — ver
+    [ESCALATE_ADMIN:...] en app/agents/coordinator.py::WHATSAPP_SYSTEM.
+    Mismo patrón que notify_admin_of_chat_report (chat_tasks.py): solo
+    in-app, para no saturar WhatsApp con una notificación por cada
+    escalamiento — el admin ya ve la conversación destacada en el inbox.
+    """
+    from app.models.models import User, UserRole
+    from app.services.notify import notify_user
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(WhatsAppConversation).where(WhatsAppConversation.id == conversation_id)
+        )
+        conversation = result.scalar_one_or_none()
+        if not conversation or not conversation.needs_admin_attention:
+            return
+
+        admins_result = await db.execute(select(User).where(User.role == UserRole.ADMIN))
+        admins = admins_result.scalars().all()
+
+        contact = conversation.contact_name or conversation.phone
+        reason = conversation.escalation_reason or "sin motivo especificado"
+        for admin in admins:
+            await notify_user(
+                db, user_id=admin.id,
+                title="WhatsApp: conversación derivada a administración",
+                body=f"{contact} — {reason}. Revísalo en IA / WhatsApp > Conversaciones.",
+                type_="WHATSAPP_ESCALATION",
+                entity_type="WhatsAppConversation", entity_id=conversation.id,
+                send_whatsapp=False,  # solo in-app, la conversación ya queda marcada en el inbox
+            )
+        await db.commit()
+        logger.info(f"🚩 Admins notificados de escalamiento de WhatsApp: conversation_id={conversation_id}")
+
+
+@celery_app.task(name="app.tasks.whatsapp_tasks.notify_admin_of_whatsapp_escalation")
+def notify_admin_of_whatsapp_escalation(conversation_id: str):
+    asyncio.run(_notify_admin_of_whatsapp_escalation(conversation_id))
+    asyncio.run(engine.dispose())

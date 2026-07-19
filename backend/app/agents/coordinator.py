@@ -281,36 +281,128 @@ REGLAS DE FORMATO (WhatsApp no soporta markdown):
 - Nunca uses **negrita**, listas con guiones, ni encabezados. Texto plano, tono cercano y directo.
 - Usa como máximo 1 emoji por mensaje, solo si aporta claridad (🩺 📅 💳).
 
-QUÉ HACER:
-- Preguntas generales (horarios, precios, especialidades, cómo agendar): responde directo y breve.
-- Pedido de cita o consulta inmediata: indica que lo puede hacer desde la app y por qué (ahí ve
-  disponibilidad real de profesionales en vivo).
+SALUDO Y TRATO:
+Si más abajo tenés CONTACTO (nombre y tipo de persona), usá el nombre en tu primer mensaje de la
+conversación para generar confianza (ej. "¡Hola, Fernanda! 👋"). Si no hay nombre, saludá igual de
+cálido, sin inventar uno. Si es un profesional, ajustá el tono (ej. "tus pacientes", no "tu
+salud"); si es un paciente o un contacto sin identificar, hablale como a alguien que busca
+atención médica.
+
+QUÉ HACER — tu objetivo es resolver lo simple acá mismo, e incentivar a abrir la app para todo lo
+que requiere datos reales o personalizados (la app siempre tiene la info actualizada, vos no):
+- Preguntas básicas de qué es MedicBolivia, qué se puede hacer ahí, y los beneficios de
+  registrarse (médicos reales por videoconsulta, recetas digitales, historia clínica, agendar o
+  consultar al instante, etc.): respondé con entusiasmo pero breve, priorizando FAQ_CONTEXT si
+  está presente más abajo.
+- Precios, horarios, especialidades puntuales, cómo agendar: si FAQ_CONTEXT tiene la respuesta
+  exacta, usala. Si no la tenés, no inventes — decí que en la app ve la info real y actualizada.
+- Pedido de cita o consulta inmediata: indicá que lo puede hacer desde la app, porque ahí ve
+  disponibilidad real de profesionales en vivo, algo que vos no podés ver desde acá.
 - Síntomas o dudas médicas puntuales: NUNCA diagnostiques ni receta. Deriva siempre a una consulta
-  con un profesional real.
-- Si detectas una emergencia (dolor de pecho, dificultad para respirar, sangrado grave, pérdida de
-  conciencia, ideación suicida): indica de inmediato llamar al 911 o acudir a urgencias más cercano,
-  sin seguir la conversación normal.
-- Si no puedes resolverlo o el usuario pide hablar con un humano, dilo abiertamente: un miembro del
-  equipo va a continuar la conversación.
+  con un profesional real desde la app.
+- Si detectás una emergencia (dolor de pecho, dificultad para respirar, sangrado grave, pérdida de
+  conciencia, ideación suicida): indicá de inmediato llamar al 911 o acudir a urgencias más
+  cercano, sin seguir la conversación normal.
+
+DERIVAR A ADMINISTRACIÓN — muy importante, no improvises acá:
+Si el mensaje es una sugerencia, propuesta de negocio o alianza, reclamo grave, o cualquier cosa
+que no está en FAQ_CONTEXT ni podés resolver con lo de arriba, no inventes una respuesta. Decile
+con calidez que tomaste nota y que alguien del equipo se va a comunicar con esa persona, e incluí
+exactamente:
+[ESCALATE_ADMIN:resumen breve de 1 frase de qué pide o propone]
+Este tag es una instrucción interna para el sistema — nunca lo expliques ni lo menciones, se quita
+automáticamente antes de mostrar tu mensaje. Usalo también si la persona pide explícitamente
+hablar con un humano, en vez de insistir con respuestas genéricas.
 
 Nunca inventes datos de precios, horarios o profesionales que no te hayan dado como contexto."""
 
 
-async def run_whatsapp_agent(conversation_id: str, message: str, history: Optional[list] = None) -> str:
+async def _load_faq_context(db, audience: str) -> str:
+    """
+    Devuelve un bloque de texto con las FAQ activas (GENERAL + la audiencia
+    dada) para inyectar como contexto verificado, o cadena vacía si no hay
+    ninguna. Compartido entre run_help y run_whatsapp_agent para no
+    duplicar la consulta ni el formato.
+    """
+    from app.models.models import FAQ
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(FAQ)
+        .where(FAQ.is_active == True, FAQ.audience.in_([audience, "GENERAL"]))
+        .order_by(FAQ.audience, FAQ.display_order)
+    )
+    faqs = result.scalars().all()
+    if not faqs:
+        return ""
+    return "\n\n".join(f"P: {f.question}\nR: {f.answer}" for f in faqs)
+
+
+def _parse_escalation_tag(reply: str) -> tuple[str, Optional[str]]:
+    """Extrae [ESCALATE_ADMIN:motivo] del texto del agente de WhatsApp y lo
+    quita del mensaje visible. Devuelve (mensaje_limpio, motivo_o_None)."""
+    match = re.search(r'\[ESCALATE_ADMIN:([^\]]*)\]', reply)
+    if not match:
+        return reply.strip(), None
+    reason = match.group(1).strip() or "Sin motivo especificado por el agente"
+    clean = re.sub(r'\[ESCALATE_ADMIN:[^\]]*\]', '', reply).strip()
+    return clean, reason
+
+
+async def run_whatsapp_agent(
+    conversation_id: str,
+    message: str,
+    history: Optional[list] = None,
+    contact_name: Optional[str] = None,
+    audience: str = "PUBLIC",
+    db=None,
+) -> dict:
     """
     Genera la respuesta corta que el agente manda por WhatsApp. No usa
     AgentLog (ese log es del agente in-app) — el registro de esta
     interacción ya queda en whatsapp_messages (ver whatsapp.py).
     `history` es una lista simple [{"role": "user"|"assistant", "content": str}]
     con los últimos mensajes de esa conversación (se arma desde WhatsAppMessage).
+    `contact_name`/`audience` vienen resueltos por el webhook (nombre real de
+    la plataforma si es un User registrado, o el pushname de WhatsApp) para
+    poder saludar por nombre y distinguir paciente/profesional/desconocido.
+
+    Devuelve {"message": str, "escalate": bool, "escalation_reason": str|None}
+    — a diferencia de la versión anterior (que devolvía solo el texto), el
+    caller necesita saber si hay que marcar la conversación para admin.
     """
+    system = WHATSAPP_SYSTEM
+
+    tipo = {"PATIENT": "paciente", "PROFESSIONAL": "profesional de salud"}.get(
+        audience, "contacto aún no identificado en la plataforma"
+    )
+    contacto = f"Tipo: {tipo}"
+    if contact_name:
+        contacto = f"Nombre: {contact_name}\n{contacto}"
+    system += f"\n\nCONTACTO:\n{contacto}"
+
+    if db:
+        faq_audience = audience if audience in ("PATIENT", "PROFESSIONAL") else "GENERAL"
+        faq_text = await _load_faq_context(db, faq_audience)
+        if faq_text:
+            system += f"\n\nFAQ_CONTEXT (respuestas oficiales verificadas por el equipo, priorizalas):\n{faq_text}"
+
     contents = _build_contents(history or [], message)
     try:
-        reply = _call_gemini(WHATSAPP_SYSTEM, contents, max_tokens=220)
-        return reply.strip()
+        reply = _call_gemini(system, contents, max_tokens=220)
+        clean_reply, escalation_reason = _parse_escalation_tag(reply)
+        return {
+            "message": clean_reply,
+            "escalate": escalation_reason is not None,
+            "escalation_reason": escalation_reason,
+        }
     except Exception as e:
         logger.error(f"Error en agente de WhatsApp (Gemini): {e}")
-        return "Disculpa, tuve un problema técnico. Un miembro del equipo te va a escribir en breve 🙏"
+        return {
+            "message": "Disculpa, tuve un problema técnico. Un miembro del equipo te va a escribir en breve 🙏",
+            "escalate": False,
+            "escalation_reason": None,
+        }
 
 
 # ─────────────────────────────────────────────────────
@@ -523,18 +615,9 @@ async def run_help(
     system = HELP_PATIENT_SYSTEM if user_role == "PATIENT" else HELP_PROFESSIONAL_SYSTEM
 
     if db:
-        from app.models.models import FAQ
-        from sqlalchemy import select
-
         audience = "PATIENT" if user_role == "PATIENT" else "PROFESSIONAL"
-        result = await db.execute(
-            select(FAQ)
-            .where(FAQ.is_active == True, FAQ.audience.in_([audience, "GENERAL"]))
-            .order_by(FAQ.audience, FAQ.display_order)
-        )
-        faqs = result.scalars().all()
-        if faqs:
-            faq_text = "\n\n".join(f"P: {f.question}\nR: {f.answer}" for f in faqs)
+        faq_text = await _load_faq_context(db, audience)
+        if faq_text:
             system += f"\n\nFAQ_CONTEXT (respuestas oficiales verificadas por el equipo, priorizalas sobre tu conocimiento general):\n{faq_text}"
 
     history = _conversation_store.get(session_id, [])
