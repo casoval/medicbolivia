@@ -764,6 +764,12 @@ export const agentAPI = {
   onboarding: (message: string, sessionId?: string) =>
     api.post<AgentResponse>('/agent/onboarding', { message, session_id: sessionId }),
 
+  // Agente de Ayuda persistente — a diferencia de onboarding, no depende de
+  // onboarding_completed, se puede usar en cualquier momento desde el botón
+  // "Ayuda" del menú.
+  help: (message: string, sessionId?: string) =>
+    api.post<AgentResponse>('/agent/help', { message, session_id: sessionId }),
+
   getHistory: (sessionId: string) =>
     api.get(`/agent/history/${sessionId}`),
 

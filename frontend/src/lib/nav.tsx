@@ -20,7 +20,7 @@
 import {
   IconHome, IconSearch, IconBot, IconClock, IconFile, IconRx, IconNote,
   IconStetho, IconGrid, IconUsers, IconCal, IconStar, IconUser,
-  IconPatients, IconCard, IconLog, IconCog, IconTag, IconChat,
+  IconPatients, IconCard, IconLog, IconCog, IconTag, IconChat, IconHelp,
 } from '@/components/nav-icons'
 
 export interface NavItem {
@@ -105,6 +105,12 @@ export const PATIENT_NAV: NavItem[] = [
     icon: <IconUser />,
     description: 'Tus datos personales y de contacto',
   },
+  {
+    label: 'Ayuda',
+    href: '/patient/help',
+    icon: <IconHelp />,
+    description: 'Resuelve dudas sobre cómo usar la plataforma, en cualquier momento',
+  },
 ]
 
 // Flujo del profesional: ve su resumen del día, configura su disponibilidad
@@ -178,6 +184,12 @@ export const PROFESSIONAL_NAV: NavItem[] = [
     href: '/professional/profile',
     icon: <IconUser />,
     description: 'Tus datos, especialidad y credenciales profesionales',
+  },
+  {
+    label: 'Ayuda',
+    href: '/professional/help',
+    icon: <IconHelp />,
+    description: 'Resuelve dudas sobre cómo usar la plataforma, en cualquier momento',
   },
 ]
 

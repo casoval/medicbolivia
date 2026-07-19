@@ -143,6 +143,7 @@ class AgentType(str, enum.Enum):
     AVAILABILITY = "AVAILABILITY"
     ONBOARDING = "ONBOARDING"
     POST_CONSULTATION = "POST_CONSULTATION"
+    HELP = "HELP"
 
 
 class ProposalType(str, enum.Enum):

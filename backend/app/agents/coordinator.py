@@ -93,6 +93,14 @@ ACCIONES DISPONIBLES:
 Cuando necesites buscar profesionales, incluye exactamente:
 [ACTION:SEARCH_PROFESSIONALS:especialidad]
 
+PREGUNTAS SOBRE EL USO DE LA PLATAFORMA (no sobre síntomas):
+Si el paciente te pregunta algo sobre cómo funciona la plataforma (ej. "¿cómo pago?", "¿cómo
+agendo?", "¿necesito cámara?") en vez de contarte un síntoma, respondé la duda puntual en 1-2
+frases con lo que ya sabés de la plataforma (pago por QR, video con cámara y micrófono, "Consultar
+ahora" vs "Agendar cita"), y después retomá el triage con naturalidad. Si la duda es más larga o
+no estás seguro de la respuesta, decile que puede tocar "Ayuda" en el menú para una guía completa
+— no inventes políticas, precios ni plazos que no conozcas con certeza.
+
 El paciente puede elegir llamada de voz o chat — adapta tu comunicación según el contexto que recibas."""
 
 
@@ -137,6 +145,60 @@ CONSEJOS PARA DOCUMENTOS (incluir siempre):
 - Texto completamente legible
 
 Al completar todos los pasos: [ONBOARDING_COMPLETE]"""
+
+
+HELP_PATIENT_SYSTEM = """Eres el Agente de Ayuda de MedicBolivia para pacientes.
+
+A diferencia del Agente de Bienvenida (que solo corre una vez, en el primer registro, para pedir
+alergias y condiciones crónicas), vos estás disponible en cualquier momento que el paciente lo
+necesite, desde el botón "Ayuda" del menú. No pedís datos médicos ni marcás nada como "completado"
+— solo explicás cómo usar la plataforma.
+
+QUÉ CUBRE TU AYUDA:
+- Cómo buscar y elegir un profesional: por el Agente IA de orientación médica (cuenta síntomas y
+  lo orienta a la especialidad), o buscando directo por especialidad en "Buscar médico"
+- Diferencia entre "Consultar ahora" (videoconsulta inmediata con alguien conectado) y
+  "Agendar cita" (reservar un horario futuro con cualquier profesional, esté conectado o no)
+- Cómo funciona el pago (QR) y dónde ver el historial de pagos
+- Cómo es la videoconsulta (necesita cámara, micrófono y buena conexión)
+- Dónde ver su historia clínica, recetas emitidas, y cómo configurar recordatorios de medicamentos
+- Cómo actualizar sus datos médicos (alergias, condiciones crónicas) desde su perfil
+- Cómo usar la mensajería para el seguimiento con un profesional después de una consulta
+
+REGLAS:
+- Respuestas breves, concretas, en español boliviano cálido — nada de párrafos largos
+- Si más abajo tenés FAQ_CONTEXT, priorizá esa información (son respuestas oficiales verificadas
+  por el equipo) por sobre tu conocimiento general
+- Si la pregunta es sobre un síntoma o duda médica (no sobre el uso de la plataforma), no la
+  respondas acá — decile que use el "Agente IA" de orientación médica para eso, vos solo ayudás
+  con el manejo de la plataforma
+- Si no sabés algo con certeza (precios exactos, plazos, políticas), decilo con honestidad y
+  sugerí contactar soporte — nunca inventes"""
+
+
+HELP_PROFESSIONAL_SYSTEM = """Eres el Agente de Ayuda de MedicBolivia para profesionales de salud.
+
+A diferencia del Agente de Bienvenida (que solo corre una vez, durante el registro, para explicar
+documentos y verificación), vos estás disponible en cualquier momento que el profesional lo
+necesite, desde el botón "Ayuda" del menú.
+
+QUÉ CUBRE TU AYUDA:
+- Estado y requisitos de verificación de documentos (CI, título, SEDES, matrícula CMB) y cuánto
+  demora (24-72 horas hábiles)
+- Cómo configurar precios, horarios de disponibilidad, y la diferencia entre marcarse "en línea"
+  manualmente y que el sistema lo haga automático según su horario configurado
+- Diferencia entre consultas inmediatas (paciente conectado ahora) y citas agendadas (con horario
+  futuro, no requiere estar en línea en ese momento)
+- Cómo registrar notas clínicas y emitir recetas durante o después de una consulta
+- Cómo funcionan sus ganancias y cuándo se liberan los pagos
+- Cómo proponer una especialidad o subespecialidad que no esté en el catálogo actual
+
+REGLAS:
+- Respuestas breves, concretas, en español boliviano profesional pero cercano
+- Si más abajo tenés FAQ_CONTEXT, priorizá esa información (respuestas oficiales del equipo) por
+  sobre tu conocimiento general
+- Si no sabés algo con certeza (montos exactos, plazos, políticas de pago), decilo con honestidad
+  y sugerí contactar soporte — nunca inventes"""
 
 
 POST_CONSULTATION_SYSTEM = """Eres el Agente Post-Consulta de MedicBolivia.
@@ -441,6 +503,69 @@ Receta emitida: {"Sí" if has_prescription else "No"}"""
     except Exception as e:
         logger.error(f"Error en agente post-consulta (Gemini): {e}")
         return f"Tu consulta con {professional_name} ha finalizado. ¡Gracias por usar MedicBolivia!"
+
+
+async def run_help(
+    session_id: str,
+    user_id: str,
+    user_role: str,
+    message: str,
+    db=None
+) -> dict:
+    """
+    Ejecuta el Agente de Ayuda — a diferencia de run_onboarding, está
+    disponible en cualquier momento (no depende de onboarding_completed) y
+    no intenta recolectar datos médicos ni marcar nada como "completado".
+    Usa las FAQ reales del catálogo (las mismas que ve la landing pública,
+    gestionadas por el admin) como contexto, para no inventar políticas de
+    precios, plazos o procedimientos que el equipo no confirmó.
+    """
+    system = HELP_PATIENT_SYSTEM if user_role == "PATIENT" else HELP_PROFESSIONAL_SYSTEM
+
+    if db:
+        from app.models.models import FAQ
+        from sqlalchemy import select
+
+        audience = "PATIENT" if user_role == "PATIENT" else "PROFESSIONAL"
+        result = await db.execute(
+            select(FAQ)
+            .where(FAQ.is_active == True, FAQ.audience.in_([audience, "GENERAL"]))
+            .order_by(FAQ.audience, FAQ.display_order)
+        )
+        faqs = result.scalars().all()
+        if faqs:
+            faq_text = "\n\n".join(f"P: {f.question}\nR: {f.answer}" for f in faqs)
+            system += f"\n\nFAQ_CONTEXT (respuestas oficiales verificadas por el equipo, priorizalas sobre tu conocimiento general):\n{faq_text}"
+
+    history = _conversation_store.get(session_id, [])
+    contents = _build_contents(history, message)
+
+    try:
+        reply = _call_gemini(system, contents, max_tokens=700)
+
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": reply})
+        if len(history) > 20:
+            history = history[-20:]
+        _conversation_store[session_id] = history
+
+        if db:
+            from app.models.models import AgentLog, AgentType
+            log = AgentLog(
+                user_id=user_id,
+                agent_type=AgentType.HELP,
+                session_id=session_id,
+                user_message=message,
+                agent_response=reply,
+            )
+            db.add(log)
+            await db.commit()
+
+        return {"message": reply.strip()}
+
+    except Exception as e:
+        logger.error(f"Error en agente de ayuda (Gemini): {e}")
+        return {"message": "Disculpa, tuve un problema técnico. Intenta de nuevo en un momento."}
 
 
 def get_conversation_history(session_id: str) -> list:

@@ -21,7 +21,7 @@ from app.models.models import (
 )
 from app.schemas.schemas import AgentChatRequest, AgentChatResponse, ProfessionalPublicResponse
 from app.agents.coordinator import (
-    run_coordinator, run_onboarding, get_conversation_history
+    run_coordinator, run_onboarding, run_help, get_conversation_history
 )
 
 router = APIRouter()
@@ -480,6 +480,40 @@ async def agent_onboarding(
         message=result["message"],
         action=result.get("action"),
         onboarding_completed=result.get("onboarding_completed", False),
+    )
+
+
+# ── POST /api/v1/agent/help ─────────────────────────
+@router.post(
+    "/help",
+    response_model=AgentChatResponse,
+    summary="Agente de Ayuda — guía de la plataforma, disponible en cualquier momento"
+)
+async def agent_help(
+    data: AgentChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    A diferencia de /onboarding (una sola vez, en el primer registro, para
+    recolectar datos médicos), este endpoint no depende de
+    onboarding_completed — el paciente o profesional puede volver a
+    preguntar cómo funciona la plataforma cuando quiera, desde el botón
+    "Ayuda" del menú.
+    """
+    session_id = data.session_id or f"help-{current_user.id}-{uuid.uuid4().hex[:8]}"
+
+    result = await run_help(
+        session_id=session_id,
+        user_id=current_user.id,
+        user_role=current_user.role.value,
+        message=data.message,
+        db=db,
+    )
+
+    return AgentChatResponse(
+        session_id=session_id,
+        message=result["message"],
     )
 
 
