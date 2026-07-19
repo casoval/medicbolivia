@@ -260,7 +260,14 @@ function interruptPlayback() {
   // paciente pero nunca genera una respuesta nueva. Si no vuelve a hablar en
   // unos segundos, lo empujamos con un mensaje de texto; si ni así reacciona,
   // cortamos nosotros en vez de dejar al paciente esperando en silencio.
-  startSilenceWatchdog()
+  // OJO: si hay una búsqueda de profesionales en curso contra nuestro backend,
+  // NO arrancamos este vigilante acá — el silencio es esperado (Medi está
+  // esperando el resultado real, no está "mudo"), y si el request tarda no
+  // queremos cortar la llamada antes de que llegue. Ese caso lo cubre su
+  // propio vigilante, que arranca recién cuando le mandamos el resultado.
+  if (!searchInFlight) {
+    startSilenceWatchdog()
+  }
 }
 
 let nudgeTimer: ReturnType<typeof setTimeout> | null = null
@@ -354,6 +361,11 @@ let currentTranscript = ''
 // la frase a la mitad).
 let hangupRequested = false
 let hangupTimer: ReturnType<typeof setTimeout> | null = null
+
+// Marca si hay una búsqueda de buscar_profesionales en curso contra nuestro
+// backend — la usa interruptPlayback para no confundir "esperando nuestro
+// propio request" con "el modelo se quedó mudo" (ver más abajo).
+let searchInFlight = false
 
 // Frases de cierre que el prompt le pide decir a Medi, más las formas en que
 // el modelo a veces narra la acción en vez de ejecutarla ("invocando
@@ -458,6 +470,7 @@ function cleanupAudio() {
   currentTranscript = ''
   if (hangupTimer) { clearTimeout(hangupTimer); hangupTimer = null }
   hangupRequested = false
+  searchInFlight = false
   clearSilenceWatchdog()
 }
 
@@ -653,12 +666,15 @@ export async function startCall(apiKey: string) {
             const especialidad = fc.args?.especialidad || ''
             let result: { covered: boolean; count_online: number; count_offline: number; professionals: unknown[] } =
               { covered: false, count_online: 0, count_offline: 0, professionals: [] }
+            searchInFlight = true
             try {
               if (callbacks?.onSearchProfessionals) {
                 result = await callbacks.onSearchProfessionals(especialidad)
               }
             } catch (e) {
               console.error('[GeminiLive] Error buscando profesionales:', e)
+            } finally {
+              searchInFlight = false
             }
 
             const socket = getWs()
@@ -675,6 +691,13 @@ export async function startCall(apiKey: string) {
                 },
               }))
             }
+            // Mismo bug de "se queda mudo" que en interruptPlayback, pero acá
+            // aplica incluso sin interrupción previa: a veces el modelo recibe
+            // el resultado de buscar_profesionales y no retoma la conversación
+            // solo — el paciente tiene que volver a hablar para que reaccione.
+            // Arrancamos el vigilante recién ahora (no antes), para no restarle
+            // tiempo al request real de arriba.
+            startSilenceWatchdog()
           }
         }
       }
