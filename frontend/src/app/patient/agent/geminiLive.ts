@@ -1,6 +1,16 @@
 // geminiLive.ts — Gestor de Gemini Live completamente fuera de React
 
-const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview'
+// Antes: 'gemini-3.1-flash-live-preview'. Cambiado a este modelo porque
+// Google no ofrece hoy ningún Live model "half-cascade" (los más confiables
+// para function calling quedaron dados de baja) — entre los dos modelos de
+// audio nativo disponibles, este (2.5) es más maduro (lleva meses más en
+// producción) y su propia ficha de Google destaca "function calling
+// robusto" como mejora explícita. El 3.1 es más nuevo y tiene bugs
+// reportados de fiabilidad de tool-calling y de sesión. Si seguís viendo
+// que no invoca las funciones o se queda mudo, este cambio no lo va a
+// arreglar del todo — la solución de fondo es dejar de depender del tool
+// calling nativo en audio (ver nota en el chat).
+const GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025'
 
 const MEDI_SYSTEM_PROMPT = `Eres Medi, agente de orientación médica de MedicBolivia.
 Hablas en español boliviano, de forma cálida y natural, como si fuera una llamada telefónica real.
