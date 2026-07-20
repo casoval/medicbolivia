@@ -213,6 +213,12 @@ export const ADMIN_NAV: NavItem[] = [
     description: 'Aprueba, edita y gestiona a los profesionales de salud',
   },
   {
+    label: 'Captación de médicos',
+    href: '/admin/doctor-leads',
+    icon: <IconSearch />,
+    description: 'Busca médicos en Google Maps e invítalos a probar la plataforma',
+  },
+  {
     label: 'Pacientes',
     href: '/admin/patients',
     icon: <IconUser />,

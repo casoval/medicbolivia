@@ -28,16 +28,22 @@ from app.models.models import (
     Rating, ClinicalNote, ProfessionalPenaltyReset, Earning, Prescription,
     CommissionPeriod, CommissionScope, ProfessionalMembership,
     ChatBlock, ProfessionalPatientVisibility, ChatConversation, AdminAccessLog, PaymentChannel,
+    DoctorLead, DoctorLeadStatus, DoctorLeadSource,
 )
 from app.schemas.schemas import (
     DocReviewRequest, RefundRequest, DisputeResolveRequest,
     ProfessionalMembershipCreateRequest, ProfessionalMembershipUpdateRequest,
     ProfessionalMembershipRenewRequest, BroadcastCreateRequest,
+    DoctorLeadCreateRequest, DoctorLeadUpdateRequest, DoctorLeadInviteRequest,
 )
 from app.services.payment import process_refund
 from app.services.commission import get_professional_commission_summary
 from app.services.broadcast import send_broadcast, count_recipients
 from app.models.models import BroadcastMessage, BroadcastAudience
+from app.services import google_places
+from app.core.phone import normalize_bo_phone, InvalidPhoneError
+from app.tasks.whatsapp_tasks import send_whatsapp_message
+from app.models.models import WhatsAppAudience
 from app.core.config import settings
 
 router = APIRouter()
@@ -2020,3 +2026,275 @@ async def list_broadcasts(
         select(BroadcastMessage).order_by(BroadcastMessage.created_at.desc()).limit(limit)
     )
     return [_broadcast_to_dict(b) for b in result.scalars().all()]
+
+
+# ─────────────────────────────────────────────────────
+# BUSCADOR DE MÉDICOS / CAPTACIÓN (DoctorLead)
+#
+# Flujo: el admin busca en Google Maps -> previsualiza -> importa el
+# resultado que le interese como DoctorLead -> le hace seguimiento
+# (notas, estado) -> lo invita por WhatsApp cuando tiene el celular
+# real del médico -> si se registra, lo liga a su Professional.
+# ─────────────────────────────────────────────────────
+
+def _doctor_lead_to_dict(lead: DoctorLead) -> dict:
+    return {
+        "id": lead.id,
+        "full_name": lead.full_name,
+        "specialty": lead.specialty,
+        "city": lead.city,
+        "phone": lead.phone,
+        "email": lead.email,
+        "clinic_or_hospital": lead.clinic_or_hospital,
+        "address": lead.address,
+        "source": lead.source,
+        "place_id": lead.place_id,
+        "maps_url": lead.maps_url,
+        "status": lead.status,
+        "notes": lead.notes,
+        "last_contacted_at": lead.last_contacted_at,
+        "converted_professional_id": lead.converted_professional_id,
+        "created_at": lead.created_at,
+        "updated_at": lead.updated_at,
+    }
+
+
+@router.get("/doctor-leads/search-maps", summary="Buscar médicos en Google Maps (previsualización, sin guardar)")
+async def search_doctor_leads_maps(
+    query: str = Query(..., min_length=2, description="Ej: 'cardiólogo', 'dermatólogo'"),
+    city: str = Query(..., min_length=2, description="Ej: 'Santa Cruz de la Sierra'"),
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        results = await google_places.text_search(query, city)
+    except google_places.GooglePlacesNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except google_places.GooglePlacesError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    # Marca cuáles resultados ya están cargados como lead o ya son
+    # Professional (por place_id ya importado), para no duplicar en la UI.
+    place_ids = [r["place_id"] for r in results if r["place_id"]]
+    existing_place_ids: set[str] = set()
+    if place_ids:
+        existing = await db.execute(
+            select(DoctorLead.place_id).where(DoctorLead.place_id.in_(place_ids))
+        )
+        existing_place_ids = {row[0] for row in existing.all()}
+
+    for r in results:
+        r["already_imported"] = r["place_id"] in existing_place_ids
+
+    return {"query": query, "city": city, "results": results}
+
+
+@router.get("/doctor-leads/place-details/{place_id}", summary="Ver detalle (incluye teléfono) de un resultado de Maps")
+async def get_doctor_lead_place_details(
+    place_id: str,
+    current_user=Depends(get_current_admin),
+):
+    try:
+        details = await google_places.place_details(place_id)
+    except google_places.GooglePlacesNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except google_places.GooglePlacesError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    # Intentamos normalizar el teléfono al formato canónico del proyecto;
+    # si no matchea (ej. formato raro o número de otro país), lo devolvemos
+    # tal cual vino y que el admin lo corrija a mano al importar.
+    if details.get("phone"):
+        try:
+            details["phone_normalized"] = normalize_bo_phone(details["phone"])
+        except InvalidPhoneError:
+            details["phone_normalized"] = None
+    else:
+        details["phone_normalized"] = None
+
+    return details
+
+
+@router.get("/doctor-leads", summary="Listar prospectos de médicos")
+async def list_doctor_leads(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    specialty: Optional[str] = None,
+    city: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    filters = []
+    if status_filter:
+        filters.append(DoctorLead.status == status_filter)
+    if specialty:
+        filters.append(DoctorLead.specialty.ilike(f"%{specialty}%"))
+    if city:
+        filters.append(DoctorLead.city.ilike(f"%{city}%"))
+    if search:
+        like = f"%{search}%"
+        filters.append(or_(DoctorLead.full_name.ilike(like), DoctorLead.phone.ilike(like)))
+
+    base_query = select(DoctorLead)
+    if filters:
+        base_query = base_query.where(and_(*filters))
+
+    total = (await db.execute(
+        select(func.count()).select_from(base_query.subquery())
+    )).scalar_one()
+
+    result = await db.execute(
+        base_query.order_by(DoctorLead.created_at.desc())
+        .offset((page - 1) * page_size).limit(page_size)
+    )
+    leads = result.scalars().all()
+
+    # Resumen del embudo, para las tarjetas del encabezado de la página.
+    counts_result = await db.execute(
+        select(DoctorLead.status, func.count()).group_by(DoctorLead.status)
+    )
+    funnel = {status.value: 0 for status in DoctorLeadStatus}
+    for status_value, count in counts_result.all():
+        funnel[status_value] = count
+
+    return {
+        "items": [_doctor_lead_to_dict(l) for l in leads],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "funnel": funnel,
+    }
+
+
+@router.post("/doctor-leads", summary="Agregar un prospecto de médico (manual o desde Google Maps)")
+async def create_doctor_lead(
+    data: DoctorLeadCreateRequest,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    phone_normalized = None
+    if data.phone:
+        try:
+            phone_normalized = normalize_bo_phone(data.phone)
+        except InvalidPhoneError:
+            raise HTTPException(status_code=422, detail="Teléfono inválido")
+
+        existing = await db.execute(select(DoctorLead).where(DoctorLead.phone == phone_normalized))
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Ya existe un prospecto con este teléfono")
+
+        already_professional = await db.execute(select(User).where(User.phone == phone_normalized))
+        if already_professional.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail="Este número ya pertenece a un usuario registrado en la plataforma",
+            )
+
+    lead = DoctorLead(
+        full_name=data.full_name,
+        specialty=data.specialty,
+        city=data.city,
+        phone=phone_normalized,
+        email=data.email,
+        clinic_or_hospital=data.clinic_or_hospital,
+        address=data.address,
+        source=data.source,
+        place_id=data.place_id,
+        maps_url=data.maps_url,
+        notes=data.notes,
+        created_by_id=current_user.id,
+    )
+    db.add(lead)
+    await db.commit()
+    await db.refresh(lead)
+    logger.info(f"Lead de médico creado por admin={current_user.id}: {lead.full_name} ({lead.source})")
+    return _doctor_lead_to_dict(lead)
+
+
+@router.put("/doctor-leads/{lead_id}", summary="Editar un prospecto (notas, estado, datos de contacto)")
+async def update_doctor_lead(
+    lead_id: str,
+    data: DoctorLeadUpdateRequest,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    lead = (await db.execute(select(DoctorLead).where(DoctorLead.id == lead_id))).scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+
+    update_data = data.model_dump(exclude_unset=True)
+    if "phone" in update_data and update_data["phone"]:
+        try:
+            update_data["phone"] = normalize_bo_phone(update_data["phone"])
+        except InvalidPhoneError:
+            raise HTTPException(status_code=422, detail="Teléfono inválido")
+
+    for field, value in update_data.items():
+        setattr(lead, field, value)
+
+    await db.commit()
+    await db.refresh(lead)
+    return _doctor_lead_to_dict(lead)
+
+
+@router.delete("/doctor-leads/{lead_id}", summary="Eliminar un prospecto")
+async def delete_doctor_lead(
+    lead_id: str,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    lead = (await db.execute(select(DoctorLead).where(DoctorLead.id == lead_id))).scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+    await db.delete(lead)
+    await db.commit()
+    return {"deleted": True}
+
+
+@router.post("/doctor-leads/{lead_id}/invite", summary="Invitar a un prospecto por WhatsApp")
+async def invite_doctor_lead(
+    lead_id: str,
+    data: DoctorLeadInviteRequest,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    lead = (await db.execute(select(DoctorLead).where(DoctorLead.id == lead_id))).scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+    if not lead.phone:
+        raise HTTPException(
+            status_code=422,
+            detail="Este prospecto no tiene teléfono cargado — agrégalo antes de invitarlo",
+        )
+    if lead.status == DoctorLeadStatus.NO_CONTACTAR.value:
+        raise HTTPException(status_code=409, detail="Este prospecto pidió no ser contactado de nuevo")
+
+    # Mismo mecanismo que usa broadcast.py: se encola como tarea Celery,
+    # nunca se llama directo a whatsapp-service desde el endpoint.
+    send_whatsapp_message.delay(
+        phone=lead.phone,
+        message=data.message,
+        audience=WhatsAppAudience.PUBLIC.value,
+        related_entity_type="DoctorLead",
+        related_entity_id=lead.id,
+        sent_by="ADMIN",
+    )
+
+    lead.status = DoctorLeadStatus.CONTACTADO.value
+    lead.last_contacted_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(lead)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="DOCTOR_LEAD_INVITED",
+        entity_type="DoctorLead",
+        entity_id=lead.id,
+        metadata_={"phone": lead.phone},
+    ))
+    await db.commit()
+
+    logger.info(f"Invitación WhatsApp encolada por admin={current_user.id} para lead={lead.id}")
+    return _doctor_lead_to_dict(lead)

@@ -55,6 +55,58 @@ export interface BroadcastMessage {
   created_at: string | null
 }
 
+// ── Buscador de médicos / captación (DoctorLead) ──
+export type DoctorLeadStatus =
+  | 'NUEVO' | 'CONTACTADO' | 'INTERESADO' | 'NO_INTERESADO' | 'REGISTRADO' | 'NO_CONTACTAR'
+
+export interface DoctorLead {
+  id: string
+  full_name: string
+  specialty: string | null
+  city: string | null
+  phone: string | null
+  email: string | null
+  clinic_or_hospital: string | null
+  address: string | null
+  source: 'MANUAL' | 'CSV_IMPORT' | 'GOOGLE_PLACES' | 'REFERIDO'
+  place_id: string | null
+  maps_url: string | null
+  status: DoctorLeadStatus
+  notes: string | null
+  last_contacted_at: string | null
+  converted_professional_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DoctorLeadListResponse {
+  items: DoctorLead[]
+  total: number
+  page: number
+  page_size: number
+  funnel: Record<DoctorLeadStatus, number>
+}
+
+export interface MapsSearchResult {
+  place_id: string
+  name: string
+  address: string | null
+  rating: number | null
+  user_rating_count: number | null
+  maps_url: string | null
+  already_imported: boolean
+}
+
+export interface MapsPlaceDetails {
+  place_id: string
+  name: string
+  address: string | null
+  phone: string | null
+  phone_normalized: string | null
+  website: string | null
+  maps_url: string | null
+}
+
 export interface PlatformSettings {
   app_name: string
   commission_percent: number
@@ -1189,6 +1241,33 @@ export const adminAPI = {
 
   listBroadcasts: () =>
     api.get<BroadcastMessage[]>('/admin/broadcasts').then(r => r.data),
+
+  // Buscador de médicos / captación (DoctorLead)
+  searchDoctorsOnMaps: (query: string, city: string) =>
+    api.get<{ query: string; city: string; results: MapsSearchResult[] }>(
+      '/admin/doctor-leads/search-maps', { params: { query, city } }
+    ).then(r => r.data),
+
+  getDoctorPlaceDetails: (placeId: string) =>
+    api.get<MapsPlaceDetails>(`/admin/doctor-leads/place-details/${placeId}`).then(r => r.data),
+
+  listDoctorLeads: (params: {
+    status?: string; specialty?: string; city?: string; search?: string
+    page?: number; page_size?: number
+  }) =>
+    api.get<DoctorLeadListResponse>('/admin/doctor-leads', { params }).then(r => r.data),
+
+  createDoctorLead: (data: Partial<DoctorLead> & { full_name: string }) =>
+    api.post<DoctorLead>('/admin/doctor-leads', data).then(r => r.data),
+
+  updateDoctorLead: (id: string, data: Partial<DoctorLead>) =>
+    api.put<DoctorLead>(`/admin/doctor-leads/${id}`, data).then(r => r.data),
+
+  deleteDoctorLead: (id: string) =>
+    api.delete(`/admin/doctor-leads/${id}`).then(r => r.data),
+
+  inviteDoctorLead: (id: string, message: string) =>
+    api.post<DoctorLead>(`/admin/doctor-leads/${id}/invite`, { message }).then(r => r.data),
 }
 
 export const maintenanceAPI = {

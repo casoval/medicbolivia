@@ -1345,3 +1345,73 @@ class BroadcastMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     sent_by: Mapped["User"] = relationship(foreign_keys=[sent_by_id])
+
+
+# ─────────────────────────────────────────────────────
+# CAPTACIÓN DE MÉDICOS (buscador admin → prospectos)
+#
+# Prospectos de médicos que NO están registrados en la plataforma,
+# descubiertos por el admin (búsqueda en Google Places, carga manual, o
+# CSV) para hacerles seguimiento e invitarlos a probar MedicBolivia.
+# No confundir con `Professional`: ese es un médico que ya se registró y
+# tiene cuenta; `DoctorLead` es solo un contacto potencial en el embudo
+# de captación, con su propio estado (NUEVO → CONTACTADO → ... →
+# REGISTRADO) hasta que (si acepta) crea su cuenta real.
+# ─────────────────────────────────────────────────────
+
+class DoctorLeadStatus(str, enum.Enum):
+    NUEVO = "NUEVO"
+    CONTACTADO = "CONTACTADO"
+    INTERESADO = "INTERESADO"
+    NO_INTERESADO = "NO_INTERESADO"
+    REGISTRADO = "REGISTRADO"       # ya se convirtió en Professional
+    NO_CONTACTAR = "NO_CONTACTAR"   # pidió explícitamente no ser contactado de nuevo
+
+
+class DoctorLeadSource(str, enum.Enum):
+    MANUAL = "MANUAL"
+    CSV_IMPORT = "CSV_IMPORT"
+    GOOGLE_PLACES = "GOOGLE_PLACES"
+    REFERIDO = "REFERIDO"
+
+
+class DoctorLead(Base):
+    """
+    Prospecto de médico para la campaña de captación del admin. `phone`
+    es único (con NULL permitido: no todo resultado de Google Places trae
+    teléfono) para poder deduplicar contra otros leads ya cargados y
+    contra `users.phone` — así detectamos automáticamente cuando un
+    prospecto ya se registró como Professional por su cuenta.
+    """
+    __tablename__ = "doctor_leads"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    specialty: Mapped[Optional[str]] = mapped_column(String(100))
+    city: Mapped[Optional[str]] = mapped_column(String(100))
+    # Formato canónico del proyecto (ver app/core/phone.py). Nullable:
+    # muchos resultados de Google Places no exponen teléfono sin pedir
+    # el Place Details, que se pide recién al importar el lead.
+    phone: Mapped[Optional[str]] = mapped_column(String(20), unique=True, nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255))
+    clinic_or_hospital: Mapped[Optional[str]] = mapped_column(String(200))
+    address: Mapped[Optional[str]] = mapped_column(String(300))
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default=DoctorLeadSource.MANUAL.value)
+    # Referencia al lugar en Google Places, para poder reabrir el mismo
+    # resultado (Place Details) sin tener que repetir el Text Search.
+    place_id: Mapped[Optional[str]] = mapped_column(String(150))
+    maps_url: Mapped[Optional[str]] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=DoctorLeadStatus.NUEVO.value)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    last_contacted_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    # Se completa solo cuando el admin marca el lead como REGISTRADO
+    # ligándolo a la cuenta real que se creó en la plataforma.
+    converted_professional_id: Mapped[Optional[str]] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("professionals.id", ondelete="SET NULL"), nullable=True
+    )
+    created_by_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    created_by: Mapped["User"] = relationship(foreign_keys=[created_by_id])
+    converted_professional: Mapped[Optional["Professional"]] = relationship(foreign_keys=[converted_professional_id])

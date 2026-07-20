@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     GOOGLE_TTS_VOICE: str = "es-US-Neural2-C"
     GOOGLE_TTS_LANGUAGE: str = "es-US"
 
+    # ── Google Places (buscador de médicos en el panel admin) ────────
+    # Vacío por default a propósito: si falta, el endpoint de búsqueda
+    # devuelve un 503 explicativo en vez de que la app falle al
+    # arrancar (a diferencia de SECRET_KEY, esta integración es
+    # opcional para el resto del sistema).
+    GOOGLE_PLACES_API_KEY: str = ""
+
     # ── ElevenLabs (reemplazado por Google TTS) ──────
     ELEVENLABS_API_KEY: str = ""
     ELEVENLABS_VOICE_ID: str = ""

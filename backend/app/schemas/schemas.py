@@ -796,6 +796,41 @@ class BroadcastCreateRequest(BaseModel):
     send_whatsapp: bool = True
 
 
+# ── Buscador de médicos / captación (DoctorLead) ──
+
+class DoctorLeadCreateRequest(BaseModel):
+    full_name: str = Field(..., min_length=2, max_length=200)
+    specialty: Optional[str] = Field(None, max_length=100)
+    city: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
+    clinic_or_hospital: Optional[str] = Field(None, max_length=200)
+    address: Optional[str] = Field(None, max_length=300)
+    source: str = Field("MANUAL", pattern="^(MANUAL|CSV_IMPORT|GOOGLE_PLACES|REFERIDO)$")
+    place_id: Optional[str] = Field(None, max_length=150)
+    maps_url: Optional[str] = Field(None, max_length=500)
+    notes: Optional[str] = None
+
+
+class DoctorLeadUpdateRequest(BaseModel):
+    full_name: Optional[str] = Field(None, min_length=2, max_length=200)
+    specialty: Optional[str] = Field(None, max_length=100)
+    city: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
+    clinic_or_hospital: Optional[str] = Field(None, max_length=200)
+    notes: Optional[str] = None
+    status: Optional[str] = Field(
+        None, pattern="^(NUEVO|CONTACTADO|INTERESADO|NO_INTERESADO|REGISTRADO|NO_CONTACTAR)$"
+    )
+
+
+class DoctorLeadInviteRequest(BaseModel):
+    # Mensaje editable: se precarga una plantilla en el frontend, pero el
+    # admin puede personalizarlo antes de enviar.
+    message: str = Field(..., min_length=5, max_length=1000)
+
+
 class RefundRequest(BaseModel):
     refund_type: str = Field(..., pattern="^(FULL|PARTIAL)$")
     reason: str = Field(..., min_length=10)
