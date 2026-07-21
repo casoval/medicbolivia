@@ -46,9 +46,10 @@ const STATUS_LABELS: Record<DoctorLeadStatus, string> = {
 
 const DEFAULT_INVITE_MESSAGE = (name: string) =>
   `Hola${name ? ' Dr./Dra. ' + name : ''}, le escribimos de MedicBolivia 👋\n\n` +
-  `Somos una plataforma de telemedicina en Bolivia y nos encantaría invitarle a probarla ` +
+  `Somos una plataforma de telemedicina en Bolivia donde agentes de inteligencia artificial ` +
+  `reciben, orientan y conectan al paciente con usted, y nos encantaría invitarle a probarla ` +
   `sin costo. Con ella puede atender consultas en línea, gestionar su agenda y recetar ` +
-  `de forma digital.\n\n¿Le interesaría que le contemos más?`
+  `de forma digital.\n\n¿Le interesaría que le contemos más?\n\nhttps://medicbolivia.com`
 
 // ── Modal: buscar en Google Maps ──
 function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {

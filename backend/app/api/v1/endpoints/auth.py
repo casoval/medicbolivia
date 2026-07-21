@@ -15,7 +15,10 @@ from app.core.config import settings
 from app.core.redis_client import security_redis_client as redis_client
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.dependencies import get_current_user
-from app.models.models import User, Patient, Professional, UserRole, UserStatus
+from app.models.models import (
+    User, Patient, Professional, UserRole, UserStatus,
+    DoctorLead, DoctorLeadStatus, AuditLog,
+)
 from app.schemas.schemas import (
     PatientRegisterRequest, ProfessionalRegisterRequest,
     LoginRequest, TokenResponse, UserResponse,
@@ -149,6 +152,34 @@ async def register_professional(
         languages=data.languages,
     )
     db.add(professional)
+    await db.flush()
+
+    # Auto-vínculo: si este mismo teléfono ya estaba cargado como
+    # DoctorLead (campaña de captación del admin) y todavía no figuraba
+    # como REGISTRADO, lo marcamos ahora automáticamente — así el panel
+    # de admin refleja de inmediato que el prospecto ya es usuario real,
+    # sin que un admin tenga que revisarlo y cambiarlo a mano.
+    # register_professional() es el único lugar del backend donde se crea
+    # un Professional, así que este chequeo cubre el 100% de los registros.
+    lead_result = await db.execute(
+        select(DoctorLead).where(
+            DoctorLead.phone == data.phone,
+            DoctorLead.status != DoctorLeadStatus.REGISTRADO.value,
+        )
+    )
+    lead = lead_result.scalar_one_or_none()
+    if lead:
+        lead.status = DoctorLeadStatus.REGISTRADO.value
+        lead.converted_professional_id = professional.id
+        db.add(AuditLog(
+            user_id=user.id,
+            action="DOCTOR_LEAD_AUTO_CONVERTED",
+            entity_type="DoctorLead",
+            entity_id=lead.id,
+            metadata_={"phone": data.phone, "professional_id": professional.id},
+        ))
+        logger.info(f"DoctorLead {lead.id} auto-vinculado a nuevo profesional {professional.id} por teléfono coincidente")
+
     await db.commit()
     await db.refresh(user)
 
