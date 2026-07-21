@@ -3,7 +3,7 @@
 // Captación de médicos: buscar en Google Maps + gestionar prospectos
 // (leads) hasta invitarlos por WhatsApp a probar la plataforma.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
@@ -266,8 +266,17 @@ function formatInviteDate(iso: string): string {
 // Badge de estado de invitación para la columna de la tabla. Muestra si el
 // último WhatsApp a este lead se mandó bien (SENT) o falló (FAILED) — no
 // si el médico lo leyó (eso no se rastrea todavía, ver nota en el backend).
-function InviteStatusBadge({ lead }: { lead: DoctorLead }) {
+function InviteStatusBadge({ lead, isPending }: { lead: DoctorLead; isPending?: boolean }) {
   const { t } = useLanguage()
+
+  if (isPending) {
+    return (
+      <span className="inline-flex w-fit items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-[#EEF1FA] text-[#4A5578]">
+        <Spinner size="sm" />
+        {t('Enviando…')}
+      </span>
+    )
+  }
 
   if (!lead.last_invite_status) {
     return <span className="text-xs text-[#A0A8BF]">{t('Sin invitar')}</span>
@@ -365,6 +374,13 @@ export default function AdminDoctorLeadsPage() {
   const [showMapsSearch, setShowMapsSearch] = useState(false)
   const [showAddLead, setShowAddLead] = useState(false)
   const [inviteTarget, setInviteTarget] = useState<DoctorLead | null>(null)
+  // Leads con una invitación recién encolada cuyo resultado (SENT/FAILED)
+  // todavía no llegó — el envío real lo hace una tarea de Celery en
+  // segundo plano (llamada al microservicio de WhatsApp), así que puede
+  // tardar unos segundos más que el POST /invite en sí. Mapea
+  // lead.id → timestamp (ms) de cuándo se encoló, para poder expirar la
+  // espera si algo se traba.
+  const [pendingInvites, setPendingInvites] = useState<Record<string, number>>({})
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'doctor-leads', statusFilter, search, page],
@@ -374,7 +390,34 @@ export default function AdminDoctorLeadsPage() {
       page,
       page_size: 20,
     }),
+    // Mientras haya invitaciones pendientes de confirmar, refrescamos
+    // solos cada 2.5s en vez de esperar a que el usuario recargue.
+    refetchInterval: Object.keys(pendingInvites).length > 0 ? 2500 : false,
   })
+
+  // Cuando el refetch trae un last_invite_sent_at más nuevo que el
+  // momento en que se encoló (o si ya pasaron 25s, para no quedar
+  // reintentando para siempre si algo falló silenciosamente), dejamos de
+  // esperar por ese lead.
+  useEffect(() => {
+    if (!data || Object.keys(pendingInvites).length === 0) return
+    setPendingInvites((prev) => {
+      let changed = false
+      const next = { ...prev }
+      const now = Date.now()
+      for (const [leadId, queuedAt] of Object.entries(prev)) {
+        const lead = data.items.find((l: DoctorLead) => l.id === leadId)
+        const confirmed = lead?.last_invite_sent_at
+          && new Date(lead.last_invite_sent_at).getTime() >= queuedAt - 5000
+        const expired = now - queuedAt > 25000
+        if (confirmed || expired) {
+          delete next[leadId]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [data])
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['admin', 'doctor-leads'] })
 
@@ -492,13 +535,13 @@ export default function AdminDoctorLeadsPage() {
                     </select>
                   </td>
                   <td className="px-4 py-3">
-                    <InviteStatusBadge lead={lead} />
+                    <InviteStatusBadge lead={lead} isPending={!!pendingInvites[lead.id]} />
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2 flex-wrap">
                       <button
                         className="text-xs font-medium text-[#0F6E56] border border-[#0F6E56] rounded-lg px-2.5 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
-                        disabled={!lead.phone || lead.status === 'NO_CONTACTAR'}
+                        disabled={!lead.phone || lead.status === 'NO_CONTACTAR' || !!pendingInvites[lead.id]}
                         title={!lead.phone ? t('Este prospecto no tiene teléfono') : ''}
                         onClick={() => setInviteTarget(lead)}
                       >
@@ -548,7 +591,11 @@ export default function AdminDoctorLeadsPage() {
         <InviteModal
           lead={inviteTarget}
           onClose={() => setInviteTarget(null)}
-          onSent={() => { setInviteTarget(null); invalidate() }}
+          onSent={() => {
+            setPendingInvites((prev) => ({ ...prev, [inviteTarget.id]: Date.now() }))
+            setInviteTarget(null)
+            invalidate()
+          }}
         />
       )}
     </DashboardLayout>
