@@ -21,6 +21,9 @@
  *   GET  /status   → estado de la conexión (CONNECTED / QR_PENDING / DOWN)
  *   GET  /qr       → PNG en base64 del QR pendiente de escanear (si aplica)
  *   POST /send     → { to, message } → manda un mensaje de texto
+ *   POST /send-document → { to, filename, caption, base64, mimetype } →
+ *        manda un archivo adjunto (ej. PDF de invitación, ver
+ *        app/services/invitation_pdf.py del backend)
  *
  * Y llama hacia afuera:
  *   POST {BACKEND_URL}/api/v1/whatsapp/webhook/inbound
@@ -31,7 +34,7 @@ require('dotenv').config()
 const express = require('express')
 const qrcode = require('qrcode')
 const pino = require('pino')
-const { Client, LocalAuth } = require('whatsapp-web.js')
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js')
 
 const PORT = process.env.PORT || 4100
 const INTERNAL_SECRET = process.env.WHATSAPP_SERVICE_INTERNAL_SECRET || ''
@@ -55,7 +58,10 @@ const CONNECT_WATCHDOG_MS = Number(process.env.WHATSAPP_CONNECT_TIMEOUT_MS || 90
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' })
 
 const app = express()
-app.use(express.json())
+// Límite subido de 100kb (default de Express) a 15mb: /send-document
+// manda archivos adjuntos en base64 (ver invitation_pdf.py), que con la
+// codificación base64 pesan ~33% más que el archivo original.
+app.use(express.json({ limit: '15mb' }))
 
 // ── Estado en memoria del microservicio ──────────────
 let client = null
@@ -274,6 +280,33 @@ app.get('/qr', requireInternalSecret, async (req, res) => {
   res.json({ qr_available: true, qr_data_url: qrPngBase64 })
 })
 
+// Manejo de errores compartido entre /send y /send-document: ambos usan
+// el mismo client.sendMessage() por debajo, así que fallan de la misma
+// forma (frame de Puppeteer muerto, etc.) — ver comentario detallado
+// más abajo, se conserva íntegro para no perder el contexto del fix.
+function _handleSendError(err, to, res) {
+  logger.error(`Error enviando mensaje a ${to}: ${err.message}`)
+
+  // whatsapp-web.js a veces deja el cliente "CONNECTED" en el estado
+  // interno aunque la página de Puppeteer ya haya muerto (frame
+  // detached / target closed) — el evento 'disconnected' no siempre
+  // se dispara en ese caso, así que el servicio queda "zombie": acepta
+  // pedidos, responde 503... no, en realidad ni eso: pasa el chequeo
+  // de connectionState !== 'CONNECTED' porque el estado sigue diciendo
+  // CONNECTED, y el intento de mandar explota siempre igual. Si
+  // detectamos ese patrón de error puntual, forzamos la reconexión acá
+  // mismo en vez de esperar a que alguien reinicie el proceso a mano.
+  const isDeadFrame = /detached frame/i.test(err.message) || /target closed/i.test(err.message)
+  if (isDeadFrame && connectionState === 'CONNECTED') {
+    logger.warn('Frame de Puppeteer muerto — forzando reconexión del cliente de WhatsApp')
+    connectionState = 'DOWN'
+    try { client.destroy().catch(() => {}) } catch (_) { /* noop */ }
+    setTimeout(connectToWhatsApp, 2000)
+  }
+
+  res.status(502).json({ error: err.message })
+}
+
 app.post('/send', requireInternalSecret, async (req, res) => {
   const { to, message } = req.body || {}
   if (!to || !message) {
@@ -290,26 +323,32 @@ app.post('/send', requireInternalSecret, async (req, res) => {
     await client.sendMessage(toWhatsAppChatId(to), message)
     res.json({ status: 'sent' })
   } catch (err) {
-    logger.error(`Error enviando mensaje a ${to}: ${err.message}`)
+    _handleSendError(err, to, res)
+  }
+})
 
-    // whatsapp-web.js a veces deja el cliente "CONNECTED" en el estado
-    // interno aunque la página de Puppeteer ya haya muerto (frame
-    // detached / target closed) — el evento 'disconnected' no siempre
-    // se dispara en ese caso, así que el servicio queda "zombie": acepta
-    // pedidos, responde 503... no, en realidad ni eso: pasa el chequeo
-    // de connectionState !== 'CONNECTED' porque el estado sigue diciendo
-    // CONNECTED, y el intento de mandar explota siempre igual. Si
-    // detectamos ese patrón de error puntual, forzamos la reconexión acá
-    // mismo en vez de esperar a que alguien reinicie el proceso a mano.
-    const isDeadFrame = /detached frame/i.test(err.message) || /target closed/i.test(err.message)
-    if (isDeadFrame && connectionState === 'CONNECTED') {
-      logger.warn('Frame de Puppeteer muerto — forzando reconexión del cliente de WhatsApp')
-      connectionState = 'DOWN'
-      try { await client.destroy() } catch (_) { /* noop */ }
-      setTimeout(connectToWhatsApp, 2000)
-    }
+// POST /send-document → { to, filename, caption, base64, mimetype }
+// Manda un archivo adjunto (usado hoy para el PDF de invitación formal
+// de app/services/invitation_pdf.py, ver
+// app/api/v1/endpoints/admin.py::invite_doctor_lead). `caption` es el
+// texto que acompaña al archivo, igual que cuando un humano adjunta un
+// PDF en WhatsApp y le escribe un mensaje encima.
+app.post('/send-document', requireInternalSecret, async (req, res) => {
+  const { to, filename, caption, base64, mimetype } = req.body || {}
+  if (!to || !filename || !base64) {
+    return res.status(400).json({ error: 'Faltan campos "to", "filename" y/o "base64"' })
+  }
+  if (connectionState !== 'CONNECTED' || !client) {
+    return res.status(503).json({ error: 'WhatsApp no está conectado en este momento' })
+  }
 
-    res.status(502).json({ error: err.message })
+  try {
+    const media = new MessageMedia(mimetype || 'application/pdf', base64, filename)
+    await new Promise((r) => setTimeout(r, 300 + Math.random() * 600))
+    await client.sendMessage(toWhatsAppChatId(to), media, { caption: caption || undefined })
+    res.json({ status: 'sent' })
+  } catch (err) {
+    _handleSendError(err, to, res)
   }
 })
 

@@ -14,10 +14,26 @@ import {
 } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
-const CITIES = [
-  'La Paz', 'Santa Cruz de la Sierra', 'Cochabamba', 'Oruro',
-  'Potosí', 'Tarija', 'Trinidad', 'Cobija', 'Sucre',
-]
+// Ciudades por departamento — para variar las búsquedas de Google Maps
+// más allá de las 9 capitales (útil porque cada búsqueda trae como
+// máximo 60 resultados: si "internista" ya te dio el tope en la
+// capital, buscar en otra ciudad del mismo departamento te trae
+// médicos distintos en vez de repetir los mismos 60).
+const BOLIVIA_CITIES: Record<string, string[]> = {
+  'La Paz': ['La Paz', 'El Alto', 'Viacha', 'Copacabana', 'Achacachi', 'Caranavi', 'Coroico', 'Patacamaya'],
+  'Santa Cruz': [
+    'Santa Cruz de la Sierra', 'Montero', 'Warnes', 'La Guardia', 'Cotoca',
+    'Camiri', 'Puerto Suárez', 'San Ignacio de Velasco', 'Yapacaní',
+  ],
+  'Cochabamba': ['Cochabamba', 'Quillacollo', 'Sacaba', 'Colcapirhua', 'Tiquipaya', 'Punata', 'Villa Tunari'],
+  'Oruro': ['Oruro', 'Huanuni', 'Challapata'],
+  'Potosí': ['Potosí', 'Uyuni', 'Villazón', 'Tupiza', 'Llallagua'],
+  'Tarija': ['Tarija', 'Yacuiba', 'Bermejo', 'Villa Montes'],
+  'Beni': ['Trinidad', 'Riberalta', 'Guayaramerín', 'San Borja'],
+  'Pando': ['Cobija', 'Porvenir'],
+  'Chuquisaca': ['Sucre', 'Monteagudo', 'Camargo'],
+}
+const DEPARTMENTS = Object.keys(BOLIVIA_CITIES)
 
 const STATUS_LABELS: Record<DoctorLeadStatus, string> = {
   NUEVO: 'Nuevo',
@@ -38,9 +54,15 @@ const DEFAULT_INVITE_MESSAGE = (name: string) =>
 function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
   const { t } = useLanguage()
   const [query, setQuery] = useState('')
-  const [city, setCity] = useState(CITIES[0])
+  const [department, setDepartment] = useState(DEPARTMENTS[0])
+  const [city, setCity] = useState(BOLIVIA_CITIES[DEPARTMENTS[0]][0])
   const [error, setError] = useState('')
   const [importingId, setImportingId] = useState<string | null>(null)
+
+  const handleDepartmentChange = (dep: string) => {
+    setDepartment(dep)
+    setCity(BOLIVIA_CITIES[dep][0])
+  }
 
   const searchMutation = useMutation({
     mutationFn: () => adminAPI.searchDoctorsOnMaps(query, city),
@@ -96,10 +118,17 @@ function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImpor
           />
           <select
             className="border border-[#DDE1EE] rounded-lg px-3 py-2 text-sm"
+            value={department}
+            onChange={(e) => handleDepartmentChange(e.target.value)}
+          >
+            {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select
+            className="border border-[#DDE1EE] rounded-lg px-3 py-2 text-sm"
             value={city}
             onChange={(e) => setCity(e.target.value)}
           >
-            {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {BOLIVIA_CITIES[department].map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <button
             className="bg-[#185FA5] text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
@@ -113,7 +142,9 @@ function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImpor
         <div className="flex-1 overflow-auto p-4">
           {error && <div className="mb-3"><Alert type="error" message={error} /></div>}
 
-          {searchMutation.isPending && <LoadingScreen text={t('Buscando en Google Maps...')} />}
+          {searchMutation.isPending && (
+            <LoadingScreen text={t('Buscando en Google Maps (puede tardar unos segundos)...')} />
+          )}
 
           {!searchMutation.isPending && searchMutation.data?.results.length === 0 && (
             <EmptyState title={t('Sin resultados')} description={t('Prueba con otra especialidad o ciudad')} />
@@ -229,10 +260,11 @@ function AddLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () => void; onSent: () => void }) {
   const { t } = useLanguage()
   const [message, setMessage] = useState(DEFAULT_INVITE_MESSAGE(lead.full_name))
+  const [includePdf, setIncludePdf] = useState(true)
   const [error, setError] = useState('')
 
   const inviteMutation = useMutation({
-    mutationFn: () => adminAPI.inviteDoctorLead(lead.id, message),
+    mutationFn: () => adminAPI.inviteDoctorLead(lead.id, message, includePdf),
     onSuccess: onSent,
     onError: (err) => setError(getErrorMessage(err)),
   })
@@ -249,6 +281,17 @@ function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () 
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
+        <label className="flex items-start gap-2 mt-3 text-xs text-[#6B738A] cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={includePdf}
+            onChange={(e) => setIncludePdf(e.target.checked)}
+          />
+          <span>
+            {t('Adjuntar carta de invitación formal en PDF (logo y firma del director médico). El texto de arriba se envía como mensaje junto al archivo.')}
+          </span>
+        </label>
         <div className="flex justify-end gap-2 mt-4">
           <button onClick={onClose} className="text-sm text-[#6B738A] px-4 py-2">{t('Cancelar')}</button>
           <button

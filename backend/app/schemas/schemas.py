@@ -827,8 +827,11 @@ class DoctorLeadUpdateRequest(BaseModel):
 
 class DoctorLeadInviteRequest(BaseModel):
     # Mensaje editable: se precarga una plantilla en el frontend, pero el
-    # admin puede personalizarlo antes de enviar.
+    # admin puede personalizarlo antes de enviar. Cuando include_pdf=True
+    # este texto se manda como caption del PDF adjunto, no como mensaje
+    # de texto separado.
     message: str = Field(..., min_length=5, max_length=1000)
+    include_pdf: bool = True
 
 
 class RefundRequest(BaseModel):

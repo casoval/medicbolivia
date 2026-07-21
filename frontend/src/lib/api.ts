@@ -1266,8 +1266,8 @@ export const adminAPI = {
   deleteDoctorLead: (id: string) =>
     api.delete(`/admin/doctor-leads/${id}`).then(r => r.data),
 
-  inviteDoctorLead: (id: string, message: string) =>
-    api.post<DoctorLead>(`/admin/doctor-leads/${id}/invite`, { message }).then(r => r.data),
+  inviteDoctorLead: (id: string, message: string, includePdf: boolean = true) =>
+    api.post<DoctorLead>(`/admin/doctor-leads/${id}/invite`, { message, include_pdf: includePdf }).then(r => r.data),
 }
 
 export const maintenanceAPI = {

@@ -15,6 +15,7 @@ Requiere GOOGLE_PLACES_API_KEY en el .env (ver app/core/config.py). Si
 no está configurada, ambas funciones levantan GooglePlacesNotConfigured
 para que el endpoint devuelva un 503 claro en vez de un error genérico.
 """
+import asyncio
 import httpx
 from typing import Optional
 from loguru import logger
@@ -41,10 +42,15 @@ def _require_key() -> str:
     return settings.GOOGLE_PLACES_API_KEY
 
 
-async def text_search(query: str, city: str, max_results: int = 15) -> list[dict]:
+async def text_search(query: str, city: str, max_results: int = 60) -> list[dict]:
     """
     Busca lugares en Google Maps a partir de una consulta libre + ciudad,
     ej. query="cardiólogo", city="Santa Cruz de la Sierra".
+
+    Auto-pagina siguiendo `nextPageToken` hasta reunir `max_results`
+    (tope real de Google: 60 resultados = 3 páginas de 20 para una misma
+    consulta). Google exige una pequeña espera antes de que el
+    nextPageToken quede activo, por eso el sleep entre páginas.
 
     Devuelve una lista de dicts livianos (sin teléfono, ver docstring del
     módulo) listos para mostrar como resultados previos en el admin:
@@ -52,6 +58,7 @@ async def text_search(query: str, city: str, max_results: int = 15) -> list[dict
     """
     api_key = _require_key()
     text = f"{query} en {city}, Bolivia".strip()
+    max_results = min(max_results, 60)
 
     headers = {
         "Content-Type": "application/json",
@@ -60,34 +67,53 @@ async def text_search(query: str, city: str, max_results: int = 15) -> list[dict
         # cada campo de más que se pide en Text Search suma al costo.
         "X-Goog-FieldMask": (
             "places.id,places.displayName,places.formattedAddress,"
-            "places.rating,places.userRatingCount,places.googleMapsUri"
+            "places.rating,places.userRatingCount,places.googleMapsUri,"
+            "nextPageToken"
         ),
     }
-    body = {"textQuery": text, "languageCode": "es", "maxResultCount": min(max_results, 20)}
 
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(TEXT_SEARCH_URL, json=body, headers=headers)
-    except httpx.RequestError as exc:
-        logger.error(f"Error de red en Google Places text_search: {exc}")
-        raise GooglePlacesError("No se pudo conectar con Google Maps") from exc
+    results: list[dict] = []
+    page_token: Optional[str] = None
 
-    if resp.status_code >= 400:
-        logger.error(f"Google Places text_search {resp.status_code}: {resp.text[:300]}")
-        raise GooglePlacesError(f"Google Maps devolvió un error ({resp.status_code})")
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        while True:
+            body: dict = {"textQuery": text, "languageCode": "es", "maxResultCount": 20}
+            if page_token:
+                body["pageToken"] = page_token
+                # El token no queda activo de inmediato en la API de Google.
+                await asyncio.sleep(2)
 
-    data = resp.json()
-    results = []
-    for place in data.get("places", []):
-        results.append({
-            "place_id": place.get("id"),
-            "name": (place.get("displayName") or {}).get("text", ""),
-            "address": place.get("formattedAddress"),
-            "rating": place.get("rating"),
-            "user_rating_count": place.get("userRatingCount"),
-            "maps_url": place.get("googleMapsUri"),
-        })
-    return results
+            try:
+                resp = await client.post(TEXT_SEARCH_URL, json=body, headers=headers)
+            except httpx.RequestError as exc:
+                logger.error(f"Error de red en Google Places text_search: {exc}")
+                raise GooglePlacesError("No se pudo conectar con Google Maps") from exc
+
+            if resp.status_code >= 400:
+                logger.error(f"Google Places text_search {resp.status_code}: {resp.text[:300]}")
+                # Si ya traíamos resultados de una página anterior, mejor
+                # devolver lo que se tiene que perderlo todo por un fallo
+                # en la página siguiente.
+                if results:
+                    break
+                raise GooglePlacesError(f"Google Maps devolvió un error ({resp.status_code})")
+
+            data = resp.json()
+            for place in data.get("places", []):
+                results.append({
+                    "place_id": place.get("id"),
+                    "name": (place.get("displayName") or {}).get("text", ""),
+                    "address": place.get("formattedAddress"),
+                    "rating": place.get("rating"),
+                    "user_rating_count": place.get("userRatingCount"),
+                    "maps_url": place.get("googleMapsUri"),
+                })
+
+            page_token = data.get("nextPageToken")
+            if not page_token or len(results) >= max_results:
+                break
+
+    return results[:max_results]
 
 
 async def place_details(place_id: str) -> dict:

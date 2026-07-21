@@ -3,6 +3,7 @@ app/api/v1/endpoints/admin.py
 Endpoints del panel de administración.
 Requieren rol ADMIN.
 """
+import base64
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
@@ -42,7 +43,8 @@ from app.services.broadcast import send_broadcast, count_recipients
 from app.models.models import BroadcastMessage, BroadcastAudience
 from app.services import google_places
 from app.core.phone import normalize_bo_phone, InvalidPhoneError
-from app.tasks.whatsapp_tasks import send_whatsapp_message
+from app.tasks.whatsapp_tasks import send_whatsapp_message, send_whatsapp_document
+from app.services import invitation_pdf
 from app.models.models import WhatsAppAudience
 from app.core.config import settings
 
@@ -2271,16 +2273,37 @@ async def invite_doctor_lead(
     if lead.status == DoctorLeadStatus.NO_CONTACTAR.value:
         raise HTTPException(status_code=409, detail="Este prospecto pidió no ser contactado de nuevo")
 
-    # Mismo mecanismo que usa broadcast.py: se encola como tarea Celery,
-    # nunca se llama directo a whatsapp-service desde el endpoint.
-    send_whatsapp_message.delay(
-        phone=lead.phone,
-        message=data.message,
-        audience=WhatsAppAudience.PUBLIC.value,
-        related_entity_type="DoctorLead",
-        related_entity_id=lead.id,
-        sent_by="ADMIN",
-    )
+    if data.include_pdf:
+        # PDF formal (logo + firma del director médico, ver
+        # invitation_pdf.py) adjunto como documento, con `message` como
+        # caption — un solo mensaje de WhatsApp con el archivo y el
+        # texto encima, igual que cuando lo manda una persona a mano.
+        pdf_bytes = invitation_pdf.generate_invitation_pdf(lead.full_name)
+        pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
+        safe_name = "".join(c for c in lead.full_name if c.isalnum() or c in " ._-").strip()[:60] or "medico"
+        filename = f"Invitacion_MedicBolivia_{safe_name}.pdf".replace(" ", "_")
+
+        send_whatsapp_document.delay(
+            phone=lead.phone,
+            pdf_base64=pdf_b64,
+            filename=filename,
+            caption=data.message,
+            audience=WhatsAppAudience.PUBLIC.value,
+            related_entity_type="DoctorLead",
+            related_entity_id=lead.id,
+            sent_by="ADMIN",
+        )
+    else:
+        # Mismo mecanismo que usa broadcast.py: se encola como tarea Celery,
+        # nunca se llama directo a whatsapp-service desde el endpoint.
+        send_whatsapp_message.delay(
+            phone=lead.phone,
+            message=data.message,
+            audience=WhatsAppAudience.PUBLIC.value,
+            related_entity_type="DoctorLead",
+            related_entity_id=lead.id,
+            sent_by="ADMIN",
+        )
 
     lead.status = DoctorLeadStatus.CONTACTADO.value
     lead.last_contacted_at = datetime.utcnow()

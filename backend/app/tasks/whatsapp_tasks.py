@@ -186,6 +186,107 @@ def send_whatsapp_message(
         asyncio.run(engine.dispose())
 
 
+async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: str, caption: str,
+                                  audience: str, user_id: Optional[str],
+                                  related_entity_type: Optional[str], related_entity_id: Optional[str],
+                                  sent_by: str) -> None:
+    """
+    Mismo patrón de _send_and_log (normalización, reintentos ante fallos
+    transitorios de whatsapp-service, log final único), pero golpeando
+    /send-document en vez de /send. El texto que se guarda en
+    WhatsAppMessage.body es el `caption` con una marca de qué archivo se
+    adjuntó — no se guarda el PDF en sí en la base de datos, solo queda
+    en el chat real de WhatsApp.
+    """
+    try:
+        phone = normalize_bo_phone(phone)
+    except InvalidPhoneError as exc:
+        logger.error(f"Teléfono inválido, no se puede enviar documento WhatsApp: {exc}")
+        await _log_message(phone, f"[PDF: {filename}] {caption}", audience, user_id,
+                            related_entity_type, related_entity_id, sent_by,
+                            status="FAILED", error_detail=str(exc))
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{settings.WHATSAPP_SERVICE_URL}/send-document",
+                json={
+                    "to": phone, "filename": filename, "caption": caption,
+                    "base64": pdf_base64, "mimetype": "application/pdf",
+                },
+                headers={"X-Internal-Secret": settings.WHATSAPP_SERVICE_INTERNAL_SECRET},
+            )
+        if resp.status_code >= 400:
+            error_detail = f"whatsapp-service {resp.status_code}: {resp.text[:250]}"
+            if resp.status_code in (502, 503):
+                raise _TransientSendError(error_detail)
+            logger.error(f"Error enviando documento WhatsApp a {phone}: {error_detail}")
+            await _log_message(phone, f"[PDF: {filename}] {caption}", audience, user_id,
+                                related_entity_type, related_entity_id, sent_by,
+                                status="FAILED", error_detail=error_detail)
+            return
+    except httpx.RequestError as exc:
+        raise _TransientSendError(f"Error de red hacia whatsapp-service: {exc}") from exc
+    except _TransientSendError as exc:
+        attempt = task.request.retries + 1
+        total = task.max_retries + 1
+        if task.request.retries >= task.max_retries:
+            logger.error(f"Documento WhatsApp a {phone} falló tras {total} intentos: {exc}")
+            await _log_message(phone, f"[PDF: {filename}] {caption}", audience, user_id,
+                                related_entity_type, related_entity_id, sent_by,
+                                status="FAILED", error_detail=f"{exc} (tras {total} intentos)")
+            return
+        logger.warning(f"Fallo transitorio enviando documento a {phone} (intento {attempt}/{total}), reintentando: {exc}")
+        raise task.retry(exc=exc, countdown=task.default_retry_delay * attempt)
+
+    await _log_message(phone, f"[PDF: {filename}] {caption}", audience, user_id,
+                        related_entity_type, related_entity_id, sent_by,
+                        status="SENT", error_detail=None)
+
+
+@celery_app.task(
+    bind=True,
+    name="app.tasks.whatsapp_tasks.send_whatsapp_document",
+    max_retries=3,
+    default_retry_delay=30,
+)
+def send_whatsapp_document(
+    self,
+    phone: str,
+    pdf_base64: str,
+    filename: str,
+    caption: str = "",
+    audience: str = WhatsAppAudience.PUBLIC.value,
+    user_id: Optional[str] = None,
+    related_entity_type: Optional[str] = None,
+    related_entity_id: Optional[str] = None,
+    sent_by: str = "SYSTEM",
+):
+    """
+    Manda un PDF (u otro documento) adjunto por WhatsApp. Hoy se usa
+    únicamente para el PDF de invitación formal de captación de médicos
+    (ver app/api/v1/endpoints/admin.py::invite_doctor_lead y
+    app/services/invitation_pdf.py), pero queda genérica por si en el
+    futuro hace falta mandar otro tipo de documento (ej. un comprobante).
+    """
+    try:
+        asyncio.run(_send_document_and_log(
+            task=self,
+            phone=phone,
+            pdf_base64=pdf_base64,
+            filename=filename,
+            caption=caption,
+            audience=audience,
+            user_id=user_id,
+            related_entity_type=related_entity_type,
+            related_entity_id=related_entity_id,
+            sent_by=sent_by,
+        ))
+    finally:
+        asyncio.run(engine.dispose())
+
+
 async def _notify_admin_of_whatsapp_escalation(conversation_id: str):
     """
     Avisa a todos los usuarios con rol ADMIN que el agente de WhatsApp
