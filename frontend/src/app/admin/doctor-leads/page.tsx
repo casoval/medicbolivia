@@ -256,6 +256,41 @@ function AddLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   )
 }
 
+function formatInviteDate(iso: string): string {
+  return new Date(iso).toLocaleString('es-BO', {
+    day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
+  })
+}
+
+// Badge de estado de invitación para la columna de la tabla. Muestra si el
+// último WhatsApp a este lead se mandó bien (SENT) o falló (FAILED) — no
+// si el médico lo leyó (eso no se rastrea todavía, ver nota en el backend).
+function InviteStatusBadge({ lead }: { lead: DoctorLead }) {
+  const { t } = useLanguage()
+
+  if (!lead.last_invite_status) {
+    return <span className="text-xs text-[#A0A8BF]">{t('Sin invitar')}</span>
+  }
+
+  const isSent = lead.last_invite_status === 'SENT'
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span
+        className={`inline-flex w-fit items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+          isSent ? 'bg-[#E6F4EF] text-[#0F6E56]' : 'bg-[#FBEAEA] text-[#A32D2D]'
+        }`}
+        title={!isSent && lead.last_invite_error ? lead.last_invite_error : undefined}
+      >
+        {isSent ? t('Enviada') : t('Falló')}
+        {lead.last_invite_included_pdf && ` · ${t('PDF')}`}
+      </span>
+      {lead.last_invite_sent_at && (
+        <span className="text-[10px] text-[#A0A8BF]">{formatInviteDate(lead.last_invite_sent_at)}</span>
+      )}
+    </div>
+  )
+}
+
 // ── Modal: invitar por WhatsApp ──
 function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () => void; onSent: () => void }) {
   const { t } = useLanguage()
@@ -274,6 +309,18 @@ function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () 
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <p className="text-sm font-semibold mb-1">{t('Invitar por WhatsApp')}</p>
         <p className="text-xs text-[#6B738A] mb-4">{lead.full_name} · {lead.phone}</p>
+        {lead.last_invite_status && (
+          <div className="mb-3">
+            <Alert
+              type={lead.last_invite_status === 'SENT' ? 'info' : 'error'}
+              message={
+                lead.last_invite_status === 'SENT'
+                  ? `⚠ ${t('Ya se invitó el')} ${lead.last_invite_sent_at ? formatInviteDate(lead.last_invite_sent_at) : ''}${lead.last_invite_included_pdf ? ` (${t('con PDF')})` : ''}`
+                  : `⚠ ${t('El último intento de invitación falló')}${lead.last_invite_sent_at ? ` (${formatInviteDate(lead.last_invite_sent_at)})` : ''}`
+              }
+            />
+          </div>
+        )}
         {error && <div className="mb-3"><Alert type="error" message={error} /></div>}
         <textarea
           className="w-full border border-[#DDE1EE] rounded-lg px-3 py-2 text-sm"
@@ -410,6 +457,7 @@ export default function AdminDoctorLeadsPage() {
                 <th className="text-left px-4 py-2 font-medium">{t('Ciudad')}</th>
                 <th className="text-left px-4 py-2 font-medium">{t('Teléfono')}</th>
                 <th className="text-left px-4 py-2 font-medium">{t('Estado')}</th>
+                <th className="text-left px-4 py-2 font-medium">{t('Invitación')}</th>
                 <th className="text-right px-4 py-2 font-medium">{t('Acciones')}</th>
               </tr>
             </thead>
@@ -443,6 +491,9 @@ export default function AdminDoctorLeadsPage() {
                     </select>
                   </td>
                   <td className="px-4 py-3">
+                    <InviteStatusBadge lead={lead} />
+                  </td>
+                  <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2 flex-wrap">
                       <button
                         className="text-xs font-medium text-[#0F6E56] border border-[#0F6E56] rounded-lg px-2.5 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -450,7 +501,7 @@ export default function AdminDoctorLeadsPage() {
                         title={!lead.phone ? t('Este prospecto no tiene teléfono') : ''}
                         onClick={() => setInviteTarget(lead)}
                       >
-                        {t('Invitar')}
+                        {lead.last_invite_status ? t('Reinvitar') : t('Invitar')}
                       </button>
                       <button
                         className="text-xs text-[#A32D2D] hover:underline"

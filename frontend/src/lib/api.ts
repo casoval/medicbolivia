@@ -77,6 +77,13 @@ export interface DoctorLead {
   converted_professional_id: string | null
   created_at: string
   updated_at: string
+  // Estado del último WhatsApp enviado a este lead. Refleja si el envío
+  // se completó sin error (SENT) o falló tras reintentos (FAILED) — NO
+  // si el médico lo recibió o leyó de verdad.
+  last_invite_status: 'SENT' | 'FAILED' | null
+  last_invite_included_pdf: boolean
+  last_invite_sent_at: string | null
+  last_invite_error: string | null
 }
 
 export interface DoctorLeadListResponse {

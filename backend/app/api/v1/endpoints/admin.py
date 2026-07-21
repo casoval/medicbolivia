@@ -29,7 +29,7 @@ from app.models.models import (
     Rating, ClinicalNote, ProfessionalPenaltyReset, Earning, Prescription,
     CommissionPeriod, CommissionScope, ProfessionalMembership,
     ChatBlock, ProfessionalPatientVisibility, ChatConversation, AdminAccessLog, PaymentChannel,
-    DoctorLead, DoctorLeadStatus, DoctorLeadSource,
+    DoctorLead, DoctorLeadStatus, DoctorLeadSource, WhatsAppMessage,
 )
 from app.schemas.schemas import (
     DocReviewRequest, RefundRequest, DisputeResolveRequest,
@@ -2039,7 +2039,59 @@ async def list_broadcasts(
 # real del médico -> si se registra, lo liga a su Professional.
 # ─────────────────────────────────────────────────────
 
-def _doctor_lead_to_dict(lead: DoctorLead) -> dict:
+async def _get_latest_invite_info(db: AsyncSession, lead_ids: list[str]) -> dict[str, dict]:
+    """
+    Devuelve, por cada lead_id, el resultado del último WhatsApp que se le
+    mandó (SENT o FAILED) — en una sola query batched para no hacer N+1 al
+    listar. Se apoya en WhatsAppMessage.related_entity_id, que
+    invite_doctor_lead() setea como el id del lead al encolar el envío
+    (ver whatsapp_tasks.py::_log_message), así que es exacto incluso si dos
+    leads llegaran a compartir el mismo teléfono — no depende de matchear
+    por número.
+    """
+    if not lead_ids:
+        return {}
+
+    latest_ts_subq = (
+        select(
+            WhatsAppMessage.related_entity_id.label("lead_id"),
+            func.max(WhatsAppMessage.created_at).label("max_created_at"),
+        )
+        .where(
+            WhatsAppMessage.related_entity_type == "DoctorLead",
+            WhatsAppMessage.related_entity_id.in_(lead_ids),
+            WhatsAppMessage.direction == "OUT",
+        )
+        .group_by(WhatsAppMessage.related_entity_id)
+        .subquery()
+    )
+
+    result = await db.execute(
+        select(WhatsAppMessage).join(
+            latest_ts_subq,
+            and_(
+                WhatsAppMessage.related_entity_id == latest_ts_subq.c.lead_id,
+                WhatsAppMessage.created_at == latest_ts_subq.c.max_created_at,
+            ),
+        )
+    )
+
+    info: dict[str, dict] = {}
+    for msg in result.scalars().all():
+        # En el rarísimo caso de empate exacto de timestamp (dos mensajes
+        # en el mismo milisegundo) nos quedamos con el último que
+        # iteremos — no afecta la UI, es solo un badge informativo.
+        info[msg.related_entity_id] = {
+            "last_invite_status": msg.status,
+            "last_invite_included_pdf": msg.body.startswith("[PDF:"),
+            "last_invite_sent_at": msg.created_at,
+            "last_invite_error": msg.error_detail,
+        }
+    return info
+
+
+def _doctor_lead_to_dict(lead: DoctorLead, invite_info: Optional[dict] = None) -> dict:
+    info = invite_info or {}
     return {
         "id": lead.id,
         "full_name": lead.full_name,
@@ -2058,6 +2110,15 @@ def _doctor_lead_to_dict(lead: DoctorLead) -> dict:
         "converted_professional_id": lead.converted_professional_id,
         "created_at": lead.created_at,
         "updated_at": lead.updated_at,
+        # Estado del último envío de WhatsApp (invitación) a este lead.
+        # IMPORTANTE: refleja si el mensaje se entregó al microservicio sin
+        # error (SENT) o falló tras reintentos (FAILED) — NO si el médico
+        # lo recibió o leyó de verdad. Eso requeriría procesar los eventos
+        # message_ack de whatsapp-web.js, que hoy no se capturan.
+        "last_invite_status": info.get("last_invite_status"),
+        "last_invite_included_pdf": info.get("last_invite_included_pdf", False),
+        "last_invite_sent_at": info.get("last_invite_sent_at"),
+        "last_invite_error": info.get("last_invite_error"),
     }
 
 
@@ -2161,8 +2222,10 @@ async def list_doctor_leads(
     for status_value, count in counts_result.all():
         funnel[status_value] = count
 
+    invite_info_map = await _get_latest_invite_info(db, [l.id for l in leads])
+
     return {
-        "items": [_doctor_lead_to_dict(l) for l in leads],
+        "items": [_doctor_lead_to_dict(l, invite_info_map.get(l.id)) for l in leads],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -2238,7 +2301,8 @@ async def update_doctor_lead(
 
     await db.commit()
     await db.refresh(lead)
-    return _doctor_lead_to_dict(lead)
+    invite_info_map = await _get_latest_invite_info(db, [lead.id])
+    return _doctor_lead_to_dict(lead, invite_info_map.get(lead.id))
 
 
 @router.delete("/doctor-leads/{lead_id}", summary="Eliminar un prospecto")
@@ -2320,4 +2384,10 @@ async def invite_doctor_lead(
     await db.commit()
 
     logger.info(f"Invitación WhatsApp encolada por admin={current_user.id} para lead={lead.id}")
-    return _doctor_lead_to_dict(lead)
+    # Nota: la tarea de Celery todavía no corrió en este punto (es async),
+    # así que esto puede devolver el resultado de una invitación ANTERIOR
+    # a este lead, no la que se acaba de encolar. El frontend no debe
+    # asumir que "SENT" acá significa que este envío puntual ya se
+    # completó — solo confirma que quedó encolado (lead.status=CONTACTADO).
+    invite_info_map = await _get_latest_invite_info(db, [lead.id])
+    return _doctor_lead_to_dict(lead, invite_info_map.get(lead.id))
