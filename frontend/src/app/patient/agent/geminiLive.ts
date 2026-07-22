@@ -664,6 +664,14 @@ export async function startCall(apiKey: string) {
               }))
             }
             hangupRequested = true
+            // El toolCall real de finalizar_llamada suele llegar en un
+            // mensaje SEPARADO, después del turnComplete de la despedida
+            // (que es el único otro lugar donde se llamaba a
+            // scheduleHangupIfNeeded). Si no se llama también acá, la
+            // bandera queda en true pero nadie la ejecuta — la llamada se
+            // queda esperando a que el paciente cuelgue. Se llama acá para
+            // cubrir ese caso, sin importar si turnComplete ya pasó o no.
+            scheduleHangupIfNeeded()
             continue
           }
           if (fc.name === 'buscar_profesionales') {
