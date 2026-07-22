@@ -12,7 +12,7 @@ import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 // Flujo INMEDIATA: médico acepta → paciente paga → videollamada
 const STATUS_STEPS_IMMEDIATE = [
-  { key: 'WAITING_PROFESSIONAL', label: 'Médico acepta',       sub: () => 'El médico tiene 2 minutos para aceptar' },
+  { key: 'WAITING_PROFESSIONAL', label: 'Médico acepta',       sub: () => 'El médico tiene 5 minutos para aceptar' },
   { key: 'WAITING_PAYMENT',      label: 'Pago QR',             sub: () => 'Escanea el QR con tu app bancaria (5 min)' },
   { key: 'PAYMENT_CONFIRMED',    label: 'Pago confirmado',     sub: () => 'El médico iniciará la llamada en breve' },
   { key: 'IN_PROGRESS',          label: 'Videoconsulta',       sub: () => '' },
@@ -985,10 +985,10 @@ export default function WaitingRoomPage() {
   const activeSteps = getSteps(kind)
   const currentStepIndex = activeSteps.findIndex((s) => s.key === consultationStatus)
 
-  // Segundos restantes para que el médico acepte (2 min desde created_at)
+  // Segundos restantes para que el médico acepte (5 min desde created_at)
   const professionalTimeoutSecs = consultationCreatedAt
-    ? Math.max(0, 120 - Math.floor((Date.now() - new Date(consultationCreatedAt + 'Z').getTime()) / 1000))
-    : 120
+    ? Math.max(0, 300 - Math.floor((Date.now() - new Date(consultationCreatedAt + 'Z').getTime()) / 1000))
+    : 300
 
   if (loadingStatus) {
     return (
@@ -1169,7 +1169,7 @@ export default function WaitingRoomPage() {
             ) : (
               <>
                 <p className="text-sm font-semibold mb-1">{t('Esperando respuesta del médico')}</p>
-                <p className="text-xs text-[#6B738A] mb-3">{t('El médico tiene 2 minutos para aceptar tu solicitud')}</p>
+                <p className="text-xs text-[#6B738A] mb-3">{t('El médico tiene 5 minutos para aceptar tu solicitud')}</p>
                 <CountdownTimer
                   seconds={professionalTimeoutSecs}
                   label="Tiempo restante"

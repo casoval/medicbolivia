@@ -70,7 +70,7 @@ SYSTEM_REMINDER_RULES = [
             "🩺 *Tienes un paciente esperando*\n\n"
             "{paciente} solicitó una consulta inmediata ({especialidad}).\n"
             "Responde *1* para ACEPTAR o *2* para RECHAZAR.\n"
-            "Tienes 2 minutos antes de que se cancele." + CTA
+            "Tienes 5 minutos antes de que se cancele." + CTA
         ),
     },
     {

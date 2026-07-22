@@ -53,13 +53,13 @@ function savePrevStatus(id: string, status: string) {
 
 // ── Cuenta regresiva ─────────────────────────────────
 function Countdown({ createdAt, onExpire }: { createdAt: string; onExpire: () => void }) {
-  const [secs, setSecs] = useState(120)
+  const [secs, setSecs] = useState(300)
   const expiredRef = useRef(false)
 
   useEffect(() => {
     const tick = () => {
       const elapsed = Math.floor((Date.now() - new Date(createdAt + 'Z').getTime()) / 1000)
-      const left = Math.max(0, 120 - elapsed)
+      const left = Math.max(0, 300 - elapsed)
       setSecs(left)
       if (left === 0 && !expiredRef.current) {
         expiredRef.current = true
@@ -74,7 +74,7 @@ function Countdown({ createdAt, onExpire }: { createdAt: string; onExpire: () =>
   const m = Math.floor(secs / 60)
   const s = secs % 60
   const urgent = secs <= 30
-  const pct = (secs / 120) * 100
+  const pct = (secs / 300) * 100
 
   return (
     <div className="mt-2">
@@ -206,7 +206,7 @@ export function NotificationToast() {
           // Médico: solicitud activa al cargar página
           if (curr === 'WAITING_PROFESSIONAL' && user.role === 'PROFESSIONAL') {
             if (c.consultation_type === 'SCHEDULED') {
-              // Cita agendada: aviso informativo, sin countdown de 2 min
+              // Cita agendada: aviso informativo, sin countdown de 5 min
               // (el plazo real puede ser de horas o días — se ve en el dashboard)
               addToast({
                 id: `incoming-${c.id}`,
@@ -217,9 +217,9 @@ export function NotificationToast() {
                 action: { label: 'Ver en el dashboard', href: '/professional/dashboard' },
               })
             } else {
-              // Solo mostrar si la consulta tiene menos de 2 minutos
+              // Solo mostrar si la consulta tiene menos de 5 minutos
               const elapsed = Math.floor((Date.now() - new Date(c.created_at + 'Z').getTime()) / 1000)
-              if (elapsed < 120) {
+              if (elapsed < 300) {
                 addToast({
                   id: `incoming-${c.id}`,
                   type: 'incoming',
@@ -275,7 +275,7 @@ export function NotificationToast() {
               })
             } else {
               const elapsed = Math.floor((Date.now() - new Date(c.created_at + 'Z').getTime()) / 1000)
-              if (elapsed < 120) {
+              if (elapsed < 300) {
                 addToast({
                   id: `incoming-${c.id}`,
                   type: 'incoming',

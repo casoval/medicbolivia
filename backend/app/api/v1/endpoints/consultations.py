@@ -42,7 +42,7 @@ from livekit import api as lk
 
 router = APIRouter()
 
-PROFESSIONAL_TIMEOUT_MINUTES_IMMEDIATE = 2     # médico tiene 2 min para aceptar una consulta inmediata
+PROFESSIONAL_TIMEOUT_MINUTES_IMMEDIATE = 5     # médico tiene 5 min para aceptar una consulta inmediata
 PROFESSIONAL_TIMEOUT_MINUTES_SCHEDULED = 1440  # médico tiene hasta 24h para aceptar/rechazar una cita agendada
 PROFESSIONAL_RESPONSE_CUTOFF_BEFORE_APPOINTMENT_MINUTES = 30  # nunca debe responder a menos de 30 min de la cita
 PAYMENT_TIMEOUT_MINUTES = 5                    # paciente tiene 5 min para pagar una consulta INMEDIATA aceptada
@@ -551,7 +551,7 @@ async def create_consultation(
         )
         logger.info(f"Cita/seguimiento creado: {consultation.id} → esperando pago del paciente (30 min)")
     else:
-        # Inmediata: el profesional tiene 2 min para aceptar.
+        # Inmediata: el profesional tiene 5 min para aceptar.
         background_tasks.add_task(
             auto_cancel_expired,
             consultation.id,

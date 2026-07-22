@@ -26,7 +26,7 @@ function RequestTimer({ createdAt }: { createdAt: string }) {
   useEffect(() => {
     const tick = () => {
       const elapsed = Math.floor((Date.now() - new Date(createdAt + 'Z').getTime()) / 1000)
-      const left = Math.max(0, 120 - elapsed)
+      const left = Math.max(0, 300 - elapsed)
       setSecs(left)
     }
     tick()
@@ -607,7 +607,7 @@ export default function ProfessionalDashboard() {
           <span className="text-[#185FA5] text-xs font-medium">{t('Abrir →')}</span>
         </a>
 
-        {/* ── Solicitudes entrantes INMEDIATAS — requieren aceptar/rechazar en 2 min ── */}
+        {/* ── Solicitudes entrantes INMEDIATAS — requieren aceptar/rechazar en 5 min ── */}
         {incomingImmediate.length > 0 && (
           <div className="card mb-4" style={{ borderColor: '#E24B4A', borderWidth: 2 }}>
             <div className="flex items-center gap-2 mb-3">

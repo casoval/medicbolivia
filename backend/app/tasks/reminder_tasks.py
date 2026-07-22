@@ -39,7 +39,7 @@ from app.services.system_reminders import fire_system_reminder, DEFAULT_STAGGER_
 
 # ── 1. Evento instantáneo: paciente esperando (consulta inmediata) ──
 # (recordatorio #1 del catálogo — dispara desde consultations.py::create_consultation,
-#  no espera al beat: la urgencia es real, el profesional tiene ~2 min para aceptar)
+#  no espera al beat: la urgencia es real, el profesional tiene ~5 min para aceptar)
 
 async def _notify_professional_patient_waiting(consultation_id: str) -> None:
     async with AsyncSessionLocal() as db:

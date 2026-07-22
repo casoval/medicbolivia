@@ -2374,10 +2374,10 @@
     "ay": "El médico no inició la videollamada — cancelar y pedir devolución",
     "gn": "El médico no inició la videollamada — cancelar y pedir devolución"
   },
-  "El médico tiene 2 minutos para aceptar tu solicitud": {
-    "qu": "Hampiqqa iskay minutuyuq mañakuyniykita chaskinanpaq",
-    "ay": "Qulliriw paya minutuni mañt'awimjja katuqañapataki",
-    "gn": "Pohãnohára orekomíma mokõi aravo'i oñemoneĩ haguã"
+  "El médico tiene 5 minutos para aceptar tu solicitud": {
+    "qu": "Hampiqqa phisqa minutuyuq mañakuyniykita chaskinanpaq",
+    "ay": "Qulliriw phisqa minutuni mañt'awimjja katuqañapataki",
+    "gn": "Pohãnohára orekomíma po aravo'i oñemoneĩ haguã"
   },
   "El médico ya recibió la notificación y se está preparando para atenderte.": {
     "qu": "El médico ya recibió la notificación y se está preparando para atenderte.",

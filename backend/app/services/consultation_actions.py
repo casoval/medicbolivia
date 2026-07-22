@@ -61,7 +61,7 @@ async def get_latest_pending_immediate_consultation(
     consulta se refiere un profesional que responde "1"/"2" sin repetir el
     ID — no tendría sentido pedírselo por chat, y en la práctica un
     profesional casi nunca tiene más de una consulta inmediata esperando a
-    la vez (el timeout de 2 min la cancela antes de que se acumulen).
+    la vez (el timeout de 5 min la cancela antes de que se acumulen).
     """
     result = await db.execute(
         select(Consultation)
