@@ -39,6 +39,34 @@ from app.tasks.whatsapp_tasks import send_whatsapp_message
 MIN_GAP_SECONDS = 4
 MAX_GAP_SECONDS = 15
 
+# El admin redacta un único título/cuerpo que se manda tal cual a todo un
+# segmento — eso es contenido 100% idéntico en volumen alto, justo el
+# patrón que puede llevar a un bloqueo de WhatsApp. Para romperlo un poco,
+# a cada envío se le antepone un saludo elegido al azar (personalizado con
+# el nombre cuando lo tenemos) en vez de mandar siempre el mismo texto
+# desde el primer caracter.
+GREETING_VARIANTS_WITH_NAME = [
+    "Hola {nombre}, ",
+    "Hola {nombre}: ",
+    "{nombre}, ",
+    "Buenas {nombre}, ",
+    "Hola {nombre} 👋 ",
+]
+# Cuando no tenemos nombre (ej. contacto público de WhatsApp sin registrar
+# nombre), igual variamos el arranque del mensaje en vez de dejarlo fijo.
+GREETING_VARIANTS_NO_NAME = [
+    "Hola, ",
+    "Hola: ",
+    "Buenas, ",
+    "",
+]
+
+
+def _pick_greeting(nombre: Optional[str]) -> str:
+    if nombre:
+        return random.choice(GREETING_VARIANTS_WITH_NAME).format(nombre=nombre)
+    return random.choice(GREETING_VARIANTS_NO_NAME)
+
 
 async def _get_agent_config(db: AsyncSession) -> Optional[AgentConfig]:
     result = await db.execute(select(AgentConfig).where(AgentConfig.id == "global"))
@@ -50,16 +78,25 @@ async def _get_agent_config(db: AsyncSession) -> Optional[AgentConfig]:
     return config
 
 
-async def _resolve_registered_recipients(db: AsyncSession, audience: str) -> list[User]:
-    """Usuarios con cuenta (paciente/profesional), activos, según audiencia."""
-    query = select(User).where(User.status == UserStatus.ACTIVE)
+async def _resolve_registered_recipients(db: AsyncSession, audience: str) -> list[tuple[User, Optional[str]]]:
+    """Usuarios con cuenta (paciente/profesional), activos, según audiencia,
+    junto con su primer nombre (Patient.first_name o Professional.first_name,
+    el que corresponda) para poder personalizar el saludo del broadcast.
+    Se trae con outerjoin en la misma query en vez de un lookup por usuario
+    para no meter N+1 queries en un broadcast que puede ir a miles."""
+    query = (
+        select(User, Patient.first_name, Professional.first_name)
+        .outerjoin(Patient, Patient.user_id == User.id)
+        .outerjoin(Professional, Professional.user_id == User.id)
+        .where(User.status == UserStatus.ACTIVE)
+    )
 
     if audience == BroadcastAudience.PATIENT.value:
         query = query.where(User.role == UserRole.PATIENT)
     elif audience == BroadcastAudience.PROFESSIONAL.value:
         # Solo profesionales aprobados — no tiene sentido mandarle un
         # anuncio de la plataforma a alguien todavía en revisión de docs.
-        query = query.join(Professional, Professional.user_id == User.id).where(
+        query = query.where(
             User.role == UserRole.PROFESSIONAL,
             Professional.status == ProfessionalStatus.APPROVED,
         )
@@ -69,7 +106,7 @@ async def _resolve_registered_recipients(db: AsyncSession, audience: str) -> lis
         return []
 
     result = await db.execute(query)
-    return list(result.scalars().all())
+    return [(user, patient_name or professional_name) for user, patient_name, professional_name in result.all()]
 
 
 async def _resolve_public_contacts(db: AsyncSession) -> list[WhatsAppConversation]:
@@ -122,7 +159,8 @@ async def send_broadcast(
             recipients_count += 1
             if send_whatsapp and whatsapp_enabled and contact.phone:
                 next_countdown += random.uniform(MIN_GAP_SECONDS, MAX_GAP_SECONDS)
-                message = f"*{title}*\n{body}" if title else body
+                greeting = _pick_greeting(contact.contact_name)
+                message = f"{greeting}*{title}*\n{body}" if title else f"{greeting}{body}"
                 send_whatsapp_message.apply_async(
                     kwargs=dict(
                         phone=contact.phone, message=message,
@@ -134,9 +172,11 @@ async def send_broadcast(
                 )
     else:
         users = await _resolve_registered_recipients(db, audience)
-        for user in users:
+        for user, first_name in users:
             recipients_count += 1
-            # Notificación in-app: siempre, es solo un insert.
+            # Notificación in-app: siempre, es solo un insert. Esta sí
+            # queda con el texto tal cual lo redactó el admin (no hay
+            # riesgo de "spam" en un insert a la BD, ver docstring arriba).
             db.add(Notification(
                 user_id=user.id, title=title, body=body,
                 type="ADMIN_BROADCAST",
@@ -146,7 +186,8 @@ async def send_broadcast(
             role = user.role.value if hasattr(user.role, "value") else str(user.role)
             if send_whatsapp and user.phone and config and _channel_enabled_for_role(config, role):
                 next_countdown += random.uniform(MIN_GAP_SECONDS, MAX_GAP_SECONDS)
-                message = f"*{title}*\n{body}" if title else body
+                greeting = _pick_greeting(first_name)
+                message = f"{greeting}*{title}*\n{body}" if title else f"{greeting}{body}"
                 audience_tag = {
                     "PATIENT": WhatsAppAudience.PATIENT.value,
                     "PROFESSIONAL": WhatsAppAudience.PROFESSIONAL.value,

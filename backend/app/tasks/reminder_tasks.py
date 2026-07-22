@@ -15,11 +15,15 @@ Tres mecanismos, a propósito:
    debe dispararse ahora, comparando contra Consultation.scheduled_at. Acá
    sí puede haber varias citas cayendo en la misma ventana (ej. 20 citas
    agendadas todas a la 1pm) — todo el lote de esa corrida se manda
-   ESCALONADO (unos segundos de diferencia entre uno y otro) para no
-   parecerle a WhatsApp un envío masivo no-humano.
+   ESCALONADO con un salto ALEATORIO entre uno y otro (no un valor fijo),
+   más un pequeño delay inicial también aleatorio antes del primero, para
+   no parecerle a WhatsApp un envío masivo no-humano.
 
 3. CRON diario de mensajes sin leer (`send_unread_messages_reminder`,
-   20:00 hora La Paz): mismo criterio de escalonado que el punto 2.
+   dispara ~19:59 hora La Paz): mismo escalonado aleatorio entre mensajes
+   que el punto 2, más un jitter inicial de 30-90s antes de arrancar para
+   que el primer envío del día no caiga siempre en el mismo segundo exacto
+   de las 20:00.
 """
 import asyncio
 import random
@@ -35,7 +39,20 @@ from app.models.models import (
     ReminderRule, ReminderLog, Consultation, ConsultationType, ConsultationStatus,
     Patient, Professional, User, ChatMessage, ChatConversation, ChatConversationStatus,
 )
-from app.services.system_reminders import fire_system_reminder, DEFAULT_STAGGER_SECONDS
+from app.services.system_reminders import fire_system_reminder
+
+# Escalonado aleatorio entre un envío y el siguiente dentro de un mismo
+# lote de "cita 1 hora antes" (antes era DEFAULT_STAGGER_SECONDS = 4s fijo
+# siempre, mismo patrón mecánico que causó el bloqueo de WhatsApp). Mismo
+# criterio que ya usa el recordatorio de mensajes sin leer y broadcast.py.
+SCHEDULED_REMINDER_MIN_GAP_SECONDS = 4
+SCHEDULED_REMINDER_MAX_GAP_SECONDS = 16
+# Además del espaciado entre mensajes, el PRIMER mensaje del lote tampoco
+# sale en el segundo exacto en que corre el cron — un pequeño delay
+# inicial también aleatorio evita que todos los lotes (uno por minuto)
+# arranquen siempre en el instante 0.
+SCHEDULED_REMINDER_INITIAL_DELAY_MIN_SECONDS = 2
+SCHEDULED_REMINDER_INITIAL_DELAY_MAX_SECONDS = 10
 
 
 # ── 1. Evento instantáneo: paciente esperando (consulta inmediata) ──
@@ -97,7 +114,14 @@ async def _check_scheduled_appointment_reminders() -> None:
             return
 
         now = datetime.utcnow()
-        stagger_index = 0  # comparte el contador entre TODAS las reglas/citas de esta corrida
+        # Comparte el contador entre TODAS las reglas/citas de esta corrida.
+        # Arranca con un delay inicial aleatorio (no en el segundo 0) y
+        # cada envío del lote suma un salto aleatorio al anterior, en vez
+        # de un múltiplo fijo — mismo criterio que unread/broadcast.
+        next_countdown = random.uniform(
+            SCHEDULED_REMINDER_INITIAL_DELAY_MIN_SECONDS,
+            SCHEDULED_REMINDER_INITIAL_DELAY_MAX_SECONDS,
+        )
 
         for rule in rules:
             if not rule.offset_minutes:
@@ -148,14 +172,16 @@ async def _check_scheduled_appointment_reminders() -> None:
                     ))
                     continue
 
-                sent = await _send_reminder_for_rule(db, rule, consultation, stagger_index)
+                sent = await _send_reminder_for_rule(db, rule, consultation, next_countdown)
                 if sent:
-                    stagger_index += 1
+                    next_countdown += random.uniform(
+                        SCHEDULED_REMINDER_MIN_GAP_SECONDS, SCHEDULED_REMINDER_MAX_GAP_SECONDS
+                    )
 
         await db.commit()
 
 
-async def _send_reminder_for_rule(db, rule: ReminderRule, consultation: Consultation, stagger_index: int) -> bool:
+async def _send_reminder_for_rule(db, rule: ReminderRule, consultation: Consultation, countdown_seconds: float) -> bool:
     pat_result = await db.execute(select(Patient).where(Patient.id == consultation.patient_id))
     patient = pat_result.scalar_one_or_none()
     prof_result = await db.execute(select(Professional).where(Professional.id == consultation.professional_id))
@@ -173,11 +199,11 @@ async def _send_reminder_for_rule(db, rule: ReminderRule, consultation: Consulta
     await fire_system_reminder(
         db, rule.id, target_user_id,
         related_entity_type="Consultation", related_entity_id=consultation.id,
-        # Escalonado: cada cita de este mismo lote sale
-        # DEFAULT_STAGGER_SECONDS después de la anterior en vez de todas
-        # en el mismo instante — importante si hay muchas citas cayendo
-        # en la misma ventana horaria.
-        stagger_seconds=stagger_index * DEFAULT_STAGGER_SECONDS,
+        # Escalonado ALEATORIO (4-16s entre uno y otro, más un delay
+        # inicial también aleatorio para el primero del lote) en vez de un
+        # múltiplo fijo — importante si hay muchas citas cayendo en la
+        # misma ventana horaria, mismo criterio que unread/broadcast.
+        stagger_seconds=countdown_seconds,
         paciente=f"{patient.first_name} {patient.last_name}",
         profesional=f"{professional.first_name} {professional.last_name}",
         especialidad=consultation.specialty or professional.specialty,
@@ -203,6 +229,15 @@ def check_scheduled_appointment_reminders():
 # criterio que ya usa broadcast.py para los anuncios del admin.
 UNREAD_REMINDER_MIN_GAP_SECONDS = 4
 UNREAD_REMINDER_MAX_GAP_SECONDS = 20
+
+# El beat dispara este cron a las 19:59 en punto (ver celery_app.py). Antes
+# de mandar el primer mensaje, la tarea espera un jitter aleatorio dentro
+# de esta ventana de 2 minutos — así el primer envío del lote cae unos
+# segundos antes o después de las 20:00:00, en vez de siempre en el mismo
+# instante exacto (mismo motivo que el escalonado entre mensajes: no
+# parecer un script disparando en reloj).
+UNREAD_REMINDER_START_JITTER_MIN_SECONDS = 30
+UNREAD_REMINDER_START_JITTER_MAX_SECONDS = 90
 
 # Frases que siguen al saludo con el nombre ("Hola {nombre}, ..."). Se
 # elige una al azar por cada envío para que el lote de las 20:00 no
@@ -231,6 +266,12 @@ async def _get_recipient_first_name(db, recipient_user_id: str, recipient_role: 
 
 
 async def _send_unread_messages_reminder() -> None:
+    start_jitter = random.uniform(
+        UNREAD_REMINDER_START_JITTER_MIN_SECONDS, UNREAD_REMINDER_START_JITTER_MAX_SECONDS
+    )
+    logger.info(f"Recordatorio de mensajes sin leer: esperando {start_jitter:.0f}s de jitter antes de arrancar")
+    await asyncio.sleep(start_jitter)
+
     async with AsyncSessionLocal() as db:
         # Quién tiene mensajes sin leer (sender_id = quién escribió). Se
         # agrupa por remitente+conversación primero para saber de qué lado

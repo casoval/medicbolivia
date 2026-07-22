@@ -55,11 +55,16 @@ celery_app.conf.beat_schedule = {
         "schedule": 60.0,
     },
     # Recordatorios #6 (profesional) / #2 (paciente): mensajes de chat sin
-    # leer. Corre una vez al día a las 20:00 — como `timezone` arriba está
-    # en "America/La_Paz", crontab(hour=20) es hora de La Paz, no UTC.
+    # leer. El beat dispara a las 19:59 (como `timezone` arriba está en
+    # "America/La_Paz", crontab(hour=19, minute=59) es hora de La Paz, no
+    # UTC) y la propia tarea espera un jitter aleatorio antes de empezar a
+    # mandar (ver UNREAD_REMINDER_START_JITTER_*_SECONDS en
+    # reminder_tasks.py) — así el primer mensaje del día no sale siempre
+    # en el mismo segundo exacto de las 20:00, sino repartido entre un
+    # poco antes y un poco después.
     "send-unread-messages-reminder": {
         "task": "app.tasks.reminder_tasks.send_unread_messages_reminder",
-        "schedule": crontab(hour=20, minute=0),
+        "schedule": crontab(hour=19, minute=59),
     },
     # Revisa cada hora si hay que correr el backup de BD según
     # DBBackupConfig (frequency + hour_utc).
