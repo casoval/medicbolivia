@@ -117,10 +117,14 @@ SYSTEM_REMINDER_RULES = [
         "trigger_type": ReminderTriggerType.UNREAD_MESSAGES_8PM.value,
         "audience": PROFESSIONAL,
         "offset_minutes": None,
-        # Genérico a propósito — es UN solo aviso por profesional aunque
-        # tenga mensajes pendientes de varios pacientes distintos, así
-        # que no nombra a nadie en particular (ver _send_unread_messages_reminder).
-        "message_template": "💬 *Tienes mensajes sin leer*\n\nTienes mensajes sin leer en el chat de la plataforma." + CTA,
+        # {nombre}: el destinatario (no el remitente del mensaje pendiente —
+        # es UN solo aviso por profesional aunque tenga mensajes de varios
+        # pacientes distintos, así que no nombra a quién le escribió, ver
+        # _send_unread_messages_reminder). {variante}: frase elegida al azar
+        # entre varias — junto con el nombre y el segundero aleatorio del
+        # envío, evita que el lote de las 20:00 se vea como el mismo texto
+        # mecánico repetido a todo el mundo (patrón que WhatsApp banea).
+        "message_template": "💬 *Tienes mensajes sin leer*\n\nHola {nombre}, {variante}" + CTA,
     },
     {
         "id": SystemReminderID.PROF_RESCHEDULE_PROPOSED,
@@ -156,7 +160,7 @@ SYSTEM_REMINDER_RULES = [
         "trigger_type": ReminderTriggerType.UNREAD_MESSAGES_8PM.value,
         "audience": PATIENT,
         "offset_minutes": None,
-        "message_template": "💬 *Tienes mensajes sin leer*\n\nTienes mensajes sin leer en el chat de la plataforma." + CTA,
+        "message_template": "💬 *Tienes mensajes sin leer*\n\nHola {nombre}, {variante}" + CTA,
     },
     {
         "id": SystemReminderID.PATIENT_RESCHEDULE_PROPOSED,

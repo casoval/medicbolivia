@@ -22,6 +22,7 @@ Tres mecanismos, a propósito:
    20:00 hora La Paz): mismo criterio de escalonado que el punto 2.
 """
 import asyncio
+import random
 from datetime import datetime, timedelta
 
 from sqlalchemy import select, and_
@@ -194,6 +195,41 @@ def check_scheduled_appointment_reminders():
 
 # ── 3. Cron diario 20:00 (La Paz): mensajes sin leer (#6 profesional / #2 paciente) ──
 
+# Espaciado aleatorio entre un envío y el siguiente dentro de este lote
+# diario. Antes era un valor fijo (DEFAULT_STAGGER_SECONDS = 4s siempre),
+# lo que hacía que todo el lote saliera con el mismo ritmo mecánico —
+# justo el patrón que llevó al bloqueo real de WhatsApp de jul-2026 (ver
+# incidente). Ahora cada salto es aleatorio entre estos dos valores, igual
+# criterio que ya usa broadcast.py para los anuncios del admin.
+UNREAD_REMINDER_MIN_GAP_SECONDS = 4
+UNREAD_REMINDER_MAX_GAP_SECONDS = 20
+
+# Frases que siguen al saludo con el nombre ("Hola {nombre}, ..."). Se
+# elige una al azar por cada envío para que el lote de las 20:00 no
+# mande el mismo texto exacto a todo el mundo — junto con el nombre y el
+# escalonado aleatorio de arriba, rompe el patrón de "mensaje idéntico +
+# horario de reloj + ráfaga corta" que WhatsApp detecta como spam.
+UNREAD_REMINDER_VARIANTS = [
+    "tienes un mensaje sin leer en el chat de la plataforma.",
+    "te quedó un mensaje pendiente por responder en la app.",
+    "tienes una conversación con mensajes sin leer en la plataforma.",
+    "hay un mensaje esperando tu respuesta en el chat.",
+    "te escribieron en el chat y todavía no lo revisaste.",
+]
+
+
+async def _get_recipient_first_name(db, recipient_user_id: str, recipient_role: str) -> str:
+    """Nombre de pila del destinatario para personalizar el saludo. Si por
+    algún motivo no se encuentra el registro (dato inconsistente), cae a
+    un saludo genérico en vez de romper el envío del lote completo."""
+    model = Professional if recipient_role == "PROFESSIONAL" else Patient
+    result = await db.execute(select(model.first_name).where(model.user_id == recipient_user_id))
+    first_name = result.scalar_one_or_none()
+    # first_name es NOT NULL en el esquema — este fallback es solo por si
+    # el registro de Patient/Professional quedara huérfano del User.
+    return first_name or ("Doctor(a)" if recipient_role == "PROFESSIONAL" else "paciente")
+
+
 async def _send_unread_messages_reminder() -> None:
     async with AsyncSessionLocal() as db:
         # Quién tiene mensajes sin leer (sender_id = quién escribió). Se
@@ -231,18 +267,27 @@ async def _send_unread_messages_reminder() -> None:
             recipient_user_id = conversation.professional_user_id if is_patient_sender else conversation.patient_user_id
             recipients[recipient_user_id] = "PROFESSIONAL" if is_patient_sender else "PATIENT"
 
-        stagger_index = 0
+        next_countdown = 0.0  # segundos acumulados desde ahora hasta el próximo envío
+        sent_count = 0
         for recipient_user_id, recipient_role in recipients.items():
             rule_id = SystemReminderID.PROF_UNREAD_8PM if recipient_role == "PROFESSIONAL" else SystemReminderID.PATIENT_UNREAD_8PM
+            nombre = await _get_recipient_first_name(db, recipient_user_id, recipient_role)
+            variante = random.choice(UNREAD_REMINDER_VARIANTS)
+            next_countdown += random.uniform(UNREAD_REMINDER_MIN_GAP_SECONDS, UNREAD_REMINDER_MAX_GAP_SECONDS)
             await fire_system_reminder(
                 db, rule_id, recipient_user_id,
                 related_entity_type="User", related_entity_id=recipient_user_id,
-                stagger_seconds=stagger_index * DEFAULT_STAGGER_SECONDS,
+                stagger_seconds=next_countdown,
+                nombre=nombre, variante=variante,
             )
-            stagger_index += 1
+            sent_count += 1
 
         await db.commit()
-        logger.info(f"Recordatorio de mensajes sin leer: {stagger_index} aviso(s) encolado(s), escalonados cada {DEFAULT_STAGGER_SECONDS}s")
+        logger.info(
+            f"Recordatorio de mensajes sin leer: {sent_count} aviso(s) encolado(s), "
+            f"escalonados aleatoriamente ({UNREAD_REMINDER_MIN_GAP_SECONDS}-{UNREAD_REMINDER_MAX_GAP_SECONDS}s "
+            f"entre cada uno) a lo largo de ~{int(next_countdown)}s"
+        )
 
 
 @celery_app.task(name="app.tasks.reminder_tasks.send_unread_messages_reminder")
