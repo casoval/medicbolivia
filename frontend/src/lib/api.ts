@@ -269,12 +269,18 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
-    // Nota: excluimos /auth/login a propósito. Un 401 ahí es "contraseña
-    // incorrecta" (no una sesión expirada), así que no corresponde
-    // recargar la página — eso hacía que el mensaje de error
-    // desapareciera a los pocos segundos en cada intento fallido de login.
+    // Excluimos /auth/login (un 401 ahí es "contraseña incorrecta", no
+    // sesión expirada) y /auth/me (un 401 ahí solo significa "visitante
+    // sin sesión" — algo normal en CUALQUIER página, incluida la propia
+    // /auth/login, ya que loadUser() la llama siempre al montar la app.
+    // Sin esta exclusión, un visitante no logueado en /auth/login entra
+    // en loop infinito: 401 en /auth/me → redirect a /auth/login →
+    // recarga completa → Providers vuelve a montar → loadUser() de
+    // nuevo → 401 de nuevo → redirect de nuevo. store.ts ya maneja el
+    // 401 de /auth/me por su cuenta, poniendo isAuthenticated: false).
     const isLoginRequest = error.config?.url?.includes('/auth/login')
-    if (error.response?.status === 401 && !isLoginRequest) {
+    const isMeRequest = error.config?.url?.includes('/auth/me')
+    if (error.response?.status === 401 && !isLoginRequest && !isMeRequest) {
       window.location.href = '/auth/login'
     }
 
