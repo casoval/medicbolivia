@@ -26,7 +26,7 @@ from sqlalchemy import select
 from loguru import logger
 
 from app.models.models import (
-    User, UserRole, UserStatus, ProfessionalStatus, Professional,
+    User, UserRole, UserStatus, ProfessionalStatus, Professional, Patient,
     Notification, WhatsAppConversation, WhatsAppAudience,
     BroadcastMessage, BroadcastAudience, BroadcastStatus,
     AgentConfig,
