@@ -4,7 +4,7 @@ Endpoints de autenticación: registro, login, logout, perfil.
 """
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from datetime import datetime
@@ -13,7 +13,10 @@ from loguru import logger
 from app.db.database import get_db
 from app.core.config import settings
 from app.core.redis_client import security_redis_client as redis_client
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import (
+    hash_password, verify_password, create_access_token,
+    set_auth_cookie, clear_auth_cookie,
+)
 from app.core.dependencies import get_current_user
 from app.models.models import (
     User, Patient, Professional, UserRole, UserStatus,
@@ -40,6 +43,7 @@ router = APIRouter()
 async def register_patient(
     data: PatientRegisterRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     # El teléfono debe haber pasado por /auth/otp/send + /auth/otp/verify
@@ -87,6 +91,7 @@ async def register_patient(
     await db.refresh(user)
 
     token = create_access_token(subject=user.id, role=user.role)
+    set_auth_cookie(response, token)
     logger.info(f"Nuevo paciente registrado: {user.id} | {data.phone}")
 
     return TokenResponse(
@@ -104,6 +109,7 @@ async def register_patient(
 )
 async def register_professional(
     data: ProfessionalRegisterRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     # El teléfono debe haber pasado por /auth/otp/send + /auth/otp/verify
@@ -184,6 +190,7 @@ async def register_professional(
     await db.refresh(user)
 
     token = create_access_token(subject=user.id, role=user.role)
+    set_auth_cookie(response, token)
     logger.info(f"Nuevo profesional registrado: {user.id} | {data.specialty}")
 
     return TokenResponse(
@@ -394,6 +401,7 @@ async def reset_password(
 )
 async def login(
     data: LoginRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     lockout_key = f"login_lockout:{data.phone}"
@@ -430,6 +438,7 @@ async def login(
     await redis_client.delete(attempts_key, lockout_key)
 
     token = create_access_token(subject=user.id, role=user.role)
+    set_auth_cookie(response, token)
     logger.info(f"Login exitoso: {user.id} | rol: {user.role}")
 
     return TokenResponse(
@@ -450,7 +459,11 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 # ── POST /api/v1/auth/logout ─────────────────────────
 @router.post("/logout", summary="Cerrar sesión")
-async def logout():
-    # Con JWT stateless el logout es del lado cliente
-    # En producción invalidar el token en Redis (blacklist)
+async def logout(response: Response):
+    # El JWT sigue siendo stateless (no hay blacklist en Redis), pero
+    # ahora sí hay algo que borrar del lado servidor: la cookie httpOnly.
+    # JavaScript no puede borrarla por su cuenta (por eso es httpOnly),
+    # así que el frontend tiene que pegarle a este endpoint al cerrar
+    # sesión para que el Set-Cookie de borrado viaje en la respuesta.
+    clear_auth_cookie(response)
     return {"message": "Sesión cerrada correctamente"}

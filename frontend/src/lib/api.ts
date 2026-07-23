@@ -246,13 +246,15 @@ export const api = axios.create({
   baseURL: BASE_URL,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
+  // El JWT ahora viaja en una cookie httpOnly seteada por el backend
+  // (ver AUTH_COOKIE_NAME en security.py) — withCredentials hace que el
+  // navegador la mande sola en cada request, sin que este código tenga
+  // que leerla ni adjuntarla a mano (de hecho no podría: httpOnly la
+  // esconde de JavaScript a propósito, es la protección ante XSS).
+  withCredentials: true,
 })
 
 api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('mb_token')
-    if (token) config.headers.Authorization = `Bearer ${token}`
-  }
   // Si el cuerpo es FormData (subida de archivos), eliminamos el
   // Content-Type fijo de la instancia ('application/json') para que
   // axios/el navegador generen el header correcto con el boundary
@@ -268,13 +270,11 @@ api.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
     // Nota: excluimos /auth/login a propósito. Un 401 ahí es "contraseña
-    // incorrecta" (no una sesión expirada), así que no corresponde borrar
-    // el token ni recargar la página — eso hacía que el mensaje de error
+    // incorrecta" (no una sesión expirada), así que no corresponde
+    // recargar la página — eso hacía que el mensaje de error
     // desapareciera a los pocos segundos en cada intento fallido de login.
     const isLoginRequest = error.config?.url?.includes('/auth/login')
     if (error.response?.status === 401 && !isLoginRequest) {
-      localStorage.removeItem('mb_token')
-      localStorage.removeItem('mb_user')
       window.location.href = '/auth/login'
     }
 
@@ -1406,10 +1406,12 @@ export const patientBlockAPI = {
 }
 
 // Arma la URL del WebSocket del chat a partir de BASE_URL (http→ws,
-// https→wss) y el JWT actual (viaja por query param: el WebSocket nativo
-// del navegador no permite headers custom en el handshake).
+// https→wss). El JWT ya NO viaja por query param: el navegador manda
+// solo la cookie httpOnly en el handshake del WebSocket (es una request
+// HTTP normal con Upgrade, las cookies se adjuntan igual que en
+// cualquier otra request same-origin). Ver AUTH_COOKIE_NAME en el
+// backend (security.py) y _authenticate_ws en chat.py.
 export function buildChatWebSocketUrl(conversationId: string): string {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('mb_token') : null
   const wsBase = BASE_URL.replace(/^http/, 'ws')
-  return `${wsBase}/chat/ws/${conversationId}?token=${encodeURIComponent(token || '')}`
+  return `${wsBase}/chat/ws/${conversationId}`
 }

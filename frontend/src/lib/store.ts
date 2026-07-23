@@ -1,12 +1,10 @@
 // src/lib/store.ts
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type { User } from '@/types'
 import { authAPI, professionalsAPI, patientsAPI } from './api'
 
 interface AuthState {
   user: User | null
-  token: string | null
   isAuthenticated: boolean
   isLoading: boolean
   login: (phone: string, password: string) => Promise<void>
@@ -14,85 +12,87 @@ interface AuthState {
   loadUser: () => Promise<void>
   enrichUserProfile: () => Promise<void>
   setUser: (user: User) => void
-  setToken: (token: string) => void
+  // Reemplaza al viejo setToken: el JWT ya no es visible para el
+  // frontend (vive en una cookie httpOnly), así que después de un
+  // login/registro exitoso lo único que hay que guardar en el store es
+  // el usuario, marcando la sesión como autenticada.
+  setAuthenticated: (user: User) => void
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
 
-      login: async (phone, password) => {
-        set({ isLoading: true })
-        try {
-          const res = await authAPI.login(phone, password)
-          const { access_token, user } = res.data
-          localStorage.setItem('mb_token', access_token)
-          set({ token: access_token, user, isAuthenticated: true, isLoading: false })
-          await get().enrichUserProfile()
-        } catch (err) {
-          set({ isLoading: false })
-          throw err
-        }
-      },
-
-      logout: () => {
-        localStorage.removeItem('mb_token')
-        localStorage.removeItem('mb_user')
-        set({ user: null, token: null, isAuthenticated: false })
-        window.location.href = '/auth/login'
-      },
-
-      loadUser: async () => {
-        const token = localStorage.getItem('mb_token')
-        if (!token) return
-        try {
-          const res = await authAPI.me()
-          set({ user: res.data, token, isAuthenticated: true })
-          await get().enrichUserProfile()
-        } catch (err: any) {
-          // Solo cerramos sesión si el token realmente es inválido.
-          // Si es un 503 de modo mantenimiento (u otro error transitorio),
-          // el token sigue siendo válido: no lo borramos, así el usuario
-          // no tiene que volver a loguearse cuando termine el mantenimiento.
-          if (err?.response?.status === 401) {
-            localStorage.removeItem('mb_token')
-            set({ user: null, token: null, isAuthenticated: false })
-          }
-        }
-      },
-
-      // Trae first_name/last_name del perfil específico (paciente o profesional)
-      // y los mergea sobre el user base, que solo trae datos de auth (/auth/me).
-      // No rompe el flujo si falla: el nombre simplemente no se muestra.
-      enrichUserProfile: async () => {
-        const currentUser = get().user
-        if (!currentUser) return
-        try {
-          if (currentUser.role === 'PATIENT') {
-            const profile = await patientsAPI.getMyProfile()
-            set({ user: { ...currentUser, first_name: profile.first_name, last_name: profile.last_name } })
-          } else if (currentUser.role === 'PROFESSIONAL') {
-            const profile = await professionalsAPI.getMyProfile()
-            set({ user: { ...currentUser, first_name: profile.first_name, last_name: profile.last_name } })
-          }
-        } catch (err) {
-          console.error('No se pudo enriquecer el perfil del usuario:', err)
-        }
-      },
-
-      setUser: (user) => set({ user }),
-      setToken: (token) => set({ token }),
-    }),
-    {
-      name: 'mb-auth',
-      partialize: (state) => ({ token: state.token }),
+  login: async (phone, password) => {
+    set({ isLoading: true })
+    try {
+      const res = await authAPI.login(phone, password)
+      set({ user: res.data.user, isAuthenticated: true, isLoading: false })
+      await get().enrichUserProfile()
+    } catch (err) {
+      set({ isLoading: false })
+      throw err
     }
-  )
-)
+  },
+
+  logout: () => {
+    // Con la cookie httpOnly, JS no puede borrarla por su cuenta — hay
+    // que avisarle al backend para que la borre en la respuesta. No
+    // esperamos la respuesta (fire and forget): igual vamos a
+    // /auth/login, y si por algún motivo la llamada falla, la cookie
+    // simplemente expira sola en el peor de los casos (24h, ver
+    // ACCESS_TOKEN_EXPIRE_MINUTES).
+    authAPI.logout().catch(() => {})
+    set({ user: null, isAuthenticated: false })
+    window.location.href = '/auth/login'
+  },
+
+  loadUser: async () => {
+    // Ya no podemos "ver" si hay sesión desde JS (la cookie es
+    // httpOnly) — así que siempre intentamos /auth/me al arrancar la
+    // app, y dejamos que el 401 (si no hay cookie o expiró) nos diga
+    // que no hay sesión. Providers.tsx ya muestra un spinner de carga
+    // mientras esto resuelve, así que no hay parpadeo de contenido.
+    set({ isLoading: true })
+    try {
+      const res = await authAPI.me()
+      set({ user: res.data, isAuthenticated: true, isLoading: false })
+      await get().enrichUserProfile()
+    } catch (err: any) {
+      set({ isLoading: false })
+      // Solo cerramos sesión si el token realmente es inválido/no existe.
+      // Si es un 503 de modo mantenimiento (u otro error transitorio),
+      // no tocamos el estado: la sesión sigue siendo válida del lado
+      // del servidor, no hace falta volver a loguearse.
+      if (err?.response?.status === 401) {
+        set({ user: null, isAuthenticated: false })
+      }
+    }
+  },
+
+  // Trae first_name/last_name del perfil específico (paciente o profesional)
+  // y los mergea sobre el user base, que solo trae datos de auth (/auth/me).
+  // No rompe el flujo si falla: el nombre simplemente no se muestra.
+  enrichUserProfile: async () => {
+    const currentUser = get().user
+    if (!currentUser) return
+    try {
+      if (currentUser.role === 'PATIENT') {
+        const profile = await patientsAPI.getMyProfile()
+        set({ user: { ...currentUser, first_name: profile.first_name, last_name: profile.last_name } })
+      } else if (currentUser.role === 'PROFESSIONAL') {
+        const profile = await professionalsAPI.getMyProfile()
+        set({ user: { ...currentUser, first_name: profile.first_name, last_name: profile.last_name } })
+      }
+    } catch (err) {
+      console.error('No se pudo enriquecer el perfil del usuario:', err)
+    }
+  },
+
+  setUser: (user) => set({ user }),
+  setAuthenticated: (user) => set({ user, isAuthenticated: true }),
+}))
 
 // ── Store del agente IA ──────────────────────────────
 interface AgentMessage {

@@ -19,7 +19,7 @@ from loguru import logger
 
 from app.db.database import get_db, AsyncSessionLocal
 from app.core.dependencies import get_current_user
-from app.core.security import decode_token
+from app.core.security import decode_token, AUTH_COOKIE_NAME
 from app.core.chat_ws_manager import chat_manager
 from app.core.config import settings
 from app.models.models import (
@@ -373,10 +373,15 @@ async def unblock(
 # WebSocket — mensajería en vivo
 # ─────────────────────────────────────────────────────
 
-async def _authenticate_ws(token: str, db: AsyncSession) -> User | None:
-    """El navegador no puede mandar headers custom en el handshake del
-    WebSocket nativo, así que el JWT viaja por query param (?token=...),
-    igual que otros proveedores de chat en tiempo real."""
+async def _authenticate_ws(token: str | None, db: AsyncSession) -> User | None:
+    """El navegador SÍ manda las cookies solas en el handshake del
+    WebSocket (es una request HTTP normal con Upgrade), así que la cookie
+    httpOnly (ver AUTH_COOKIE_NAME en security.py) es la forma normal de
+    autenticar esto ahora. El query param ?token=... queda como
+    alternativa para clientes que no manejan cookies (ej. un test manual
+    con wscat)."""
+    if not token:
+        return None
     try:
         payload = decode_token(token)
         user_id = payload.get("sub")
@@ -390,9 +395,16 @@ async def _authenticate_ws(token: str, db: AsyncSession) -> User | None:
 
 
 @router.websocket("/ws/{conversation_id}")
-async def chat_websocket(websocket: WebSocket, conversation_id: str, token: str = Query(...)):
+async def chat_websocket(
+    websocket: WebSocket,
+    conversation_id: str,
+    token: str | None = Query(None),
+):
+    # Cookie httpOnly primero (viaja sola en el handshake); el query
+    # param queda como fallback si por algún motivo no hay cookie.
+    auth_token = websocket.cookies.get(AUTH_COOKIE_NAME) or token
     async with AsyncSessionLocal() as db:
-        current_user = await _authenticate_ws(token, db)
+        current_user = await _authenticate_ws(auth_token, db)
         if not current_user:
             await websocket.close(code=4001, reason="Token inválido o expirado")
             return

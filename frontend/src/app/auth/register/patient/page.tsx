@@ -20,8 +20,7 @@ const DEPARTMENTS = [
 export default function RegisterPatientPage() {
   const router = useRouter()
   const { t } = useLanguage()
-  const setUser = useAuthStore((s) => s.setUser)
-  const setToken = useAuthStore((s) => s.setToken)
+  const setAuthenticated = useAuthStore((s) => s.setAuthenticated)
 
   const [form, setForm] = useState({
     phone: '', email: '', password: '', confirm_password: '',
@@ -64,10 +63,8 @@ export default function RegisterPatientPage() {
         gender: form.gender || undefined,
       })
 
-      const { access_token, user } = res.data
-      localStorage.setItem('mb_token', access_token)
-      setToken(access_token)
-      setUser(user)
+      const { user } = res.data
+      setAuthenticated(user)
 
       // Si no completó el onboarding, ir al agente de bienvenida
       router.push(user.onboarding_completed ? '/patient/dashboard' : '/patient/onboarding')

@@ -6,6 +6,7 @@ from datetime import timedelta
 from typing import Optional, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from fastapi import Response
 from app.core.config import settings
 from app.core.timezone import utcnow_naive
 
@@ -74,4 +75,51 @@ def decode_token(token: str) -> dict[str, Any]:
         token,
         settings.SECRET_KEY,
         algorithms=[settings.ALGORITHM]
+    )
+
+
+# ── Cookie httpOnly (auth del frontend web) ───────────
+# Nombre distinto de "mb_token" (la vieja key de localStorage) a propósito,
+# para no confundir el mecanismo viejo con el nuevo durante la migración.
+AUTH_COOKIE_NAME = "mb_access_token"
+
+
+def set_auth_cookie(response: Response, token: str) -> None:
+    """
+    Guarda el JWT en una cookie httpOnly — es la fuente principal de auth
+    para el frontend web (ver get_current_user en dependencies.py, que
+    también sigue aceptando el header Authorization como alternativa para
+    scripts/Postman/una futura app móvil).
+
+    httponly=True: JavaScript no puede leer esta cookie ni con una
+    vulnerabilidad XSS — es la protección real que buscamos con este
+    cambio (antes el JWT vivía en localStorage, legible por cualquier
+    script que lograra ejecutarse en la página).
+
+    secure solo en producción: los navegadores rechazan cookies Secure
+    sobre conexiones HTTP simples, y el desarrollo local (localhost) no
+    usa HTTPS.
+
+    samesite="strict": frontend y backend viven bajo el mismo dominio en
+    producción (medicbolivia.com, ver ALLOWED_ORIGINS) — no hace falta
+    relajarlo a "lax" ni a "none".
+    """
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=settings.ENVIRONMENT == "production",
+        samesite="strict",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+
+
+def clear_auth_cookie(response: Response) -> None:
+    """Borra la cookie de auth — usado en /auth/logout."""
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        path="/",
+        secure=settings.ENVIRONMENT == "production",
+        samesite="strict",
     )

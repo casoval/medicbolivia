@@ -29,8 +29,7 @@ interface CatalogItem {
 export default function RegisterProfessionalPage() {
   const router = useRouter()
   const { t } = useLanguage()
-  const setUser  = useAuthStore((s) => s.setUser)
-  const setToken = useAuthStore((s) => s.setToken)
+  const setAuthenticated = useAuthStore((s) => s.setAuthenticated)
 
   const [form, setForm] = useState({
     phone: '', email: '', password: '', confirm_password: '',
@@ -161,13 +160,12 @@ export default function RegisterProfessionalPage() {
         sub_specialties: subSpecialtyNames,
         languages: finalLanguages,
       })
-      const { access_token, user } = res.data
-      localStorage.setItem('mb_token', access_token)
-      setToken(access_token)
-      setUser(user)
+      const { user } = res.data
+      setAuthenticated(user)
 
-      // A partir de acá ya hay token guardado, así que se pueden crear
-      // las propuestas (requieren estar autenticado como profesional).
+      // A partir de acá ya hay sesión iniciada (cookie httpOnly seteada
+      // por el backend), así que se pueden crear las propuestas
+      // (requieren estar autenticado como profesional).
       let specialtyProposalId: string | undefined
 
       if (specialtyNotListed) {

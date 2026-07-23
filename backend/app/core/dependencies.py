@@ -3,7 +3,7 @@ app/core/dependencies.py
 Dependencias de FastAPI: autenticación, roles, base de datos.
 Uso: current_user: User = Depends(get_current_user)
 """
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends, HTTPException, status, Header, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -11,21 +11,45 @@ from jose import JWTError
 from typing import Optional
 
 from app.db.database import get_db
-from app.core.security import decode_token
+from app.core.security import decode_token, AUTH_COOKIE_NAME
 from app.core.maintenance import is_maintenance_active
 from app.models.models import User, UserRole, UserStatus
 
-# Esquema Bearer para el header Authorization
-bearer_scheme = HTTPBearer()
+# Esquema Bearer para el header Authorization. auto_error=False porque la
+# fuente principal de auth ahora es la cookie httpOnly (AUTH_COOKIE_NAME,
+# ver security.py) — el header queda como alternativa para scripts,
+# Postman, o una futura app móvil que no maneje cookies. Si ninguna de
+# las dos fuentes trae el token, get_current_user es quien decide
+# lanzar 401, no este scheme.
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _extract_token(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials],
+) -> Optional[str]:
+    """
+    Busca el JWT primero en la cookie httpOnly (uso normal desde el
+    frontend web) y, si no está, en el header "Authorization: Bearer"
+    (scripts, Postman, apps que no manejan cookies).
+    """
+    cookie_token = request.cookies.get(AUTH_COOKIE_NAME)
+    if cookie_token:
+        return cookie_token
+    if credentials:
+        return credentials.credentials
+    return None
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """
     Dependencia principal de autenticación.
-    Extrae el usuario del JWT token en el header Authorization.
+    Extrae el usuario del JWT, ya sea de la cookie httpOnly o del header
+    Authorization (ver _extract_token).
 
     Uso en cualquier endpoint:
         @router.get("/perfil")
@@ -38,8 +62,12 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    token = _extract_token(request, credentials)
+    if not token:
+        raise credentials_exception
+
     try:
-        payload = decode_token(credentials.credentials)
+        payload = decode_token(token)
         user_id: str = payload.get("sub")
         if not user_id:
             raise credentials_exception
@@ -72,6 +100,7 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
+    request: Request,
     authorization: Optional[str] = Header(None),
     db: AsyncSession = Depends(get_db),
 ) -> Optional[User]:
@@ -82,9 +111,12 @@ async def get_current_user_optional(
     ProfessionalPatientVisibility) SOLO si el visitante está logueado
     como paciente, sin romper el acceso anónimo al resto del directorio.
     """
-    if not authorization or not authorization.lower().startswith("bearer "):
-        return None
-    token = authorization.split(" ", 1)[1].strip()
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token:
+        if not authorization or not authorization.lower().startswith("bearer "):
+            return None
+        token = authorization.split(" ", 1)[1].strip()
+
     try:
         payload = decode_token(token)
         user_id: str = payload.get("sub")
