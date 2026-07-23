@@ -10,6 +10,7 @@ Backend del menú "IA" del panel admin (4 pestañas):
     (Node/whatsapp-web.js) cada vez que llega un mensaje nuevo al número real.
 """
 from datetime import datetime, timedelta
+from app.core.timezone import utcnow_naive
 from typing import Optional, List
 
 import httpx
@@ -198,7 +199,7 @@ async def get_reminder_stats(db: AsyncSession = Depends(get_db), current_user: U
       - last_7_days: serie diaria (para un mini gráfico) + total de la
         semana, para detectar caídas de volumen día a día.
     """
-    now = datetime.utcnow()
+    now = utcnow_naive()
     today_start = datetime(now.year, now.month, now.day)
     week_start = today_start - timedelta(days=6)
 
@@ -542,7 +543,7 @@ async def receive_inbound_message(
         # por número.
         conversation.contact_name = payload.contact_name
 
-    conversation.last_message_at = datetime.utcnow()
+    conversation.last_message_at = utcnow_naive()
     conversation.last_message_preview = payload.message[:300]
     conversation.unread_count = (conversation.unread_count or 0) + 1
 

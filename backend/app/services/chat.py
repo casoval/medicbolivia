@@ -4,7 +4,8 @@ Lógica de negocio del chat interno paciente-profesional: validación de
 bloqueo, reportes al admin, visibilidad integral (Mis Pacientes), rate
 limiting y ciclo de vida de la conversación.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.timezone import utcnow_naive
 from typing import Optional
 
 from sqlalchemy import select, or_, and_, func
@@ -126,7 +127,7 @@ async def _check_rate_limits(
     """Lanza RateLimitError si el usuario se pasó de los límites definidos
     arriba. Se llama antes de crear cualquier ChatBlock o
     ProfessionalPatientVisibility (bloqueo integral)."""
-    since = datetime.utcnow() - timedelta(hours=24)
+    since = utcnow_naive() - timedelta(hours=24)
 
     total_today = (await db.execute(
         select(func.count(ChatBlock.id)).where(
@@ -145,7 +146,7 @@ async def _check_rate_limits(
             select(func.count(ChatBlock.id)).where(
                 ChatBlock.blocker_id == actor_user_id,
                 ChatBlock.blocked_id == target_user_id,
-                ChatBlock.created_at >= datetime.utcnow() - timedelta(hours=BLOCK_SAME_CONTACT_COOLDOWN_HOURS),
+                ChatBlock.created_at >= utcnow_naive() - timedelta(hours=BLOCK_SAME_CONTACT_COOLDOWN_HOURS),
             )
         )).scalar_one()
         if recent_same_contact > 0:
@@ -193,7 +194,7 @@ async def create_chat_block(
         is_reported=is_reported,
         reason_category=reason_category if is_reported else None,
         reason_text=reason_text if is_reported else None,
-        admin_notified_at=datetime.utcnow() if is_reported else None,
+        admin_notified_at=utcnow_naive() if is_reported else None,
     )
     db.add(block)
     await db.flush()
@@ -215,7 +216,7 @@ async def unblock_chat(
     result = await db.execute(query)
     rows = result.scalars().all()
     for row in rows:
-        row.unblocked_at = datetime.utcnow()
+        row.unblocked_at = utcnow_naive()
         row.unblocked_by_id = unblocked_by_id
     await db.flush()
 
@@ -290,7 +291,7 @@ async def block_patient_integrally(
         is_reported=is_reported,
         reason_category=reason_category if is_reported else None,
         reason_text=reason_text if is_reported else None,
-        admin_notified_at=datetime.utcnow() if is_reported else None,
+        admin_notified_at=utcnow_naive() if is_reported else None,
     )
     db.add(visibility)
 
@@ -303,7 +304,7 @@ async def block_patient_integrally(
         is_reported=is_reported,
         reason_category=reason_category if is_reported else None,
         reason_text=reason_text if is_reported else None,
-        admin_notified_at=datetime.utcnow() if is_reported else None,
+        admin_notified_at=utcnow_naive() if is_reported else None,
     ))
 
     await db.flush()
@@ -320,7 +321,7 @@ async def unblock_patient_integrally(
     independiente de este desbloqueo."""
     visibility = await get_visibility_block(db, professional_id, patient_id)
     if visibility:
-        visibility.restored_at = datetime.utcnow()
+        visibility.restored_at = utcnow_naive()
         visibility.restored_by_id = unblocked_by_id
 
     await unblock_chat(
@@ -375,7 +376,7 @@ def is_conversation_writable(conversation: ChatConversation) -> bool:
     """Solo ACTIVE y sin haber vencido expires_at permite escribir."""
     if conversation.status != ChatConversationStatus.ACTIVE.value:
         return False
-    if conversation.expires_at and conversation.expires_at < datetime.utcnow():
+    if conversation.expires_at and conversation.expires_at < utcnow_naive():
         return False
     return True
 

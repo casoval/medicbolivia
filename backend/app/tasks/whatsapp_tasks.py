@@ -19,7 +19,7 @@ mensaje como FAILED en la BD cuando se agotan los reintentos — así no se
 acumula una fila por cada intento fallido.
 """
 import asyncio
-from datetime import datetime
+from app.core.timezone import utcnow_naive
 from typing import Optional
 
 import httpx
@@ -76,7 +76,7 @@ async def _log_message(
             related_entity_type=related_entity_type,
             related_entity_id=related_entity_id,
         ))
-        conversation.last_message_at = datetime.utcnow()
+        conversation.last_message_at = utcnow_naive()
         conversation.last_message_preview = message[:300]
         await db.commit()
 

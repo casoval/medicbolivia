@@ -17,7 +17,7 @@ import shutil
 import smtplib
 import subprocess
 import tempfile
-from datetime import datetime
+from app.core.timezone import utcnow_naive
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -86,7 +86,7 @@ async def _run_backup() -> None:
         if not config or not config.is_active or not config.recipient_emails:
             return
 
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = utcnow_naive().strftime("%Y%m%d_%H%M%S")
         status = "SUCCESS"
         error_detail = None
         file_size = None
@@ -168,7 +168,7 @@ async def _check_and_run_backup() -> None:
         if not config or not config.is_active:
             return
 
-        now = datetime.utcnow()
+        now = utcnow_naive()
         if now.hour != config.hour_utc:
             return
         if config.frequency == "WEEKLY" and now.weekday() != 0:  # lunes

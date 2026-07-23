@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from typing import Optional
-from datetime import datetime
+from app.core.timezone import utcnow_naive
 from pydantic import BaseModel
 import uuid
 from loguru import logger
@@ -440,7 +440,7 @@ async def review_proposal(
 
     proposal.admin_note = data.admin_note
     proposal.reviewed_by = current_user.id
-    proposal.reviewed_at = datetime.utcnow()
+    proposal.reviewed_at = utcnow_naive()
 
     professional_result = await db.execute(
         select(Professional).where(Professional.id == proposal.professional_id)

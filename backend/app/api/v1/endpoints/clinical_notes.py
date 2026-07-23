@@ -14,7 +14,8 @@ Reglas de privacidad:
     importar la configuración de privacidad del paciente, por si ese
     paciente vuelve a consultarlo.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.timezone import utcnow_naive
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -44,7 +45,7 @@ def _is_editable(note: ClinicalNote, consultation: Consultation | None) -> bool:
     # Mientras la consulta sigue en curso, edición libre (autosave en vivo).
     if consultation and consultation.status == ConsultationStatus.IN_PROGRESS:
         return True
-    return datetime.utcnow() < note.created_at + EDIT_WINDOW
+    return utcnow_naive() < note.created_at + EDIT_WINDOW
 
 
 async def _enrich(

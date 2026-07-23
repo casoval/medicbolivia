@@ -11,6 +11,7 @@ from typing import Optional
 
 from app.db.database import get_db
 from app.core.dependencies import get_current_patient, get_current_professional
+from app.core.timezone import utcnow_naive
 from app.models.models import (
     User, Patient, Professional, Consultation, Payment, PaymentStatus,
     PatientProfessionalLink, ProfessionalStatus, PaymentChannel,
@@ -424,8 +425,7 @@ async def revoke_patient_link(
             detail="Tienes una cita agendada con este profesional. Complétala o cancélala antes de desvincularte.",
         )
 
-    from datetime import datetime
-    link.revoked_at = datetime.utcnow()
+    link.revoked_at = utcnow_naive()
     await db.commit()
     return {"detail": "Vínculo revocado"}
 
@@ -472,7 +472,6 @@ async def mark_notification_read(
     db: AsyncSession = Depends(get_db)
 ):
     from app.models.models import Notification
-    from datetime import datetime as dt
     result = await db.execute(
         select(Notification).where(
             and_(Notification.id == notification_id, Notification.user_id == current_user.id)
@@ -482,7 +481,7 @@ async def mark_notification_read(
     if not notif:
         raise HTTPException(status_code=404, detail="Notificación no encontrada")
 
-    notif.read_at = dt.utcnow()
+    notif.read_at = utcnow_naive()
     await db.commit()
     return {"message": "Notificación marcada como leída"}
 
@@ -494,13 +493,12 @@ async def mark_all_notifications_read(
     db: AsyncSession = Depends(get_db)
 ):
     from app.models.models import Notification
-    from datetime import datetime as dt
     result = await db.execute(
         select(Notification).where(
             and_(Notification.user_id == current_user.id, Notification.read_at.is_(None))
         )
     )
     for n in result.scalars().all():
-        n.read_at = dt.utcnow()
+        n.read_at = utcnow_naive()
     await db.commit()
     return {"message": "Notificaciones marcadas como leídas"}

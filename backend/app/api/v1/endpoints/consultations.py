@@ -7,7 +7,8 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
+from app.core.timezone import utcnow_naive
 from zoneinfo import ZoneInfo
 from loguru import logger
 
@@ -113,7 +114,7 @@ async def auto_cancel_professional_timeout_with_refund(consultation_id: str, db_
         payment = pay_result.scalar_one_or_none()
         if payment:
             payment.status = PaymentStatus.REFUNDED_FULL
-            payment.refunded_at = datetime.utcnow()
+            payment.refunded_at = utcnow_naive()
             payment.refund_note = "Devolución automática: el profesional no respondió a tiempo."
 
         # Notificar al paciente
@@ -706,7 +707,7 @@ async def professional_schedule_consultation(
         commission_percent_applied=amounts["commission_percent"],
         payment_channel=PaymentChannel.CASH,
         status=PaymentStatus.CONFIRMED if data.charge_now else PaymentStatus.PENDING,
-        paid_at=datetime.utcnow() if data.charge_now else None,
+        paid_at=utcnow_naive() if data.charge_now else None,
     )
     db.add(payment)
 
@@ -1087,7 +1088,9 @@ async def generate_payment_qr(
     # creación — ver app.services.payment.compute_professional_scheduled_qr_deadline.
     if consultation.created_by_role == ConsultationCreatedBy.PROFESSIONAL and consultation.scheduled_at:
         deadline = compute_professional_scheduled_qr_deadline(consultation.scheduled_at)
-        qr_expiry = max(1, int((deadline - datetime.utcnow()).total_seconds() // 60))
+        # deadline sale de scheduled_at (hora Bolivia) — hay que restar
+        # _bolivia_now(), no utcnow_naive(), o el resultado queda 4h mal.
+        qr_expiry = max(1, int((deadline - _bolivia_now()).total_seconds() // 60))
     else:
         qr_expiry = (
             PAYMENT_TIMEOUT_SCHEDULED_MINUTES
@@ -1104,7 +1107,7 @@ async def generate_payment_qr(
 
     if existing_payment:
         # Solo regenerar si el QR ya expiró
-        if existing_payment.qr_expires_at and existing_payment.qr_expires_at > datetime.utcnow():
+        if existing_payment.qr_expires_at and existing_payment.qr_expires_at > utcnow_naive():
             # QR aún válido — devolver el mismo
             return QRPaymentResponse(
                 payment_id=existing_payment.id,
@@ -1223,7 +1226,7 @@ async def cancel_consultation(
         confirmed_payment = confirmed_result.scalar_one_or_none()
         if confirmed_payment:
             confirmed_payment.status = PaymentStatus.REFUNDED_FULL
-            confirmed_payment.refunded_at = datetime.utcnow()
+            confirmed_payment.refunded_at = utcnow_naive()
             confirmed_payment.refund_note = "Devolución automática: el paciente canceló antes de que el profesional confirmara la cita."
             consultation.outcome_note = "CANCELLED_BY_PATIENT_WITH_REFUND"
         else:
@@ -1284,13 +1287,13 @@ async def payment_webhook(
     if not payment:
         return {"status": "not_found"}
 
-    if payment.qr_expires_at and payment.qr_expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
+    if payment.qr_expires_at and payment.qr_expires_at < utcnow_naive():
         return {"status": "expired"}
 
     payment.status = PaymentStatus.CONFIRMED
     payment.bank_tx_id = data.bank_tx_id
     payment.bank_name = data.bank_name
-    payment.paid_at = datetime.utcnow()
+    payment.paid_at = utcnow_naive()
 
     cons_result = await db.execute(
         select(Consultation).where(Consultation.id == payment.consultation_id)
@@ -1330,7 +1333,10 @@ async def payment_webhook(
                     hora=consultation.scheduled_at.strftime("%H:%M"),
                 )
 
-            now = datetime.utcnow()
+            # NOTA: scheduled_at se guarda en hora Bolivia naive, así que acá
+            # hay que compararlo contra _bolivia_now(), no contra utcnow_naive()
+            # (mezclar los dos desfasa este cálculo en 4h — ver bug corregido).
+            now = _bolivia_now()
             minutes_until = (consultation.scheduled_at - now).total_seconds() / 60
 
             # a) Calcular timeout dinámico para que el profesional acepte.
@@ -1534,11 +1540,11 @@ async def update_consultation_status(
 
     consultation.status = new_status
     if new_status == ConsultationStatus.IN_PROGRESS:
-        consultation.started_at = datetime.utcnow()
+        consultation.started_at = utcnow_naive()
     elif new_status == ConsultationStatus.COMPLETED:
-        consultation.ended_at = datetime.utcnow()
+        consultation.ended_at = utcnow_naive()
         if consultation.started_at:
-            delta = datetime.utcnow() - consultation.started_at
+            delta = utcnow_naive() - consultation.started_at
             consultation.duration_minutes = int(delta.total_seconds() / 60)
         return await _complete_consultation_effects(db, background_tasks, consultation)
 
@@ -1587,7 +1593,7 @@ async def complete_in_person_consultation(
     if consultation.status != ConsultationStatus.PAYMENT_CONFIRMED:
         raise HTTPException(status_code=400, detail=f"Estado actual no permite completarla: {consultation.status}")
 
-    consultation.ended_at = datetime.utcnow()
+    consultation.ended_at = utcnow_naive()
     logger.info(f"Profesional {professional.id} completó la cita presencial {consultation_id}")
     return await _complete_consultation_effects(db, background_tasks, consultation)
 
@@ -1622,7 +1628,7 @@ async def simulate_payment(
         payment.status = PaymentStatus.CONFIRMED
         payment.bank_tx_id = f"SIM-{consultation_id[:8].upper()}"
         payment.bank_name = "Simulación Local"
-        payment.paid_at = datetime.utcnow()
+        payment.paid_at = utcnow_naive()
     else:
         patient_result = await db.execute(select(Patient).where(Patient.user_id == current_user.id))
         patient = patient_result.scalar_one_or_none()
@@ -1638,7 +1644,7 @@ async def simulate_payment(
                 status=PaymentStatus.CONFIRMED,
                 bank_tx_id=f"SIM-{consultation_id[:8].upper()}",
                 bank_name="Simulación Local",
-                paid_at=datetime.utcnow(),
+                paid_at=utcnow_naive(),
             ))
 
     consultation.status = ConsultationStatus.PAYMENT_CONFIRMED
@@ -1754,7 +1760,7 @@ async def start_video_consultation(
     consultation.video_room_id = room_name
     consultation.video_room_url = token_patient
     consultation.status = ConsultationStatus.IN_PROGRESS
-    consultation.started_at = datetime.utcnow()
+    consultation.started_at = utcnow_naive()
     await db.commit()
 
     logger.info(f"Videollamada iniciada: sala {room_name} | consulta {consultation_id}")
@@ -2366,7 +2372,7 @@ async def cancel_scheduled_with_refund(
     payment = payment_result.scalar_one_or_none()
     if payment:
         payment.status = PaymentStatus.REFUNDED_FULL
-        payment.refunded_at = datetime.utcnow()
+        payment.refunded_at = utcnow_naive()
         payment.refund_note = f"Cancelada por el paciente con aviso de al menos {CANCEL_NOTICE_HOURS}h — devolución completa."
 
     await db.commit()
@@ -2403,12 +2409,12 @@ async def _release_payment_to_professional(db: AsyncSession, consultation: Consu
         # que "liberar" — el profesional ya lo registró aparte.
         return
     payment.status = PaymentStatus.RELEASED_TO_PROFESSIONAL
-    payment.released_at = datetime.utcnow()
+    payment.released_at = utcnow_naive()
     db.add(Earning(
         professional_id=consultation.professional_id,
         payment_id=payment.id,
         amount=consultation.professional_earning,
-        released_at=datetime.utcnow(),
+        released_at=utcnow_naive(),
     ))
 
 
@@ -2456,7 +2462,7 @@ async def dispute_consultation(
         )
 
     deadline = consultation.ended_at + timedelta(minutes=settings.PAYMENT_HOLD_MINUTES)
-    if datetime.utcnow() > deadline:
+    if utcnow_naive() > deadline:
         raise HTTPException(
             status_code=400,
             detail=f"El plazo de {settings.PAYMENT_HOLD_MINUTES} minutos para reportar un problema ya venció."
@@ -2478,7 +2484,7 @@ async def dispute_consultation(
     payment.status = PaymentStatus.DISPUTED
     payment.dispute_category = data.category
     payment.dispute_reason = data.reason
-    payment.disputed_at = datetime.utcnow()
+    payment.disputed_at = utcnow_naive()
     await db.commit()
 
     logger.info(f"[DISPUTA] Consulta {consultation_id} reportada por el paciente — pago {payment.id} congelado")
@@ -2610,7 +2616,7 @@ async def report_professional_no_show(
     payment = payment_result.scalar_one_or_none()
     if payment:
         payment.status = PaymentStatus.REFUNDED_FULL
-        payment.refunded_at = datetime.utcnow()
+        payment.refunded_at = utcnow_naive()
         payment.refund_note = "El profesional no se presentó a la cita — devolución completa al paciente."
 
     await db.commit()
@@ -2684,7 +2690,7 @@ async def cancel_by_professional(
         consultation.status = ConsultationStatus.REFUNDED
         consultation.outcome_note = "PROFESSIONAL_CANCELLED_WITH_REFUND"
         payment.status = PaymentStatus.REFUNDED_FULL
-        payment.refunded_at = datetime.utcnow()
+        payment.refunded_at = utcnow_naive()
         payment.refunded_amount = payment.amount
         payment.refund_note = "El profesional canceló la cita por un percance — devolución completa al paciente."
     else:
@@ -2810,7 +2816,7 @@ async def cancel_no_video_immediate(
     consultation.outcome_note = "PATIENT_CANCELLED_NO_VIDEO_IMMEDIATE"
 
     payment.status = PaymentStatus.REFUNDED_FULL
-    payment.refunded_at = datetime.utcnow()
+    payment.refunded_at = utcnow_naive()
     payment.refund_note = (
         f"El profesional no inició la videollamada en {VIDEO_START_GRACE_MINUTES_IMMEDIATE} min — "
         "cancelación solicitada por el paciente, devolución completa."
@@ -2899,7 +2905,7 @@ async def cancel_no_video_scheduled(
     payment = payment_result.scalar_one_or_none()
     if payment:
         payment.status = PaymentStatus.REFUNDED_FULL
-        payment.refunded_at = datetime.utcnow()
+        payment.refunded_at = utcnow_naive()
         payment.refund_note = (
             f"El profesional no inició la videollamada en {VIDEO_START_GRACE_MINUTES_SCHEDULED} min "
             "tras la hora programada — cancelación solicitada por el paciente, devolución completa."

@@ -12,6 +12,7 @@ Reglas de negocio (definidas junto al usuario):
   solo no da ningún privilegio si no hay membresía.
 """
 from datetime import datetime
+from app.core.timezone import utcnow_naive
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -94,7 +95,7 @@ async def has_pending_consultations_between(db: AsyncSession, patient_id: str, p
 async def professional_has_active_membership(db: AsyncSession, professional_id: str, at: datetime | None = None) -> bool:
     """Wrapper público — el resto de la app no debería importar el helper
     privado de commission.py directamente."""
-    return await _has_active_membership(db, professional_id, at or datetime.utcnow())
+    return await _has_active_membership(db, professional_id, at or utcnow_naive())
 
 
 async def professionals_with_active_membership(
@@ -117,7 +118,7 @@ async def professionals_with_active_membership(
     from app.core.timezone import BOLIVIA_TZ
     from app.models.models import ProfessionalMembership
 
-    at = at or datetime.utcnow()
+    at = at or utcnow_naive()
     if at.tzinfo is not None:
         at = at.astimezone(timezone.utc).replace(tzinfo=None)
     at_bolivia = (at.replace(tzinfo=timezone.utc)).astimezone(BOLIVIA_TZ).replace(tzinfo=None)

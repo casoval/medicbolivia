@@ -8,7 +8,7 @@ el historial sigue disponible en modo solo lectura, solo se bloquea el
 envío de mensajes nuevos (ver validación en chat.py, tanto REST como WS).
 """
 import asyncio
-from datetime import datetime
+from app.core.timezone import utcnow_naive
 
 from sqlalchemy import select, and_
 from loguru import logger
@@ -99,7 +99,7 @@ async def _expire_chat_conversations():
                 and_(
                     ChatConversation.status == ChatConversationStatus.ACTIVE.value,
                     ChatConversation.expires_at.is_not(None),
-                    ChatConversation.expires_at < datetime.utcnow(),
+                    ChatConversation.expires_at < utcnow_naive(),
                 )
             )
         )

@@ -11,7 +11,8 @@ horario, de estar ya en otra consulta en curso, notificación al paciente,
 devolución si corresponde) — así los dos canales no pueden divergir con el
 tiempo.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.timezone import utcnow_naive
 from typing import Optional
 
 from fastapi import BackgroundTasks
@@ -173,7 +174,7 @@ async def reject_consultation_core(
         payment = pay_result.scalar_one_or_none()
         if payment:
             payment.status = PaymentStatus.REFUNDED_FULL
-            payment.refunded_at = datetime.utcnow()
+            payment.refunded_at = utcnow_naive()
             payment.refund_note = "Devolución automática: el profesional no pudo atender la cita."
 
         patient_result_r = await db.execute(select(Patient).where(Patient.id == consultation.patient_id))

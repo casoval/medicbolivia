@@ -15,7 +15,6 @@ Flujo:
    el formulario, su consulta ya quedó registrada.
 """
 import smtplib
-from datetime import datetime
 from email.message import EmailMessage
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -25,6 +24,7 @@ from loguru import logger
 from app.db.database import get_db
 from app.core.config import settings
 from app.core.redis_client import security_redis_client as redis_client
+from app.core.timezone import utcnow_naive
 from app.models.models import ContactInquiry
 from app.schemas.schemas import ContactInquiryCreateRequest, ContactInquiryResponse
 
@@ -107,7 +107,7 @@ async def create_contact_inquiry(
             email=data.email,
             inquiry_type=data.inquiry_type,
             message=data.message,
-            created_at=datetime.utcnow(),
+            created_at=utcnow_naive(),
         )
 
     client_ip = request.client.host if request.client else "unknown"
@@ -123,7 +123,7 @@ async def create_contact_inquiry(
 
     # Freno de emergencia global: protege contra spam repartido entre
     # muchas IPs distintas, donde el límite de arriba (por IP) no alcanza.
-    daily_key = f"contact_form_daily:{datetime.utcnow().strftime('%Y-%m-%d')}"
+    daily_key = f"contact_form_daily:{utcnow_naive().strftime('%Y-%m-%d')}"
     daily_count = await redis_client.incr(daily_key)
     if daily_count == 1:
         await redis_client.expire(daily_key, 86400)

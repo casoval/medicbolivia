@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import CommissionPeriod, CommissionScope, PlatformSettings, ProfessionalMembership
 from app.core.config import settings
-from app.core.timezone import BOLIVIA_TZ
+from app.core.timezone import BOLIVIA_TZ, utcnow_naive
 
 
 async def _has_active_membership(db: AsyncSession, professional_id: str, at: datetime) -> bool:
@@ -86,7 +86,7 @@ async def resolve_commission_percent(
     mismo para un profesional, en formato porcentaje (0-100), listo para
     guardar en commission_percent_applied.
     """
-    at = at or datetime.utcnow()
+    at = at or utcnow_naive()
 
     if professional_id:
         if await _has_active_membership(db, professional_id, at):
@@ -115,7 +115,7 @@ async def get_professional_commission_summary(
     Info lista para mostrar en el perfil del profesional o en el panel
     admin: % vigente + de dónde sale (individual / global / default).
     """
-    at = at or datetime.utcnow()
+    at = at or utcnow_naive()
 
     if professional_id and await _has_active_membership(db, professional_id, at):
         return {"percent": Decimal("0.00"), "source": "MEMBERSHIP", "label": None, "ends_at": None}

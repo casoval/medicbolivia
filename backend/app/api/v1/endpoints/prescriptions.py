@@ -4,7 +4,7 @@ Recetas digitales con firma criptográfica y verificación QR.
 """
 import hashlib
 import uuid
-from datetime import datetime
+from app.core.timezone import utcnow_naive
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -110,13 +110,13 @@ async def create_prescription(
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente no encontrado")
 
-    today = datetime.utcnow()
+    today = utcnow_naive()
     age = today.year - patient.birth_date.year - (
         (today.month, today.day) < (patient.birth_date.month, patient.birth_date.day)
     )
 
     medications_data = [med.model_dump() for med in data.medications]
-    signed_at = datetime.utcnow()
+    signed_at = utcnow_naive()
 
     digital_hash = _generate_prescription_hash({
         "consultation_id": data.consultation_id,
@@ -182,7 +182,7 @@ async def void_prescription(
         raise HTTPException(status_code=400, detail="Esta receta ya está anulada")
 
     prescription.status = PrescriptionStatus.VOIDED.value
-    prescription.voided_at = datetime.utcnow()
+    prescription.voided_at = utcnow_naive()
     prescription.void_reason = data.reason
     await db.commit()
     await db.refresh(prescription)

@@ -10,6 +10,7 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, timedelta
+from app.core.timezone import utcnow_naive
 from dateutil.relativedelta import relativedelta
 from loguru import logger
 
@@ -147,7 +148,7 @@ async def get_stats(
     )).scalar_one()
 
     # Consultas del mes actual
-    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
+    month_start = utcnow_naive().replace(day=1, hour=0, minute=0, second=0)
     monthly_consultations = (await db.execute(
         select(func.count(Consultation.id)).where(
             Consultation.created_at >= month_start
@@ -597,7 +598,7 @@ async def reset_professional_penalties(
         raise HTTPException(status_code=404, detail="Profesional no encontrado")
 
     reset_row = await db.get(ProfessionalPenaltyReset, professional_id)
-    now = datetime.utcnow()
+    now = utcnow_naive()
     if reset_row:
         reset_row.reset_at = now
         reset_row.reset_by_admin_id = current_user.id
@@ -623,7 +624,7 @@ async def review_document(
 
     doc.status = data.status
     doc.review_note = data.review_note
-    doc.reviewed_at = datetime.utcnow()
+    doc.reviewed_at = utcnow_naive()
     doc.reviewed_by = current_user.id
 
     prof_result = await db.execute(
@@ -825,7 +826,7 @@ async def refund_payment(
 
     refund_status = PaymentStatus.REFUNDED_FULL if data.refund_type == "FULL" else PaymentStatus.REFUNDED_PARTIAL
     payment.status = refund_status
-    payment.refunded_at = datetime.utcnow()
+    payment.refunded_at = utcnow_naive()
     payment.refund_note = data.reason
     payment.refunded_amount = payment.amount if data.refund_type == "FULL" else data.amount
 
@@ -926,7 +927,7 @@ async def resolve_dispute(
 
     elif data.resolution == "REFUND_FULL":
         payment.status = PaymentStatus.REFUNDED_FULL
-        payment.refunded_at = datetime.utcnow()
+        payment.refunded_at = utcnow_naive()
         payment.refunded_amount = payment.amount
         result_status = PaymentStatus.REFUNDED_FULL
 
@@ -936,7 +937,7 @@ async def resolve_dispute(
         if data.amount > payment.amount:
             raise HTTPException(status_code=400, detail="El monto a reembolsar no puede ser mayor al monto original del pago")
         payment.status = PaymentStatus.REFUNDED_PARTIAL
-        payment.refunded_at = datetime.utcnow()
+        payment.refunded_at = utcnow_naive()
         payment.refunded_amount = data.amount
         result_status = PaymentStatus.REFUNDED_PARTIAL
 
@@ -989,7 +990,7 @@ async def get_agent_stats(
     current_user=Depends(get_current_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
+    month_start = utcnow_naive().replace(day=1, hour=0, minute=0, second=0)
 
     total_sessions = (await db.execute(
         select(func.count(AgentLog.id)).where(AgentLog.created_at >= month_start)
@@ -1834,7 +1835,7 @@ async def get_system_info(current_user=Depends(get_current_admin)):
         "ai_agent_model":      settings.GEMINI_MODEL,
         "whatsapp_engine":     "whatsapp-web.js (microservicio Node.js aparte)",
         "background_jobs":     "Celery + Redis",
-        "server_time_utc":     datetime.utcnow().isoformat(),
+        "server_time_utc":     utcnow_naive().isoformat(),
     }
 
 
@@ -1943,7 +1944,7 @@ async def review_chat_report(
     if not row or not row.is_reported:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reporte no encontrado")
 
-    row.admin_reviewed_at = datetime.utcnow()
+    row.admin_reviewed_at = utcnow_naive()
     row.admin_reviewed_by_id = current_user.id
     row.admin_resolution_notes = data.resolution_notes
 
@@ -2370,7 +2371,7 @@ async def invite_doctor_lead(
         )
 
     lead.status = DoctorLeadStatus.CONTACTADO.value
-    lead.last_contacted_at = datetime.utcnow()
+    lead.last_contacted_at = utcnow_naive()
     await db.commit()
     await db.refresh(lead)
 

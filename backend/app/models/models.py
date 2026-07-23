@@ -17,6 +17,7 @@ from sqlalchemy.dialects.postgresql import UUID
 import enum
 
 from app.db.database import Base
+from app.core.timezone import utcnow_naive
 
 
 # ─────────────────────────────────────────────────────
@@ -176,9 +177,9 @@ class User(Base):
         SAEnum(UserStatus), default=UserStatus.ACTIVE
     )
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utcnow_naive, onupdate=utcnow_naive
     )
 
     # Relaciones
@@ -204,8 +205,8 @@ class Patient(Base):
     chronic_conditions: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
     current_medications: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
     photo_url: Mapped[Optional[str]] = mapped_column(String(500))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     user: Mapped["User"] = relationship(back_populates="patient")
     consultations: Mapped[List["Consultation"]] = relationship(back_populates="patient")
@@ -247,8 +248,8 @@ class Professional(Base):
     total_consultations: Mapped[int] = mapped_column(Integer, default=0)
     cmb_matricula: Mapped[Optional[str]] = mapped_column(String(50))
     sedes_number: Mapped[Optional[str]] = mapped_column(String(50))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     user: Mapped["User"] = relationship(back_populates="professional")
     documents: Mapped[List["ProfessionalDoc"]] = relationship(back_populates="professional")
@@ -271,7 +272,7 @@ class ProfessionalDoc(Base):
     review_note: Mapped[Optional[str]] = mapped_column(Text)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     reviewed_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     professional: Mapped["Professional"] = relationship(back_populates="documents")
 
@@ -287,7 +288,7 @@ class Specialty(Base):
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     sub_specialties: Mapped[List["SubSpecialty"]] = relationship(back_populates="specialty")
 
@@ -303,7 +304,7 @@ class SubSpecialty(Base):
     specialty_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("specialties.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     specialty: Mapped["Specialty"] = relationship(back_populates="sub_specialties")
 
@@ -334,7 +335,7 @@ class SpecialtyProposal(Base):
     admin_note: Mapped[Optional[str]] = mapped_column(Text)
     reviewed_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     professional: Mapped["Professional"] = relationship(back_populates="specialty_proposals")
     parent_specialty: Mapped[Optional["Specialty"]] = relationship(foreign_keys=[parent_specialty_id])
@@ -349,7 +350,7 @@ class Schedule(Base):
     start_time: Mapped[str] = mapped_column(String(5), nullable=False)  # "08:00"
     end_time: Mapped[str] = mapped_column(String(5), nullable=False)    # "18:00"
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     professional: Mapped["Professional"] = relationship(back_populates="schedules")
 
@@ -421,8 +422,8 @@ class Consultation(Base):
     modality: Mapped[ConsultationModality] = mapped_column(
         SAEnum(ConsultationModality), nullable=False, default=ConsultationModality.VIDEO_CALL
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     patient: Mapped["Patient"] = relationship(back_populates="consultations")
     professional: Mapped[Optional["Professional"]] = relationship(back_populates="consultations")
@@ -439,7 +440,7 @@ class Derivation(Base):
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     consultation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id"))
     professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"))
-    notified_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    notified_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     accepted: Mapped[Optional[bool]] = mapped_column(Boolean)
     reason: Mapped[Optional[str]] = mapped_column(String(255))
@@ -484,8 +485,8 @@ class Payment(Base):
     dispute_reason: Mapped[Optional[str]] = mapped_column(Text)
     disputed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     resolution_note: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     consultation: Mapped["Consultation"] = relationship(back_populates="payment")
     patient: Mapped["Patient"] = relationship(back_populates="payments")
@@ -500,7 +501,7 @@ class Earning(Base):
     payment_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("payments.id"), unique=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     released_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     professional: Mapped["Professional"] = relationship(back_populates="earnings")
     payment: Mapped["Payment"] = relationship(back_populates="earning")
@@ -520,8 +521,8 @@ class Prescription(Base):
     digital_hash: Mapped[str] = mapped_column(String(256), unique=True, nullable=False)
     qr_verify_code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     pdf_url: Mapped[Optional[str]] = mapped_column(String(500))
-    signed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    signed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     # Anulación / reemisión: una receta firmada NUNCA se edita (rompería el
     # hash SHA-256 y el QR que las farmacias verifican). En su lugar se anula
@@ -573,8 +574,8 @@ class ClinicalNote(Base):
     # frontend pueda mostrar "editado" sin otra consulta).
     edit_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     consultation: Mapped["Consultation"] = relationship()
     professional: Mapped["Professional"] = relationship()
@@ -598,7 +599,7 @@ class ClinicalNoteAddendum(Base):
     clinical_note_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("clinical_notes.id"))
     professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"))
     content: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     professional: Mapped["Professional"] = relationship()
 
@@ -612,7 +613,7 @@ class Rating(Base):
     professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"))
     score: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5
     comment: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     consultation: Mapped["Consultation"] = relationship(back_populates="rating")
     patient: Mapped["Patient"] = relationship(back_populates="ratings")
@@ -631,7 +632,7 @@ class ProfessionalPenaltyReset(Base):
     __tablename__ = "professional_penalty_resets"
 
     professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"), primary_key=True)
-    reset_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    reset_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     reset_by_admin_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"))
 
 class AgentLog(Base):
@@ -648,7 +649,7 @@ class AgentLog(Base):
     latency_ms: Mapped[Optional[int]] = mapped_column(Integer)
     guardrail_triggered: Mapped[bool] = mapped_column(Boolean, default=False)
     metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     consultation: Mapped[Optional["Consultation"]] = relationship(back_populates="agent_logs")
 
@@ -663,7 +664,7 @@ class AuditLog(Base):
     entity_id: Mapped[Optional[str]] = mapped_column(String(100))
     metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSON)
     ip_address: Mapped[Optional[str]] = mapped_column(String(45))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     user: Mapped[Optional["User"]] = relationship(back_populates="audit_logs")
 
@@ -674,7 +675,7 @@ class Admin(Base):
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     user: Mapped["User"] = relationship(back_populates="admin")
 
@@ -695,7 +696,7 @@ class Notification(Base):
     entity_type: Mapped[Optional[str]] = mapped_column(String(50))
     entity_id: Mapped[Optional[str]] = mapped_column(String(100))
     read_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     user: Mapped["User"] = relationship(back_populates="notifications")
 
@@ -736,8 +737,8 @@ class CommissionPeriod(Base):
     ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=utcnow_naive, default=utcnow_naive)
 
     professional: Mapped[Optional["Professional"]] = relationship()
 
@@ -770,7 +771,7 @@ class PlatformSettings(Base):
     # Activable/desactivable por rol, no un único flag global.
     chat_attachments_enabled_patient: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     chat_attachments_enabled_professional: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=utcnow_naive, default=utcnow_naive)
 
 
 class ProfessionalMembership(Base):
@@ -806,8 +807,8 @@ class ProfessionalMembership(Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     note: Mapped[Optional[str]] = mapped_column(String(255))  # ej. "Pago recibido por QR personal, ref. 123"
     enabled_by_admin_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=utcnow_naive, default=utcnow_naive)
 
     professional: Mapped["Professional"] = relationship()
 
@@ -833,7 +834,7 @@ class PatientProfessionalLink(Base):
     professional_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("professionals.id", ondelete="CASCADE"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     # NULL mientras el vínculo sigue activo. Se llena cuando el paciente lo
     # revoca — no se borra la fila, para conservar el historial.
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -874,8 +875,8 @@ class FAQ(Base):
     # edita a mano desde el panel; no hay drag-and-drop, solo un número.
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
 
 # ─────────────────────────────────────────────────────
@@ -923,8 +924,8 @@ class WhatsAppConversation(Base):
     last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     last_message_preview: Mapped[Optional[str]] = mapped_column(String(300))
     unread_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     user: Mapped[Optional["User"]] = relationship()
     messages: Mapped[List["WhatsAppMessage"]] = relationship(back_populates="conversation", order_by="WhatsAppMessage.created_at")
@@ -945,7 +946,7 @@ class WhatsAppMessage(Base):
     # Referencia opcional a qué disparó el mensaje (ej. Consultation, ReminderRule)
     related_entity_type: Mapped[Optional[str]] = mapped_column(String(50))
     related_entity_id: Mapped[Optional[str]] = mapped_column(String(100))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     conversation: Mapped["WhatsAppConversation"] = relationship(back_populates="messages")
 
@@ -968,7 +969,7 @@ class AgentConfig(Base):
     auto_reply_patients: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     auto_reply_professionals: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     business_hours_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
 
 class ReminderTriggerType(str, enum.Enum):
@@ -1017,8 +1018,8 @@ class ReminderRule(Base):
     message_template: Mapped[str] = mapped_column(Text, nullable=False)  # admite {paciente}, {profesional}, {fecha}, {hora}
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     logs: Mapped[List["ReminderLog"]] = relationship(back_populates="rule")
 
@@ -1033,7 +1034,7 @@ class ReminderLog(Base):
     related_entity_id: Mapped[Optional[str]] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="SENT")  # SENT|FAILED|SKIPPED
     error_detail: Mapped[Optional[str]] = mapped_column(String(300))
-    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     rule: Mapped["ReminderRule"] = relationship(back_populates="logs")
 
@@ -1048,7 +1049,7 @@ class DBBackupConfig(Base):
     hour_utc: Mapped[int] = mapped_column(Integer, nullable=False, default=8)  # hora UTC de ejecución
     recipient_emails: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
     include_full_dump: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
 
 class DBBackupLog(Base):
@@ -1063,7 +1064,7 @@ class DBBackupLog(Base):
     # R2_LINK: dump superó BACKUP_MAX_ATTACHMENT_MB, se subió a R2 y el
     # correo llevó un link firmado en vez del archivo.
     delivery_method: Mapped[str] = mapped_column(String(20), nullable=False, default="ATTACHMENT")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
 
 class ContactInquiry(Base):
@@ -1093,7 +1094,7 @@ class ContactInquiry(Base):
     # Si el correo a info@medicbolivia.com se pudo mandar o no — la consulta
     # se guarda igual aunque falle, para no perder ningún lead.
     email_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
 
 # ─────────────────────────────────────────────────────
@@ -1146,8 +1147,8 @@ class ChatConversation(Base):
     close_reason: Mapped[Optional[str]] = mapped_column(String(255))
     last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     last_message_preview: Mapped[Optional[str]] = mapped_column(String(300))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     consultation: Mapped[Optional["Consultation"]] = relationship()
     patient_user: Mapped["User"] = relationship(foreign_keys=[patient_user_id])
@@ -1167,7 +1168,7 @@ class ChatMessage(Base):
     attachment_key: Mapped[Optional[str]] = mapped_column(String(500))
     attachment_content_type: Mapped[Optional[str]] = mapped_column(String(100))
     read_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     conversation: Mapped["ChatConversation"] = relationship(back_populates="messages")
     sender: Mapped["User"] = relationship()
@@ -1234,7 +1235,7 @@ class ChatBlock(Base):
     admin_resolution_notes: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
 
     # ── Auditoría de desbloqueo (soft-delete) ────────
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     unblocked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     unblocked_by_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
 
@@ -1275,7 +1276,7 @@ class ProfessionalPatientVisibility(Base):
     admin_reviewed_by_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
     admin_resolution_notes: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     restored_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     restored_by_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
 
@@ -1298,7 +1299,7 @@ class AdminAccessLog(Base):
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     admin_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     conversation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False)
-    accessed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    accessed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     admin: Mapped["User"] = relationship(foreign_keys=[admin_id])
     conversation: Mapped["ChatConversation"] = relationship(foreign_keys=[conversation_id])
@@ -1342,7 +1343,7 @@ class BroadcastMessage(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=BroadcastStatus.PENDING.value)
     recipients_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     sent_by_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     sent_by: Mapped["User"] = relationship(foreign_keys=[sent_by_id])
 
@@ -1410,8 +1411,8 @@ class DoctorLead(Base):
         UUID(as_uuid=False), ForeignKey("professionals.id", ondelete="SET NULL"), nullable=True
     )
     created_by_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     created_by: Mapped["User"] = relationship(foreign_keys=[created_by_id])
     converted_professional: Mapped[Optional["Professional"]] = relationship(foreign_keys=[converted_professional_id])

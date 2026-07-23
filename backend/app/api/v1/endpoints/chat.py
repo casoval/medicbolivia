@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSoc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, desc
 from datetime import datetime
+from app.core.timezone import utcnow_naive
 from jose import JWTError
 from loguru import logger
 
@@ -201,7 +202,7 @@ async def send_attachment(
     )
     db.add(msg)
 
-    conv.last_message_at = datetime.utcnow()
+    conv.last_message_at = utcnow_naive()
     conv.last_message_preview = "📎 Adjunto"
     await db.flush()
 
@@ -355,7 +356,7 @@ async def unblock(
     # Regla de los 15 días: no se puede "reactivar" una conversación cuya
     # ventana de chat ya venció desbloqueándola. El bloqueo se levanta
     # igual (por prolijidad de datos), pero seguirá en modo solo lectura.
-    if conv.expires_at and conv.expires_at < datetime.utcnow():
+    if conv.expires_at and conv.expires_at < utcnow_naive():
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             "La ventana de chat de esta conversación ya venció; desbloquear no la reactivará.",
@@ -431,7 +432,7 @@ async def chat_websocket(websocket: WebSocket, conversation_id: str, token: str 
 
                 msg = ChatMessage(conversation_id=conversation_id, sender_id=current_user.id, content=content)
                 db.add(msg)
-                conv.last_message_at = datetime.utcnow()
+                conv.last_message_at = utcnow_naive()
                 conv.last_message_preview = content[:300]
                 await db.flush()
 

@@ -27,7 +27,8 @@ Tres mecanismos, a propósito:
 """
 import asyncio
 import random
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.timezone import bolivia_now_naive, utc_naive_to_bolivia_naive
 
 from sqlalchemy import select, and_
 from loguru import logger
@@ -113,7 +114,11 @@ async def _check_scheduled_appointment_reminders() -> None:
         if not rules:
             return
 
-        now = datetime.utcnow()
+        # scheduled_at se guarda en hora Bolivia naive — "now" acá tiene
+        # que ser bolivia_now_naive(), no utcnow_naive(), o la ventana de
+        # comparación contra scheduled_at queda desfasada 4h y el cron
+        # nunca dispara en el momento real correcto.
+        now = bolivia_now_naive()
         # Comparte el contador entre TODAS las reglas/citas de esta corrida.
         # Arranca con un delay inicial aleatorio (no en el segundo 0) y
         # cada envío del lote suma un salto aleatorio al anterior, en vez
@@ -162,7 +167,10 @@ async def _check_scheduled_appointment_reminders() -> None:
                 # sentido mandarlo — por lógica, quien la agendó sabe que
                 # es en breve. Se deja constancia como SKIPPED igual, para
                 # que quede visible en el log de la regla.
-                lead_time = consultation.scheduled_at - consultation.created_at
+                # created_at es UTC-naive (timestamp técnico) pero scheduled_at
+                # es Bolivia-naive — hay que convertir uno al dominio del otro
+                # antes de restar, si no el lead_time queda mal en 4h.
+                lead_time = consultation.scheduled_at - utc_naive_to_bolivia_naive(consultation.created_at)
                 if lead_time <= timedelta(minutes=rule.offset_minutes):
                     db.add(ReminderLog(
                         rule_id=rule.id, user_id=None,

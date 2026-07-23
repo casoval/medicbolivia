@@ -2,11 +2,12 @@
 app/core/security.py
 Manejo de JWT tokens y hash de contraseñas.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from app.core.config import settings
+from app.core.timezone import utcnow_naive
 
 
 # ── Hash de contraseñas ───────────────────────────────
@@ -42,9 +43,9 @@ def create_access_token(
         Token JWT firmado
     """
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = utcnow_naive() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = utcnow_naive() + timedelta(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
 
@@ -52,7 +53,7 @@ def create_access_token(
         "sub": subject,
         "role": role,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": utcnow_naive(),
     }
 
     return jwt.encode(

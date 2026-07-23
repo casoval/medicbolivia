@@ -10,6 +10,7 @@ from decimal import Decimal
 from loguru import logger
 
 from app.core.config import settings
+from app.core.timezone import utcnow_naive, bolivia_now_naive
 
 
 def generate_qr_data(
@@ -35,7 +36,7 @@ def generate_qr_data(
     representa el cobro del monto total al paciente.
     """
     minutes = expiry_minutes if expiry_minutes is not None else settings.QR_EXPIRY_MINUTES
-    expires_at = datetime.utcnow() + timedelta(minutes=minutes)
+    expires_at = utcnow_naive() + timedelta(minutes=minutes)
     tx_id = str(uuid.uuid4()).replace("-", "")[:16].upper()
 
     # Datos del QR en formato boliviano
@@ -68,8 +69,12 @@ def compute_professional_scheduled_qr_deadline(scheduled_at: datetime, now: date
       - Piso de seguridad: nunca menos de 5 min desde "ahora", para que
         una cita agendada casi encima del horario (ej. en 3 minutos)
         igual le dé al paciente un margen real para pagar.
+
+    IMPORTANTE: scheduled_at se guarda en hora Bolivia naive (no UTC), así
+    que "now" acá tiene que ser bolivia_now_naive(), NO utcnow_naive() —
+    mezclar los dos desfasa todo el cálculo en 4h (offset de Bolivia).
     """
-    now = now or datetime.utcnow()
+    now = now or bolivia_now_naive()
     lead_time = scheduled_at - now
 
     if lead_time > timedelta(hours=2):
@@ -127,8 +132,7 @@ async def process_refund(
         if refund_type == "FULL"
         else PaymentStatus.REFUNDED_PARTIAL
     )
-    from datetime import datetime
-    payment.refunded_at = datetime.utcnow()
+    payment.refunded_at = utcnow_naive()
     payment.refund_note = reason
 
     log = AuditLog(
