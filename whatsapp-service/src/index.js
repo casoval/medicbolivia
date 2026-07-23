@@ -34,6 +34,7 @@ require('dotenv').config()
 const express = require('express')
 const qrcode = require('qrcode')
 const pino = require('pino')
+const crypto = require('crypto')
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js')
 
 const PORT = process.env.PORT || 4100
@@ -69,13 +70,24 @@ let connectionState = 'DOWN'   // DOWN | CONNECTING | QR_PENDING | CONNECTED
 let latestQR = null            // string crudo del QR, se convierte a PNG on-demand
 let connectWatchdogTimer = null
 
+// Compara dos strings en tiempo constante (crypto.timingSafeEqual exige
+// buffers del mismo largo, así que primero se hashean a un largo fijo con
+// SHA-256 — evita tanto la fuga por tiempo de comparación como la fuga por
+// largo del secreto real).
+function safeEqual(a, b) {
+  const hashA = crypto.createHash('sha256').update(String(a)).digest()
+  const hashB = crypto.createHash('sha256').update(String(b)).digest()
+  return crypto.timingSafeEqual(hashA, hashB)
+}
+
 // ── Middleware de autenticación interna ──────────────
 function requireInternalSecret(req, res, next) {
   if (!INTERNAL_SECRET) {
     logger.warn('WHATSAPP_SERVICE_INTERNAL_SECRET no está configurado — rechazando todo por seguridad')
     return res.status(500).json({ error: 'Servicio mal configurado: falta INTERNAL_SECRET' })
   }
-  if (req.headers['x-internal-secret'] !== INTERNAL_SECRET) {
+  const provided = req.headers['x-internal-secret']
+  if (typeof provided !== 'string' || !safeEqual(provided, INTERNAL_SECRET)) {
     return res.status(401).json({ error: 'No autorizado' })
   }
   next()
