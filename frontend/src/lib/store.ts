@@ -8,7 +8,7 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   login: (phone: string, password: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   loadUser: () => Promise<void>
   enrichUserProfile: () => Promise<void>
   setUser: (user: User) => void
@@ -36,14 +36,20 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
     // Con la cookie httpOnly, JS no puede borrarla por su cuenta — hay
-    // que avisarle al backend para que la borre en la respuesta. No
-    // esperamos la respuesta (fire and forget): igual vamos a
-    // /auth/login, y si por algún motivo la llamada falla, la cookie
-    // simplemente expira sola en el peor de los casos (24h, ver
-    // ACCESS_TOKEN_EXPIRE_MINUTES).
-    authAPI.logout().catch(() => {})
+    // que esperar la respuesta del backend (que sí manda el
+    // Set-Cookie de borrado). Si esto fuera "fire and forget" (sin
+    // await), la navegación a /auth/login corta la request a mitad de
+    // camino y la cookie NUNCA se borra, aunque la pantalla ya
+    // muestre el login — es exactamente el bug que encontramos en
+    // pruebas. Igual navegamos aunque la llamada falle (red caída,
+    // etc.): peor caso, la cookie expira sola a las 24h.
+    try {
+      await authAPI.logout()
+    } catch {
+      // no bloqueamos el logout del lado cliente por esto
+    }
     set({ user: null, isAuthenticated: false })
     window.location.href = '/auth/login'
   },
