@@ -234,3 +234,11 @@ frontend/tsconfig.tsbuildinfo
 **/node_modules/
 **/auth_info/
 **/.wwebjs_cache/
+
+# El gestor de paquetes del frontend es pnpm (ver scripts/setup_frontend.sh,
+# usa "pnpm install --frozen-lockfile"). Ignoramos los lockfiles de npm/yarn
+# para que no se cuelen de nuevo si alguien corre "npm install" o
+# "yarn install" por costumbre en vez de pnpm — solo pnpm-lock.yaml debe
+# quedar versionado.
+frontend/package-lock.json
+frontend/yarn.lock
