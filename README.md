@@ -116,15 +116,25 @@ En producción debe contener:
 ```env
 NEXT_PUBLIC_API_URL=https://medicbolivia.com/api/v1
 NEXT_PUBLIC_WS_URL=wss://medicbolivia.com
-NEXT_PUBLIC_GEMINI_API_KEY=tu-clave-gemini-aqui
 ```
 En desarrollo local debe contener:
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
 NEXT_PUBLIC_WS_URL=ws://localhost:4000
-NEXT_PUBLIC_GEMINI_API_KEY=tu-clave-gemini-aqui
 ```
 Siempre hacer `pnpm build` después de cambiar estas variables.
+
+**Ya NO se necesita `NEXT_PUBLIC_GEMINI_API_KEY` acá.** Antes la llamada de voz
+leía la API key de Gemini directo de esta variable — pero todo lo que empieza
+con `NEXT_PUBLIC_` en Next.js queda incrustado tal cual en el JS público que
+descarga cualquier visitante, así que la key real quedaba expuesta (visible
+incluso en la URL del WebSocket, con las devtools del navegador). Ahora el
+frontend le pide un *ephemeral token* de un solo uso al backend
+(`POST /agent/live-token`, autenticado) justo antes de cada llamada, y el
+backend es el único que conoce `GEMINI_API_KEY` (ver más abajo). Si tenías
+`NEXT_PUBLIC_GEMINI_API_KEY` configurada en tu `.env.local` o en el panel de
+tu hosting, quítala — y **rota la key real en Google AI Studio**, porque
+pudo haber quedado expuesta mientras estuvo así.
 
 ### ⚠️ ALLOWED_ORIGINS en el backend .env
 Debe estar en formato JSON con comillas dobles:
@@ -232,14 +242,19 @@ Paciente cuelga → mensaje de despedida con link al chat
 | base64 | Chunks de 32KB — 10x más rápido que concatenación carácter a carácter |
 | Fast Refresh | Estado en `window.__gLiveWs/Status/Started` — sobrevive recargas de módulo |
 
-**Variables de entorno necesarias:**
-```env
-# frontend/.env.local
-NEXT_PUBLIC_GEMINI_API_KEY=tu-clave-aqui   # misma clave que el backend
-```
-⚠️ En producción usar ephemeral tokens (ver docs de Gemini Live API) para no exponer la clave en el cliente.
+**Autenticación del WebSocket:** el frontend pide un *ephemeral token* de un
+solo uso al backend (`POST /agent/live-token`, requiere sesión iniciada)
+justo antes de abrir la conexión, en vez de usar la API key real — así, si
+alguien inspecciona la URL del WebSocket desde las devtools, solo encuentra
+un token que ya no sirve. La API key de Gemini vive únicamente en
+`backend/.env` (`GEMINI_API_KEY`), nunca en el frontend.
 
-**Detección automática de especialidades:** `geminiLive.ts` analiza el texto de cada respuesta de Medi buscando ~30 palabras clave (cardiólogo, pediatra, traumatólogo, diabetes, etc.) y llama silenciosamente a `agentAPI.chat()` con la especialidad detectada. Si el backend devuelve `available_professionals`, los muestra en el chat automáticamente.
+**Búsqueda de especialidad:** `geminiLive.ts` declara la función
+`buscar_profesionales` como *tool* del modelo (function calling real de
+Gemini Live, no detección de palabras clave sobre texto). Medi la invoca
+cuando decide qué especialidad recomendar; el callback `onSearchProfessionals`
+llama a `GET /agent/search-professionals` y el resultado (`available_professionals`)
+se muestra como tarjetas en el chat.
 
 ### Variables de entorno necesarias (backend/.env)
 ```env

@@ -260,7 +260,7 @@ async function forwardInboundToBackend(phone, message, contactName) {
   try {
     const resp = await fetch(`${BACKEND_URL}/api/v1/whatsapp/webhook/inbound`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_SECRET },
       body: JSON.stringify({ phone, message, contact_name: contactName }),
       signal: controller.signal,
     })

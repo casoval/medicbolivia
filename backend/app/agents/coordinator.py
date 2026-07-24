@@ -14,14 +14,48 @@ from google.genai import types
 from loguru import logger
 
 from app.core.config import settings
+from app.core.redis_client import redis_client
 
 # Cliente Gemini
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 GEMINI_MODEL = "gemini-2.5-flash"
 
-# ── Almacén de conversaciones en memoria ──────────────
-_conversation_store: dict[str, list] = {}
+# ── Historial de conversación en Redis ────────────────
+# Antes era un dict en memoria del proceso — con --workers 2 en producción
+# (ver ecosystem.config.js) cada worker tiene su propia copia, así que una
+# misma conversación podía "olvidarse" a mitad de camino si dos mensajes
+# consecutivos del mismo session_id caían en workers distintos (nada
+# garantiza afinidad de sesión entre requests HTTP). Redis es compartido
+# entre todos los workers y ya está disponible en el proyecto (rate
+# limiting, Celery), así que no suma infraestructura nueva.
+#
+# TTL de 2 horas: si el paciente abandona la conversación y no vuelve en
+# ese lapso, es razonable que el agente "empiece de cero" — y evita que
+# Redis acumule para siempre sesiones que nadie va a retomar (el dict en
+# memoria anterior tampoco expiraba nunca, así que esto además corrige esa
+# fuga de memoria).
+_SESSION_TTL_SECONDS = 60 * 60 * 2
+_SESSION_KEY_PREFIX = "agent_session:"
+
+
+async def _get_conversation(session_id: str) -> list:
+    raw = await redis_client.get(f"{_SESSION_KEY_PREFIX}{session_id}")
+    if not raw:
+        return []
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        logger.warning(f"Historial corrupto en Redis para session_id={session_id}, se descarta")
+        return []
+
+
+async def _save_conversation(session_id: str, history: list, max_turns: int = 20) -> None:
+    if len(history) > max_turns:
+        history = history[-max_turns:]
+    await redis_client.set(
+        f"{_SESSION_KEY_PREFIX}{session_id}", json.dumps(history), ex=_SESSION_TTL_SECONDS
+    )
 
 
 # ─────────────────────────────────────────────────────
@@ -448,7 +482,7 @@ async def run_coordinator(
 ) -> dict:
     """Ejecuta el Agente Coordinador."""
     start = time.time()
-    history = _conversation_store.get(session_id, [])
+    history = await _get_conversation(session_id)
 
     system = COORDINATOR_SYSTEM
     if patient_context:
@@ -464,9 +498,7 @@ async def run_coordinator(
 
         history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": reply})
-        if len(history) > 20:
-            history = history[-20:]
-        _conversation_store[session_id] = history
+        await _save_conversation(session_id, history)
 
         if db:
             from app.models.models import AgentLog, AgentType
@@ -561,7 +593,7 @@ async def run_onboarding(
 ) -> dict:
     """Ejecuta el Agente de Onboarding para primer registro."""
     system = ONBOARDING_PATIENT_SYSTEM if user_role == "PATIENT" else ONBOARDING_PROFESSIONAL_SYSTEM
-    history = _conversation_store.get(session_id, [])
+    history = await _get_conversation(session_id)
     contents = _build_contents(history, message)
 
     try:
@@ -569,9 +601,7 @@ async def run_onboarding(
 
         history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": reply})
-        if len(history) > 30:
-            history = history[-30:]
-        _conversation_store[session_id] = history
+        await _save_conversation(session_id, history, max_turns=30)
 
         onboarding_done = "[ONBOARDING_COMPLETE]" in reply
         reply = reply.replace("[ONBOARDING_COMPLETE]", "").strip()
@@ -649,7 +679,7 @@ async def run_help(
         if faq_text:
             system += f"\n\nFAQ_CONTEXT (respuestas oficiales verificadas por el equipo, priorizalas sobre tu conocimiento general):\n{faq_text}"
 
-    history = _conversation_store.get(session_id, [])
+    history = await _get_conversation(session_id)
     contents = _build_contents(history, message)
 
     try:
@@ -657,9 +687,7 @@ async def run_help(
 
         history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": reply})
-        if len(history) > 20:
-            history = history[-20:]
-        _conversation_store[session_id] = history
+        await _save_conversation(session_id, history)
 
         if db:
             from app.models.models import AgentLog, AgentType
@@ -680,10 +708,9 @@ async def run_help(
         return {"message": "Disculpa, tuve un problema técnico. Intenta de nuevo en un momento."}
 
 
-def get_conversation_history(session_id: str) -> list:
-    return _conversation_store.get(session_id, [])
+async def get_conversation_history(session_id: str) -> list:
+    return await _get_conversation(session_id)
 
 
-def clear_conversation(session_id: str) -> None:
-    if session_id in _conversation_store:
-        del _conversation_store[session_id]
+async def clear_conversation(session_id: str) -> None:
+    await redis_client.delete(f"{_SESSION_KEY_PREFIX}{session_id}")

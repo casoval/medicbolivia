@@ -162,7 +162,7 @@ export default function AgentPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isTyping])
+  }, [messages, isTyping, availableProfessionals])
 
   // Registrar callbacks en cada render para que siempre apunten a las funciones actuales
   useEffect(() => {
@@ -179,6 +179,7 @@ export default function AgentPage() {
         // se puede agendar, y devolvemos eso para que Medi lo verbalice con
         // datos reales, no con lo que imagine.
         try {
+          setTyping(true)
           const res = await agentAPI.searchProfessionals(specialty)
           const { covered, count_online, count_offline, professionals, professionals_public } = res.data
           if (professionals_public && professionals_public.length > 0) {
@@ -187,14 +188,20 @@ export default function AgentPage() {
           return { covered, count_online, count_offline, professionals }
         } catch {
           return { covered: false, count_online: 0, count_offline: 0, professionals: [] }
+        } finally {
+          setTyping(false)
         }
       },
     })
   })  // sin deps — se actualiza en cada render
 
-  function startCall() {
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
-    GeminiLive.startCall(apiKey)
+  async function startCall() {
+    try {
+      const res = await agentAPI.getLiveToken()
+      await GeminiLive.startCall(res.data.token)
+    } catch (err) {
+      addMessage('agent', 'No se pudo iniciar la llamada de voz. Intenta de nuevo en un momento.')
+    }
   }
 
   function endCall() {
@@ -278,7 +285,7 @@ export default function AgentPage() {
       if (sessionId) formData.append('session_id', sessionId)
 
       const res = await agentAPI.voiceChat(formData)
-      const { session_id, message, audio_base64 } = res.data
+      const { session_id, message, audio_base64, available_professionals } = res.data
 
       if (!sessionId) setSessionId(session_id)
 
@@ -286,6 +293,10 @@ export default function AgentPage() {
         addMessage('agent', message, audio_base64, true)
       } else {
         addMessage('agent', message)
+      }
+
+      if (available_professionals && available_professionals.length > 0) {
+        setAvailableProfessionals(available_professionals)
       }
 
     } catch {
@@ -369,7 +380,7 @@ export default function AgentPage() {
               </div>
             </div>
 
-            {/* Botón de llamada Vapi */}
+            {/* Botón de llamada (Gemini Live) */}
             <div className="ml-auto flex items-center gap-2">
               {callStatus === 'active' ? (
                 <button

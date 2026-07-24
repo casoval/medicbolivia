@@ -850,6 +850,11 @@ export const agentAPI = {
   // mecanismo de búsqueda que usa el agente coordinador de texto.
   searchProfessionals: (specialty: string) =>
     api.get('/agent/search-professionals', { params: { specialty } }),
+
+  // Token efímero de un solo uso para que el navegador conecte directo a
+  // Gemini Live por WebSocket, sin exponer nunca la API key real.
+  getLiveToken: () =>
+    api.post<{ token: string }>('/agent/live-token'),
 }
 
 export const prescriptionsAPI = {

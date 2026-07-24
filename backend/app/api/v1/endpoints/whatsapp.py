@@ -14,7 +14,7 @@ from app.core.timezone import utcnow_naive
 from typing import Optional, List
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
@@ -495,7 +495,17 @@ async def receive_inbound_message(
     payload: InboundMessagePayload,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    x_internal_secret: str = Header(default=""),
 ):
+    # Sin esto, cualquiera en internet que conozca esta URL podía simular un
+    # mensaje de WhatsApp con CUALQUIER número de teléfono (incluido el de
+    # un profesional real) y disparar el agente de IA gratis, o incluso
+    # aceptar/rechazar consultas inmediatas suplantando a un profesional
+    # (ver _classify_immediate_reply más abajo). whatsapp-service ya manda
+    # este header en sus propias rutas expuestas; acá faltaba exigirlo.
+    if not settings.WHATSAPP_SERVICE_INTERNAL_SECRET or x_internal_secret != settings.WHATSAPP_SERVICE_INTERNAL_SECRET:
+        raise HTTPException(status_code=401, detail="No autorizado")
+
     # Normalizamos acá aunque whatsapp-service ya manda el número con
     # código de país (así es como llegan los JID de WhatsApp): es
     # defensivo por si en algún momento se llama a este webhook desde

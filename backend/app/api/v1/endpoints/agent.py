@@ -4,11 +4,13 @@ Endpoints del agente IA: chat, onboarding, historial, TTS, voice-chat.
 """
 import uuid
 import base64
+import asyncio
+from datetime import datetime, timedelta, timezone
 import httpx
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.orm import selectinload
 from loguru import logger
 
@@ -119,7 +121,16 @@ async def _search_professionals(db: AsyncSession, specialty: str) -> dict:
             Professional.status == ProfessionalStatus.APPROVED,
             (
                 func.lower(Professional.specialty).contains(match_name.lower())
-                | Professional.sub_specialties.any(match_name)
+                # .any(match_name) comparaba exacto (case-sensitive) contra el
+                # array — un profesional con la subespecialidad guardada como
+                # "Electrofisiología Cardíaca" nunca matcheaba si el término
+                # venía como "electrofisiología cardíaca". El EXISTS/unnest de
+                # abajo compara en minúsculas, igual que ya se hace arriba
+                # con specialty.
+                | text(
+                    "EXISTS (SELECT 1 FROM unnest(professionals.sub_specialties) s "
+                    "WHERE lower(s) = lower(:match_name))"
+                ).bindparams(match_name=match_name)
             ),
         )
         result = await db.execute(query)
@@ -130,6 +141,12 @@ async def _search_professionals(db: AsyncSession, specialty: str) -> dict:
         "specialty_requested": specialty,
         "specialty_resolved": resolved,
         "covered": bool(online or offline),
+        "online_count": len(online),
+        "offline_count": len(offline),
+        # Las tarjetas mostradas/verbalizadas se recortan a 5 por prolijidad,
+        # pero online_count/offline_count arriba reflejan el total real —
+        # sin esto, Medi subestimaba cuántos profesionales hay si eran más
+        # de 5 (ej. "encontré 5" con 8 conectados de verdad).
         "online": [ProfessionalPublicResponse.model_validate(p) for p in online[:5]],
         "offline": [ProfessionalPublicResponse.model_validate(p) for p in offline[:5]],
     }
@@ -199,6 +216,87 @@ async def _text_to_speech(text: str) -> str | None:
         return None
 
 
+def _brief(p) -> dict:
+    return {
+        "id": p.id,
+        "nombre": f"{p.first_name} {p.last_name}",
+        "especialidad": p.specialty,
+        "precio_general": p.price_general,
+        "experiencia_años": p.years_experience,
+        "calificacion": p.average_rating,
+    }
+
+
+async def _handle_search_action(
+    db: AsyncSession,
+    session_id: str,
+    user_id: str,
+    patient_context: dict | None,
+    result: dict,
+) -> tuple[dict, list | None]:
+    """
+    Si run_coordinator devolvió una acción SEARCH_PROFESSIONALS, ejecuta la
+    búsqueda real y le devuelve el resultado al modelo para que redacte la
+    respuesta final. Devuelve (result_final, available_professionals).
+
+    Compartido entre /chat y /voice-chat — antes voice-chat no tenía este
+    mecanismo en absoluto (no podía sugerir tarjetas de médicos, cada nota
+    de voz era una llamada aislada a Gemini sin tools ni acción alguna).
+    """
+    if not (result.get("action") and result["action"].get("type") == "SEARCH_PROFESSIONALS"):
+        return result, None
+
+    specialty = result["action"].get("param", "")
+    search = await _search_professionals(db, specialty)
+    online, offline = search["online"], search["offline"]
+    resolved = search["specialty_resolved"] or specialty
+
+    # Se muestran tarjetas si hay online, offline, o ambos — la tarjeta
+    # real (frontend) ya distingue "Consultar ahora" (solo online) de
+    # "Agendar cita" (siempre disponible), así que mostrar offline no es
+    # engañoso, siempre que el mensaje del agente lo aclare.
+    available_professionals = (online + offline) or None
+
+    if online:
+        followup_message = (
+            f"[SISTEMA] Se encontraron {search['online_count']} profesional(es) de {resolved} "
+            f"CONECTADOS ahora mismo:\n{[_brief(p) for p in online]}\n\n"
+            f"Preséntaselos al paciente de forma amigable con su nombre real, especialidad y "
+            f"precio. Dile que puede tocar 'Consultar ahora' en la tarjeta para conectarse ya."
+        )
+    elif offline:
+        followup_message = (
+            f"[SISTEMA] Nadie de {resolved} está conectado ahora mismo, pero sí hay "
+            f"{search['offline_count']} profesional(es) de esa especialidad en la plataforma:\n"
+            f"{[_brief(p) for p in offline]}\n\n"
+            f"Explícale con honestidad al paciente que por ahora no hay nadie en línea, pero que "
+            f"puede tocar 'Agendar cita' en la tarjeta de abajo para reservar un horario. "
+            f"NUNCA digas que puede 'consultar ya' o que están disponibles ahora mismo."
+        )
+    elif search["specialty_resolved"]:
+        followup_message = (
+            f"[SISTEMA] Por ahora no tenemos ningún profesional de {resolved} en la plataforma, "
+            f"ni conectado ni para agendar. Dile esto con honestidad al paciente, sin prometer que "
+            f"aparecerá alguien pronto. Ofrécele como alternativa una primera evaluación con "
+            f"Medicina General, aclarando que ese médico lo puede orientar o derivar si hace falta."
+        )
+    else:
+        followup_message = (
+            f"[SISTEMA] '{specialty}' no coincide con ninguna especialidad de nuestro catálogo. "
+            f"Pídele al paciente que te cuente un poco más sobre el síntoma para orientarlo mejor, "
+            f"o sugiere Medicina General como punto de partida."
+        )
+
+    result2 = await run_coordinator(
+        session_id=session_id,
+        user_id=user_id,
+        message=followup_message,
+        patient_context=patient_context,
+        db=db,
+    )
+    return result2, available_professionals
+
+
 # ── POST /api/v1/agent/chat ──────────────────────────
 @router.post(
     "/chat",
@@ -224,68 +322,9 @@ async def agent_chat(
         db=db
     )
 
-    available_professionals = None
-
-    if result.get("action") and result["action"].get("type") == "SEARCH_PROFESSIONALS":
-        specialty = result["action"].get("param", "")
-        search = await _search_professionals(db, specialty)
-        online, offline = search["online"], search["offline"]
-        resolved = search["specialty_resolved"] or specialty
-
-        def _brief(p):
-            return {
-                "id": p.id,
-                "nombre": f"{p.first_name} {p.last_name}",
-                "especialidad": p.specialty,
-                "precio_general": p.price_general,
-                "experiencia_años": p.years_experience,
-                "calificacion": p.average_rating,
-            }
-
-        # Se muestran tarjetas si hay online, offline, o ambos — la tarjeta
-        # real (frontend) ya distingue "Consultar ahora" (solo online) de
-        # "Agendar cita" (siempre disponible), así que mostrar offline no es
-        # engañoso, siempre que el mensaje del agente lo aclare.
-        available_professionals = (online + offline) or None
-
-        if online:
-            followup_message = (
-                f"[SISTEMA] Se encontraron {len(online)} profesional(es) de {resolved} "
-                f"CONECTADOS ahora mismo:\n{[_brief(p) for p in online]}\n\n"
-                f"Preséntaselos al paciente de forma amigable con su nombre real, especialidad y "
-                f"precio. Dile que puede tocar 'Consultar ahora' en la tarjeta para conectarse ya."
-            )
-        elif offline:
-            followup_message = (
-                f"[SISTEMA] Nadie de {resolved} está conectado ahora mismo, pero sí hay "
-                f"{len(offline)} profesional(es) de esa especialidad en la plataforma:\n"
-                f"{[_brief(p) for p in offline]}\n\n"
-                f"Explícale con honestidad al paciente que por ahora no hay nadie en línea, pero que "
-                f"puede tocar 'Agendar cita' en la tarjeta de abajo para reservar un horario. "
-                f"NUNCA digas que puede 'consultar ya' o que están disponibles ahora mismo."
-            )
-        elif search["specialty_resolved"]:
-            followup_message = (
-                f"[SISTEMA] Por ahora no tenemos ningún profesional de {resolved} en la plataforma, "
-                f"ni conectado ni para agendar. Dile esto con honestidad al paciente, sin prometer que "
-                f"aparecerá alguien pronto. Ofrécele como alternativa una primera evaluación con "
-                f"Medicina General, aclarando que ese médico lo puede orientar o derivar si hace falta."
-            )
-        else:
-            followup_message = (
-                f"[SISTEMA] '{specialty}' no coincide con ninguna especialidad de nuestro catálogo. "
-                f"Pídele al paciente que te cuente un poco más sobre el síntoma para orientarlo mejor, "
-                f"o sugiere Medicina General como punto de partida."
-            )
-
-        result2 = await run_coordinator(
-            session_id=session_id,
-            user_id=current_user.id,
-            message=followup_message,
-            patient_context=patient_context,
-            db=db
-        )
-        result = result2
+    result, available_professionals = await _handle_search_action(
+        db, session_id, current_user.id, patient_context, result
+    )
 
     return AgentChatResponse(
         session_id=session_id,
@@ -321,28 +360,23 @@ async def voice_chat(
     # Leer audio
     audio_bytes = await audio.read()
     audio_b64 = base64.b64encode(audio_bytes).decode()
-
-    # Determinar mime type
     content_type = audio.content_type or "audio/webm"
 
-    # Enviar audio a Gemini para transcripción y respuesta
     from google import genai
     from google.genai import types as genai_types
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    # Obtener contexto del paciente
-    patient_context = await _get_patient_context(db, current_user.id)
-    context_str = ""
-    if patient_context:
-        context_str = f"\nPaciente: {patient_context['nombre']}"
-
-    system_prompt = f"""Eres Medi, agente de orientación médica de MedicBolivia Bolivia.
-El paciente te envió un mensaje de voz. Transcríbelo, entiéndelo y responde de forma breve y natural (máximo 3 oraciones).
-No emitas diagnósticos. Solo orienta y conecta con especialistas.{context_str}
-Responde SOLO con tu respuesta al paciente, sin mencionar la transcripción."""
-
-    agent_text = "Disculpa, el servicio está ocupado. Intenta en unos segundos."
+    # Paso 1: SOLO transcribir el audio. Antes este endpoint le pedía a
+    # Gemini que escuchara el audio y respondiera directamente en una única
+    # llamada aislada — sin historial (cada nota de voz "olvidaba" todo lo
+    # dicho antes, incluso en la misma sesión) y sin la herramienta de
+    # búsqueda de profesionales (nunca podía mostrar tarjetas de médicos, a
+    # diferencia del chat de texto y de la llamada en vivo). Ahora solo
+    # transcribe, y el texto resultante pasa por el mismo run_coordinator()
+    # que usa el chat de texto — así comparten historial (Redis) y el
+    # mecanismo real de ACTION:SEARCH_PROFESSIONALS.
+    transcript = ""
     for attempt in range(3):
         try:
             response = client.models.generate_content(
@@ -350,29 +384,52 @@ Responde SOLO con tu respuesta al paciente, sin mencionar la transcripción."""
                 contents=[
                     genai_types.Content(
                         parts=[
-                            genai_types.Part(text=system_prompt),
                             genai_types.Part(
-                                inline_data=genai_types.Blob(
-                                    mime_type=content_type,
-                                    data=audio_b64
-                                )
-                            )
+                                text="Transcribe exactamente lo que dice este audio, en español. "
+                                     "Responde SOLO con la transcripción textual, sin comillas, sin "
+                                     "comentarios ni explicaciones. Si no se entiende nada, responde "
+                                     "con una cadena vacía."
+                            ),
+                            genai_types.Part(
+                                inline_data=genai_types.Blob(mime_type=content_type, data=audio_b64)
+                            ),
                         ]
                     )
-                ]
+                ],
             )
-            agent_text = response.text.strip()
+            transcript = (response.text or "").strip()
             break
         except Exception as e:
-            logger.error(f"Gemini voice error (intento {attempt+1}): {e}")
+            logger.error(f"Gemini transcripción error (intento {attempt+1}): {e}")
             if attempt < 2:
-                import asyncio
                 await asyncio.sleep(2)
 
-    # Guardar en historial del chat
-    from app.agents.coordinator import get_conversation_history
-    # Agregar al historial (simplificado — el texto transcrito no lo tenemos, usamos placeholder)
-    
+    if not transcript:
+        return JSONResponse({
+            "session_id": session_id,
+            "message": "No pude entender tu mensaje de voz. ¿Puedes intentarlo de nuevo o escribirlo?",
+            "audio_base64": None,
+            "audio_format": "mp3",
+            "available_professionals": None,
+        })
+
+    patient_context = await _get_patient_context(db, current_user.id) if current_user.role == "PATIENT" else None
+
+    result = await run_coordinator(
+        session_id=session_id,
+        user_id=current_user.id,
+        message=(
+            "[Este mensaje llegó por nota de voz — tu respuesta se va a leer en voz alta, así que "
+            "respondé breve y natural, máximo 3 oraciones, sin listas ni números] " + transcript
+        ),
+        patient_context=patient_context,
+        db=db,
+    )
+    result, available_professionals = await _handle_search_action(
+        db, session_id, current_user.id, patient_context, result
+    )
+    agent_text = result["message"]
+
     # Convertir respuesta a audio con Google TTS
     audio_response_b64 = await _text_to_speech(agent_text)
 
@@ -380,7 +437,10 @@ Responde SOLO con tu respuesta al paciente, sin mencionar la transcripción."""
         "session_id": session_id,
         "message": agent_text,
         "audio_base64": audio_response_b64,  # None si TTS falla — frontend usará texto
-        "audio_format": "mp3"
+        "audio_format": "mp3",
+        "available_professionals": (
+            [p.model_dump(mode="json") for p in available_professionals] if available_professionals else None
+        ),
     })
 
 
@@ -405,6 +465,64 @@ async def text_to_speech_endpoint(
         raise HTTPException(status_code=500, detail="Error al generar audio")
 
     return {"audio_base64": audio_b64, "audio_format": "mp3"}
+
+
+# ── POST /api/v1/agent/live-token ───────────────────
+@router.post(
+    "/live-token",
+    summary="Genera un token efímero para que el navegador se conecte directo a Gemini Live"
+)
+async def create_live_token(current_user: User = Depends(get_current_user)):
+    """
+    La llamada de voz (Gemini Live) conecta el navegador DIRECTO a Google por
+    WebSocket para minimizar latencia — el audio nunca pasa por nuestro
+    backend. El navegador necesita alguna credencial para autenticarse ante
+    Google, pero NUNCA debe ser nuestra API key real: si lo fuera, cualquiera
+    que abriera las devtools durante una llamada podría copiarla de la URL
+    del WebSocket y usarla libremente a nuestra cuenta, sin límite (así
+    estaba antes: NEXT_PUBLIC_GEMINI_API_KEY quedaba incrustada tal cual en
+    el JS público del navegador).
+
+    En su lugar, generamos acá un ephemeral token — el mecanismo oficial de
+    Google para este caso exacto (https://ai.google.dev/gemini-api/docs/live-api/ephemeral-tokens):
+    de un solo uso y válido pocos minutos, así que aunque alguien lo copie
+    de las devtools no le sirve de nada. Este endpoint sí requiere sesión
+    iniciada en nuestra plataforma (get_current_user) — la seguridad del
+    token efímero depende de que solo lo entreguemos a usuarios reales.
+    """
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Agente de voz no configurado")
+
+    from google import genai as genai_client
+
+    token_client = genai_client.Client(
+        api_key=settings.GEMINI_API_KEY,
+        http_options={"api_version": "v1alpha"},  # los ephemeral tokens requieren v1alpha
+    )
+    now = datetime.now(timezone.utc)
+    try:
+        token = await asyncio.wait_for(
+            asyncio.to_thread(
+                token_client.auth_tokens.create,
+                config={
+                    "uses": 1,
+                    # 1 minuto para arrancar la sesión con este token (el
+                    # frontend lo pide justo antes de abrir el WebSocket, no
+                    # hace falta más), 5 minutos de margen por si el
+                    # navegador tarda en conseguir el micrófono antes de
+                    # completar el setup — la sesión en sí, una vez
+                    # iniciada, no depende más del token.
+                    "expire_time": (now + timedelta(minutes=5)).isoformat(),
+                    "new_session_expire_time": (now + timedelta(minutes=1)).isoformat(),
+                },
+            ),
+            timeout=10.0,
+        )
+    except Exception as e:
+        logger.error(f"Error generando token efímero de Gemini Live: {e}")
+        raise HTTPException(status_code=502, detail="No se pudo iniciar la llamada de voz, intenta de nuevo")
+
+    return {"token": token.name}
 
 
 # ── GET /api/v1/agent/search-professionals ──────────
@@ -442,8 +560,8 @@ async def search_professionals_endpoint(
         "specialty_requested": specialty,
         "specialty_resolved": search["specialty_resolved"],
         "covered": search["covered"],
-        "count_online": len(online),
-        "count_offline": len(offline),
+        "count_online": search["online_count"],
+        "count_offline": search["offline_count"],
         "professionals": [_brief(p, True) for p in online] + [_brief(p, False) for p in offline],
         "professionals_public": [p.model_dump(mode="json") for p in online] + [p.model_dump(mode="json") for p in offline],
     }
@@ -526,113 +644,6 @@ async def get_history(
     session_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    history = get_conversation_history(session_id)
+    history = await get_conversation_history(session_id)
     return {"session_id": session_id, "messages": history, "count": len(history)}
 
-# ── POST /api/v1/agent/vapi-tts ─────────────────────
-@router.post(
-    "/vapi-tts",
-    summary="TTS para Vapi (sin autenticación)"
-)
-async def vapi_tts(request: Request):
-    """
-    Endpoint TTS compatible con Vapi Custom Voice.
-    Retorna: audio MP3 binario
-    """
-    try:
-        body = await request.json()
-        logger.info(f"Vapi TTS body: {body}")
-
-        # Vapi envía el texto dentro de body["message"]["text"]
-        msg = body.get("message", {})
-        text = ""
-        if isinstance(msg, dict):
-            text = msg.get("text", "") or msg.get("content", "")
-        elif isinstance(msg, str):
-            text = msg
-        if not text:
-            text = body.get("text", "")
-
-        if not text:
-            raise HTTPException(status_code=400, detail="No text provided")
-
-        audio_b64 = await _text_to_speech(text)
-        if not audio_b64:
-            raise HTTPException(status_code=500, detail="TTS failed")
-
-        audio_bytes = base64.b64decode(audio_b64)
-        
-        from fastapi.responses import Response
-        return Response(content=audio_bytes, media_type="audio/mpeg")
-    except Exception as e:
-        logger.error(f"Vapi TTS error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ── POST /api/v1/agent/vapi-llm/chat/completions ────
-from fastapi.responses import StreamingResponse
-import json
-
-@router.post("/vapi-llm/chat/completions")
-async def vapi_llm_completions(request: Request):
-    from google import genai as genai_client
-    from google.genai import types as genai_types
-
-    body = await request.json()
-    messages = body.get("messages", [])
-    stream = body.get("stream", False)
-
-    system_prompt = ""
-    last_user_msg = ""
-
-    for msg in messages:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        if role == "system":
-            system_prompt = content
-        elif role == "user":
-            last_user_msg = content
-
-    client = genai_client.Client(api_key=settings.GEMINI_API_KEY)
-
-    if stream:
-        async def generate():
-            try:
-                response = client.models.generate_content_stream(
-                    model="gemini-2.5-flash",
-                    contents=last_user_msg,
-                    config=genai_types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                    )
-                )
-                for chunk in response:
-                    text = chunk.text if hasattr(chunk, 'text') and chunk.text else ""
-                    if text:
-                        data = {
-                            "id": "chatcmpl-vapi",
-                            "object": "chat.completion.chunk",
-                            "choices": [{"delta": {"content": text}, "index": 0, "finish_reason": None}]
-                        }
-                        yield f"data: {json.dumps(data)}\n\n"
-                yield "data: [DONE]\n\n"
-            except Exception as e:
-                logger.error(f"Vapi LLM stream error: {e}")
-                yield "data: [DONE]\n\n"
-
-        return StreamingResponse(generate(), media_type="text/event-stream")
-    else:
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=last_user_msg,
-                config=genai_types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                )
-            )
-            return {
-                "id": "chatcmpl-vapi",
-                "object": "chat.completion",
-                "choices": [{"message": {"role": "assistant", "content": response.text}, "index": 0, "finish_reason": "stop"}]
-            }
-        except Exception as e:
-            logger.error(f"Vapi LLM error: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
