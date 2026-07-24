@@ -1,10 +1,17 @@
 /** @type {import('next').NextConfig} */
+const path = require('path')
 const nextConfig = {
   reactStrictMode: false, // Evita doble-mount en desarrollo (necesario para LiveKit)
-  // No bloquear el build de producción por errores/warnings de ESLint
-  // (hay deuda técnica de lint en varios archivos que no afecta el funcionamiento).
-  eslint: {
-    ignoreDuringBuilds: true,
+  // Next.js 16 eliminó "next lint" y, con él, la opción "eslint" de este
+  // config (ya no hace nada — next build tampoco corre lint solo).
+  // El lint, si hace falta, se corre aparte con `npx eslint .`
+  //
+  // Fija la raíz del workspace para Turbopack de forma explícita: sin
+  // esto, Next detecta el package-lock.json suelto en la raíz del repo
+  // (fuera de frontend/) y advierte que no está seguro de cuál es la
+  // raíz real del proyecto.
+  turbopack: {
+    root: path.join(__dirname),
   },
   // Permite imágenes desde S3 y servicios externos
   images: {

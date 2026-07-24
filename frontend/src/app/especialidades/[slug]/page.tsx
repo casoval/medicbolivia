@@ -10,13 +10,14 @@ import { SEO_SPECIALTIES, getSpecialtyBySlug } from '@/lib/seo/specialties'
 
 const SITE_URL = 'https://medicbolivia.com'
 
-type Props = { params: { slug: string } }
+type Props = { params: Promise<{ slug: string }> }
 
 export function generateStaticParams() {
   return SEO_SPECIALTIES.map((s) => ({ slug: s.slug }))
 }
 
-export function generateMetadata({ params }: Props): Metadata {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   const specialty = getSpecialtyBySlug(params.slug)
   if (!specialty) return {}
 
@@ -34,7 +35,8 @@ export function generateMetadata({ params }: Props): Metadata {
   }
 }
 
-export default function SpecialtyPage({ params }: Props) {
+export default async function SpecialtyPage(props: Props) {
+  const params = await props.params;
   const specialty = getSpecialtyBySlug(params.slug)
   if (!specialty) notFound()
 
