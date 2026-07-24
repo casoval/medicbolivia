@@ -1036,14 +1036,19 @@ async def list_patients(
     )
     rows = result.all()
 
+    # Conteo de consultas por paciente en UNA sola consulta agregada, en vez
+    # de un `SELECT COUNT(*)` por cada paciente dentro del loop de abajo.
+    # Con miles de pacientes, ese N+1 significaba miles de round-trips
+    # secuenciales a la base en una sola request de este endpoint.
+    cons_counts_result = await db.execute(
+        select(Consultation.patient_id, func.count(Consultation.id))
+        .group_by(Consultation.patient_id)
+    )
+    cons_counts: dict[str, int] = {pid: count for pid, count in cons_counts_result.all()}
+
     patients_list = []
     for patient, user in rows:
-        cons_count = await db.execute(
-            select(func.count(Consultation.id)).where(
-                Consultation.patient_id == patient.id
-            )
-        )
-        total_cons = cons_count.scalar_one()
+        total_cons = cons_counts.get(patient.id, 0)
 
         patients_list.append({
             "id":                  patient.id,

@@ -359,14 +359,20 @@ class Consultation(Base):
     __tablename__ = "consultations"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
-    patient_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("patients.id"))
-    professional_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"))
+    # index=True en patient_id/professional_id/status/scheduled_at/created_at:
+    # son las columnas por las que se filtra todo el tiempo (historial de
+    # paciente/profesional, panel admin, y el cron de recordatorios que
+    # corre cada 60s). Postgres no indexa foreign keys automáticamente —
+    # ver migración r2s3t4u5v6w7_add_missing_fk_indexes, que es la que
+    # realmente crea estos índices en la base ya existente.
+    patient_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("patients.id"), index=True)
+    professional_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"), index=True)
     consultation_type: Mapped[ConsultationType] = mapped_column(SAEnum(ConsultationType), default=ConsultationType.IMMEDIATE)
-    status: Mapped[ConsultationStatus] = mapped_column(SAEnum(ConsultationStatus), default=ConsultationStatus.AGENT_TRIAGING)
+    status: Mapped[ConsultationStatus] = mapped_column(SAEnum(ConsultationStatus), default=ConsultationStatus.AGENT_TRIAGING, index=True)
     specialty: Mapped[Optional[str]] = mapped_column(String(100))
     chief_complaint: Mapped[Optional[str]] = mapped_column(Text)
     agent_summary: Mapped[Optional[str]] = mapped_column(Text)
-    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, index=True)
     # Propuesta de reprogramación pendiente: cualquiera de las dos partes
     # (paciente o profesional) puede proponer un horario nuevo si la cita
     # original ya no le funciona; la otra parte debe aceptar o rechazar.
@@ -422,7 +428,7 @@ class Consultation(Base):
     modality: Mapped[ConsultationModality] = mapped_column(
         SAEnum(ConsultationModality), nullable=False, default=ConsultationModality.VIDEO_CALL
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     patient: Mapped["Patient"] = relationship(back_populates="consultations")
@@ -453,7 +459,7 @@ class Payment(Base):
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     consultation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id"), unique=True)
-    patient_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("patients.id"))
+    patient_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("patients.id"), index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     platform_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     professional_net: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
@@ -471,7 +477,7 @@ class Payment(Base):
     qr_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     bank_tx_id: Mapped[Optional[str]] = mapped_column(String(100))
     bank_name: Mapped[Optional[str]] = mapped_column(String(100))
-    status: Mapped[PaymentStatus] = mapped_column(SAEnum(PaymentStatus), default=PaymentStatus.PENDING)
+    status: Mapped[PaymentStatus] = mapped_column(SAEnum(PaymentStatus), default=PaymentStatus.PENDING, index=True)
     paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     released_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     refunded_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
@@ -511,8 +517,8 @@ class Prescription(Base):
     __tablename__ = "prescriptions"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
-    consultation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id"))
-    professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"))
+    consultation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id"), index=True)
+    professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"), index=True)
     patient_name: Mapped[str] = mapped_column(String(200), nullable=False)
     patient_ci: Mapped[str] = mapped_column(String(20), nullable=False)
     patient_age: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -556,9 +562,9 @@ class ClinicalNote(Base):
     __tablename__ = "clinical_notes"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
-    consultation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id"))
-    professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"))
-    patient_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("patients.id"))
+    consultation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id"), index=True)
+    professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"), index=True)
+    patient_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("patients.id"), index=True)
 
     # Formato SOAP, estándar en historias clínicas
     subjective: Mapped[Optional[str]] = mapped_column(Text)   # lo que reporta/relata el paciente
@@ -609,8 +615,8 @@ class Rating(Base):
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     consultation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id"), unique=True)
-    patient_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("patients.id"))
-    professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"))
+    patient_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("patients.id"), index=True)
+    professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"), index=True)
     score: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5
     comment: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)

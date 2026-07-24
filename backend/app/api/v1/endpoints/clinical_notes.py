@@ -84,6 +84,96 @@ async def _enrich(
     return base
 
 
+async def _enrich_many(
+    db: AsyncSession,
+    notes: list[ClinicalNote],
+    professional: Professional | None = None,
+    patient: Patient | None = None,
+) -> list[ClinicalNoteResponse]:
+    """
+    Versión en bulk de _enrich(): resuelve profesional, paciente,
+    consulta y autores de addenda con UNA consulta por tabla (usando
+    `IN (...)`), en vez de que _enrich() dispare 2-4 queries por cada
+    nota dentro del loop del caller. Antes, un médico o paciente con
+    cientos de notas acumuladas hacía que ese endpoint se pusiera cada
+    vez más lento con el uso real de la plataforma.
+
+    `professional`/`patient`: pasar solo si TODAS las notas son del mismo
+    profesional o del mismo paciente (ej. "mis notas escritas" siempre es
+    el profesional logueado) — evita la query de bulk para esa entidad.
+    Si no se pasa, se resuelve para todos los IDs distintos presentes en
+    `notes`.
+    """
+    if not notes:
+        return []
+
+    professionals_by_id: dict[str, Professional] = {}
+    if professional:
+        professionals_by_id[professional.id] = professional
+    else:
+        prof_ids = {n.professional_id for n in notes if n.professional_id}
+        if prof_ids:
+            result = await db.execute(select(Professional).where(Professional.id.in_(prof_ids)))
+            professionals_by_id = {p.id: p for p in result.scalars().all()}
+
+    patients_by_id: dict[str, Patient] = {}
+    if patient:
+        patients_by_id[patient.id] = patient
+    else:
+        patient_ids = {n.patient_id for n in notes if n.patient_id}
+        if patient_ids:
+            result = await db.execute(select(Patient).where(Patient.id.in_(patient_ids)))
+            patients_by_id = {p.id: p for p in result.scalars().all()}
+
+    consultation_ids = {n.consultation_id for n in notes if n.consultation_id}
+    consultations_by_id: dict[str, Consultation] = {}
+    if consultation_ids:
+        result = await db.execute(select(Consultation).where(Consultation.id.in_(consultation_ids)))
+        consultations_by_id = {c.id: c for c in result.scalars().all()}
+
+    # Autores de los addenda: pueden ser distintos del profesional dueño de
+    # la nota (otro médico agregando un addendum), así que se resuelven
+    # aparte — reutilizando lo ya cargado en professionals_by_id cuando
+    # coincide, para no repetir esos IDs en la query de abajo.
+    addendum_prof_ids = {a.professional_id for n in notes for a in n.addenda if a.professional_id}
+    addendum_profs_by_id: dict[str, Professional] = dict(professionals_by_id)
+    missing_addendum_ids = addendum_prof_ids - addendum_profs_by_id.keys()
+    if missing_addendum_ids:
+        result = await db.execute(select(Professional).where(Professional.id.in_(missing_addendum_ids)))
+        addendum_profs_by_id.update({p.id: p for p in result.scalars().all()})
+
+    enriched: list[ClinicalNoteResponse] = []
+    for n in notes:
+        base = ClinicalNoteResponse.model_validate(n)
+
+        prof = professionals_by_id.get(n.professional_id)
+        if prof:
+            base.professional_name = f"Dr. {prof.first_name} {prof.last_name}"
+            base.professional_specialty = prof.specialty
+
+        pat = patients_by_id.get(n.patient_id)
+        if pat:
+            base.patient_name = f"{pat.first_name} {pat.last_name}"
+            base.patient_photo_url = pat.photo_url
+
+        consultation = consultations_by_id.get(n.consultation_id)
+        base.is_editable = _is_editable(n, consultation)
+        base.edit_window_expires_at = n.created_at + EDIT_WINDOW
+
+        enriched_addenda = []
+        for a in n.addenda:
+            a_resp = ClinicalNoteAddendumResponse.model_validate(a)
+            a_prof = addendum_profs_by_id.get(a.professional_id)
+            if a_prof:
+                a_resp.professional_name = f"Dr. {a_prof.first_name} {a_prof.last_name}"
+            enriched_addenda.append(a_resp)
+        base.addenda = enriched_addenda
+
+        enriched.append(base)
+
+    return enriched
+
+
 async def _get_professional_or_403(current_user: User, db: AsyncSession) -> Professional:
     prof_result = await db.execute(
         select(Professional).where(Professional.user_id == current_user.id)
@@ -374,13 +464,7 @@ async def get_my_clinical_history(
         .order_by(ClinicalNote.created_at.desc())
     )
     notes = result.scalars().all()
-
-    enriched = []
-    for n in notes:
-        prof_result = await db.execute(select(Professional).where(Professional.id == n.professional_id))
-        prof = prof_result.scalar_one_or_none()
-        enriched.append(await _enrich(db, n, prof, patient))
-    return enriched
+    return await _enrich_many(db, notes, patient=patient)
 
 
 # ── GET /clinical-notes/patient/{patient_id}/mine ────
@@ -414,7 +498,7 @@ async def get_my_notes_for_patient(
         .order_by(ClinicalNote.created_at.desc())
     )
     notes = result.scalars().all()
-    return [await _enrich(db, n, professional, patient) for n in notes]
+    return await _enrich_many(db, notes, professional=professional, patient=patient)
 
 
 # ── GET /clinical-notes/patient/{patient_id}/shared ──
@@ -443,15 +527,7 @@ async def get_patient_shared_history(
         .order_by(ClinicalNote.created_at.desc())
     )
     notes = result.scalars().all()
-
-    enriched = []
-    for n in notes:
-        prof_result = await db.execute(select(Professional).where(Professional.id == n.professional_id))
-        prof = prof_result.scalar_one_or_none()
-        pat_result = await db.execute(select(Patient).where(Patient.id == n.patient_id))
-        pat = pat_result.scalar_one_or_none()
-        enriched.append(await _enrich(db, n, prof, pat))
-    return enriched
+    return await _enrich_many(db, notes)
 
 
 # ── GET /clinical-notes/my ────────────────────────────
@@ -474,9 +550,4 @@ async def get_my_written_notes(
         .order_by(ClinicalNote.created_at.desc())
     )
     notes = result.scalars().all()
-    enriched = []
-    for n in notes:
-        pat_result = await db.execute(select(Patient).where(Patient.id == n.patient_id))
-        pat = pat_result.scalar_one_or_none()
-        enriched.append(await _enrich(db, n, professional, pat))
-    return enriched
+    return await _enrich_many(db, notes, professional=professional)

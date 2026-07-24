@@ -4,11 +4,24 @@ Servicio de almacenamiento en Cloudflare R2 para documentos médicos y fotos de 
 R2 es compatible con la API de S3 — solo cambia el endpoint y se eliminan
 los parámetros no soportados (ACL, ServerSideEncryption).
 """
+import asyncio
 import uuid
 import boto3
 from botocore.exceptions import ClientError
 from loguru import logger
 from app.core.config import settings
+
+# boto3 es 100% síncrono (no tiene soporte async nativo). Si sus llamadas de
+# red (put_object, generate_presigned_url) se ejecutan con un simple `await`
+# directo desde un endpoint async, en realidad NO ceden el control: bloquean
+# el event loop completo del worker mientras dura la subida/operación contra
+# R2. Con --workers 2 (ver ecosystem.config.js), un solo profesional
+# subiendo su título/CI (o su foto, o un adjunto de chat) congela TODAS las
+# demás requests que ese worker esté sirviendo en simultáneo (chat, video,
+# lo que sea) durante ese tiempo. Por eso cada llamada a boto3 de este
+# archivo corre en un thread aparte vía asyncio.to_thread — así el event
+# loop queda libre para seguir atendiendo otras requests mientras boto3
+# espera la red.
 
 
 def _get_r2_client():
@@ -41,7 +54,8 @@ async def upload_document_to_r2(
 
     try:
         r2 = _get_r2_client()
-        r2.put_object(
+        await asyncio.to_thread(
+            r2.put_object,
             Bucket=settings.R2_BUCKET_DOCS,
             Key=key,
             Body=file_content,
@@ -74,7 +88,8 @@ async def upload_photo_to_r2(
 
     try:
         r2 = _get_r2_client()
-        r2.put_object(
+        await asyncio.to_thread(
+            r2.put_object,
             Bucket=settings.R2_BUCKET_PHOTOS,
             Key=key,
             Body=file_content,
@@ -109,7 +124,8 @@ async def upload_chat_attachment_to_r2(
 
     try:
         r2 = _get_r2_client()
-        r2.put_object(
+        await asyncio.to_thread(
+            r2.put_object,
             Bucket=settings.R2_BUCKET_DOCS,
             Key=key,
             Body=file_content,
@@ -141,7 +157,8 @@ async def upload_backup_to_r2(
 
     try:
         r2 = _get_r2_client()
-        r2.put_object(
+        await asyncio.to_thread(
+            r2.put_object,
             Bucket=settings.R2_BUCKET_DOCS,
             Key=key,
             Body=file_content,
@@ -168,7 +185,11 @@ async def get_presigned_url(r2_url: str, expires_seconds: int = 300) -> str:
 
     try:
         r2 = _get_r2_client()
-        url = r2.generate_presigned_url(
+        # generate_presigned_url no pega a la red (firma local), pero se
+        # mantiene el mismo patrón que el resto del archivo por consistencia
+        # y como garantía si boto3 cambia de implementación más adelante.
+        url = await asyncio.to_thread(
+            r2.generate_presigned_url,
             "get_object",
             Params={"Bucket": bucket, "Key": key},
             ExpiresIn=expires_seconds,
