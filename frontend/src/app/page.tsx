@@ -18,7 +18,7 @@ import { Reveal } from '@/components/ui/Reveal'
 import { ContactSection } from '@/components/landing/ContactSection'
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
-import { MessageCircleHeart, UserCheck, Video, FileCheck2, QrCode, ShieldCheck, BadgeCheck, CalendarCheck2, Clock, Bell, Stethoscope, Mic, Cpu, Mail, Gift, Handshake, Bot } from 'lucide-react'
+import { MessageCircleHeart, UserCheck, Video, FileCheck2, QrCode, ShieldCheck, BadgeCheck, CalendarCheck2, Clock, Bell, Stethoscope, Mic, Cpu, Mail, Gift, Handshake, Bot, Menu, X } from 'lucide-react'
 
 const TABS: { key: FAQAudience; label: string }[] = [
   { key: 'GENERAL', label: 'General' },
@@ -145,34 +145,111 @@ function VerifyPrescriptionSection() {
 
 function LandingHeader() {
   const { t } = useLanguage()
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  const navLinks: { href: string; label: string; anchor?: boolean }[] = [
+    { href: '/especialidades', label: 'Especialidades' },
+    { href: '/telemedicina', label: 'Telemedicina' },
+    { href: '#faq', label: 'Preguntas frecuentes', anchor: true },
+    { href: '/verificar-receta', label: 'Verificar receta' },
+    { href: '#contacto', label: 'Contacto', anchor: true },
+  ]
+
   return (
-    <header className="border-b border-[#DDE1EE] bg-white sticky top-0 z-10">
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 h-16 sm:h-20 flex items-center justify-between gap-1 sm:gap-2">
-        {/* shrink-0: el logo no debe comprimirse aunque el resto de los
-            elementos (idioma, login, registro) no entren cómodos en pantallas chicas */}
+    <header className="border-b border-[#DDE1EE] bg-white sticky top-0 z-20">
+      <div className="max-w-6xl mx-auto px-4 h-16 lg:h-20 flex items-center justify-between gap-3">
         <div className="flex items-center shrink-0">
-          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-6 sm:h-11 w-auto" priority />
+          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-7 lg:h-11 w-auto" priority />
         </div>
-        <nav className="hidden sm:flex items-center gap-6 text-sm text-[#6B738A]">
-          <Link href="/especialidades" className="hover:text-[#141820]">{t('Especialidades')}</Link>
-          <Link href="/telemedicina" className="hover:text-[#141820]">{t('Telemedicina')}</Link>
-          <a href="#faq" className="hover:text-[#141820]">{t('Preguntas frecuentes')}</a>
-          <Link href="/verificar-receta" className="hover:text-[#141820]">{t('Verificar receta')}</Link>
-          <a href="#contacto" className="hover:text-[#141820]">{t('Contacto')}</a>
+
+        {/* Nav completo: recién desde lg (1024px) — antes aparecía desde sm
+            (640px) y ahí no entraban cómodos 5 links + selector de idioma +
+            2 botones, quedaba apretado y desordenado justo en el rango de
+            pantallas donde más importa (tablets, laptops chicas, zoom del
+            navegador). Con más ancho disponible, gap-8 le da respiro real
+            a los links en vez de amontonarse. */}
+        <nav className="hidden lg:flex items-center gap-8 text-sm text-[#6B738A]">
+          {navLinks.map((link) => (
+            link.anchor
+              ? <a key={link.href} href={link.href} className="hover:text-[#141820] transition-colors">{t(link.label)}</a>
+              : <Link key={link.href} href={link.href} className="hover:text-[#141820] transition-colors">{t(link.label)}</Link>
+          ))}
         </nav>
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+
+        <div className="hidden lg:flex items-center gap-3 shrink-0">
           <LanguageSwitcher variant="light" />
           <Link
             href="/auth/login"
-            className="text-xs sm:text-sm font-medium text-[#0F6E56] px-1.5 sm:px-2 py-2 hover:underline sm:hover:no-underline sm:border sm:border-[#11A15A]/40 sm:px-3 sm:rounded-lg sm:hover:bg-[#E7F8EF] sm:transition-colors whitespace-nowrap"
+            className="text-sm font-medium text-[#0F6E56] px-3 py-2 border border-[#11A15A]/40 rounded-lg hover:bg-[#E7F8EF] transition-colors whitespace-nowrap"
           >
             {t('Iniciar sesión')}
           </Link>
-          <Link href="/auth/register/patient" className="bg-[#11A15A] text-white text-xs sm:text-sm font-medium px-2.5 sm:px-4 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap">
+          <Link href="/auth/register/patient" className="bg-[#11A15A] text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap">
             {t('Registrarme')}
           </Link>
         </div>
+
+        {/* Debajo de lg: selector de idioma + botón hamburguesa. Antes no
+            había NADA acá — los 5 links de navegación quedaban totalmente
+            inaccesibles desde el header en cualquier pantalla angosta, la
+            única forma de llegar a ellos era scrollear hasta el footer. */}
+        <div className="flex lg:hidden items-center gap-1.5 shrink-0">
+          <LanguageSwitcher variant="light" />
+          <button
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            aria-label={mobileOpen ? t('Cerrar menú') : t('Abrir menú')}
+            aria-expanded={mobileOpen}
+            className="p-2 text-[#141820] hover:bg-[#F4F6FB] rounded-lg transition-colors"
+          >
+            {mobileOpen ? <X className="w-5 h-5" aria-hidden="true" /> : <Menu className="w-5 h-5" aria-hidden="true" />}
+          </button>
+        </div>
       </div>
+
+      {mobileOpen && (
+        <div className="lg:hidden border-t border-[#DDE1EE] bg-white px-4 py-3 flex flex-col gap-1">
+          {navLinks.map((link) => (
+            link.anchor
+              ? (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className="px-2 py-2.5 rounded-lg text-sm text-[#141820] hover:bg-[#F4F6FB]"
+                >
+                  {t(link.label)}
+                </a>
+              )
+              : (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className="px-2 py-2.5 rounded-lg text-sm text-[#141820] hover:bg-[#F4F6FB]"
+                >
+                  {t(link.label)}
+                </Link>
+              )
+          ))}
+          <div className="flex items-center gap-2 mt-2 pt-3 border-t border-[#DDE1EE]">
+            <Link
+              href="/auth/login"
+              onClick={() => setMobileOpen(false)}
+              className="flex-1 text-center text-sm font-medium text-[#0F6E56] px-3 py-2.5 border border-[#11A15A]/40 rounded-lg hover:bg-[#E7F8EF]"
+            >
+              {t('Iniciar sesión')}
+            </Link>
+            <Link
+              href="/auth/register/patient"
+              onClick={() => setMobileOpen(false)}
+              className="flex-1 text-center bg-[#11A15A] text-white text-sm font-medium px-3 py-2.5 rounded-lg hover:bg-[#0F6E56]"
+            >
+              {t('Registrarme')}
+            </Link>
+          </div>
+        </div>
+      )}
     </header>
   )
 }
