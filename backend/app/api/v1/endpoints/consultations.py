@@ -1726,7 +1726,16 @@ async def start_video_consultation(
                 detail=f"La cita agendada comienza a las {consultation.scheduled_at.strftime('%H:%M')}. Aún no es la hora."
             )
 
-    room_name = f"consulta-{consultation_id[:8]}"
+    # Se usa el consultation_id COMPLETO (no truncado) como nombre de sala.
+    # Truncar a 8 caracteres hex (32 bits) deja una probabilidad de
+    # colisión chica pero real y evitable: si dos consultas distintas
+    # generaran el mismo room_name mientras ambas están activas al mismo
+    # tiempo, sus pacientes/médicos podrían terminar compartiendo la MISMA
+    # sala de LiveKit — un paciente viendo/escuchando la consulta de otro.
+    # Con miles de consultas acumuladas la probabilidad deja de ser
+    # despreciable, y el nombre completo no cuesta nada (LiveKit no tiene
+    # problema con nombres de sala largos).
+    room_name = f"consulta-{consultation_id}"
 
     # Crear sala en LiveKit usando context manager
     async with lk.LiveKitAPI(
@@ -1741,7 +1750,7 @@ async def start_video_consultation(
     # Token para el médico
     token_prof = (
         lk.AccessToken(api_key=settings.LIVEKIT_API_KEY, api_secret=settings.LIVEKIT_API_SECRET)
-        .with_identity(f"prof-{professional.id[:8]}")
+        .with_identity(f"prof-{professional.id}")
         .with_name(f"Dr. {professional.first_name} {professional.last_name}")
         .with_grants(lk.VideoGrants(room_join=True, room=room_name, can_publish=True, can_subscribe=True))
         .to_jwt()
@@ -1750,7 +1759,7 @@ async def start_video_consultation(
     # Token para el paciente — se guarda en video_room_url para que lo lea después
     token_patient = (
         lk.AccessToken(api_key=settings.LIVEKIT_API_KEY, api_secret=settings.LIVEKIT_API_SECRET)
-        .with_identity(f"patient-{consultation.patient_id[:8]}-{consultation_id[:8]}")
+        .with_identity(f"patient-{consultation.patient_id}-{consultation_id}")
         .with_name("Paciente")
         .with_grants(lk.VideoGrants(room_join=True, room=room_name, can_publish=True, can_subscribe=True))
         .to_jwt()
@@ -1801,7 +1810,7 @@ async def get_patient_video_token(
     # Regenerar token fresco (el guardado en BD puede haber expirado)
     token_patient = (
         lk.AccessToken(api_key=settings.LIVEKIT_API_KEY, api_secret=settings.LIVEKIT_API_SECRET)
-        .with_identity(f"patient-{patient.id[:8]}-{consultation_id[:8]}")
+        .with_identity(f"patient-{patient.id}-{consultation_id}")
         .with_name("Paciente")
         .with_grants(lk.VideoGrants(
             room_join=True,
@@ -1851,7 +1860,7 @@ async def rejoin_video_consultation(
     # Regenerar token del médico (el token anterior puede haber expirado)
     token_prof = (
         lk.AccessToken(api_key=settings.LIVEKIT_API_KEY, api_secret=settings.LIVEKIT_API_SECRET)
-        .with_identity(f"prof-{professional.id[:8]}")
+        .with_identity(f"prof-{professional.id}")
         .with_name(f"Dr. {professional.first_name} {professional.last_name}")
         .with_grants(lk.VideoGrants(
             room_join=True,
