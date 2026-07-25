@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import * as Icons from 'lucide-react'
 import { SEO_SPECIALTIES, getSpecialtyBySlug } from '@/lib/seo/specialties'
+import { PublicHeader } from '@/components/layout/PublicHeader'
 
 const SITE_URL = 'https://medicbolivia.com'
 
@@ -73,17 +74,7 @@ export default async function SpecialtyPage(props: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <header className="border-b border-[#DDE1EE] bg-white">
-        <div className="max-w-5xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between">
-          <Link href="/" className="text-lg font-bold text-[#141820]">MedicBolivia</Link>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link href="/especialidades" className="text-[#6B738A] hover:text-[#141820]">Especialidades</Link>
-            <Link href="/auth/register/patient" className="bg-[#11A15A] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#0F6E56] transition-colors">
-              Registrarme
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <PublicHeader />
 
       <main className="max-w-3xl mx-auto px-4 py-12">
         <nav className="text-xs text-[#6B738A] mb-6" aria-label="Breadcrumb">
