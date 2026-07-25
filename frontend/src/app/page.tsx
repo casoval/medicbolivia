@@ -157,9 +157,9 @@ function LandingHeader() {
 
   return (
     <header className="border-b border-[#DDE1EE] bg-white sticky top-0 z-20">
-      <div className="max-w-6xl mx-auto px-4 h-16 lg:h-20 flex items-center justify-between gap-3">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 h-16 lg:h-20 flex items-center justify-between gap-2 lg:gap-3">
         <div className="flex items-center shrink-0">
-          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-7 lg:h-11 w-auto" priority />
+          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-6 sm:h-7 lg:h-11 w-auto" priority />
         </div>
 
         {/* Nav completo: recién desde lg (1024px) — antes aparecía desde sm
@@ -189,12 +189,22 @@ function LandingHeader() {
           </Link>
         </div>
 
-        {/* Debajo de lg: selector de idioma + botón hamburguesa. Antes no
-            había NADA acá — los 5 links de navegación quedaban totalmente
-            inaccesibles desde el header en cualquier pantalla angosta, la
-            única forma de llegar a ellos era scrollear hasta el footer. */}
+        {/* Debajo de lg: Iniciar sesión + Registrarme SIEMPRE visibles (no
+            solo dentro del menú desplegable) + botón hamburguesa para el
+            resto de los links. El selector de idioma se movió al panel
+            desplegable de abajo para hacerles lugar — es una acción mucho
+            menos frecuente que iniciar sesión o registrarse, así que no
+            hace falta que compita por espacio en la barra superior. */}
         <div className="flex lg:hidden items-center gap-1.5 shrink-0">
-          <LanguageSwitcher variant="light" />
+          <Link
+            href="/auth/login"
+            className="text-xs font-medium text-[#0F6E56] px-2 py-2 border border-[#11A15A]/40 rounded-lg hover:bg-[#E7F8EF] transition-colors whitespace-nowrap"
+          >
+            {t('Iniciar sesión')}
+          </Link>
+          <Link href="/auth/register/patient" className="bg-[#11A15A] text-white text-xs font-medium px-2.5 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap">
+            {t('Registrarme')}
+          </Link>
           <button
             type="button"
             onClick={() => setMobileOpen((v) => !v)}
@@ -232,21 +242,9 @@ function LandingHeader() {
                 </Link>
               )
           ))}
-          <div className="flex items-center gap-2 mt-2 pt-3 border-t border-[#DDE1EE]">
-            <Link
-              href="/auth/login"
-              onClick={() => setMobileOpen(false)}
-              className="flex-1 text-center text-sm font-medium text-[#0F6E56] px-3 py-2.5 border border-[#11A15A]/40 rounded-lg hover:bg-[#E7F8EF]"
-            >
-              {t('Iniciar sesión')}
-            </Link>
-            <Link
-              href="/auth/register/patient"
-              onClick={() => setMobileOpen(false)}
-              className="flex-1 text-center bg-[#11A15A] text-white text-sm font-medium px-3 py-2.5 rounded-lg hover:bg-[#0F6E56]"
-            >
-              {t('Registrarme')}
-            </Link>
+          <div className="flex items-center justify-between gap-2 mt-2 pt-3 border-t border-[#DDE1EE]">
+            <span className="text-xs text-[#6B738A] px-2">{t('Idioma')}</span>
+            <LanguageSwitcher variant="light" />
           </div>
         </div>
       )}
