@@ -17,6 +17,7 @@ from loguru import logger
 from app.db.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.config import settings
+from app.core.redis_client import redis_client
 from app.models.models import (
     User, Patient, Professional, ProfessionalStatus, AvailabilityMode,
     Specialty, SubSpecialty,
@@ -27,6 +28,38 @@ from app.agents.coordinator import (
 )
 
 router = APIRouter()
+
+# ── Rate limit del agente IA (chat, voice-chat, onboarding, help) ────
+# Cada llamada acá dispara una llamada real y paga a Gemini (y voice-chat
+# además a Google TTS) — a diferencia del rate limit del chat WS (que
+# protege contra inundar una conversación), este protege el costo real de
+# la API y el cupo compartido de Gemini: un cliente en loop por un bug del
+# frontend, o alguien mandando mensajes en ráfaga sin parar, puede generar
+# costo real y — más grave — si Gemini devuelve 429 por exceso de cuota,
+# eso degrada el agente para TODOS los usuarios, no solo para quien lo
+# está abusando. Límite generoso (no lo nota una conversación real) pero
+# real: comparte el mismo contador entre los 4 endpoints porque todos
+# pagan al mismo cupo de Gemini.
+_AGENT_RATE_LIMIT_MAX = 15
+_AGENT_RATE_LIMIT_WINDOW_SECONDS = 60
+
+
+async def _check_agent_rate_limit(user_id: str) -> None:
+    key = f"agent_rate:{user_id}"
+    try:
+        count = await redis_client.incr(key)
+        if count == 1:
+            await redis_client.expire(key, _AGENT_RATE_LIMIT_WINDOW_SECONDS)
+    except Exception as e:
+        # Si Redis está caído, no tiene sentido tumbar el agente por esto.
+        logger.warning(f"No se pudo chequear rate limit del agente IA: {e}")
+        return
+    if count > _AGENT_RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail="Estás mandando mensajes muy rápido. Esperá un momento antes de seguir.",
+        )
+
 
 
 async def _get_patient_context(db: AsyncSession, user_id: str) -> dict | None:
@@ -308,6 +341,7 @@ async def agent_chat(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    await _check_agent_rate_limit(current_user.id)
     session_id = data.session_id or str(uuid.uuid4())
 
     patient_context = None
@@ -355,6 +389,7 @@ async def voice_chat(
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Agente IA no configurado")
 
+    await _check_agent_rate_limit(current_user.id)
     session_id = session_id or str(uuid.uuid4())
 
     # Leer audio
@@ -379,24 +414,38 @@ async def voice_chat(
     transcript = ""
     for attempt in range(3):
         try:
-            response = client.models.generate_content(
-                model=settings.GEMINI_MODEL,
-                contents=[
-                    genai_types.Content(
-                        parts=[
-                            genai_types.Part(
-                                text="Transcribe exactamente lo que dice este audio, en español. "
-                                     "Responde SOLO con la transcripción textual, sin comillas, sin "
-                                     "comentarios ni explicaciones. Si no se entiende nada, responde "
-                                     "con una cadena vacía."
-                            ),
-                            genai_types.Part(
-                                inline_data=genai_types.Blob(mime_type=content_type, data=audio_b64)
-                            ),
-                        ]
-                    )
-                ],
-            )
+            # client.models.generate_content (SDK sync de google-genai) es
+            # una llamada de red BLOQUEANTE — igual que en
+            # coordinator.py::_call_gemini, si corre directo acá bloquea el
+            # event loop completo del worker (2 workers en producción,
+            # ecosystem.config.js) mientras dura la transcripción: CUALQUIER
+            # otra request cayendo en ese mismo worker (chat, video, lo que
+            # sea) se queda esperando en cola, hasta 3 veces en el peor caso
+            # si los 3 intentos fallan. Por eso corre en un hilo aparte con
+            # asyncio.to_thread, con el mismo timeout defensivo de 25s que
+            # ya usa _call_gemini (el propio SDK tiene issues abiertos donde
+            # su timeout interno no se respeta: googleapis/python-genai#911,
+            # #4031 — no hay que confiar en que el SDK se corte solo).
+            def _sync_transcribe():
+                return client.models.generate_content(
+                    model=settings.GEMINI_MODEL,
+                    contents=[
+                        genai_types.Content(
+                            parts=[
+                                genai_types.Part(
+                                    text="Transcribe exactamente lo que dice este audio, en español. "
+                                         "Responde SOLO con la transcripción textual, sin comillas, sin "
+                                         "comentarios ni explicaciones. Si no se entiende nada, responde "
+                                         "con una cadena vacía."
+                                ),
+                                genai_types.Part(
+                                    inline_data=genai_types.Blob(mime_type=content_type, data=audio_b64)
+                                ),
+                            ]
+                        )
+                    ],
+                )
+            response = await asyncio.wait_for(asyncio.to_thread(_sync_transcribe), timeout=25.0)
             transcript = (response.text or "").strip()
             break
         except Exception as e:
@@ -583,6 +632,7 @@ async def agent_onboarding(
             message="¡Ya completaste tu registro inicial! Puedes usar la plataforma con normalidad.",
         )
 
+    await _check_agent_rate_limit(current_user.id)
     session_id = data.session_id or f"onboarding-{current_user.id}"
 
     result = await run_onboarding(
@@ -620,6 +670,7 @@ async def agent_help(
     "Ayuda" del menú.
     """
     session_id = data.session_id or f"help-{current_user.id}-{uuid.uuid4().hex[:8]}"
+    await _check_agent_rate_limit(current_user.id)
 
     result = await run_help(
         session_id=session_id,
