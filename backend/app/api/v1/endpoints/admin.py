@@ -4,6 +4,7 @@ Endpoints del panel de administración.
 Requieren rol ADMIN.
 """
 import base64
+import json
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
@@ -15,6 +16,7 @@ from dateutil.relativedelta import relativedelta
 from loguru import logger
 
 from app.core.timezone import bolivia_today_midnight_naive, bolivia_now_naive, as_bolivia_calendar_day
+from app.core.redis_client import redis_client
 
 from pydantic import BaseModel, Field
 
@@ -50,6 +52,36 @@ from app.models.models import WhatsAppAudience
 from app.core.config import settings
 
 router = APIRouter()
+
+# ── Cache corto de GET /admin/professionals ──────────────────────────
+# Este endpoint escanea TODO el historial de Consultation/Rating (sin
+# filtrar por professional_id) para armar el puntaje de penalización de
+# cada profesional — necesario porque el frontend pide la lista COMPLETA
+# de una sola vez para filtrar/tabular en el cliente (tabs, búsqueda,
+# contador por estado), así que no se puede paginar sin rehacer también
+# esa parte del frontend. El frontend además hace polling cada 15s
+# mientras el admin tiene la pantalla abierta (ver admin/professionals/
+# page.tsx, refetchInterval: 15000) — sin cache, eso significa un scan
+# completo de esas tablas cada 15 segundos, sin importar si algo cambió.
+# Con un TTL corto en Redis, la mayoría de esos polls se sirven desde
+# cache y el scan pesado corre como máximo 1 vez cada
+# _PROFESSIONALS_LIST_CACHE_TTL segundos. Se invalida manualmente (ver
+# `_invalidate_professionals_list_cache`) en las acciones que sí cambian
+# lo que se muestra (aprobar/rechazar profesional o documento, resetear
+# penalizaciones) para que el admin vea su propio cambio al instante, en
+# vez de esperar a que expire el TTL.
+_PROFESSIONALS_LIST_CACHE_KEY = "cache:admin:professionals_list"
+_PROFESSIONALS_LIST_CACHE_TTL = 20  # segundos
+
+
+async def _invalidate_professionals_list_cache() -> None:
+    try:
+        await redis_client.delete(_PROFESSIONALS_LIST_CACHE_KEY)
+    except Exception as e:
+        # Si Redis está caído, no vale la pena tumbar la request completa
+        # por esto — en el peor caso el admin ve datos con hasta
+        # _PROFESSIONALS_LIST_CACHE_TTL segundos de atraso.
+        logger.warning(f"No se pudo invalidar cache de admin/professionals: {e}")
 
 
 # ── Sistema de penalizaciones por semáforo (solo visible para admin) ──
@@ -250,6 +282,19 @@ async def list_all_professionals(
     current_user=Depends(get_current_admin),
     db: AsyncSession = Depends(get_db)
 ):
+    # Solo se cachea la consulta SIN filtro (la que usa el frontend, que
+    # trae todo y filtra/tabula del lado del cliente). Con `status` filtrado
+    # el volumen de trabajo ya es chico y no vale la pena la complejidad
+    # extra de tener una key de cache por cada valor de status.
+    if not status:
+        try:
+            cached = await redis_client.get(_PROFESSIONALS_LIST_CACHE_KEY)
+        except Exception as e:
+            cached = None
+            logger.warning(f"No se pudo leer cache de admin/professionals: {e}")
+        if cached:
+            return json.loads(cached)
+
     query = select(Professional, User).join(User, Professional.user_id == User.id)
     if status:
         query = query.where(Professional.status == ProfessionalStatus(status))
@@ -343,7 +388,7 @@ async def list_all_professionals(
             "since": reset_at.isoformat() if reset_at else None,  # None = todo el historial
         }
 
-    return [
+    result_list = [
         {
             "id":                  p.id,
             "name":                f"{p.first_name} {p.last_name}",
@@ -382,6 +427,18 @@ async def list_all_professionals(
         }
         for p, u in rows
     ]
+
+    if not status:
+        try:
+            await redis_client.set(
+                _PROFESSIONALS_LIST_CACHE_KEY,
+                json.dumps(result_list),
+                ex=_PROFESSIONALS_LIST_CACHE_TTL,
+            )
+        except Exception as e:
+            logger.warning(f"No se pudo guardar cache de admin/professionals: {e}")
+
+    return result_list
 
 
 # ── GET /api/v1/admin/professionals/{id}/documents ──
@@ -606,6 +663,7 @@ async def reset_professional_penalties(
         db.add(ProfessionalPenaltyReset(professional_id=professional_id, reset_at=now, reset_by_admin_id=current_user.id))
 
     await db.commit()
+    await _invalidate_professionals_list_cache()
     return {"ok": True, "reset_at": now.isoformat()}
 
 
@@ -694,6 +752,7 @@ async def review_document(
     )
     db.add(log)
     await db.commit()
+    await _invalidate_professionals_list_cache()
 
     return {"doc_id": doc_id, "status": data.status, "message": f"Documento {data.status.lower()}"}
 

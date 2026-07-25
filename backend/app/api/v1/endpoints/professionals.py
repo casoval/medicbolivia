@@ -13,6 +13,7 @@ from loguru import logger
 
 from app.db.database import get_db
 from app.core.dependencies import get_current_user, get_current_professional, get_current_admin, get_current_user_optional
+from app.core.redis_client import redis_client
 from app.models.models import (
     User, UserRole, Professional, ProfessionalDoc, ProfessionalStatus,
     AvailabilityMode, DocType, DocStatus, AuditLog, Notification,
@@ -1146,6 +1147,16 @@ async def verify_professional(
 
     await db.commit()
     logger.info(f"Profesional {professional_id} → {new_status} por admin {current_user.id}")
+
+    # Invalida el cache corto de GET /admin/professionals (ver admin.py,
+    # _PROFESSIONALS_LIST_CACHE_KEY) para que el admin vea el cambio de
+    # estado al instante en vez de esperar a que expire el TTL. Se
+    # duplica el literal en vez de importar la constante de admin.py para
+    # no crear un acoplamiento entre estos dos módulos de endpoints.
+    try:
+        await redis_client.delete("cache:admin:professionals_list")
+    except Exception as e:
+        logger.warning(f"No se pudo invalidar cache de admin/professionals: {e}")
 
     return {"message": f"Profesional {new_status.lower()}", "professional_id": professional_id}
 

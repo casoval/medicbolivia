@@ -20,6 +20,7 @@ from loguru import logger
 from app.db.database import get_db, AsyncSessionLocal
 from app.core.dependencies import get_current_user
 from app.core.security import decode_token, AUTH_COOKIE_NAME
+from app.core.redis_client import redis_client
 from app.core.chat_ws_manager import chat_manager
 from app.core.config import settings
 from app.models.models import (
@@ -394,6 +395,32 @@ async def _authenticate_ws(token: str | None, db: AsyncSession) -> User | None:
     return result.scalar_one_or_none()
 
 
+# Tope de mensajes por usuario en la ventana de abajo. No es para limitar
+# el uso normal (una conversación real nunca se acerca a esto) — es para
+# que un cliente roto (bug de reconexión en loop) o malicioso no pueda
+# inundar una conversación ni saturar notify_user/WhatsApp mandando
+# mensajes sin parar. Ventana fija simple (INCR + EXPIRE), mismo patrón
+# que ya usa auth.py para los intentos de OTP — no hace falta que sea
+# exacta, solo cortar el abuso.
+_CHAT_WS_MAX_MESSAGES = 20
+_CHAT_WS_WINDOW_SECONDS = 10
+
+
+async def _chat_ws_rate_limit_ok(user_id: str) -> bool:
+    key = f"chat_ws_rate:{user_id}"
+    try:
+        count = await redis_client.incr(key)
+        if count == 1:
+            await redis_client.expire(key, _CHAT_WS_WINDOW_SECONDS)
+        return count <= _CHAT_WS_MAX_MESSAGES
+    except Exception as e:
+        # Si Redis está caído, no tiene sentido cortar el chat en vivo por
+        # esto — se deja pasar (misma filosofía que el resto del rate
+        # limiting del proyecto, ver security_redis_client).
+        logger.warning(f"No se pudo chequear rate limit de chat WS: {e}")
+        return True
+
+
 @router.websocket("/ws/{conversation_id}")
 async def chat_websocket(
     websocket: WebSocket,
@@ -420,6 +447,10 @@ async def chat_websocket(
     try:
         while True:
             data = await websocket.receive_json()
+
+            if not await _chat_ws_rate_limit_ok(current_user.id):
+                await websocket.send_json({"type": "error", "code": "rate_limited"})
+                continue
 
             async with AsyncSessionLocal() as db:
                 # Revalida en cada mensaje: la conversación pudo expirar o
