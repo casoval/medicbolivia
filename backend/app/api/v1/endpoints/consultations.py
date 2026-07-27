@@ -4,7 +4,7 @@ Endpoints de consultas médicas.
 """
 import hmac
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Header
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timedelta
@@ -1390,6 +1390,17 @@ async def payment_webhook(
 # ── GET /api/v1/consultations/my ────────────────────
 @router.get("/my", summary="Obtener mis consultas")
 async def get_my_consultations(
+    limit: int = Query(
+        300, ge=1, le=500,
+        description="Tope defensivo: este endpoint lo consumen ~13 pantallas del "
+                    "frontend (incluyendo polling cada 4s en la sala de espera), y "
+                    "antes devolvía TODO el historial sin límite en cada llamada. "
+                    "Con usuarios reales acumulando consultas por años, esto crecía "
+                    "sin techo — tanto el costo de la query (join triple con "
+                    "Professional/Patient/Payment) como el tamaño de la respuesta. "
+                    "300 ya cubre de sobra a cualquier usuario actual; es un techo "
+                    "de seguridad para el futuro, no un cambio de comportamiento hoy."
+    ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -1429,6 +1440,7 @@ async def get_my_consultations(
             base_query
             .where(Consultation.patient_id == patient.id)
             .order_by(Consultation.created_at.desc())
+            .limit(limit)
         )
     else:
         prof_result = await db.execute(
@@ -1441,6 +1453,7 @@ async def get_my_consultations(
             base_query
             .where(Consultation.professional_id == professional.id)
             .order_by(Consultation.created_at.desc())
+            .limit(limit)
         )
 
     rows = result.all()
