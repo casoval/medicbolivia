@@ -14,6 +14,7 @@ Flujo:
    el error pero la petición igual responde 201: para la persona que llenó
    el formulario, su consulta ya quedó registrada.
 """
+import asyncio
 import smtplib
 from email.message import EmailMessage
 
@@ -147,7 +148,16 @@ async def create_contact_inquiry(
     await db.flush()
 
     try:
-        _send_notification_email(inquiry)
+        # smtplib es 100% síncrono (conectar, TLS, login y enviar son
+        # todas llamadas de red BLOQUEANTES) — igual que boto3 (patch #1)
+        # y la transcripción de Gemini (patch #8), si esto corre directo
+        # acá bloquea el event loop del worker entero mientras dura la
+        # conversación SMTP con Hostinger (hasta 15s de timeout en el peor
+        # caso). Este es un endpoint PÚBLICO sin login, así que aunque hay
+        # rate-limit (máx. 100/día), cada uno de esos hasta 100 envíos
+        # diarios congelaría un worker completo (de solo 2) para TODOS los
+        # demás usuarios mientras dura. Por eso corre en un hilo aparte.
+        await asyncio.to_thread(_send_notification_email, inquiry)
         inquiry.email_sent = True
     except Exception as exc:
         # No tumbamos la petición si falla el correo: la consulta ya quedó
