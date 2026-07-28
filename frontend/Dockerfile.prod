@@ -1,0 +1,26 @@
+# frontend/Dockerfile.prod
+# Build de producción de Next.js. Usa el frontend/.env.production que ya
+# existe en el VPS (lo crea scripts/setup_frontend.sh) — Next.js lo lee
+# automáticamente durante "pnpm build" porque NODE_ENV=production.
+FROM node:20-slim AS builder
+
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+ENV NODE_ENV=production
+RUN pnpm build
+
+# ── Imagen final, más liviana ──────────────────────────
+FROM node:20-slim
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
+ENV NODE_ENV=production
+COPY --from=builder /app ./
+
+EXPOSE 3000
+CMD ["npx", "next", "start", "-p", "3002"]

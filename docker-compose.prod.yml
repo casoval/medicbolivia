@@ -1,0 +1,87 @@
+# docker-compose.prod.yml
+# Para correr EN EL VPS, reemplazando los procesos que hoy maneja PM2
+# (ver ecosystem.config.js). A propósito NO incluye servicios de Postgres
+# ni Redis — siguen siendo los que ya están instalados nativos en el VPS
+# (ver scripts/deploy_vps.sh), sin tocar los datos existentes.
+#
+# Cada servicio usa network_mode: host (solo funciona en Linux, que es lo
+# que corre el VPS) para que "localhost" adentro del contenedor sea el
+# mismo localhost del VPS — así backend/.env y whatsapp-service/.env NO
+# necesitan ningún cambio, siguen apuntando a localhost:5432, localhost:6379,
+# localhost:6380, etc. tal como ya lo hacen para PM2 hoy. Nginx tampoco
+# cambia: sigue haciendo proxy_pass a 127.0.0.1:4000 y 127.0.0.1:3000
+# exactamente igual que ahora.
+#
+# Uso (en el VPS, como root o con sudo):
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Ver logs:
+#   docker compose -f docker-compose.prod.yml logs -f backend
+#
+# Rollback instantáneo si algo sale mal (PM2 sigue instalado, no se borra):
+#   docker compose -f docker-compose.prod.yml down
+#   pm2 resurrect        # o: pm2 start ecosystem.config.js
+
+services:
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # El entrypoint espera a Postgres antes de correr las migraciones —
+      # con host networking, Postgres nativo está en localhost, no en un
+      # hostname "postgres" de docker-compose (eso es solo para el compose
+      # de desarrollo local).
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    network_mode: host
+    restart: unless-stopped
+    command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    network_mode: host
+    restart: unless-stopped
+    command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+
+  whatsapp-service:
+    build: ./whatsapp-service
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - ./whatsapp-service/.env
+    volumes:
+      # Bind mount al MISMO directorio que ya usa PM2 hoy (WHATSAPP_AUTH_DIR
+      # en whatsapp-service/.env, default "./auth_info") — así la sesión de
+      # WhatsApp ya vinculada se reutiliza y NO hay que volver a escanear
+      # el QR al migrar a Docker.
+      - /var/www/medicbolivia/whatsapp-service/auth_info:/app/auth_info
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    network_mode: host
+    restart: unless-stopped
