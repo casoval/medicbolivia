@@ -7,7 +7,7 @@ FROM node:20-slim
 WORKDIR /app
 
 # Habilita pnpm (el repo usa pnpm-lock.yaml / pnpm-workspace.yaml, no npm)
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
