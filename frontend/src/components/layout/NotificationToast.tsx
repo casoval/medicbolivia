@@ -175,7 +175,11 @@ export function NotificationToast() {
 
   const addToast = useCallback((toast: Toast) => {
     // Verificar en sessionStorage para sobrevivir navegación entre páginas
-    if (getSeenIds().has(toast.id)) return
+    if (getSeenIds().has(toast.id)) {
+      console.log('[DIAG NotificationToast] toast ignorado (ya visto):', toast.id)
+      return
+    }
+    console.log('[DIAG NotificationToast] 🔔 toast NUEVO agregado:', toast.id, toast.title)
     saveSeenId(toast.id)
     setToasts(t => [...t, toast])
 
@@ -419,7 +423,10 @@ export function NotificationToast() {
   // siendo la fuente de verdad.
   // eslint-disable-next-line no-console
   console.log('[DIAG NotificationToast] render, user =', user, 'user?.id =', user?.id)
-  useNotificationSocket(user?.id, useCallback(() => { refetch() }, [refetch]))
+  useNotificationSocket(user?.id, useCallback(() => {
+    console.log('[DIAG NotificationToast] 🔁 WS disparó refetch')
+    refetch()
+  }, [refetch]))
 
   useEffect(() => {
     if (typeof window !== 'undefined' && Notification.permission === 'default') {

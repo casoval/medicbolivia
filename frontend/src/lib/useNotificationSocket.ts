@@ -65,6 +65,7 @@ export function useNotificationSocket(
       }
 
       ws.onmessage = (event) => {
+        console.log('[DIAG useNotificationSocket] 📩 mensaje recibido:', event.data)
         try {
           const data: NotificationSocketEvent = JSON.parse(event.data)
           if (data.type === 'notification') onEventRef.current(data)
