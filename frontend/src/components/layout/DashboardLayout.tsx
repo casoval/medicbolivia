@@ -33,6 +33,9 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
   const { user, isAuthenticated, logout } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  // Grupos expandidos del sidebar (modo acordeón). Arranca vacío; el efecto
+  // de abajo expande automáticamente el grupo que contiene la página activa.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set())
   const { t } = useLanguage()
 
   useEffect(() => {
@@ -51,6 +54,20 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
     document.body.style.overflow = menuOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [menuOpen])
+
+  // Auto-expande el grupo de la página activa (no cierra los que el usuario
+  // ya haya abierto manualmente, para no sorprenderlo al navegar).
+  useEffect(() => {
+    const activeItem = navItems.find((item) => item.href === activeHref)
+    if (activeItem?.group) {
+      setOpenGroups((prev) => {
+        if (prev.has(activeItem.group as string)) return prev
+        const next = new Set(prev)
+        next.add(activeItem.group as string)
+        return next
+      })
+    }
+  }, [activeHref, navItems])
 
   if (!user) return null
 
@@ -113,17 +130,39 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
     )
   }
 
+  const toggleGroup = (groupName: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupName)) next.delete(groupName)
+      else next.add(groupName)
+      return next
+    })
+  }
+
   const NavLinks = () => (
     <nav className="py-3">
       {ungroupedItems.map(renderLink)}
-      {groupNames.map((groupName) => (
-        <div key={groupName} className="mt-3 first:mt-0">
-          <p className="px-5 mb-1 text-[11px] font-medium uppercase tracking-wide text-[#9AA0B4]">
-            {t(groupName)}
-          </p>
-          {sidebarItems.filter((item) => item.group === groupName).map(renderLink)}
-        </div>
-      ))}
+      {groupNames.map((groupName) => {
+        const isOpen = openGroups.has(groupName)
+        return (
+          <div key={groupName} className="mt-1">
+            <button
+              onClick={() => toggleGroup(groupName)}
+              className="w-full flex items-center justify-between gap-2 px-5 py-2 text-[11px] font-medium uppercase tracking-wide text-[#9AA0B4] hover:text-[#6B738A]"
+              aria-expanded={isOpen}
+            >
+              <span>{t(groupName)}</span>
+              <svg
+                width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                className={`transition-transform duration-150 ${isOpen ? '' : '-rotate-90'}`}
+              >
+                <polyline points="6,9 12,15 18,9" />
+              </svg>
+            </button>
+            {isOpen && sidebarItems.filter((item) => item.group === groupName).map(renderLink)}
+          </div>
+        )
+      })}
     </nav>
   )
 
