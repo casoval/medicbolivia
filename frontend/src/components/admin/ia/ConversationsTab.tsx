@@ -124,7 +124,7 @@ export function ConversationsTab() {
                 <div key={key} className="flex items-center justify-between py-3 border-b border-[#DDE1EE] last:border-0">
                   <div>
                     <p className="text-sm font-medium">{label}</p>
-                    <p className="text-xs text-[#6B738A] mt-0.5">{desc}</p>
+                    <p className="text-xs text-[#475569] mt-0.5">{desc}</p>
                   </div>
                   {locked ? (
                     <div className="flex items-center gap-2">
@@ -152,7 +152,7 @@ export function ConversationsTab() {
               key={f}
               onClick={() => setAudienceFilter(f)}
               className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                audienceFilter === f ? 'bg-[#185FA5] text-white border-[#185FA5]' : 'bg-white text-[#6B738A] border-[#DDE1EE]'
+                audienceFilter === f ? 'bg-[#185FA5] text-white border-[#185FA5]' : 'bg-white text-[#475569] border-[#DDE1EE]'
               }`}
             >
               {f === 'ALL' ? 'Todas' : AUDIENCE_LABEL[f]}
@@ -180,13 +180,13 @@ export function ConversationsTab() {
                   </div>
                   {/* Número siempre visible además del nombre, para identificación rápida
                       y para distinguir contactos que compartan nombre. */}
-                  <p className="text-xs text-[#6B738A] truncate">{c.phone}</p>
+                  <p className="text-xs text-[#475569] truncate">{c.phone}</p>
                   <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <span className={`${AUDIENCE_BADGE[c.audience] || 'badge-gray'} text-[9px]`}>{AUDIENCE_LABEL[c.audience] || c.audience}</span>
                     {!c.agent_enabled && <span className="badge-gray text-[9px]">{t('Bot off')}</span>}
                     {c.needs_admin_attention && <span className="badge-amber text-[9px]">🚩 {t('Para administración')}</span>}
                   </div>
-                  <p className="text-xs text-[#6B738A] mt-1 truncate">{c.last_message_preview || '—'}</p>
+                  <p className="text-xs text-[#475569] mt-1 truncate">{c.last_message_preview || '—'}</p>
                 </button>
               ))
             )}
@@ -196,7 +196,7 @@ export function ConversationsTab() {
           <div className="flex flex-col max-h-[420px]">
             {!selectedId ? (
               <div className="flex-1 flex items-center justify-center">
-                <p className="text-sm text-[#6B738A]">{t('Elegí una conversación para ver el historial')}</p>
+                <p className="text-sm text-[#475569]">{t('Elegí una conversación para ver el historial')}</p>
               </div>
             ) : loadingThread ? (
               <LoadingScreen text="Cargando mensajes..." />
@@ -205,9 +205,9 @@ export function ConversationsTab() {
                 <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#DDE1EE]">
                   <div>
                     <p className="text-sm font-medium">{thread.conversation.display_name}</p>
-                    <p className="text-xs text-[#6B738A]">{thread.conversation.phone}</p>
+                    <p className="text-xs text-[#475569]">{thread.conversation.phone}</p>
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-[#6B738A]">
+                  <label className="flex items-center gap-2 text-xs text-[#475569]">
                     {t('Agente en este chat')}
                     <Toggle
                       on={thread.conversation.agent_enabled}
@@ -238,7 +238,7 @@ export function ConversationsTab() {
                         m.direction === 'OUT' ? 'bg-[#185FA5] text-white rounded-br-sm' : 'bg-[#F5F6FA] text-[#141820] rounded-bl-sm'
                       }`}>
                         <p className="whitespace-pre-wrap">{m.body}</p>
-                        <p className={`text-[9px] mt-1 ${m.direction === 'OUT' ? 'text-white/70' : 'text-[#6B738A]'}`}>
+                        <p className={`text-[9px] mt-1 ${m.direction === 'OUT' ? 'text-white/70' : 'text-[#475569]'}`}>
                           {m.sent_by === 'BOT' ? 'Bot IA' : m.sent_by === 'ADMIN' ? 'Tú' : m.sent_by === 'SYSTEM' ? 'Automático' : ''}
                           {m.status === 'FAILED' ? ' · Falló' : ''}
                         </p>

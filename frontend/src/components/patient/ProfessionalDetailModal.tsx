@@ -51,7 +51,7 @@ export function ProfessionalDetailModal({
         <div className="relative">
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-[#6B738A] hover:text-[#3C4257] text-xl leading-none shadow-sm z-10"
+            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-[#475569] hover:text-[#3C4257] text-xl leading-none shadow-sm z-10"
           >
             ×
           </button>
@@ -81,7 +81,7 @@ export function ProfessionalDetailModal({
             <h2 className="text-lg font-semibold text-[#141820] mt-3 text-center px-6">
               {pro.first_name} {pro.last_name}
             </h2>
-            <p className="text-sm text-[#6B738A] mt-0.5 text-center px-6">
+            <p className="text-sm text-[#475569] mt-0.5 text-center px-6">
               {pro.specialty}
               {pro.department && <span> · {pro.department}</span>}
             </p>
@@ -101,7 +101,7 @@ export function ProfessionalDetailModal({
 
             <div className="flex items-center gap-2 mt-3">
               <Stars score={Math.round(parseFloat(pro.average_rating))} size="sm" />
-              <span className="text-xs text-[#6B738A]">
+              <span className="text-xs text-[#475569]">
                 {parseFloat(pro.average_rating).toFixed(1)} ({pro.total_ratings} calificaciones)
               </span>
             </div>
@@ -117,15 +117,15 @@ export function ProfessionalDetailModal({
           <div className="grid grid-cols-3 gap-2 py-4 border-y border-[#DDE1EE] text-center">
             <div>
               <p className="text-sm font-semibold text-[#141820]">{pro.years_experience}</p>
-              <p className="text-[10px] text-[#A0A8BF]">{t('años de exp.')}</p>
+              <p className="text-[10px] text-[#64748B]">{t('años de exp.')}</p>
             </div>
             <div>
               <p className="text-sm font-semibold text-[#141820]">{pro.total_consultations}</p>
-              <p className="text-[10px] text-[#A0A8BF]">{t('consultas')}</p>
+              <p className="text-[10px] text-[#64748B]">{t('consultas')}</p>
             </div>
             <div>
               <p className="text-sm font-semibold text-[#141820] truncate">{pro.languages.join(', ')}</p>
-              <p className="text-[10px] text-[#A0A8BF]">{t('idiomas')}</p>
+              <p className="text-[10px] text-[#64748B]">{t('idiomas')}</p>
             </div>
           </div>
 
@@ -133,7 +133,7 @@ export function ProfessionalDetailModal({
           {pro.bio && (
             <div className="mt-4">
               <h3 className="text-xs font-semibold text-[#3C4257] mb-1">{t('Sobre mí')}</h3>
-              <p className="text-sm text-[#6B738A] whitespace-pre-line">{pro.bio}</p>
+              <p className="text-sm text-[#475569] whitespace-pre-line">{pro.bio}</p>
             </div>
           )}
 

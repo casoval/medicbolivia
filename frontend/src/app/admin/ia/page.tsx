@@ -36,7 +36,7 @@ export default function AdminIAPage() {
       <div className="max-w-4xl">
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('IA / WhatsApp')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             {t('Bot de WhatsApp, recordatorios automáticos, conversaciones, mensajería masiva y automatización de backups.')}
           </p>
         </div>
@@ -50,7 +50,7 @@ export default function AdminIAPage() {
               className={`px-3.5 py-2.5 text-sm whitespace-nowrap border-b-2 transition-colors ${
                 tab === t.key
                   ? 'border-[#185FA5] text-[#185FA5] font-medium'
-                  : 'border-transparent text-[#6B738A] hover:text-[#141820]'
+                  : 'border-transparent text-[#475569] hover:text-[#141820]'
               }`}
             >
               {t.label}

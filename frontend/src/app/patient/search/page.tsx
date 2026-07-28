@@ -83,7 +83,7 @@ function SearchPageInner() {
             <h1 className="text-base font-semibold">
               {tab === 'buscar' ? t('Profesionales disponibles') : t('Profesionales consultados')}
             </h1>
-            <p className="text-xs text-[#6B738A] mt-0.5">
+            <p className="text-xs text-[#475569] mt-0.5">
               {tab === 'buscar' ? t('Consulta inmediata o agenda una cita') : t('Médicos con los que ya tuviste alguna consulta')}
             </p>
           </div>
@@ -99,7 +99,7 @@ function SearchPageInner() {
           <button
             onClick={() => setTab('buscar')}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === 'buscar' ? 'border-[#185FA5] text-[#185FA5]' : 'border-transparent text-[#6B738A] hover:text-[#141820]'
+              tab === 'buscar' ? 'border-[#185FA5] text-[#185FA5]' : 'border-transparent text-[#475569] hover:text-[#141820]'
             }`}
           >
             {t('Buscar médico')}
@@ -107,7 +107,7 @@ function SearchPageInner() {
           <button
             onClick={() => setTab('consultados')}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === 'consultados' ? 'border-[#185FA5] text-[#185FA5]' : 'border-transparent text-[#6B738A] hover:text-[#141820]'
+              tab === 'consultados' ? 'border-[#185FA5] text-[#185FA5]' : 'border-transparent text-[#475569] hover:text-[#141820]'
             }`}
           >
             {t('Profesionales consultados')}
@@ -153,7 +153,7 @@ function SearchPageInner() {
         {/* Buscador */}
         <div className="flex gap-2 mb-3">
           <div className="relative flex-1">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A0A8BF]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input
               className="input pl-8"
               placeholder={t('Buscar por nombre o especialidad...')}
@@ -172,7 +172,7 @@ function SearchPageInner() {
               className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs border transition-colors ${
                 specialty === sp
                   ? 'bg-[#E6F1FB] border-[#185FA5] text-[#185FA5] font-medium'
-                  : 'bg-white border-[#DDE1EE] text-[#6B738A] hover:border-[#A0A8BF]'
+                  : 'bg-white border-[#DDE1EE] text-[#475569] hover:border-[#A0A8BF]'
               }`}
             >
               {sp}
@@ -187,14 +187,14 @@ function SearchPageInner() {
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs border transition-colors ${
               availableNow
                 ? 'bg-[#E1F5EE] border-[#1D9E75] text-[#0F6E56] font-medium'
-                : 'bg-white border-[#DDE1EE] text-[#6B738A]'
+                : 'bg-white border-[#DDE1EE] text-[#475569]'
             }`}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${availableNow ? 'bg-[#1D9E75]' : 'bg-[#A0A8BF]'}`} />
             {t('Disponibles ahora')}
           </button>
           {professionals.length > 0 && (
-            <p className="text-xs text-[#6B738A]">
+            <p className="text-xs text-[#475569]">
               {professionals.length} profesional{professionals.length !== 1 ? 'es' : ''} encontrado{professionals.length !== 1 ? 's' : ''}
             </p>
           )}

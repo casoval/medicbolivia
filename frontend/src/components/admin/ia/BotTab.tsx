@@ -83,7 +83,7 @@ export function BotTab() {
             <div className={`w-2.5 h-2.5 rounded-full ${state === 'CONNECTED' ? 'bg-[#0F6E56]' : state === 'DOWN' || state === 'ERROR' ? 'bg-[#A32D2D]' : 'bg-[#185FA5] animate-pulse'}`} />
             <div>
               <p className="text-sm font-medium">{STATE_LABEL[state] || state}</p>
-              <p className="text-xs text-[#6B738A]">{t('Número vinculado vía whatsapp-service (Baileys)')}</p>
+              <p className="text-xs text-[#475569]">{t('Número vinculado vía whatsapp-service (Baileys)')}</p>
             </div>
             <span className={`ml-auto ${STATE_BADGE[state] || 'badge-gray'}`}>{state}</span>
           </div>
@@ -91,7 +91,7 @@ export function BotTab() {
 
         {state === 'QR_PENDING' && (
           <div className="mt-4 p-4 border border-[#DDE1EE] rounded-xl text-center">
-            <p className="text-xs text-[#6B738A] mb-3">
+            <p className="text-xs text-[#475569] mb-3">
               Escaneá este código desde WhatsApp → Dispositivos vinculados → Vincular un dispositivo.
               Usá primero un número de pruebas — ver advertencia de riesgo de baneo en el README de whatsapp-service.
             </p>
@@ -108,7 +108,7 @@ export function BotTab() {
       {/* ── Mensaje de prueba ── */}
       <div className="card p-4">
         <SectionTitle>{t('Mensaje de prueba')}</SectionTitle>
-        <p className="text-xs text-[#6B738A] mb-3">
+        <p className="text-xs text-[#475569] mb-3">
           Manda un WhatsApp real a un número para confirmar que todo el pipeline funciona
           (backend → Celery → whatsapp-service → WhatsApp).
         </p>
@@ -134,7 +134,7 @@ export function BotTab() {
       {/* ── Notas de configuración ── */}
       <div className="card p-4">
         <SectionTitle>{t('Configuración')}</SectionTitle>
-        <ul className="text-xs text-[#6B738A] space-y-1.5 list-disc list-inside">
+        <ul className="text-xs text-[#475569] space-y-1.5 list-disc list-inside">
           <li>{t('La sesión de WhatsApp vive en')} <code>whatsapp-service/auth_info/</code> {t('— respaldala aparte, no está en git.')}</li>
           <li>Si aparece &quot;Desconectado&quot; sin QR, revisá los logs de PM2: <code>{t('pm2 logs medicbolivia-whatsapp-service')}</code>.</li>
           <li>{t('Un cierre de sesión desde el celular obliga a volver a escanear el QR.')}</li>

@@ -286,7 +286,7 @@ export default function PatientVideoPage() {
   if (status === 'error') return (
     <div className="fixed inset-0 bg-[#0D1117] flex flex-col items-center justify-center gap-4 text-white px-6">
       <span className="text-5xl">⚠️</span>
-      <p className="text-sm text-center max-w-xs text-[#A0A8BF]">{error}</p>
+      <p className="text-sm text-center max-w-xs text-[#64748B]">{error}</p>
       <button onClick={() => { connectingRef.current = false; window.location.reload() }} className="px-5 py-2.5 bg-[#185FA5] text-white text-sm rounded-xl font-medium">
         {t('Reintentar')}
       </button>
@@ -318,12 +318,12 @@ export default function PatientVideoPage() {
           <div className="text-center mb-4">
             <div className="text-4xl mb-2">⭐</div>
             <h3 className="text-base font-semibold">{t('¿Cómo fue tu consulta?')}</h3>
-            <p className="text-xs text-[#6B738A] mt-1">{t('Tu opinión ayuda a otros pacientes')}</p>
+            <p className="text-xs text-[#475569] mt-1">{t('Tu opinión ayuda a otros pacientes')}</p>
           </div>
 
           <div className="mb-4">
             <StarPickerInline value={ratingScore} onChange={setRatingScore} />
-            <p className="text-center text-xs text-[#6B738A] mt-2">
+            <p className="text-center text-xs text-[#475569] mt-2">
               {ratingScore === 1 && 'Muy mala'}
               {ratingScore === 2 && 'Mala'}
               {ratingScore === 3 && 'Regular'}
@@ -334,7 +334,7 @@ export default function PatientVideoPage() {
 
           <div className="mb-4">
             <textarea
-              className="w-full border border-[#DDE1EE] rounded-xl px-3 py-2 text-sm resize-none outline-none focus:border-[#185FA5] text-[#1C2133] placeholder:text-[#A0A8BF]"
+              className="w-full border border-[#DDE1EE] rounded-xl px-3 py-2 text-sm resize-none outline-none focus:border-[#185FA5] text-[#1C2133] placeholder:text-[#64748B]"
               rows={3}
               placeholder={t('Cuéntanos cómo estuvo la atención... (opcional)')}
               value={ratingComment}
@@ -360,7 +360,7 @@ export default function PatientVideoPage() {
           </button>
           <button
             onClick={skipRating}
-            className="w-full py-2 text-sm text-[#6B738A] hover:text-[#1C2133] transition-colors"
+            className="w-full py-2 text-sm text-[#475569] hover:text-[#1C2133] transition-colors"
           >
             {t('Calificar luego')}
           </button>
@@ -372,7 +372,7 @@ export default function PatientVideoPage() {
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-fade-up">
           <div className="text-5xl mb-3">🎉</div>
           <h3 className="text-base font-semibold">{t('¡Gracias por tu calificación!')}</h3>
-          <p className="text-xs text-[#6B738A] mt-1 mb-5">{t('Tu opinión ayuda a mejorar el servicio')}</p>
+          <p className="text-xs text-[#475569] mt-1 mb-5">{t('Tu opinión ayuda a mejorar el servicio')}</p>
           <button onClick={goToDashboard} className="w-full py-2.5 bg-[#185FA5] text-white text-sm rounded-xl font-medium">
             {t('Volver al inicio')}
           </button>
@@ -402,7 +402,7 @@ export default function PatientVideoPage() {
             <p className="text-white text-sm font-medium">
               {status === 'connecting' ? 'Conectando...' : 'Esperando al médico...'}
             </p>
-            <p className="text-[#6B738A] text-xs">{t('La consulta comenzará en breve')}</p>
+            <p className="text-[#475569] text-xs">{t('La consulta comenzará en breve')}</p>
           </div>
         )}
 

@@ -138,7 +138,7 @@ export function RemindersTab() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[#6B738A]">
+      <p className="text-sm text-[#475569]">
         &quot;Paciente esperando&quot; se dispara al instante cuando se crea una consulta inmediata — no usa el
         campo de minutos. El resto de reglas corre por un chequeo cada minuto contra la hora de la cita.
       </p>
@@ -153,7 +153,7 @@ export function RemindersTab() {
             <StatBox label="Últimos 7 días" value={stats.week_total_sent} tone="blue" />
           </div>
           {(stats.today.by_audience.PATIENT || stats.today.by_audience.PROFESSIONAL) && (
-            <div className="flex gap-4 mt-3 pt-3 border-t border-[#E5E7EB] text-xs text-[#6B738A]">
+            <div className="flex gap-4 mt-3 pt-3 border-t border-[#E5E7EB] text-xs text-[#475569]">
               <span>
                 {t('Paciente:')} <strong className="text-[#141820]">{stats.today.by_audience.PATIENT?.SENT || 0}</strong> enviados
                 {(stats.today.by_audience.PATIENT?.FAILED ?? 0) > 0 && (
@@ -179,7 +179,7 @@ export function RemindersTab() {
                     <div className="w-full bg-[#A32D2D] rounded-t-sm" style={{ height: `${(day.FAILED / max) * 48}px` }} />
                     <div className="w-full bg-[#2F7D4F]" style={{ height: `${(day.SENT / max) * 48}px` }} />
                   </div>
-                  <span className="text-[9px] text-[#6B738A]">{day.date.slice(8, 10)}</span>
+                  <span className="text-[9px] text-[#475569]">{day.date.slice(8, 10)}</span>
                   {total === 0 && <span className="sr-only">Sin envíos</span>}
                 </div>
               )
@@ -200,14 +200,14 @@ export function RemindersTab() {
         )}
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">{t('Nombre interno')}</label>
+          <label className="text-xs font-medium text-[#475569]">{t('Nombre interno')}</label>
           <input className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
             placeholder={t('Ej: Recordatorio 24h antes de la cita')} maxLength={150} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">{t('Disparador')}</label>
+            <label className="text-xs font-medium text-[#475569]">{t('Disparador')}</label>
             <select className="input mt-1" value={form.trigger_type} disabled={form.is_system}
               onChange={(e) => setForm({ ...form, trigger_type: e.target.value })}>
               {Object.entries(TRIGGER_LABEL).map(([value, label]) => (
@@ -216,7 +216,7 @@ export function RemindersTab() {
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">{t('Destinatario')}</label>
+            <label className="text-xs font-medium text-[#475569]">{t('Destinatario')}</label>
             <select className="input mt-1" value={form.audience} disabled={form.is_system}
               onChange={(e) => setForm({ ...form, audience: e.target.value })}>
               <option value="PATIENT">{t('Paciente')}</option>
@@ -228,7 +228,7 @@ export function RemindersTab() {
 
         {form.trigger_type === 'SCHEDULED_APPOINTMENT_REMINDER' && (
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">{t('Minutos antes de la cita')}</label>
+            <label className="text-xs font-medium text-[#475569]">{t('Minutos antes de la cita')}</label>
             <input type="number" className="input mt-1 max-w-[160px]" value={form.offset_minutes}
               onChange={(e) => setForm({ ...form, offset_minutes: e.target.value === '' ? '' : Number(e.target.value) })}
               placeholder={t('1440 = 24 horas')} />
@@ -236,11 +236,11 @@ export function RemindersTab() {
         )}
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">{t('Plantilla del mensaje')}</label>
+          <label className="text-xs font-medium text-[#475569]">{t('Plantilla del mensaje')}</label>
           <textarea className="input mt-1 min-h-[80px]" value={form.message_template}
             onChange={(e) => setForm({ ...form, message_template: e.target.value })}
             placeholder={t('Hola {paciente}, tu cita con {profesional} es el {fecha} a las {hora}.')} />
-          <p className="text-[10px] text-[#6B738A] mt-1">
+          <p className="text-[10px] text-[#475569] mt-1">
             Variables disponibles: {'{paciente}'} {'{profesional}'} {'{especialidad}'} {'{fecha}'} {'{hora}'}
           </p>
         </div>
@@ -267,7 +267,7 @@ export function RemindersTab() {
         <>
           {rules.some((r) => r.is_system) && (
             <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide pt-2">
+              <h3 className="text-xs font-semibold text-[#475569] uppercase tracking-wide pt-2">
                 Catálogo del sistema (Profesional #1-8 · Paciente #1-4)
               </h3>
               {rules.filter((r) => r.is_system).map((rule) => (
@@ -277,7 +277,7 @@ export function RemindersTab() {
           )}
           {rules.some((r) => !r.is_system) && (
             <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide pt-2">Reglas personalizadas</h3>
+              <h3 className="text-xs font-semibold text-[#475569] uppercase tracking-wide pt-2">Reglas personalizadas</h3>
               {rules.filter((r) => !r.is_system).map((rule) => (
                 <ReminderCard
                   key={rule.id} rule={rule} todayCount={stats?.per_rule[rule.id]} onEdit={startEdit} onToggle={() => toggleMutation.mutate(rule)}
@@ -294,12 +294,12 @@ export function RemindersTab() {
 
 function StatBox({ label, value, tone }: { label: string; value: number; tone: 'green' | 'red' | 'gray' | 'blue' }) {
   const toneClass = {
-    green: 'text-[#2F7D4F]', red: 'text-[#A32D2D]', gray: 'text-[#6B738A]', blue: 'text-[#185FA5]',
+    green: 'text-[#2F7D4F]', red: 'text-[#A32D2D]', gray: 'text-[#475569]', blue: 'text-[#185FA5]',
   }[tone]
   return (
     <div className="bg-[#F7F8FA] rounded-lg p-3">
       <p className={`text-xl font-semibold ${toneClass}`}>{value}</p>
-      <p className="text-[10px] text-[#6B738A] mt-0.5">{label}</p>
+      <p className="text-[10px] text-[#475569] mt-0.5">{label}</p>
     </div>
   )
 }
@@ -319,10 +319,10 @@ function ReminderCard({ rule, todayCount, onEdit, onToggle, onDelete }: {
           <span className={AUDIENCE_BADGE[rule.audience] || 'badge-gray'}>{AUDIENCE_LABEL[rule.audience] || rule.audience}</span>
           {rule.is_system && <span className="badge-blue">Sistema</span>}
           {!rule.is_active && <span className="badge-gray">{t('Inactiva')}</span>}
-          <span className="text-[10px] text-[#6B738A]">{TRIGGER_LABEL[rule.trigger_type] || rule.trigger_type}</span>
-          {rule.offset_minutes != null && <span className="text-[10px] text-[#6B738A]">· {rule.offset_minutes} min antes</span>}
+          <span className="text-[10px] text-[#475569]">{TRIGGER_LABEL[rule.trigger_type] || rule.trigger_type}</span>
+          {rule.offset_minutes != null && <span className="text-[10px] text-[#475569]">· {rule.offset_minutes} min antes</span>}
           {todayCount && (todayCount.SENT + todayCount.FAILED + todayCount.SKIPPED) > 0 && (
-            <span className="text-[10px] text-[#6B738A]">
+            <span className="text-[10px] text-[#475569]">
               · hoy: <strong className="text-[#2F7D4F]">{todayCount.SENT} enviados</strong>
               {todayCount.FAILED > 0 && <> · <strong className="text-[#A32D2D]">{todayCount.FAILED} fallidos</strong></>}
               {todayCount.SKIPPED > 0 && <> · {todayCount.SKIPPED} omitidos</>}
@@ -330,7 +330,7 @@ function ReminderCard({ rule, todayCount, onEdit, onToggle, onDelete }: {
           )}
         </div>
         <p className="text-sm font-medium text-[#141820]">{rule.name}</p>
-        <p className="text-xs text-[#6B738A] mt-1 whitespace-pre-wrap">{rule.message_template}</p>
+        <p className="text-xs text-[#475569] mt-1 whitespace-pre-wrap">{rule.message_template}</p>
       </div>
       <div className="flex flex-col gap-1.5 flex-shrink-0">
         <button className="text-xs text-[#185FA5] hover:underline" onClick={() => onEdit(rule)}>{t('Editar')}</button>

@@ -75,13 +75,13 @@ function RatingModal({ consultation, onClose, onSave, loading }: {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-base font-semibold">{t('Califica tu consulta')}</h3>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        <p className="text-xs text-[#6B738A] mb-4">
+        <p className="text-xs text-[#475569] mb-4">
           {fmtFecha(consultation.created_at)} · Bs. {parseFloat(consultation.amount).toFixed(2)}
         </p>
         <div className="mb-4">
-          <p className="text-xs text-[#6B738A] mb-2">{t('¿Cómo fue tu experiencia?')}</p>
+          <p className="text-xs text-[#475569] mb-2">{t('¿Cómo fue tu experiencia?')}</p>
           <StarPicker value={score} onChange={setScore} />
         </div>
         <div className="mb-5">
@@ -94,7 +94,7 @@ function RatingModal({ consultation, onClose, onSave, loading }: {
             onChange={(e) => setComment(e.target.value)}
             maxLength={500}
           />
-          <p className="text-xs text-[#A0A8BF] mt-1 text-right">{comment.length}/500</p>
+          <p className="text-xs text-[#64748B] mt-1 text-right">{comment.length}/500</p>
         </div>
         <div className="flex gap-2">
           <button onClick={onClose} className="btn-secondary flex-1" disabled={loading}>{t('Calificar luego')}</button>
@@ -123,14 +123,14 @@ function RatingDetailModal({ rating, onClose }: {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-base font-semibold">{t('Tu calificación')}</h3>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        <p className="text-xs text-[#6B738A] mb-4">{fmtFecha(rating.created_at)}</p>
+        <p className="text-xs text-[#475569] mb-4">{fmtFecha(rating.created_at)}</p>
         <div className="mb-4">
           <Stars score={rating.score} size="lg" />
         </div>
         <div className="bg-[#F5F6FA] rounded-xl p-3 mb-5">
-          <p className="text-xs text-[#6B738A] mb-1">{t('Comentario')}</p>
+          <p className="text-xs text-[#475569] mb-1">{t('Comentario')}</p>
           <p className="text-sm">{rating.comment || 'Sin comentario'}</p>
         </div>
         <button onClick={onClose} className="btn-secondary w-full">{t('Cerrar')}</button>
@@ -200,9 +200,9 @@ function DisputeModal({ consultation, onClose, onSave, loading, error }: {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-base font-semibold">{t('Reportar un problema')}</h3>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        <p className="text-xs text-[#6B738A] mb-4">
+        <p className="text-xs text-[#475569] mb-4">
           Esto congela el pago (Bs. {parseFloat(consultation.amount).toFixed(2)}) mientras un
           administrador revisa tu caso. El profesional no puede decidir esto por su cuenta.
           {deadline && (
@@ -235,7 +235,7 @@ function DisputeModal({ consultation, onClose, onSave, loading, error }: {
             onChange={(e) => setReason(e.target.value)}
             maxLength={1000}
           />
-          <p className="text-xs text-[#A0A8BF] mt-1 text-right">{reason.length}/1000</p>
+          <p className="text-xs text-[#64748B] mt-1 text-right">{reason.length}/1000</p>
         </div>
 
         <div className="flex gap-2">
@@ -264,7 +264,7 @@ function SummaryModal({ consultation, onClose }: {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">{t('Resumen de consulta')}</h3>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#1C2133]"><IconClose /></button>
         </div>
         <div className="space-y-3 text-sm">
           {doctorNameOf(consultation) && (
@@ -275,29 +275,29 @@ function SummaryModal({ consultation, onClose }: {
                 photoUrl={consultation.professional_photo_url}
               />
               <div>
-                <p className="text-xs text-[#6B738A] mb-0.5">{t('Médico')}</p>
+                <p className="text-xs text-[#475569] mb-0.5">{t('Médico')}</p>
                 <p className="font-medium">{doctorNameOf(consultation)}</p>
               </div>
             </div>
           )}
           <div className="bg-[#F5F6FA] rounded-xl p-3">
-            <p className="text-xs text-[#6B738A] mb-1">{t('Especialidad')}</p>
+            <p className="text-xs text-[#475569] mb-1">{t('Especialidad')}</p>
             <p className="font-medium">{consultation.specialty || 'Consulta médica general'}</p>
           </div>
           {consultation.professional_sub_specialties && consultation.professional_sub_specialties.length > 0 && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
-              <p className="text-xs text-[#6B738A] mb-1">{t('Subespecialidad')}</p>
+              <p className="text-xs text-[#475569] mb-1">{t('Subespecialidad')}</p>
               <p className="font-medium">{consultation.professional_sub_specialties.join(', ')}</p>
             </div>
           )}
           {consultation.professional_department && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
-              <p className="text-xs text-[#6B738A] mb-1">{t('Departamento')}</p>
+              <p className="text-xs text-[#475569] mb-1">{t('Departamento')}</p>
               <p className="font-medium">{consultation.professional_department}</p>
             </div>
           )}
           <div className="bg-[#F5F6FA] rounded-xl p-3">
-            <p className="text-xs text-[#6B738A] mb-1">
+            <p className="text-xs text-[#475569] mb-1">
               {consultation.consultation_type === 'SCHEDULED' ? 'Fecha de la cita' : 'Fecha'}
             </p>
             <p className="font-medium">
@@ -310,7 +310,7 @@ function SummaryModal({ consultation, onClose }: {
           </div>
           {(consultation as any).outcome_note && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
-              <p className="text-xs text-[#6B738A] mb-1">{t('Detalle')}</p>
+              <p className="text-xs text-[#475569] mb-1">{t('Detalle')}</p>
               <p className="font-medium text-xs">
                 {outcomeLabel(consultation, 'PATIENT')}
               </p>
@@ -318,22 +318,22 @@ function SummaryModal({ consultation, onClose }: {
           )}
           {!!consultation.duration_minutes && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
-              <p className="text-xs text-[#6B738A] mb-1">{t('Duración')}</p>
+              <p className="text-xs text-[#475569] mb-1">{t('Duración')}</p>
               <p className="font-medium">{consultation.duration_minutes} minutos</p>
             </div>
           )}
           <div className="bg-[#F5F6FA] rounded-xl p-3">
-            <p className="text-xs text-[#6B738A] mb-1">{t('Monto pagado')}</p>
+            <p className="text-xs text-[#475569] mb-1">{t('Monto pagado')}</p>
             <p className="font-medium text-[#0F6E56]">Bs. {parseFloat(consultation.amount).toFixed(2)}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-xl p-3">
-            <p className="text-xs text-[#6B738A] mb-1">{t('Estado')}</p>
+            <p className="text-xs text-[#475569] mb-1">{t('Estado')}</p>
             <StatusBadge status={consultation.status} createdByRole={consultation.created_by_role} />
             <div className="mt-1"><PaymentBadge consultation={consultation} viewerRole="PATIENT" /></div>
           </div>
           {(consultation as any).notes && (
             <div className="bg-[#F5F6FA] rounded-xl p-3">
-              <p className="text-xs text-[#6B738A] mb-1">{t('Notas del médico')}</p>
+              <p className="text-xs text-[#475569] mb-1">{t('Notas del médico')}</p>
               <p className="text-sm">{(consultation as any).notes}</p>
             </div>
           )}
@@ -364,24 +364,24 @@ function PrescriptionModal({ consultationId, onClose }: {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">{t('Recetas de esta consulta')}</h3>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando recetas...')}</p>}
+        {isLoading && <p className="text-sm text-[#475569] text-center py-6">{t('Cargando recetas...')}</p>}
         {data && data.length === 0 && (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">💊</p>
-            <p className="text-sm text-[#6B738A]">{t('No hay recetas para esta consulta')}</p>
+            <p className="text-sm text-[#475569]">{t('No hay recetas para esta consulta')}</p>
           </div>
         )}
         {data && data.map((rx: any) => (
           <div key={rx.id} className="border border-[#DDE1EE] rounded-xl p-4 mb-3">
             <div className="border-b border-[#DDE1EE] pb-3 mb-3">
-              <p className="text-xs text-[#6B738A]">{t('Dr./Dra.')}</p>
+              <p className="text-xs text-[#475569]">{t('Dr./Dra.')}</p>
               <p className="font-semibold text-sm">{rx.professional_name || 'Médico'}</p>
-              {rx.professional_specialty && <p className="text-xs text-[#6B738A]">{rx.professional_specialty}</p>}
-              {rx.cmb_matricula && <p className="text-xs text-[#6B738A]">Mat. CMB: {rx.cmb_matricula}</p>}
+              {rx.professional_specialty && <p className="text-xs text-[#475569]">{rx.professional_specialty}</p>}
+              {rx.cmb_matricula && <p className="text-xs text-[#475569]">Mat. CMB: {rx.cmb_matricula}</p>}
             </div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Medicamentos')}</p>
+            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Medicamentos')}</p>
             <div className="space-y-2 mb-3">
               {rx.medications?.map((m: any, i: number) => (
                 <div key={i} className="bg-[#F5F6FA] rounded-lg p-2">
@@ -406,7 +406,7 @@ function PrescriptionModal({ consultationId, onClose }: {
                 alt="QR Receta"
                 className="mx-auto rounded-lg mb-1"
               />
-              <p className="text-[10px] text-[#6B738A] font-mono">{rx.qr_verify_code}</p>
+              <p className="text-[10px] text-[#475569] font-mono">{rx.qr_verify_code}</p>
             </div>
           </div>
         ))}
@@ -438,7 +438,7 @@ function ClinicalNoteModal({ consultationId, onClose }: {
   const field = (label: string, value?: string | null) =>
     value ? (
       <div className="bg-[#F5F6FA] rounded-xl p-3 mb-3">
-        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-1">{label}</p>
+        <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-1">{label}</p>
         <p className="text-sm whitespace-pre-wrap">{value}</p>
       </div>
     ) : null
@@ -448,22 +448,22 @@ function ClinicalNoteModal({ consultationId, onClose }: {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">{t('Historia clínica de esta consulta')}</h3>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando historia clínica...')}</p>}
+        {isLoading && <p className="text-sm text-[#475569] text-center py-6">{t('Cargando historia clínica...')}</p>}
         {!isLoading && !note && (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">📋</p>
-            <p className="text-sm text-[#6B738A]">{t('No hay historia clínica para esta consulta')}</p>
+            <p className="text-sm text-[#475569]">{t('No hay historia clínica para esta consulta')}</p>
           </div>
         )}
         {note && (
           <>
             {(note.professional_name || note.professional_specialty) && (
               <div className="border-b border-[#DDE1EE] pb-3 mb-3">
-                <p className="text-xs text-[#6B738A]">{t('Dr./Dra.')}</p>
+                <p className="text-xs text-[#475569]">{t('Dr./Dra.')}</p>
                 <p className="font-semibold text-sm">{note.professional_name || 'Médico'}</p>
-                {note.professional_specialty && <p className="text-xs text-[#6B738A]">{note.professional_specialty}</p>}
+                {note.professional_specialty && <p className="text-xs text-[#475569]">{note.professional_specialty}</p>}
               </div>
             )}
             {field('Motivo de consulta (Subjetivo)', note.subjective)}
@@ -471,9 +471,9 @@ function ClinicalNoteModal({ consultationId, onClose }: {
             {field('Diagnóstico (Evaluación)', note.assessment)}
             {field('Plan / Indicaciones', note.plan)}
             {!note.subjective && !note.objective && !note.assessment && !note.plan && (
-              <p className="text-sm text-[#6B738A] text-center py-4">{t('El médico aún no completó el detalle.')}</p>
+              <p className="text-sm text-[#475569] text-center py-4">{t('El médico aún no completó el detalle.')}</p>
             )}
-            <p className="text-xs text-[#A0A8BF] mt-2">
+            <p className="text-xs text-[#64748B] mt-2">
               Registrada el {fmtFecha(note.created_at)}
             </p>
           </>
@@ -618,7 +618,7 @@ export default function HistoryPage() {
       <div className={activeTab === 'calendar' ? 'max-w-5xl' : 'max-w-2xl'}>
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Mis consultas')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">{t('Todas tus consultas y citas agendadas, en un solo lugar')}</p>
+          <p className="text-xs text-[#475569] mt-0.5">{t('Todas tus consultas y citas agendadas, en un solo lugar')}</p>
         </div>
 
         {success && <div className="mb-4"><Alert type="success" message={success} /></div>}
@@ -628,15 +628,15 @@ export default function HistoryPage() {
         <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#185FA5]">{consultations.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Total')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Total')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#0F6E56]">{completed.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Completadas')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Completadas')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#854F0B]">Bs. {totalSpent.toFixed(0)}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Total gastado')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Total gastado')}</p>
           </div>
         </div>
 
@@ -647,7 +647,7 @@ export default function HistoryPage() {
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
               activeTab === 'active'
                 ? 'bg-white text-[#141820] border border-[#DDE1EE]'
-                : 'text-[#6B738A]'
+                : 'text-[#475569]'
             }`}
           >
             En curso {active.length > 0 && (
@@ -661,7 +661,7 @@ export default function HistoryPage() {
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
               activeTab === 'history'
                 ? 'bg-white text-[#141820] border border-[#DDE1EE]'
-                : 'text-[#6B738A]'
+                : 'text-[#475569]'
             }`}
           >
             Completadas {completed.length > 0 && (
@@ -675,7 +675,7 @@ export default function HistoryPage() {
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
               activeTab === 'cancelled'
                 ? 'bg-white text-[#141820] border border-[#DDE1EE]'
-                : 'text-[#6B738A]'
+                : 'text-[#475569]'
             }`}
           >
             Canceladas {cancelledOrRefunded.length > 0 && (
@@ -689,7 +689,7 @@ export default function HistoryPage() {
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
               activeTab === 'calendar'
                 ? 'bg-white text-[#141820] border border-[#DDE1EE]'
-                : 'text-[#6B738A]'
+                : 'text-[#475569]'
             }`}
           >
             {t('🗓 Calendario')}
@@ -724,7 +724,7 @@ export default function HistoryPage() {
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{doctorName || c.specialty || 'Consulta médica'}</p>
-                          <p className="text-xs text-[#6B738A] mt-0.5 truncate">
+                          <p className="text-xs text-[#475569] mt-0.5 truncate">
                             {doctorName && c.specialty ? `${c.specialty} · ` : ''}
                             {isScheduled && c.scheduled_at ? (
                               <>🗓 {new Date(c.scheduled_at).toLocaleString('es-BO', {
@@ -736,7 +736,7 @@ export default function HistoryPage() {
                             {' · '}Bs. {parseFloat(c.amount).toFixed(2)}
                           </p>
                           {(c.professional_department || (c.professional_sub_specialties && c.professional_sub_specialties.length > 0)) && (
-                            <p className="text-xs text-[#A0A8BF] mt-0.5 truncate">
+                            <p className="text-xs text-[#64748B] mt-0.5 truncate">
                               {c.professional_department || ''}
                               {c.professional_department && c.professional_sub_specialties?.length ? ' · ' : ''}
                               {c.professional_sub_specialties?.join(', ') || ''}
@@ -775,7 +775,7 @@ export default function HistoryPage() {
           <div className="card">
             <SectionTitle>{t('Historial de consultas completadas')}</SectionTitle>
             {completed.length === 0 ? (
-              <p className="text-sm text-[#6B738A] text-center py-3">{t('No hay consultas completadas aún')}</p>
+              <p className="text-sm text-[#475569] text-center py-3">{t('No hay consultas completadas aún')}</p>
             ) : (
               <div className="divide-y divide-[#DDE1EE]">
                   {completed.map((c) => {
@@ -790,21 +790,21 @@ export default function HistoryPage() {
                           />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{doctorName || c.specialty || 'Consulta médica'}</p>
-                            <p className="text-xs text-[#6B738A] mt-0.5 truncate">
+                            <p className="text-xs text-[#475569] mt-0.5 truncate">
                               {doctorName && c.specialty ? `${c.specialty} · ` : ''}
                               {fmtFecha(c.created_at)}
                               {c.duration_minutes ? ` · ${c.duration_minutes} min` : ''}
                               {' · '}Bs. {parseFloat(c.amount).toFixed(2)}
                             </p>
                             {(c.started_at || c.ended_at) && (
-                              <p className="text-xs text-[#A0A8BF] mt-0.5 truncate">
+                              <p className="text-xs text-[#64748B] mt-0.5 truncate">
                                 {c.started_at ? `Inició ${fmtHora(c.started_at)}` : ''}
                                 {c.started_at && c.ended_at ? ' · ' : ''}
                                 {c.ended_at ? `Finalizó ${fmtHora(c.ended_at)}` : ''}
                               </p>
                             )}
                             {c.chief_complaint && (
-                              <p className="text-xs text-[#A0A8BF] mt-0.5 truncate" title={c.chief_complaint}>
+                              <p className="text-xs text-[#64748B] mt-0.5 truncate" title={c.chief_complaint}>
                                 Motivo: {c.chief_complaint}
                               </p>
                             )}
@@ -814,7 +814,7 @@ export default function HistoryPage() {
                               </p>
                             )}
                             {(c.professional_department || (c.professional_sub_specialties && c.professional_sub_specialties.length > 0)) && (
-                              <p className="text-xs text-[#A0A8BF] mt-0.5 truncate">
+                              <p className="text-xs text-[#64748B] mt-0.5 truncate">
                                 {c.professional_department || ''}
                                 {c.professional_department && c.professional_sub_specialties?.length ? ' · ' : ''}
                                 {c.professional_sub_specialties?.join(', ') || ''}
@@ -872,7 +872,7 @@ export default function HistoryPage() {
                                 const deadline = disputeDeadline(c)
                                 const label = deadline ? timeLeftToDisputeLabel(deadline, now) : null
                                 return label ? (
-                                  <span className="text-[11px] text-[#A0A8BF]">· {label}</span>
+                                  <span className="text-[11px] text-[#64748B]">· {label}</span>
                                 ) : null
                               })()}
                             </span>
@@ -922,22 +922,22 @@ export default function HistoryPage() {
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{doctorName || c.specialty || 'Consulta médica'}</p>
-                          <p className="text-xs text-[#6B738A] mt-0.5 truncate">
+                          <p className="text-xs text-[#475569] mt-0.5 truncate">
                             {c.consultation_type === 'SCHEDULED' && c.scheduled_at
                               ? `Cita agendada para ${fmtFechaHoraLocal(c.scheduled_at)}`
                               : `Solicitada ${fmtFecha(c.created_at)}`}
                             {' · '}Bs. {parseFloat(c.amount).toFixed(2)}
                           </p>
-                          <p className="text-xs text-[#6B738A] mt-0.5 truncate">
+                          <p className="text-xs text-[#475569] mt-0.5 truncate">
                             {outcomeLabel(c, 'PATIENT')}
                           </p>
                           <div className="flex items-center gap-2 flex-wrap mt-1">
                             {who && (
-                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#6B738A]">
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#475569]">
                                 {who}
                               </span>
                             )}
-                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#6B738A]">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#475569]">
                               {c.updated_at ? `Cancelada ${fmtFechaHora(c.updated_at)}` : ''}
                             </span>
                           </div>

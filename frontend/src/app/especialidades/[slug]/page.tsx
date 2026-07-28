@@ -77,7 +77,7 @@ export default async function SpecialtyPage(props: Props) {
       <PublicHeader />
 
       <main className="max-w-3xl mx-auto px-4 py-12">
-        <nav className="text-xs text-[#6B738A] mb-6" aria-label="Breadcrumb">
+        <nav className="text-xs text-[#475569] mb-6" aria-label="Breadcrumb">
           <Link href="/" className="hover:underline">Inicio</Link>
           {' / '}
           <Link href="/especialidades" className="hover:underline">Especialidades</Link>
@@ -92,13 +92,13 @@ export default async function SpecialtyPage(props: Props) {
           <h1 className="text-2xl sm:text-3xl font-bold text-[#141820]">{specialty.intro}</h1>
         </div>
 
-        <p className="text-[#6B738A] mb-6">{specialty.description}</p>
+        <p className="text-[#475569] mb-6">{specialty.description}</p>
 
         <div className="bg-white border border-[#DDE1EE] rounded-2xl p-6 mb-8">
           <h2 className="font-semibold text-[#141820] mb-2">
             ¿Cómo consultar con un profesional de {specialty.name.toLowerCase()} en MedicBolivia?
           </h2>
-          <ol className="space-y-1.5 text-sm text-[#6B738A] list-decimal list-inside">
+          <ol className="space-y-1.5 text-sm text-[#475569] list-decimal list-inside">
             <li>Registrate gratis como paciente en MedicBolivia.</li>
             <li>Contale a Medi, nuestro agente de orientación con IA, qué te está pasando.</li>
             <li>Medi te deriva con un profesional de {specialty.name.toLowerCase()} verificado.</li>
@@ -117,7 +117,7 @@ export default async function SpecialtyPage(props: Props) {
             <h2 className="font-semibold text-[#141820] mb-3">Subespecialidades relacionadas</h2>
             <div className="flex flex-wrap gap-2">
               {specialty.subspecialties.map((sub) => (
-                <span key={sub} className="text-xs bg-white border border-[#DDE1EE] text-[#6B738A] px-3 py-1.5 rounded-full">
+                <span key={sub} className="text-xs bg-white border border-[#DDE1EE] text-[#475569] px-3 py-1.5 rounded-full">
                   {sub}
                 </span>
               ))}

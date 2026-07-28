@@ -88,7 +88,7 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
         <PhotoAvatar size="md" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium">{pro.first_name} {pro.last_name}</p>
-          <p className="text-xs text-[#6B738A]">
+          <p className="text-xs text-[#475569]">
             {pro.specialty}
             {pro.department && <span> · {pro.department}</span>}
           </p>
@@ -117,7 +117,7 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-sm font-semibold">{pro.first_name} {pro.last_name}</p>
-              <p className="text-xs text-[#6B738A] mt-0.5">
+              <p className="text-xs text-[#475569] mt-0.5">
                 {pro.specialty}
                 {pro.department && <span> · {pro.department}</span>}
               </p>
@@ -126,7 +126,7 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
                   {pro.sub_specialties.map((sub) => (
                     <span
                       key={sub}
-                      className="text-[10px] bg-[#F1F3F9] text-[#6B738A] px-1.5 py-0.5 rounded-full"
+                      className="text-[10px] bg-[#F1F3F9] text-[#475569] px-1.5 py-0.5 rounded-full"
                     >
                       {sub}
                     </span>
@@ -138,7 +138,7 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
           </div>
           <div className="flex items-center gap-2 mt-1">
             <Stars score={Math.round(parseFloat(pro.average_rating))} size="sm" />
-            <span className="text-xs text-[#6B738A]">
+            <span className="text-xs text-[#475569]">
               {parseFloat(pro.average_rating).toFixed(1)} ({pro.total_ratings})
             </span>
           </div>
@@ -146,7 +146,7 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
       </div>
 
       {/* Info */}
-      <div className="flex items-center gap-3 mb-3 text-xs text-[#6B738A]">
+      <div className="flex items-center gap-3 mb-3 text-xs text-[#475569]">
         <span>{pro.years_experience} años de exp.</span>
         <span className="text-[#DDE1EE]">·</span>
         <span>{pro.languages.join(', ')}</span>
@@ -156,7 +156,7 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
 
       {pro.bio && (
         <div className="mb-3">
-          <p className={`text-xs text-[#6B738A] ${bioExpanded ? '' : 'line-clamp-2'}`}>{pro.bio}</p>
+          <p className={`text-xs text-[#475569] ${bioExpanded ? '' : 'line-clamp-2'}`}>{pro.bio}</p>
           <button
             onClick={(e) => { e.stopPropagation(); setBioExpanded((v) => !v) }}
             className="text-xs text-[#185FA5] font-medium mt-0.5 hover:underline"
@@ -181,7 +181,7 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
             className={`text-xs py-1.5 px-3 rounded-full border transition-colors ${
               isLinked
                 ? 'border-[#185FA5] text-[#185FA5] bg-[#E6F1FB] hover:bg-[#DCE9F7]'
-                : 'border-[#DDE1EE] text-[#6B738A] hover:border-[#185FA5] hover:text-[#185FA5]'
+                : 'border-[#DDE1EE] text-[#475569] hover:border-[#185FA5] hover:text-[#185FA5]'
             }`}
           >
             {linkMutation.isPending ? '...' : isLinked ? '✓ Vinculado' : 'Vincularme'}

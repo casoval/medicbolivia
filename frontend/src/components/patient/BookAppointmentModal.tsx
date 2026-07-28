@@ -77,20 +77,20 @@ function MiniCalendar({
     <div className="border border-[#DDE1EE] rounded-xl p-3 mb-4 select-none">
       {/* Header mes/año */}
       <div className="flex items-center justify-between mb-3">
-        <button onClick={prevMonth} className="text-[#6B738A] hover:text-[#185FA5] p-1 rounded">
+        <button onClick={prevMonth} className="text-[#475569] hover:text-[#185FA5] p-1 rounded">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
         <span className="text-sm font-semibold text-[#3C4257]">
           {MESES[view.month]} {view.year}
         </span>
-        <button onClick={nextMonth} className="text-[#6B738A] hover:text-[#185FA5] p-1 rounded">
+        <button onClick={nextMonth} className="text-[#475569] hover:text-[#185FA5] p-1 rounded">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
         </button>
       </div>
       {/* Encabezados días */}
       <div className="grid grid-cols-7 mb-1">
         {DIAS.map(d => (
-          <div key={d} className="text-center text-[10px] font-semibold text-[#A0A8BF]">{d}</div>
+          <div key={d} className="text-center text-[10px] font-semibold text-[#64748B]">{d}</div>
         ))}
       </div>
       {/* Días */}
@@ -190,9 +190,9 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
       <div className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-base font-semibold">{t('Agendar cita')}</h3>
-          <button onClick={onClose} className="text-[#A0A8BF] hover:text-[#6B738A] text-xl leading-none">×</button>
+          <button onClick={onClose} className="text-[#64748B] hover:text-[#475569] text-xl leading-none">×</button>
         </div>
-        <p className="text-xs text-[#6B738A] mb-4">
+        <p className="text-xs text-[#475569] mb-4">
           Con {professional.first_name} {professional.last_name} · {professional.specialty}
         </p>
 
@@ -207,7 +207,7 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
             <button
               onClick={() => handleTypeSelect('SCHEDULED')}
               className={`flex-1 text-xs py-2 rounded-md font-medium transition-colors ${
-                consultationType === 'SCHEDULED' ? 'bg-white shadow-sm text-[#185FA5]' : 'text-[#6B738A]'
+                consultationType === 'SCHEDULED' ? 'bg-white shadow-sm text-[#185FA5]' : 'text-[#475569]'
               }`}
             >
               Cita nueva · Bs. {parseFloat(professional.price_general).toFixed(0)}
@@ -215,7 +215,7 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
             <button
               onClick={() => handleTypeSelect('FOLLOW_UP')}
               className={`flex-1 text-xs py-2 rounded-md font-medium transition-colors ${
-                consultationType === 'FOLLOW_UP' ? 'bg-white shadow-sm text-[#0F6E56]' : 'text-[#6B738A]'
+                consultationType === 'FOLLOW_UP' ? 'bg-white shadow-sm text-[#0F6E56]' : 'text-[#475569]'
               }`}
             >
               Seguimiento · Bs. {parseFloat(professional.price_follow_up).toFixed(0)}
@@ -228,11 +228,11 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
           </p>
         )}
 
-        <label className="block text-xs font-medium text-[#6B738A] mb-2">{t('Fecha')}</label>
+        <label className="block text-xs font-medium text-[#475569] mb-2">{t('Fecha')}</label>
         <MiniCalendar selected={date} onSelect={handleDateSelect} />
         <p className="text-xs text-[#185FA5] font-medium -mt-2 mb-4">{dateLabel}</p>
 
-        <label className="block text-xs font-medium text-[#6B738A] mb-2">{t('Horarios disponibles')}</label>
+        <label className="block text-xs font-medium text-[#475569] mb-2">{t('Horarios disponibles')}</label>
         {loadingSlots ? (
           <div className="grid grid-cols-3 gap-2 mb-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -240,7 +240,7 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
             ))}
           </div>
         ) : slots.length === 0 ? (
-          <p className="text-sm text-[#6B738A] mb-4">
+          <p className="text-sm text-[#475569] mb-4">
             {t('No hay horarios disponibles ese día. Prueba otra fecha.')}
           </p>
         ) : (
@@ -261,7 +261,7 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
           </div>
         )}
 
-        <label className="block text-xs font-medium text-[#6B738A] mb-1">
+        <label className="block text-xs font-medium text-[#475569] mb-1">
           {t('Motivo de consulta (opcional)')}
         </label>
         <textarea
@@ -288,7 +288,7 @@ export function BookAppointmentModal({ professional, onClose }: BookAppointmentM
               : 'Solicitar cita'}
           </button>
         </div>
-        <p className="text-[10px] text-[#A0A8BF] mt-2 text-center">
+        <p className="text-[10px] text-[#64748B] mt-2 text-center">
           {t('El profesional debe confirmar tu solicitud antes de pagar.')}
         </p>
       </div>

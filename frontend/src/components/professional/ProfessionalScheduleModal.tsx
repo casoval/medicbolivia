@@ -72,7 +72,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-sm font-semibold mb-1">Agendar cita a {patientName}</h2>
-        <p className="text-xs text-[#6B738A] mb-4">
+        <p className="text-xs text-[#475569] mb-4">
           Sin límite de horario disponible — sí se revisa que no choque con otra cita tuya.
         </p>
 
@@ -80,12 +80,12 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
 
         <div className="space-y-3" style={pickerOpen ? { marginBottom: 300 } : undefined}>
           <div>
-            <label className="block text-xs text-[#6B738A] mb-1">Fecha y hora</label>
+            <label className="block text-xs text-[#475569] mb-1">Fecha y hora</label>
             <SpanishDateTimePicker value={scheduledAt} onChange={setScheduledAt} onOpenChange={setPickerOpen} />
           </div>
 
           <div>
-            <label className="block text-xs text-[#6B738A] mb-1">{t('Motivo de consulta (opcional)')}</label>
+            <label className="block text-xs text-[#475569] mb-1">{t('Motivo de consulta (opcional)')}</label>
             <input
               value={chiefComplaint}
               onChange={(e) => setChiefComplaint(e.target.value)}
@@ -95,7 +95,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
           </div>
 
           <div className="bg-[#F5F6FA] rounded-lg px-3 py-2.5">
-            <p className="text-[11px] text-[#6B738A]">
+            <p className="text-[11px] text-[#475569]">
               El cobro es directo entre tú y el paciente — la plataforma no genera QR ni participa
               en este pago, solo lo registra para tus estadísticas. Por eso puedes cancelar o
               reprogramar esta cita después las veces que necesites, sin trámites de reembolso.
@@ -103,7 +103,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
           </div>
 
           <div>
-            <label className="block text-xs text-[#6B738A] mb-1">¿Cómo se atiende?</label>
+            <label className="block text-xs text-[#475569] mb-1">¿Cómo se atiende?</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -111,7 +111,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
                 className={`text-xs font-medium rounded-lg py-1.5 border transition-colors ${
                   modality === 'VIDEO_CALL'
                     ? 'bg-[#0F6E56] border-[#0F6E56] text-white'
-                    : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                    : 'border-[#DDE1EE] text-[#475569] hover:bg-[#F5F6FA]'
                 }`}
               >
                 🎥 Videollamada
@@ -122,13 +122,13 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
                 className={`text-xs font-medium rounded-lg py-1.5 border transition-colors ${
                   modality === 'IN_PERSON'
                     ? 'bg-[#993C1D] border-[#993C1D] text-white'
-                    : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                    : 'border-[#DDE1EE] text-[#475569] hover:bg-[#F5F6FA]'
                 }`}
               >
                 🏥 Presencial
               </button>
             </div>
-            <p className="text-[10px] text-[#A0A8BF] mt-1">
+            <p className="text-[10px] text-[#64748B] mt-1">
               {modality === 'IN_PERSON'
                 ? 'El paciente verá que debe presentarse en tu consultorio, sin videollamada.'
                 : 'Se atenderán por videollamada en la plataforma, como el resto de las consultas.'}
@@ -136,7 +136,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
           </div>
 
           <div>
-            <label className="block text-xs text-[#6B738A] mb-1">Monto que cobrarás (Bs.)</label>
+            <label className="block text-xs text-[#475569] mb-1">Monto que cobrarás (Bs.)</label>
             <input
               type="number"
               min={0}
@@ -145,11 +145,11 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
               placeholder="0"
               className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
             />
-            <p className="text-[10px] text-[#A0A8BF] mt-1">Puedes poner 0 (ej. consulta de cortesía).</p>
+            <p className="text-[10px] text-[#64748B] mt-1">Puedes poner 0 (ej. consulta de cortesía).</p>
           </div>
 
           <div>
-            <label className="block text-xs text-[#6B738A] mb-1">¿Cuándo cobras?</label>
+            <label className="block text-xs text-[#475569] mb-1">¿Cuándo cobras?</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -157,7 +157,7 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
                 className={`text-xs font-medium rounded-lg py-1.5 border transition-colors ${
                   chargeNow
                     ? 'bg-[#0F6E56] border-[#0F6E56] text-white'
-                    : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                    : 'border-[#DDE1EE] text-[#475569] hover:bg-[#F5F6FA]'
                 }`}
               >
                 Pagar ahora
@@ -168,13 +168,13 @@ export function ProfessionalScheduleModal({ link, defaultAmount, onClose }: Prop
                 className={`text-xs font-medium rounded-lg py-1.5 border transition-colors ${
                   !chargeNow
                     ? 'bg-[#185FA5] border-[#185FA5] text-white'
-                    : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                    : 'border-[#DDE1EE] text-[#475569] hover:bg-[#F5F6FA]'
                 }`}
               >
                 Pagar después
               </button>
             </div>
-            <p className="text-[10px] text-[#A0A8BF] mt-1">
+            <p className="text-[10px] text-[#64748B] mt-1">
               {chargeNow
                 ? 'Se registrará el cobro como hecho, con la fecha de hoy.'
                 : 'La cita se agenda igual — luego registras cuánto y cuándo cobraste desde el detalle de la cita.'}

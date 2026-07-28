@@ -108,7 +108,7 @@ export default function ProfessionalSchedulePage() {
       <div className="max-w-3xl">
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Mi horario semanal')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             Estos bloques se usan para sugerirle horarios al paciente cuando agenda una cita
             contigo, y también para el modo automático de disponibilidad.
           </p>
@@ -128,7 +128,7 @@ export default function ProfessionalSchedulePage() {
         {/* Duración de cada cita */}
         <div className="card mb-4">
           <SectionTitle>{t('Duración de cada cita')}</SectionTitle>
-          <p className="text-xs text-[#6B738A] mt-1 mb-3">
+          <p className="text-xs text-[#475569] mt-1 mb-3">
             {t('Se usa para calcular los horarios disponibles y detectar choques entre citas.')}
           </p>
           <div className="flex items-center gap-2">
@@ -141,7 +141,7 @@ export default function ProfessionalSchedulePage() {
               onChange={(e) => setDuration(Number(e.target.value))}
               className="w-24 px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
             />
-            <span className="text-sm text-[#6B738A]">{t('minutos')}</span>
+            <span className="text-sm text-[#475569]">{t('minutos')}</span>
           </div>
         </div>
 
@@ -164,7 +164,7 @@ export default function ProfessionalSchedulePage() {
                   </div>
 
                   {dayBlocks.length === 0 ? (
-                    <p className="text-xs text-[#A0A8BF]">{t('Sin horario este día')}</p>
+                    <p className="text-xs text-[#64748B]">{t('Sin horario este día')}</p>
                   ) : (
                     <div className="space-y-2">
                       {dayBlocks.map((b) => (
@@ -175,7 +175,7 @@ export default function ProfessionalSchedulePage() {
                             onChange={(e) => updateBlock(b._key, 'start_time', e.target.value)}
                             className="px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
                           />
-                          <span className="text-xs text-[#A0A8BF]">a</span>
+                          <span className="text-xs text-[#64748B]">a</span>
                           <input
                             type="time"
                             value={b.end_time}

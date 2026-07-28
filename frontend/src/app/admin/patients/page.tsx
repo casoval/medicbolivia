@@ -118,10 +118,10 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
             />
             <div>
               <h3 className="text-base font-semibold">{local.first_name} {local.last_name}</h3>
-              <p className="text-xs text-[#6B738A]">CI: {local.ci} · {local.department}</p>
+              <p className="text-xs text-[#475569]">CI: {local.ci} · {local.department}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#141820] text-xl font-light">✕</button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#141820] text-xl font-light">✕</button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -137,7 +137,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
           {/* Datos personales */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">{t('Datos personales')}</p>
+              <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide">{t('Datos personales')}</p>
               {!editing && (
                 <button onClick={startEdit} className="text-xs text-[#185FA5] hover:underline">{t('Editar')}</button>
               )}
@@ -146,7 +146,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
             {!editing ? (
               <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">{t('Fecha de nacimiento')}</p>
+                  <p className="text-xs text-[#64748B]">{t('Fecha de nacimiento')}</p>
                   <p className="text-sm font-medium">
                     {local.birth_date
                       ? new Date(local.birth_date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -154,27 +154,27 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">{t('Edad')}</p>
+                  <p className="text-xs text-[#64748B]">{t('Edad')}</p>
                   <p className="text-sm font-medium">{age ? `${age} años` : 'No especificada'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">{t('Género')}</p>
+                  <p className="text-xs text-[#64748B]">{t('Género')}</p>
                   <p className="text-sm font-medium">{local.gender || 'No especificado'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">{t('Teléfono')}</p>
+                  <p className="text-xs text-[#64748B]">{t('Teléfono')}</p>
                   <p className="text-sm font-medium">{local.phone || 'No disponible'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">{t('Email')}</p>
+                  <p className="text-xs text-[#64748B]">{t('Email')}</p>
                   <p className="text-sm font-medium truncate">{local.email || 'No especificado'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">{t('Departamento')}</p>
+                  <p className="text-xs text-[#64748B]">{t('Departamento')}</p>
                   <p className="text-sm font-medium">{local.department}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#A0A8BF]">{t('Registrado')}</p>
+                  <p className="text-xs text-[#64748B]">{t('Registrado')}</p>
                   <p className="text-sm font-medium">
                     {new Date(local.created_at).toLocaleDateString('es-BO', {
                       day: 'numeric', month: 'short', year: 'numeric'
@@ -187,39 +187,39 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                 {saveError && <Alert type="error" message={saveError} />}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Nombre')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Nombre')}</label>
                     <input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Apellido')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Apellido')}</label>
                     <input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">CI</label>
+                    <label className="block text-xs text-[#475569] mb-1">CI</label>
                     <input value={form.ci} onChange={(e) => setForm({ ...form, ci: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Fecha de nacimiento')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Fecha de nacimiento')}</label>
                     <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Departamento')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Departamento')}</label>
                     <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
                       {DEPARTMENTS.filter((d) => d !== 'Todos').map((d) => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Género')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Género')}</label>
                     <input value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Email')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Email')}</label>
                     <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
@@ -232,7 +232,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                     entrar con el número anterior — asegúrate de avisarle.
                   </p>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Teléfono')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Teléfono')}</label>
                     <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
@@ -261,7 +261,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
 
           {/* Historial médico */}
           <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Historial médico')}</p>
+            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Historial médico')}</p>
             <div className="space-y-2">
 
               {/* Alergias */}
@@ -276,7 +276,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-[#6B738A]">{t('Sin alergias registradas')}</p>
+                  <p className="text-xs text-[#475569]">{t('Sin alergias registradas')}</p>
                 )}
               </div>
 
@@ -292,7 +292,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-[#6B738A]">{t('Sin condiciones crónicas')}</p>
+                  <p className="text-xs text-[#475569]">{t('Sin condiciones crónicas')}</p>
                 )}
               </div>
 
@@ -308,7 +308,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-[#6B738A]">{t('Sin medicación registrada')}</p>
+                  <p className="text-xs text-[#475569]">{t('Sin medicación registrada')}</p>
                 )}
               </div>
             </div>
@@ -316,18 +316,18 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
 
           {/* Estadísticas */}
           <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Actividad')}</p>
+            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Actividad')}</p>
             <div className="bg-[#F5F6FA] rounded-xl p-3 flex gap-4">
               <div className="text-center flex-1">
                 <p className="text-xl font-bold text-[#185FA5]">{local.total_consultations || 0}</p>
-                <p className="text-xs text-[#6B738A]">{t('Consultas')}</p>
+                <p className="text-xs text-[#475569]">{t('Consultas')}</p>
               </div>
               <div className="w-px bg-[#DDE1EE]" />
               <div className="text-center flex-1">
                 <p className="text-xs font-medium text-[#0F6E56] mt-1">
                   {local.status === 'ACTIVE' ? '✓ Activo' : '✗ Inactivo'}
                 </p>
-                <p className="text-xs text-[#6B738A]">{t('Estado')}</p>
+                <p className="text-xs text-[#475569]">{t('Estado')}</p>
               </div>
             </div>
           </div>
@@ -406,7 +406,7 @@ export default function AdminPatientsPage() {
       <div className="max-w-4xl">
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Gestión de pacientes')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             {patients.length} pacientes registrados
           </p>
         </div>
@@ -415,13 +415,13 @@ export default function AdminPatientsPage() {
         <div className="flex gap-1 bg-[#F5F6FA] p-1 rounded-xl mb-4 w-fit">
           <button onClick={() => setTab('ACTIVE')}
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              tab === 'ACTIVE' ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#6B738A]'
+              tab === 'ACTIVE' ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#475569]'
             }`}>
             Activos ({patients.filter((p:any) => p.status !== 'SUSPENDED').length})
           </button>
           <button onClick={() => setTab('SUSPENDED')}
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              tab === 'SUSPENDED' ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#6B738A]'
+              tab === 'SUSPENDED' ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#475569]'
             }`}>
             Suspendidos ({patients.filter((p:any) => p.status === 'SUSPENDED').length})
           </button>
@@ -433,7 +433,7 @@ export default function AdminPatientsPage() {
         {/* Filtros */}
         <div className="flex gap-2 mb-4 flex-wrap">
           <div className="relative flex-1 min-w-48">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A0A8BF]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input
               className="w-full pl-8 pr-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
               placeholder={t('Buscar por nombre, CI o teléfono...')}
@@ -490,7 +490,7 @@ export default function AdminPatientsPage() {
                     {/* Info principal */}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{p.first_name} {p.last_name}</p>
-                      <p className="text-xs text-[#6B738A]">
+                      <p className="text-xs text-[#475569]">
                         CI: {p.ci}
                         {age && ` · ${age} años`}
                         {' · '}{p.department}
@@ -516,7 +516,7 @@ export default function AdminPatientsPage() {
                       <p className="text-xs font-medium text-[#185FA5]">
                         {p.total_consultations || 0} consultas
                       </p>
-                      <p className="text-xs text-[#A0A8BF]">
+                      <p className="text-xs text-[#64748B]">
                         {new Date(p.created_at).toLocaleDateString('es-BO', {
                           day: 'numeric', month: 'short'
                         })}

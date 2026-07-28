@@ -63,9 +63,9 @@ function ReportCard({ report, onReviewed }: { report: ChatReport; onReviewed: ()
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#FEF2F2] text-[#DC2626]">
               {CATEGORY_LABELS[report.reason_category || 'OTHER']}
             </span>
-            <span className="text-xs text-[#6B738A]">{KIND_LABELS[report.kind]}</span>
+            <span className="text-xs text-[#475569]">{KIND_LABELS[report.kind]}</span>
           </div>
-          <p className="text-xs text-[#A0A8BF] mt-1">Reportado el {fmtDate(report.created_at)}</p>
+          <p className="text-xs text-[#64748B] mt-1">Reportado el {fmtDate(report.created_at)}</p>
         </div>
         {report.status === 'reviewed' && (
           <span className="text-xs text-[#0F6E56] font-medium flex-shrink-0">✓ Revisado</span>
@@ -88,9 +88,9 @@ function ReportCard({ report, onReviewed }: { report: ChatReport; onReviewed: ()
 
       {report.status === 'reviewed' ? (
         <div className="mt-3 pt-3 border-t border-[#DDE1EE]">
-          <p className="text-xs text-[#6B738A] font-medium mb-1">Notas de resolución</p>
+          <p className="text-xs text-[#475569] font-medium mb-1">Notas de resolución</p>
           <p className="text-sm text-[#141820]">{report.admin_resolution_notes}</p>
-          <p className="text-xs text-[#A0A8BF] mt-1">Revisado el {fmtDate(report.admin_reviewed_at)}</p>
+          <p className="text-xs text-[#64748B] mt-1">Revisado el {fmtDate(report.admin_reviewed_at)}</p>
         </div>
       ) : (
         <div className="mt-3 pt-3 border-t border-[#DDE1EE] space-y-2">
@@ -135,7 +135,7 @@ export default function AdminChatReportsPage() {
       <div className="max-w-2xl">
         <div className="mb-4">
           <h1 className="text-base font-semibold">Reportes de chat</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             Bloqueos que pacientes o profesionales marcaron para que el equipo los revise
           </p>
         </div>
@@ -143,13 +143,13 @@ export default function AdminChatReportsPage() {
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => setTab('pending')}
-            className={`text-xs font-medium px-3 py-1.5 rounded-lg ${tab === 'pending' ? 'bg-[#185FA5] text-white' : 'bg-[#F5F6FA] text-[#6B738A]'}`}
+            className={`text-xs font-medium px-3 py-1.5 rounded-lg ${tab === 'pending' ? 'bg-[#185FA5] text-white' : 'bg-[#F5F6FA] text-[#475569]'}`}
           >
             {t('Pendientes')}
           </button>
           <button
             onClick={() => setTab('reviewed')}
-            className={`text-xs font-medium px-3 py-1.5 rounded-lg ${tab === 'reviewed' ? 'bg-[#185FA5] text-white' : 'bg-[#F5F6FA] text-[#6B738A]'}`}
+            className={`text-xs font-medium px-3 py-1.5 rounded-lg ${tab === 'reviewed' ? 'bg-[#185FA5] text-white' : 'bg-[#F5F6FA] text-[#475569]'}`}
           >
             Revisados
           </button>

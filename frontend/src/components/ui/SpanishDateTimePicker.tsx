@@ -91,15 +91,15 @@ export function SpanishDateTimePicker({
               type="button"
               disabled={!canGoPrevMonth}
               onClick={() => { const d = new Date(viewYear, viewMonth - 1); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()) }}
-              className="text-xs px-2 py-1 text-[#6B738A] hover:text-[#185FA5] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-[#6B738A]"
+              className="text-xs px-2 py-1 text-[#475569] hover:text-[#185FA5] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-[#475569]"
             >‹</button>
             <span className="text-xs font-semibold capitalize">{MESES_ES[viewMonth]} {viewYear}</span>
-            <button type="button" onClick={() => { const d = new Date(viewYear, viewMonth + 1); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()) }} className="text-xs px-2 py-1 text-[#6B738A] hover:text-[#185FA5]">›</button>
+            <button type="button" onClick={() => { const d = new Date(viewYear, viewMonth + 1); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()) }} className="text-xs px-2 py-1 text-[#475569] hover:text-[#185FA5]">›</button>
           </div>
 
           <div className="grid grid-cols-7 gap-1 mb-1">
             {DIAS_ES.map(d => (
-              <div key={d} className="text-[10px] text-center text-[#A0A8BF] font-medium">{d}</div>
+              <div key={d} className="text-[10px] text-center text-[#64748B] font-medium">{d}</div>
             ))}
           </div>
           <div className="grid grid-cols-7 gap-1">
@@ -125,7 +125,7 @@ export function SpanishDateTimePicker({
           </div>
 
           <div className="mt-3 flex items-center gap-2">
-            <label className="text-xs text-[#6B738A]">Hora:</label>
+            <label className="text-xs text-[#475569]">Hora:</label>
             <input
               type="time"
               value={timePart || ''}
@@ -179,7 +179,7 @@ export function SpanishDatePicker({ value, onChange }: { value: Date; onChange: 
       <button
         type="button"
         onClick={() => (open ? setOpen(false) : openPicker())}
-        className="text-xs border border-[#DDE1EE] rounded-lg px-2 py-1 text-[#6B738A] bg-white hover:bg-[#F4F6FB]"
+        className="text-xs border border-[#DDE1EE] rounded-lg px-2 py-1 text-[#475569] bg-white hover:bg-[#F4F6FB]"
         aria-label="Ir a una fecha"
       >
         🗓 {displayLabel}
@@ -193,19 +193,19 @@ export function SpanishDatePicker({ value, onChange }: { value: Date; onChange: 
               <button
                 type="button"
                 onClick={() => { const d = new Date(viewYear, viewMonth - 1); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()) }}
-                className="text-xs px-2 py-1 text-[#6B738A] hover:text-[#185FA5]"
+                className="text-xs px-2 py-1 text-[#475569] hover:text-[#185FA5]"
               >‹</button>
               <span className="text-xs font-semibold capitalize">{MESES_ES[viewMonth]} {viewYear}</span>
               <button
                 type="button"
                 onClick={() => { const d = new Date(viewYear, viewMonth + 1); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()) }}
-                className="text-xs px-2 py-1 text-[#6B738A] hover:text-[#185FA5]"
+                className="text-xs px-2 py-1 text-[#475569] hover:text-[#185FA5]"
               >›</button>
             </div>
 
             <div className="grid grid-cols-7 gap-1 mb-1">
               {DIAS_ES.map((d) => (
-                <div key={d} className="text-[10px] text-center text-[#A0A8BF] font-medium">{d}</div>
+                <div key={d} className="text-[10px] text-center text-[#64748B] font-medium">{d}</div>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-1">
@@ -228,7 +228,7 @@ export function SpanishDatePicker({ value, onChange }: { value: Date; onChange: 
               <button type="button" onClick={() => { onChange(new Date()); setOpen(false) }} className="text-xs text-[#185FA5] font-medium">
                 Hoy
               </button>
-              <button type="button" onClick={() => setOpen(false)} className="text-xs text-[#6B738A]">
+              <button type="button" onClick={() => setOpen(false)} className="text-xs text-[#475569]">
                 Cerrar
               </button>
             </div>

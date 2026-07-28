@@ -48,20 +48,20 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
           <p className="text-sm font-semibold text-[#1A1F2E]">
             {rx.professional_name ?? 'Médico'}
           </p>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             {rx.professional_specialty && <span className="mr-1">{rx.professional_specialty} ·</span>}
             {meds.length} medicamento{meds.length !== 1 ? 's' : ''} ·{' '}
             {new Date(rx.signed_at).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })}
           </p>
           {(rx.professional_department || (rx.professional_sub_specialties && rx.professional_sub_specialties.length > 0)) && (
-            <p className="text-xs text-[#A0A8BF] mt-0.5">
+            <p className="text-xs text-[#64748B] mt-0.5">
               {rx.professional_sub_specialties?.join(', ') || ''}
               {rx.professional_department && rx.professional_sub_specialties?.length ? ' · ' : ''}
               {rx.professional_department || ''}
             </p>
           )}
         </div>
-        <div className="flex-shrink-0 text-[#6B738A] text-xs bg-[#F5F6FA] w-6 h-6 rounded-full flex items-center justify-center">
+        <div className="flex-shrink-0 text-[#475569] text-xs bg-[#F5F6FA] w-6 h-6 rounded-full flex items-center justify-center">
           {open ? '▲' : '▼'}
         </div>
       </button>
@@ -105,7 +105,7 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
 
             {/* Medicamentos */}
             <div>
-              <p className="text-xs font-bold text-[#6B738A] uppercase tracking-wide mb-2">{t('Medicamentos prescritos')}</p>
+              <p className="text-xs font-bold text-[#475569] uppercase tracking-wide mb-2">{t('Medicamentos prescritos')}</p>
               <div className="space-y-2">
                 {meds.map((m, i) => (
                   <div key={i} className="bg-white rounded-xl border border-[#DDE1EE] p-3.5">
@@ -113,13 +113,13 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
                       <span className="text-[#185FA5] font-bold text-sm w-5 flex-shrink-0">{i + 1}.</span>
                       <div className="flex-1">
                         <p className="text-sm font-bold text-[#1A1F2E]">{m.name}</p>
-                        {m.presentation && <p className="text-xs text-[#6B738A]">{m.presentation}</p>}
+                        {m.presentation && <p className="text-xs text-[#475569]">{m.presentation}</p>}
                         <div className="flex flex-wrap gap-2 mt-2">
                           {m.dosage    && <span className="text-xs bg-[#E6F1FB] text-[#185FA5] px-2.5 py-1 rounded-full font-medium">💊 {m.dosage}</span>}
                           {m.frequency && <span className="text-xs bg-[#E6F1FB] text-[#185FA5] px-2.5 py-1 rounded-full font-medium">🕐 {m.frequency}</span>}
                           {m.duration  && <span className="text-xs bg-[#E6F1FB] text-[#185FA5] px-2.5 py-1 rounded-full font-medium">📅 {m.duration}</span>}
                         </div>
-                        {m.notes && <p className="text-xs text-[#6B738A] mt-1.5 italic">{m.notes}</p>}
+                        {m.notes && <p className="text-xs text-[#475569] mt-1.5 italic">{m.notes}</p>}
                       </div>
                     </div>
                   </div>
@@ -137,12 +137,12 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
 
             {/* QR + firma digital */}
             <div className="bg-white rounded-xl border border-[#DDE1EE] p-4">
-              <p className="text-xs font-bold text-[#6B738A] uppercase tracking-wide mb-4">{t('Verificación y firma digital')}</p>
+              <p className="text-xs font-bold text-[#475569] uppercase tracking-wide mb-4">{t('Verificación y firma digital')}</p>
 
               <div className="flex flex-col sm:flex-row gap-5 items-start">
                 <div className="flex-shrink-0">
                   <QRCode value={buildPrescriptionVerifyUrl(rx.qr_verify_code)} size={130} />
-                  <p className="text-[10px] text-[#6B738A] text-center mt-1 max-w-[130px]">
+                  <p className="text-[10px] text-[#475569] text-center mt-1 max-w-[130px]">
                     {t('Presenta en farmacia para verificar')}
                   </p>
                 </div>
@@ -150,7 +150,7 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
                 <div className="flex-1 space-y-3">
                   <div>
                     <p className="text-xs font-semibold text-[#1A1F2E] mb-1">{t('¿Cómo funciona la firma?')}</p>
-                    <p className="text-xs text-[#6B738A] leading-relaxed">
+                    <p className="text-xs text-[#475569] leading-relaxed">
                       Esta receta fue firmada criptográficamente con el algoritmo SHA-256.
                       El hash combina tu CI, los medicamentos, la matrícula del médico y la fecha exacta de emisión.
                       Si alguien altera cualquier dato, el hash cambia y la receta se invalida automáticamente.
@@ -158,7 +158,7 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
                   </div>
 
                   <div className="bg-[#F5F6FA] rounded-lg p-2.5">
-                    <p className="text-[10px] text-[#6B738A] font-semibold mb-1">{t('Hash SHA-256')}</p>
+                    <p className="text-[10px] text-[#475569] font-semibold mb-1">{t('Hash SHA-256')}</p>
                     <p className="text-[10px] font-mono text-[#185FA5] break-all leading-relaxed">
                       {rx.digital_hash}
                     </p>
@@ -201,12 +201,12 @@ function ProfessionalRxGroup({ group }: { group: { key: string; professionalName
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-[#1A1F2E] truncate">{group.professionalName}</p>
-          <p className="text-xs text-[#6B738A]">
+          <p className="text-xs text-[#475569]">
             {group.specialty ? `${group.specialty} · ` : ''}
             {group.items.length} receta{group.items.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <span className="text-[#A0A8BF] text-xs flex-shrink-0">{open ? '▲' : '▼'}</span>
+        <span className="text-[#64748B] text-xs flex-shrink-0">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
@@ -262,7 +262,7 @@ export default function PatientPrescriptionsPage() {
       <div className="max-w-2xl">
         <div className="mb-5">
           <h1 className="text-base font-semibold">{t('Mis recetas')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             {t('Recetas médicas digitales firmadas. Presenta el código QR en cualquier farmacia para verificarlas.')}
           </p>
         </div>
@@ -275,26 +275,26 @@ export default function PatientPrescriptionsPage() {
           <div className="card text-center py-14">
             <p className="text-4xl mb-3">📋</p>
             <p className="text-sm font-semibold text-[#1A1F2E]">{t('Sin recetas aún')}</p>
-            <p className="text-xs text-[#6B738A] mt-1 max-w-xs mx-auto">
+            <p className="text-xs text-[#475569] mt-1 max-w-xs mx-auto">
               {t('Las recetas que te emita tu médico durante las consultas aparecerán aquí.')}
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-[#A0A8BF]">
+              <p className="text-xs text-[#64748B]">
                 {sortedByDate.length} receta{sortedByDate.length !== 1 ? 's' : ''}
               </p>
               <div className="flex gap-1 bg-[#F5F6FA] rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('date')}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#475569]'}`}
                 >
                   {t('🕐 Por fecha')}
                 </button>
                 <button
                   onClick={() => setViewMode('professional')}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'professional' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'professional' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#475569]'}`}
                 >
                   {t('🩺 Por profesional')}
                 </button>

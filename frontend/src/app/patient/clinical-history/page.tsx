@@ -42,7 +42,7 @@ function ShareToggle({ note, onToggled }: { note: ClinicalNote; onToggled: () =>
           <p className="text-xs font-semibold text-[#1A1F2E]">
             {note.shared_with_professionals ? '🔓 Compartida con otros médicos' : '🔒 Privada (solo este médico la ve)'}
           </p>
-          <p className="text-[11px] text-[#6B738A] mt-0.5">
+          <p className="text-[11px] text-[#475569] mt-0.5">
             {note.shared_with_professionals
               ? 'Cualquier médico verificado de la plataforma puede ver esta nota si te atiende en el futuro.'
               : 'Solo el médico que la escribió puede verla. Actívalo si quieres que otros médicos la consulten.'}
@@ -82,7 +82,7 @@ function ClinicalNoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: 
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{note.professional_name || 'Médico'}</p>
-          <p className="text-xs text-[#6B738A]">
+          <p className="text-xs text-[#475569]">
             {note.professional_specialty || 'Consulta'} · {fmtFecha(note.created_at)}
           </p>
         </div>
@@ -90,14 +90,14 @@ function ClinicalNoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: 
           {note.shared_with_professionals && (
             <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium">{t('Compartida')}</span>
           )}
-          <span className="text-[#6B738A] text-xs">{open ? '▲' : '▼'}</span>
+          <span className="text-[#475569] text-xs">{open ? '▲' : '▼'}</span>
         </div>
       </button>
 
       {open && (
         <div className="bg-[#FAFBFC] border-t border-[#DDE1EE] px-4 py-4 space-y-3">
           {fields.length === 0 ? (
-            <p className="text-xs text-[#A0A8BF] text-center py-2">{t('El médico no agregó detalles en esta nota.')}</p>
+            <p className="text-xs text-[#64748B] text-center py-2">{t('El médico no agregó detalles en esta nota.')}</p>
           ) : (
             fields.map(f => (
               <div key={f.label} className="bg-white rounded-lg border border-[#DDE1EE] p-3">
@@ -138,12 +138,12 @@ function ProfessionalGroup({
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-[#1A1F2E] truncate">{group.professionalName}</p>
-          <p className="text-xs text-[#6B738A]">
+          <p className="text-xs text-[#475569]">
             {group.specialty ? `${group.specialty} · ` : ''}
             {group.notes.length} nota{group.notes.length !== 1 ? 's' : ''} clínica{group.notes.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <span className="text-[#A0A8BF] text-xs flex-shrink-0">{open ? '▲' : '▼'}</span>
+        <span className="text-[#64748B] text-xs flex-shrink-0">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
@@ -202,7 +202,7 @@ export default function PatientClinicalHistoryPage() {
       <div className="max-w-2xl">
         <div className="mb-5">
           <h1 className="text-base font-semibold">{t('Mi historia clínica')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             {t('Notas que tus médicos fueron registrando durante tus consultas. Tú decides si compartirlas con otros profesionales de la plataforma.')}
           </p>
         </div>
@@ -225,26 +225,26 @@ export default function PatientClinicalHistoryPage() {
           <div className="card text-center py-14">
             <p className="text-4xl mb-3">📋</p>
             <p className="text-sm font-semibold text-[#1A1F2E]">{t('Sin historia clínica aún')}</p>
-            <p className="text-xs text-[#6B738A] mt-1 max-w-xs mx-auto">
+            <p className="text-xs text-[#475569] mt-1 max-w-xs mx-auto">
               {t('Las notas que tu médico registre durante tus consultas aparecerán aquí.')}
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-[#A0A8BF]">
+              <p className="text-xs text-[#64748B]">
                 {sorted.length} nota{sorted.length !== 1 ? 's' : ''}
               </p>
               <div className="flex gap-1 bg-[#F5F6FA] rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('date')}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#475569]'}`}
                 >
                   {t('🕐 Por fecha')}
                 </button>
                 <button
                   onClick={() => setViewMode('professional')}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'professional' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'professional' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#475569]'}`}
                 >
                   {t('🩺 Por profesional')}
                 </button>

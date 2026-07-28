@@ -555,7 +555,7 @@ export default function ProfessionalVideoPage() {
             <p className="text-white text-sm font-medium">
               {status === 'connecting' ? 'Conectando...' : 'Esperando al paciente...'}
             </p>
-            {status === 'connected' && <p className="text-[#6B738A] text-xs">{t('El paciente entrará automáticamente')}</p>}
+            {status === 'connected' && <p className="text-[#475569] text-xs">{t('El paciente entrará automáticamente')}</p>}
           </div>
         )}
 

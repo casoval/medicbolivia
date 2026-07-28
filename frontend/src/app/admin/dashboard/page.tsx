@@ -26,7 +26,7 @@ function StatCard({ label, value, color }: { label: string; value: string | numb
   return (
     <div className="card py-3 text-center">
       <p className="text-xl font-bold" style={{ color }}>{value}</p>
-      <p className="text-xs text-[#6B738A] mt-0.5">{label}</p>
+      <p className="text-xs text-[#475569] mt-0.5">{label}</p>
     </div>
   )
 }
@@ -51,7 +51,7 @@ export default function AdminDashboard() {
             <h1 className="text-base font-semibold">
               {getGreeting()}{user?.first_name ? `, ${user.first_name}` : ''} · Panel de administración
             </h1>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Resumen general de MedicBolivia')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Resumen general de MedicBolivia')}</p>
           </div>
           <div className="flex items-center gap-1.5 bg-[#E1F5EE] border border-[#9FE1CB] rounded-full px-3 py-1">
             <span className="w-1.5 h-1.5 rounded-full bg-[#1D9E75] animate-pulse-dot" />
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
                   <p className="text-2xl font-bold text-[#141820]">{stats.scheduled_pending}</p>
-                  <p className="text-xs text-[#6B738A] mt-0.5">{t('Citas agendadas pendientes')}</p>
+                  <p className="text-xs text-[#475569] mt-0.5">{t('Citas agendadas pendientes')}</p>
                 </div>
               </div>
             </div>

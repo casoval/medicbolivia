@@ -27,7 +27,7 @@ export function CreatorBadge({
   return (
     <span
       className={`text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
-        isOwn ? 'bg-[#EFF6FF] text-[#185FA5]' : 'bg-[#F5F6FA] text-[#6B738A]'
+        isOwn ? 'bg-[#EFF6FF] text-[#185FA5]' : 'bg-[#F5F6FA] text-[#475569]'
       } ${className}`}
       title={
         createdByRole === 'PROFESSIONAL'

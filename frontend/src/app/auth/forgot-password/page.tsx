@@ -109,7 +109,7 @@ export default function ForgotPasswordPage() {
           <Link href="/" className="inline-block">
             <Image src="/logo1.png" alt="MedicBolivia" width={1262} height={173} className="h-8 w-auto mx-auto" priority />
           </Link>
-          <p className="text-sm text-[#6B738A] mt-1">{t('Recuperar contraseña')}</p>
+          <p className="text-sm text-[#475569] mt-1">{t('Recuperar contraseña')}</p>
         </div>
 
         <div className="card">
@@ -121,12 +121,12 @@ export default function ForgotPasswordPage() {
                 </svg>
               </div>
               <h2 className="text-base font-semibold mb-1">{t('Contraseña actualizada')}</h2>
-              <p className="text-sm text-[#6B738A]">{t('Te llevamos al inicio de sesión...')}</p>
+              <p className="text-sm text-[#475569]">{t('Te llevamos al inicio de sesión...')}</p>
             </div>
           ) : step === 1 ? (
             <>
               <h2 className="text-base font-semibold mb-1">{t('¿Olvidaste tu contraseña?')}</h2>
-              <p className="text-sm text-[#6B738A] mb-5">
+              <p className="text-sm text-[#475569] mb-5">
                 {t('Ingresá tu número de celular y te mandamos un código por WhatsApp para restablecerla.')}
               </p>
 
@@ -151,7 +151,7 @@ export default function ForgotPasswordPage() {
           ) : (
             <>
               <h2 className="text-base font-semibold mb-1">{t('Ingresá el código y tu contraseña nueva')}</h2>
-              <p className="text-sm text-[#6B738A] mb-5">
+              <p className="text-sm text-[#475569] mb-5">
                 {t('Te enviamos un código de 6 dígitos por WhatsApp al')}{' '}
                 <span className="font-medium text-[#3A4155]">+{phone}</span>.
                 {expireMinutes != null && <> {t('Vence en')} {expireMinutes} {t('minutos.')}</>}
@@ -181,7 +181,7 @@ export default function ForgotPasswordPage() {
                     type="button"
                     onClick={handleResendCode}
                     disabled={cooldown > 0 || loading}
-                    className="text-xs text-[#185FA5] font-medium mt-1.5 disabled:text-[#A0A8BF] disabled:cursor-not-allowed"
+                    className="text-xs text-[#185FA5] font-medium mt-1.5 disabled:text-[#64748B] disabled:cursor-not-allowed"
                   >
                     {cooldown > 0 ? `${t('Reenviar código')} (${cooldown}s)` : t('Reenviar código')}
                   </button>
@@ -222,7 +222,7 @@ export default function ForgotPasswordPage() {
                 <button
                   type="button"
                   onClick={() => { setStep(1); setError(''); setCode(''); }}
-                  className="text-xs text-[#6B738A] hover:underline w-full text-center"
+                  className="text-xs text-[#475569] hover:underline w-full text-center"
                 >
                   {t('Usar otro número')}
                 </button>
@@ -231,7 +231,7 @@ export default function ForgotPasswordPage() {
           )}
 
           {!success && (
-            <p className="text-center text-sm text-[#6B738A] mt-4 pt-4 border-t border-[#DDE1EE]">
+            <p className="text-center text-sm text-[#475569] mt-4 pt-4 border-t border-[#DDE1EE]">
               <Link href="/auth/login" className="text-[#185FA5] font-medium hover:underline">
                 {t('Volver a iniciar sesión')}
               </Link>

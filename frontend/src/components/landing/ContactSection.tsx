@@ -145,7 +145,7 @@ export function ContactSection() {
       <Reveal className="text-center mb-10">
         <h2 className="text-2xl font-bold text-[#141820] mb-2">{t('Contáctanos')}</h2>
         <div className="w-10 h-1 rounded-full bg-gradient-to-r from-[#185FA5] to-[#11A15A] mx-auto mb-3" />
-        <p className="text-sm text-[#6B738A] max-w-md mx-auto">
+        <p className="text-sm text-[#475569] max-w-md mx-auto">
           {t('¿Tenés dudas, sos profesional de salud, o necesitás soporte? Escribinos y te respondemos a')}{' '}
           <a href="mailto:info@medicbolivia.com" className="text-[#0F6E56] font-medium hover:underline">
             info@medicbolivia.com
@@ -160,7 +160,7 @@ export function ContactSection() {
               <CheckCircle2 className="w-6 h-6 text-[#0F6E56]" aria-hidden="true" />
             </div>
             <p className="text-sm font-medium text-[#141820] mb-1">{t('¡Consulta enviada!')}</p>
-            <p className="text-xs text-[#6B738A] mb-4">
+            <p className="text-xs text-[#475569] mb-4">
               {t('Gracias por escribirnos. Te vamos a responder a la brevedad.')}
             </p>
             <button
@@ -247,7 +247,7 @@ export function ContactSection() {
 
             <Reveal delayMs={180}>
               <label className="label flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5" aria-hidden="true" /> {t('Correo')} <span className="text-[#A0A8BF]">({t('opcional')})</span>
+                <Mail className="w-3.5 h-3.5" aria-hidden="true" /> {t('Correo')} <span className="text-[#64748B]">({t('opcional')})</span>
               </label>
               <input
                 className={`input ${FIELD_TRANSITION}`}
@@ -283,7 +283,7 @@ export function ContactSection() {
                 {isTyping && (
                   <span className="flex items-center gap-1 animate-fade-up">
                     <TypingDots />
-                    <span className="text-[10px] text-[#6B738A]">{t('escribiendo…')}</span>
+                    <span className="text-[10px] text-[#475569]">{t('escribiendo…')}</span>
                   </span>
                 )}
               </div>

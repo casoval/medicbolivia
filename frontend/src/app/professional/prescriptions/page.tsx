@@ -77,8 +77,8 @@ function PrescriptionCard({
           💊
         </div>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium truncate ${isVoided ? 'text-[#A0A8BF] line-through' : ''}`}>{rx.patient_name}</p>
-          <p className="text-xs text-[#6B738A]">
+          <p className={`text-sm font-medium truncate ${isVoided ? 'text-[#64748B] line-through' : ''}`}>{rx.patient_name}</p>
+          <p className="text-xs text-[#475569]">
             CI: {rx.patient_ci} · {rx.patient_age} años · {fmtFecha(rx.signed_at)}
           </p>
         </div>
@@ -92,10 +92,10 @@ function PrescriptionCard({
           {!isVoided && alreadyReplaced && (
             <span className="text-[10px] bg-[#FAEEDA] text-[#854F0B] px-2 py-0.5 rounded-full font-medium">{t('Reemplazada')}</span>
           )}
-          <span className="hidden sm:block text-[10px] font-mono text-[#6B738A] bg-[#F5F6FA] px-2 py-0.5 rounded-full">
+          <span className="hidden sm:block text-[10px] font-mono text-[#475569] bg-[#F5F6FA] px-2 py-0.5 rounded-full">
             {rx.qr_verify_code}
           </span>
-          <span className="text-[#6B738A] text-xs">{open ? '▲' : '▼'}</span>
+          <span className="text-[#475569] text-xs">{open ? '▲' : '▼'}</span>
         </div>
       </button>
 
@@ -124,7 +124,7 @@ function PrescriptionCard({
                     <span className="text-[#185FA5] font-bold text-sm">{i + 1}.</span>
                     <div className="flex-1">
                       <p className="text-sm font-semibold text-[#1A1F2E]">{m.name}</p>
-                      {m.presentation && <p className="text-xs text-[#6B738A]">{m.presentation}</p>}
+                      {m.presentation && <p className="text-xs text-[#475569]">{m.presentation}</p>}
                       <div className="flex flex-wrap gap-2 mt-1.5 text-xs">
                         {m.dosage    && <span className="bg-[#E6F1FB] text-[#185FA5] px-2 py-0.5 rounded-full">💊 {m.dosage}</span>}
                         {m.frequency && <span className="bg-[#E6F1FB] text-[#185FA5] px-2 py-0.5 rounded-full">🕐 {m.frequency}</span>}
@@ -150,10 +150,10 @@ function PrescriptionCard({
               <div className="flex-1 space-y-2">
                 <div>
                   <p className="text-xs font-semibold text-[#1A1F2E]">{t('Código QR de verificación')}</p>
-                  <p className="text-[10px] text-[#6B738A] mt-0.5">{t('La farmacia puede escanear este QR para verificar la autenticidad de la receta.')}</p>
+                  <p className="text-[10px] text-[#475569] mt-0.5">{t('La farmacia puede escanear este QR para verificar la autenticidad de la receta.')}</p>
                 </div>
                 <div className="bg-[#F5F6FA] rounded px-2 py-1.5">
-                  <p className="text-[9px] text-[#6B738A] font-semibold mb-0.5">{t('Hash SHA-256')}</p>
+                  <p className="text-[9px] text-[#475569] font-semibold mb-0.5">{t('Hash SHA-256')}</p>
                   <p className="text-[9px] font-mono text-[#185FA5] break-all">{rx.digital_hash}</p>
                 </div>
                 <button onClick={copyCode} className={`w-full py-1.5 rounded text-[10px] font-medium transition-colors ${copied ? 'bg-[#E1F5EE] text-[#0F6E56]' : 'bg-[#E6F1FB] text-[#185FA5] hover:bg-[#B5D4F4]'}`}>
@@ -184,7 +184,7 @@ function PrescriptionCard({
                     </button>
                     <button
                       onClick={() => { setVoidPanel(false); setVoidReason('') }}
-                      className="px-3 py-1.5 text-xs text-[#6B738A] hover:underline"
+                      className="px-3 py-1.5 text-xs text-[#475569] hover:underline"
                     >
                       {t('Cancelar')}
                     </button>
@@ -244,11 +244,11 @@ function PatientRxGroup({
         />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-[#1A1F2E] truncate">{group.patientName}</p>
-          <p className="text-xs text-[#6B738A]">
+          <p className="text-xs text-[#475569]">
             {group.items.length} receta{group.items.length !== 1 ? 's' : ''} · CI: {group.patientCi}
           </p>
         </div>
-        <span className="text-[#A0A8BF] text-xs flex-shrink-0">{open ? '▲' : '▼'}</span>
+        <span className="text-[#64748B] text-xs flex-shrink-0">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
@@ -398,7 +398,7 @@ export default function PrescriptionsPage() {
       <div className="max-w-4xl">
         <div className="mb-5">
           <h1 className="text-base font-semibold">{t('Recetario digital')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             {t('Las recetas se firman con SHA-256 vinculado a tu matrícula CMB y quedan disponibles para el paciente')}
           </p>
         </div>
@@ -473,7 +473,7 @@ export default function PrescriptionsPage() {
                   {medications.map((med, i) => (
                     <div key={i} className="bg-[#F5F6FA] rounded-xl p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-medium text-[#6B738A]">Medicamento {i + 1}</p>
+                        <p className="text-xs font-medium text-[#475569]">Medicamento {i + 1}</p>
                         {medications.length > 1 && (
                           <button type="button" onClick={() => removeMedication(i)} className="text-xs text-[#A32D2D] hover:underline">
                             {t('Eliminar')}
@@ -559,7 +559,7 @@ export default function PrescriptionsPage() {
             <div className="flex items-center justify-between mb-3">
               <SectionTitle>{t('Recetas emitidas')}</SectionTitle>
               {myPrescriptions.length > 0 && (
-                <span className="text-xs text-[#6B738A] bg-[#F5F6FA] px-2 py-0.5 rounded-full">
+                <span className="text-xs text-[#475569] bg-[#F5F6FA] px-2 py-0.5 rounded-full">
                   {myPrescriptions.length} total
                 </span>
               )}
@@ -569,13 +569,13 @@ export default function PrescriptionsPage() {
               <div className="flex gap-1 mb-3 bg-[#F5F6FA] rounded-lg p-1 w-fit">
                 <button
                   onClick={() => setViewMode('date')}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#475569]'}`}
                 >
                   {t('🕐 Por fecha')}
                 </button>
                 <button
                   onClick={() => setViewMode('patient')}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'patient' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'patient' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#475569]'}`}
                 >
                   {t('👤 Por paciente')}
                 </button>
@@ -590,7 +590,7 @@ export default function PrescriptionsPage() {
               <div className="text-center py-10">
                 <p className="text-3xl mb-2">📋</p>
                 <p className="text-sm font-medium text-[#1A1F2E]">{t('Aún no has emitido recetas')}</p>
-                <p className="text-xs text-[#6B738A] mt-1">{t('Las recetas aparecerán aquí una vez que las emitas')}</p>
+                <p className="text-xs text-[#475569] mt-1">{t('Las recetas aparecerán aquí una vez que las emitas')}</p>
               </div>
             ) : viewMode === 'date' ? (
               <div className="space-y-2">

@@ -56,7 +56,7 @@ export default function AdminLogsPage() {
       <div className="max-w-4xl">
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Auditoría y logs')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">{t('Registro completo de todas las acciones del sistema')}</p>
+          <p className="text-xs text-[#475569] mt-0.5">{t('Registro completo de todas las acciones del sistema')}</p>
         </div>
 
         {/* Filtros */}
@@ -68,7 +68,7 @@ export default function AdminLogsPage() {
               className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
                 filter === f
                   ? 'bg-[#E6F1FB] border-[#185FA5] text-[#185FA5] font-medium'
-                  : 'bg-white border-[#DDE1EE] text-[#6B738A]'
+                  : 'bg-white border-[#DDE1EE] text-[#475569]'
               }`}
             >
               {f === '' ? 'Todos' : f === 'PAYMENT' ? 'Pagos' : f === 'REFUND' ? 'Reembolsos' : f === 'DOC' ? 'Documentos' : 'Agente IA'}
@@ -88,7 +88,7 @@ export default function AdminLogsPage() {
               {logs.length} registro{logs.length !== 1 ? 's' : ''}
             </SectionTitle>
             {logs.length === 0 ? (
-              <p className="text-sm text-[#6B738A] text-center py-8">{t('No hay registros con este filtro')}</p>
+              <p className="text-sm text-[#475569] text-center py-8">{t('No hay registros con este filtro')}</p>
             ) : (
               <div className="divide-y divide-[#DDE1EE]">
                 {logs.map((l: any) => (
@@ -99,13 +99,13 @@ export default function AdminLogsPage() {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium">{l.action}</p>
-                      <p className="text-xs text-[#6B738A] mt-0.5">
+                      <p className="text-xs text-[#475569] mt-0.5">
                         {l.entity_type && `${l.entity_type} · `}
                         {new Date(l.created_at).toLocaleString('es-BO')}
                         {l.ip_address && ` · ${l.ip_address}`}
                       </p>
                       {l.metadata && Object.keys(l.metadata).length > 0 && (
-                        <p className="text-xs text-[#A0A8BF] mt-0.5 truncate">
+                        <p className="text-xs text-[#64748B] mt-0.5 truncate">
                           {Object.entries(l.metadata).map(([k, v]) => `${k}: ${v}`).join(' · ')}
                         </p>
                       )}

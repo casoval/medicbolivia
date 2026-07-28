@@ -54,7 +54,7 @@ function ScheduledAcceptDeadlineTimer({ createdAt, scheduledAt }: { createdAt: s
 
   if (secs <= 0) {
     return (
-      <span className="text-xs text-[#A0A8BF] ml-12">
+      <span className="text-xs text-[#64748B] ml-12">
         {limitedByAppointment ? 'Cita muy próxima — ya no se puede responder' : 'Plazo vencido'}
       </span>
     )
@@ -178,7 +178,7 @@ export default function ProfessionalAppointmentsPage() {
       <div className={activeTab === 'calendar' ? 'max-w-5xl' : 'max-w-3xl'}>
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Citas agendadas')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">{t('Todas tus citas con horario fijo, pasadas y futuras')}</p>
+          <p className="text-xs text-[#475569] mt-0.5">{t('Todas tus citas con horario fijo, pasadas y futuras')}</p>
         </div>
 
         {error && <div className="mb-4"><Alert type="error" message={error} /></div>}
@@ -190,7 +190,7 @@ export default function ProfessionalAppointmentsPage() {
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
               activeTab === 'upcoming'
                 ? 'bg-white text-[#141820] border border-[#DDE1EE]'
-                : 'text-[#6B738A]'
+                : 'text-[#475569]'
             }`}
           >
             Próximas {upcoming.length > 0 && (
@@ -204,7 +204,7 @@ export default function ProfessionalAppointmentsPage() {
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
               activeTab === 'history'
                 ? 'bg-white text-[#141820] border border-[#DDE1EE]'
-                : 'text-[#6B738A]'
+                : 'text-[#475569]'
             }`}
           >
             Historial {past.length > 0 && (
@@ -218,7 +218,7 @@ export default function ProfessionalAppointmentsPage() {
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
               activeTab === 'calendar'
                 ? 'bg-white text-[#141820] border border-[#DDE1EE]'
-                : 'text-[#6B738A]'
+                : 'text-[#475569]'
             }`}
           >
             {t('🗓 Calendario')}
@@ -247,7 +247,7 @@ export default function ProfessionalAppointmentsPage() {
                           <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
-                            <p className="text-xs text-[#6B738A]">
+                            <p className="text-xs text-[#475569]">
                               {c.specialty ? `${c.specialty} · ` : ''}Bs. {parseFloat(c.amount).toFixed(2)}
                             </p>
                             {scheduledAt && (
@@ -267,7 +267,7 @@ export default function ProfessionalAppointmentsPage() {
 
                         {c.chief_complaint && (
                           <div className="ml-12 mt-2 bg-[#F5F6FA] rounded-lg px-3 py-2">
-                            <p className="text-xs text-[#A0A8BF] mb-0.5">{t('Motivo de la consulta')}</p>
+                            <p className="text-xs text-[#64748B] mb-0.5">{t('Motivo de la consulta')}</p>
                             <p className="text-xs text-[#141820]">{c.chief_complaint}</p>
                           </div>
                         )}
@@ -292,7 +292,7 @@ export default function ProfessionalAppointmentsPage() {
                               </button>
                               <button
                                 onClick={() => rejectMutation.mutate(c.id)}
-                                className="py-1.5 px-4 bg-[#F5F6FA] hover:bg-[#DDE1EE] text-[#6B738A] text-xs font-medium rounded-lg"
+                                className="py-1.5 px-4 bg-[#F5F6FA] hover:bg-[#DDE1EE] text-[#475569] text-xs font-medium rounded-lg"
                               >
                                 {t('Rechazar')}
                               </button>
@@ -336,18 +336,18 @@ export default function ProfessionalAppointmentsPage() {
                                   <button onClick={() => respondRescheduleMutation.mutate({ id: c.id, decision: 'ACCEPT' })} className="text-xs bg-[#1D9E75] text-white px-3 py-1 rounded-lg">
                                     {t('Aceptar')}
                                   </button>
-                                  <button onClick={() => respondRescheduleMutation.mutate({ id: c.id, decision: 'REJECT' })} className="text-xs bg-white border border-[#DDE1EE] text-[#6B738A] px-3 py-1 rounded-lg">
+                                  <button onClick={() => respondRescheduleMutation.mutate({ id: c.id, decision: 'REJECT' })} className="text-xs bg-white border border-[#DDE1EE] text-[#475569] px-3 py-1 rounded-lg">
                                     {t('Rechazar')}
                                   </button>
                                 </div>
                               </div>
                             )}
                             {hasOwnPendingProposal && (
-                              <p className="text-xs text-[#A0A8BF] mb-2">{t('Propusiste otro horario — esperando respuesta del paciente.')}</p>
+                              <p className="text-xs text-[#64748B] mb-2">{t('Propusiste otro horario — esperando respuesta del paciente.')}</p>
                             )}
 
                             {c.created_by_role === 'PROFESSIONAL' && (
-                              <p className="text-xs text-[#A0A8BF]">
+                              <p className="text-xs text-[#64748B]">
                                 Cita agendada por ti — reprográmala o cancélala al instante desde la pestaña "Calendario".
                               </p>
                             )}
@@ -367,7 +367,7 @@ export default function ProfessionalAppointmentsPage() {
                                       >
                                         {t('Enviar')}
                                       </button>
-                                      <button onClick={() => setReschedulingId(null)} className="text-xs text-[#6B738A]">{t('Cancelar')}</button>
+                                      <button onClick={() => setReschedulingId(null)} className="text-xs text-[#475569]">{t('Cancelar')}</button>
                                     </div>
                                   ) : (
                                     <button onClick={() => { setReschedulingId(c.id); setNewDateTime('') }} className="text-xs text-[#185FA5] font-medium">
@@ -408,31 +408,31 @@ export default function ProfessionalAppointmentsPage() {
                     const wasRefunded = wasActuallyRefunded(c)
                     return (
                       <div key={c.id} className="py-3 flex items-start gap-3">
-                        <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} colorClasses="bg-[#F5F6FA] text-[#6B738A]" />
+                        <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} colorClasses="bg-[#F5F6FA] text-[#475569]" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{patientNameOf(c) || c.specialty || 'Cita'}</p>
-                          <p className="text-xs text-[#6B738A] truncate">
+                          <p className="text-xs text-[#475569] truncate">
                             {c.scheduled_at ? `Cita para ${fmtFechaHoraLocal(c.scheduled_at)}` : ''}
                             {' · '}Bs. {parseFloat(c.professional_earning || c.amount).toFixed(2)}
                           </p>
                           {!isCancelled && c.chief_complaint && (
-                            <p className="text-xs text-[#A0A8BF] mt-0.5 truncate" title={c.chief_complaint}>
+                            <p className="text-xs text-[#64748B] mt-0.5 truncate" title={c.chief_complaint}>
                               Motivo: {c.chief_complaint}
                             </p>
                           )}
                           {isCancelled && (
                             <>
-                              <p className="text-xs text-[#6B738A] mt-0.5 truncate">
+                              <p className="text-xs text-[#475569] mt-0.5 truncate">
                                 {outcomeLabel(c, 'PROFESSIONAL')}
                               </p>
                               <div className="flex items-center gap-2 flex-wrap mt-1">
                                 {who && (
-                                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#6B738A]">
+                                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#475569]">
                                     {who}
                                   </span>
                                 )}
                                 {c.updated_at && (
-                                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#6B738A]">
+                                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#475569]">
                                     Cancelada {fmtFechaHora(c.updated_at)}
                                   </span>
                                 )}
@@ -480,7 +480,7 @@ export default function ProfessionalAppointmentsPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowPatientPicker(false)}>
           <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-sm font-semibold mb-1">¿A quién le agendas la cita?</h2>
-            <p className="text-xs text-[#6B738A] mb-3">Solo aparecen tus pacientes vinculados (por consulta previa o vínculo manual).</p>
+            <p className="text-xs text-[#475569] mb-3">Solo aparecen tus pacientes vinculados (por consulta previa o vínculo manual).</p>
             <input
               autoFocus
               value={patientSearch}
@@ -490,7 +490,7 @@ export default function ProfessionalAppointmentsPage() {
             />
             <div className="overflow-y-auto flex-1 -mx-1 px-1">
               {filteredPatients.length === 0 ? (
-                <p className="text-xs text-[#6B738A] text-center py-6">
+                <p className="text-xs text-[#475569] text-center py-6">
                   {effectivePatients.length === 0 ? 'Todavía no tienes pacientes vinculados.' : 'Sin resultados.'}
                 </p>
               ) : (
@@ -504,7 +504,7 @@ export default function ProfessionalAppointmentsPage() {
                       <PatientAvatar firstName={p.firstName} lastName={p.lastName} photoUrl={p.photoUrl} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-medium truncate">{p.name}</span>
-                        <span className="block text-[11px] text-[#A0A8BF]">
+                        <span className="block text-[11px] text-[#64748B]">
                           {p.completed} consulta{p.completed === 1 ? '' : 's'} completada{p.completed === 1 ? '' : 's'}
                         </span>
                       </span>

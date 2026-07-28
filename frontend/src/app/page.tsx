@@ -41,10 +41,10 @@ function FAQItem({ faq }: { faq: FAQ }) {
         className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left"
       >
         <span className="text-sm font-medium text-[#141820]">{faq.question}</span>
-        <span className={`text-[#6B738A] transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}>▾</span>
+        <span className={`text-[#475569] transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}>▾</span>
       </button>
       {open && (
-        <div className="px-4 pb-4 text-sm text-[#6B738A] whitespace-pre-wrap">
+        <div className="px-4 pb-4 text-sm text-[#475569] whitespace-pre-wrap">
           {faq.answer}
         </div>
       )}
@@ -68,7 +68,7 @@ function FAQSection() {
     <section id="faq" className="max-w-3xl mx-auto px-4 py-16">
       <h2 className="text-2xl font-bold text-center text-[#141820] mb-2">{t('Preguntas frecuentes')}</h2>
       <SectionAccent />
-      <p className="text-sm text-center text-[#6B738A] mt-3 mb-8">
+      <p className="text-sm text-center text-[#475569] mt-3 mb-8">
         {t('¿Quiénes somos, cómo funciona la plataforma y qué necesitás saber antes de empezar.')}
       </p>
 
@@ -80,7 +80,7 @@ function FAQSection() {
             className={`text-sm px-4 py-2 rounded-full border transition-colors ${
               tab === tb.key
                 ? 'bg-[#11A15A] text-white border-[#11A15A]'
-                : 'bg-white text-[#6B738A] border-[#DDE1EE]'
+                : 'bg-white text-[#475569] border-[#DDE1EE]'
             }`}
           >
             {t(tb.label)}
@@ -91,7 +91,7 @@ function FAQSection() {
       {isLoading ? (
         <div className="flex justify-center py-8"><Spinner /></div>
       ) : visible.length === 0 ? (
-        <p className="text-center text-sm text-[#6B738A] py-8">
+        <p className="text-center text-sm text-[#475569] py-8">
           {t('Todavía no hay preguntas cargadas en esta sección.')}
         </p>
       ) : (
@@ -121,7 +121,7 @@ function VerifyPrescriptionSection() {
           <QrCode className="w-6 h-6 text-[#0F6E56]" aria-hidden="true" />
         </div>
         <h2 className="text-2xl font-bold text-[#141820] mb-2">{t('Verificar una receta médica')}</h2>
-        <p className="text-sm text-[#6B738A] mb-6 max-w-md mx-auto">
+        <p className="text-sm text-[#475569] mb-6 max-w-md mx-auto">
           {t('¿Recibiste una receta digital de MedicBolivia? Escaneá el código QR con tu celular, o ingresá el código manualmente para confirmar que es auténtica.')}
         </p>
         <form onSubmit={goVerify} className="flex gap-2 max-w-sm mx-auto">
@@ -168,7 +168,7 @@ function LandingHeader() {
             pantallas donde más importa (tablets, laptops chicas, zoom del
             navegador). Con más ancho disponible, gap-8 le da respiro real
             a los links en vez de amontonarse. */}
-        <nav className="hidden lg:flex items-center gap-8 text-sm text-[#6B738A]">
+        <nav className="hidden lg:flex items-center gap-8 text-sm text-[#475569]">
           {navLinks.map((link) => (
             link.anchor
               ? <a key={link.href} href={link.href} className="hover:text-[#141820] transition-colors">{t(link.label)}</a>
@@ -243,7 +243,7 @@ function LandingHeader() {
               )
           ))}
           <div className="flex items-center justify-between gap-2 mt-2 pt-3 border-t border-[#DDE1EE]">
-            <span className="text-xs text-[#6B738A] px-2">{t('Idioma')}</span>
+            <span className="text-xs text-[#475569] px-2">{t('Idioma')}</span>
             <LanguageSwitcher variant="light" />
           </div>
         </div>
@@ -582,7 +582,7 @@ function HowItWorksSection() {
     <section className="max-w-5xl mx-auto px-4 py-16">
       <h2 className="text-2xl font-bold text-center text-[#141820] mb-2">{t('Cómo funciona')}</h2>
       <SectionAccent />
-      <p className="text-sm text-center text-[#6B738A] mt-3 mb-10">
+      <p className="text-sm text-center text-[#475569] mt-3 mb-10">
         {t('De la consulta a la receta, en cuatro pasos.')}
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -595,7 +595,7 @@ function HowItWorksSection() {
             </div>
             <p className={`text-xs font-medium mb-1 ${step.done ? 'text-[#0F6E56]' : 'text-[#185FA5]'}`}>{t('Paso')} {i + 1}</p>
             <p className="text-sm font-medium text-[#141820] mb-1">{t(step.title)}</p>
-            <p className="text-xs text-[#6B738A]">{t(step.text)}</p>
+            <p className="text-xs text-[#475569]">{t(step.text)}</p>
           </div>
         ))}
       </div>
@@ -617,7 +617,7 @@ function AppointmentsSection() {
             <h2 className="text-2xl font-bold text-[#141820] mb-3">
               {t('Agendá tu cita y seguila en un calendario')}
             </h2>
-            <p className="text-sm text-[#6B738A] mb-4">
+            <p className="text-sm text-[#475569] mb-4">
               {t('Tanto el paciente como el profesional ven la cita en su propio calendario apenas se agenda — con fecha, hora y estado siempre actualizados. Nada se coordina por mensajes sueltos.')}
             </p>
             <ul className="space-y-2 text-sm text-[#141820]">
@@ -644,7 +644,7 @@ function AppointmentsSection() {
               <p className="text-sm font-medium text-[#141820]">{t('Mis próximas citas')}</p>
               <CalendarCheck2 className="w-4 h-4 text-[#11A15A]" aria-hidden="true" />
             </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-[#6B738A] mb-1">
+            <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-[#475569] mb-1">
               {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => <span key={i}>{d}</span>)}
             </div>
             <div className="grid grid-cols-7 gap-1 mb-4">
@@ -654,7 +654,7 @@ function AppointmentsSection() {
                   className={`aspect-square rounded-md flex items-center justify-center text-[10px] ${
                     [9, 16, 22].includes(i)
                       ? 'bg-[#11A15A] text-white font-medium'
-                      : 'bg-white text-[#6B738A]'
+                      : 'bg-white text-[#475569]'
                   }`}
                 >
                   {i + 1}
@@ -709,7 +709,7 @@ function AI24_7Section() {
           <h2 className="text-2xl font-bold text-[#141820] mb-3">
             {t('Agentes de IA que nunca se duermen')}
           </h2>
-          <p className="text-sm text-[#6B738A] mb-4">
+          <p className="text-sm text-[#475569] mb-4">
             {t('Medi está disponible las 24 horas, los 7 días de la semana, para orientarte, conectarte con un profesional y agendar tu cita — sin horario de atención de por medio.')}
           </p>
           <div className="bg-white border border-[#DDE1EE] rounded-xl p-4 flex items-start gap-3">
@@ -718,7 +718,7 @@ function AI24_7Section() {
             </div>
             <div>
               <p className="text-sm font-medium text-[#141820] mb-1">{t('Recordatorios automáticos por WhatsApp')}</p>
-              <p className="text-xs text-[#6B738A]">
+              <p className="text-xs text-[#475569]">
                 {t('Una vez agendada la cita, el agente te escribe por WhatsApp antes de la hora para recordártela y confirmar que vas a asistir — así ni el paciente ni el profesional pierden tiempo con citas a las que nadie se conecta.')}
               </p>
             </div>
@@ -767,7 +767,7 @@ function TrustSection() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-[#141820] mb-1">{t(point.title)}</p>
-                  <p className="text-xs text-[#6B738A]">{t(point.text)}</p>
+                  <p className="text-xs text-[#475569]">{t(point.text)}</p>
                 </div>
               </div>
             </Reveal>
@@ -783,7 +783,7 @@ function LandingFooter() {
   return (
     <footer className="border-t border-[#DDE1EE] bg-white">
       <div className="h-1 bg-gradient-to-r from-[#185FA5] to-[#11A15A]" />
-      <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B738A]">
+      <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#475569]">
         <div className="flex flex-col items-center sm:items-start gap-1">
           <span>© {new Date().getFullYear()} MedicBolivia. {t('Todos los derechos reservados.')}</span>
           <a href="mailto:info@medicbolivia.com" className="flex items-center gap-1.5 hover:text-[#141820]">
@@ -847,7 +847,7 @@ export default function HomePage() {
       <div className="min-h-screen flex items-center justify-center bg-[#F5F6FA]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-[#11A15A] border-t-transparent rounded-full animate-spin-slow" />
-          <p className="text-sm text-[#6B738A]">{t('Redirigiendo...')}</p>
+          <p className="text-sm text-[#475569]">{t('Redirigiendo...')}</p>
         </div>
       </div>
     )

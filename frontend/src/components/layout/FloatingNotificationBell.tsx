@@ -160,7 +160,7 @@ export function FloatingNotificationBell() {
         {/* Quitar el ícono — vuelve a aparecer solo con una notificación nueva */}
         <button
           onClick={dismissBubble}
-          className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-white text-[#6B738A] border border-[#DDE1EE] shadow flex items-center justify-center hover:text-[#141820]"
+          className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-white text-[#475569] border border-[#DDE1EE] shadow flex items-center justify-center hover:text-[#141820]"
           title="Quitar (reaparece con una notificación nueva)"
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -185,14 +185,14 @@ export function FloatingNotificationBell() {
                 )}
               </div>
               {notifications.length === 0 ? (
-                <p className="text-xs text-[#6B738A] text-center py-6">{t('No tenés notificaciones todavía')}</p>
+                <p className="text-xs text-[#475569] text-center py-6">{t('No tenés notificaciones todavía')}</p>
               ) : (
                 <div className="divide-y divide-[#DDE1EE]">
                   {notifications.slice(0, 10).map((n) => (
                     <div key={n.id} className={`p-3 ${!n.read ? 'bg-[#F5FBF8]' : ''}`}>
                       <p className="text-xs font-medium">{n.title}</p>
-                      <p className="text-xs text-[#6B738A] mt-0.5">{n.body}</p>
-                      <p className="text-[10px] text-[#A0A8BF] mt-1">
+                      <p className="text-xs text-[#475569] mt-0.5">{n.body}</p>
+                      <p className="text-[10px] text-[#64748B] mt-1">
                         {new Date(n.created_at).toLocaleString('es-BO')}
                       </p>
                     </div>

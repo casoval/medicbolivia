@@ -106,7 +106,7 @@ function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImpor
       >
         <div className="flex items-center justify-between p-4 border-b border-[#DDE1EE]">
           <p className="text-sm font-semibold">{t('Buscar médicos en Google Maps')}</p>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#141820] text-xl">✕</button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#141820] text-xl">✕</button>
         </div>
 
         <div className="p-4 border-b border-[#DDE1EE] flex flex-col sm:flex-row gap-2">
@@ -152,7 +152,7 @@ function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImpor
           )}
 
           {!searchMutation.isPending && !searchMutation.data && (
-            <p className="text-sm text-[#6B738A] text-center py-8">
+            <p className="text-sm text-[#475569] text-center py-8">
               {t('Escribe una especialidad y ciudad, ej. "pediatra" en "Cochabamba"')}
             </p>
           )}
@@ -165,9 +165,9 @@ function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImpor
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-[#141820] truncate">{place.name}</p>
-                  {place.address && <p className="text-xs text-[#6B738A] mt-0.5">{place.address}</p>}
+                  {place.address && <p className="text-xs text-[#475569] mt-0.5">{place.address}</p>}
                   {place.rating != null && (
-                    <p className="text-xs text-[#A0A8BF] mt-0.5">
+                    <p className="text-xs text-[#64748B] mt-0.5">
                       ⭐ {place.rating} ({place.user_rating_count ?? 0})
                     </p>
                   )}
@@ -243,7 +243,7 @@ function AddLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           />
         </div>
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="text-sm text-[#6B738A] px-4 py-2">{t('Cancelar')}</button>
+          <button onClick={onClose} className="text-sm text-[#475569] px-4 py-2">{t('Cancelar')}</button>
           <button
             className="bg-[#185FA5] text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
             disabled={form.full_name.length < 2 || createMutation.isPending}
@@ -279,7 +279,7 @@ function InviteStatusBadge({ lead, isPending }: { lead: DoctorLead; isPending?: 
   }
 
   if (!lead.last_invite_status) {
-    return <span className="text-xs text-[#A0A8BF]">{t('Sin invitar')}</span>
+    return <span className="text-xs text-[#64748B]">{t('Sin invitar')}</span>
   }
 
   const isSent = lead.last_invite_status === 'SENT'
@@ -295,7 +295,7 @@ function InviteStatusBadge({ lead, isPending }: { lead: DoctorLead; isPending?: 
         {lead.last_invite_included_pdf && ` · ${t('PDF')}`}
       </span>
       {lead.last_invite_sent_at && (
-        <span className="text-[10px] text-[#A0A8BF]">{formatInviteDate(lead.last_invite_sent_at)}</span>
+        <span className="text-[10px] text-[#64748B]">{formatInviteDate(lead.last_invite_sent_at)}</span>
       )}
     </div>
   )
@@ -318,7 +318,7 @@ function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () 
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <p className="text-sm font-semibold mb-1">{t('Invitar por WhatsApp')}</p>
-        <p className="text-xs text-[#6B738A] mb-4">{lead.full_name} · {lead.phone}</p>
+        <p className="text-xs text-[#475569] mb-4">{lead.full_name} · {lead.phone}</p>
         {lead.last_invite_status && (
           <div className="mb-3">
             <Alert
@@ -338,7 +338,7 @@ function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () 
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
-        <label className="flex items-start gap-2 mt-3 text-xs text-[#6B738A] cursor-pointer">
+        <label className="flex items-start gap-2 mt-3 text-xs text-[#475569] cursor-pointer">
           <input
             type="checkbox"
             className="mt-0.5"
@@ -350,7 +350,7 @@ function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () 
           </span>
         </label>
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="text-sm text-[#6B738A] px-4 py-2">{t('Cancelar')}</button>
+          <button onClick={onClose} className="text-sm text-[#475569] px-4 py-2">{t('Cancelar')}</button>
           <button
             className="bg-[#0F6E56] text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
             disabled={message.length < 5 || inviteMutation.isPending}
@@ -466,7 +466,7 @@ export default function AdminDoctorLeadsPage() {
               }`}
             >
               <p className="text-xl font-semibold text-[#141820]">{funnel[s] ?? 0}</p>
-              <p className="text-xs text-[#6B738A]">{STATUS_LABELS[s]}</p>
+              <p className="text-xs text-[#475569]">{STATUS_LABELS[s]}</p>
             </button>
           ))}
         </div>
@@ -494,7 +494,7 @@ export default function AdminDoctorLeadsPage() {
       {!isLoading && data && data.items.length > 0 && (
         <div className="bg-white rounded-2xl border border-[#DDE1EE] overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[#F5F6FA] text-[#6B738A] text-xs">
+            <thead className="bg-[#F5F6FA] text-[#475569] text-xs">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">{t('Nombre')}</th>
                 <th className="text-left px-4 py-2 font-medium">{t('Especialidad')}</th>
@@ -511,7 +511,7 @@ export default function AdminDoctorLeadsPage() {
                   <td className="px-4 py-3">
                     <p className="font-medium text-[#141820]">{lead.full_name}</p>
                     {lead.clinic_or_hospital && (
-                      <p className="text-xs text-[#A0A8BF]">{lead.clinic_or_hospital}</p>
+                      <p className="text-xs text-[#64748B]">{lead.clinic_or_hospital}</p>
                     )}
                     {lead.maps_url && (
                       <a href={lead.maps_url} target="_blank" rel="noopener noreferrer"
@@ -520,9 +520,9 @@ export default function AdminDoctorLeadsPage() {
                       </a>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-[#6B738A]">{lead.specialty || '—'}</td>
-                  <td className="px-4 py-3 text-[#6B738A]">{lead.city || '—'}</td>
-                  <td className="px-4 py-3 text-[#6B738A]">{lead.phone || '—'}</td>
+                  <td className="px-4 py-3 text-[#475569]">{lead.specialty || '—'}</td>
+                  <td className="px-4 py-3 text-[#475569]">{lead.city || '—'}</td>
+                  <td className="px-4 py-3 text-[#475569]">{lead.phone || '—'}</td>
                   <td className="px-4 py-3">
                     <select
                       className="text-xs border border-[#DDE1EE] rounded-md px-1.5 py-1"
@@ -562,7 +562,7 @@ export default function AdminDoctorLeadsPage() {
 
           {/* Paginación simple */}
           {data.total > data.page_size && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-[#DDE1EE] text-xs text-[#6B738A]">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-[#DDE1EE] text-xs text-[#475569]">
               <span>{t('Página')} {data.page} · {data.total} {t('prospectos')}</span>
               <div className="flex gap-2">
                 <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="disabled:opacity-40">

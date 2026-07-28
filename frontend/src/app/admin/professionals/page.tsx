@@ -63,13 +63,13 @@ function SpanishDatePicker({ value, onChange }: { value: string; onChange: (v: s
       {open && (
         <div className="mt-1 border border-[#DDE1EE] rounded-lg bg-white p-2 shadow-sm">
           <div className="flex items-center justify-between mb-2">
-            <button type="button" onClick={() => changeMonth(-1)} className="px-2 text-[#6B738A] hover:text-[#185FA5]">‹</button>
+            <button type="button" onClick={() => changeMonth(-1)} className="px-2 text-[#475569] hover:text-[#185FA5]">‹</button>
             <span className="text-xs font-semibold text-[#3A4256] capitalize">{ES_MESES[viewM]} {viewY}</span>
-            <button type="button" onClick={() => changeMonth(1)} className="px-2 text-[#6B738A] hover:text-[#185FA5]">›</button>
+            <button type="button" onClick={() => changeMonth(1)} className="px-2 text-[#475569] hover:text-[#185FA5]">›</button>
           </div>
           <div className="grid grid-cols-7 gap-1 text-center">
             {ES_DIAS_CORTOS.map((d) => (
-              <span key={d} className="text-[10px] text-[#A0A8BF]">{d}</span>
+              <span key={d} className="text-[10px] text-[#64748B]">{d}</span>
             ))}
             {Array.from({ length: leadingBlanks }).map((_, i) => <span key={`b${i}`} />)}
             {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -212,7 +212,7 @@ function DocThumbnail({ doc, onExpand, onReview, reviewing }: {
         className="w-full h-24 rounded-lg overflow-hidden bg-[#F5F6FA] flex items-center justify-center group relative"
       >
         {pdf ? (
-          <div className="flex flex-col items-center gap-1 text-[#6B738A]">
+          <div className="flex flex-col items-center gap-1 text-[#475569]">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
             <span className="text-[10px] font-medium">PDF</span>
           </div>
@@ -253,7 +253,7 @@ function DocThumbnail({ doc, onExpand, onReview, reviewing }: {
         <button
           onClick={() => onReview('REJECTED')}
           disabled={reviewing}
-          className="text-[10px] text-[#A0A8BF] hover:text-[#A32D2D] disabled:opacity-50"
+          className="text-[10px] text-[#64748B] hover:text-[#A32D2D] disabled:opacity-50"
         >
           {t('Revertir aprobación')}
         </button>
@@ -270,7 +270,7 @@ function DocViewerModal({ doc, onClose }: { doc: ProfessionalDocItem; onClose: (
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-[#DDE1EE]">
           <p className="text-sm font-semibold">{DOC_LABELS[doc.doc_type] || doc.doc_type}</p>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#141820] text-xl">✕</button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#141820] text-xl">✕</button>
         </div>
         <div className="flex-1 overflow-auto bg-[#F5F6FA] flex items-center justify-center p-4">
           {pdf ? (
@@ -323,7 +323,7 @@ function PenaltyDetailSection({ professionalId, penalty }: { professionalId: str
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">
+        <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide">
           Penalizaciones {penalty.since ? `· desde ${new Date(penalty.since).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}` : '· historial completo'}
         </p>
       </div>
@@ -389,15 +389,15 @@ function PenaltyDetailSection({ professionalId, penalty }: { professionalId: str
 
       {expanded && (
         <div className="mt-2 space-y-1.5 max-h-64 overflow-y-auto">
-          {isLoading && <p className="text-xs text-[#6B738A] text-center py-3">{t('Cargando detalle...')}</p>}
+          {isLoading && <p className="text-xs text-[#475569] text-center py-3">{t('Cargando detalle...')}</p>}
           {!isLoading && data?.items.length === 0 && (
-            <p className="text-xs text-[#6B738A] text-center py-3">{t('No hay consultas penalizadas en este período.')}</p>
+            <p className="text-xs text-[#475569] text-center py-3">{t('No hay consultas penalizadas en este período.')}</p>
           )}
           {!isLoading && data?.items.map((item, i) => (
             <div key={`${item.consultation_id}-${item.reason}-${i}`} className="bg-[#F5F6FA] rounded-lg p-2 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs font-medium truncate">{item.patient_name}</p>
-                <p className="text-[10px] text-[#6B738A]">
+                <p className="text-[10px] text-[#475569]">
                   {new Date(item.date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })} · {item.reason_label}
                 </p>
               </div>
@@ -435,7 +435,7 @@ function ProfessionalDocsSection({ professionalId }: { professionalId: string })
   })
 
   if (isLoading) {
-    return <p className="text-xs text-[#6B738A] py-4 text-center">{t('Cargando documentos...')}</p>
+    return <p className="text-xs text-[#475569] py-4 text-center">{t('Cargando documentos...')}</p>
   }
 
   const missing = REQUIRED_DOC_TYPES.filter((t) => !docs.some((d) => d.doc_type === t))
@@ -443,14 +443,14 @@ function ProfessionalDocsSection({ professionalId }: { professionalId: string })
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">{t('Documentos de verificación')}</p>
-        <span className="text-[10px] text-[#A0A8BF]">{docs.length} subido{docs.length !== 1 ? 's' : ''}</span>
+        <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide">{t('Documentos de verificación')}</p>
+        <span className="text-[10px] text-[#64748B]">{docs.length} subido{docs.length !== 1 ? 's' : ''}</span>
       </div>
 
       {docError && <div className="mb-2"><Alert type="error" message={docError} /></div>}
 
       {docs.length === 0 ? (
-        <p className="text-sm text-[#6B738A] bg-[#F5F6FA] rounded-xl p-3 text-center">
+        <p className="text-sm text-[#475569] bg-[#F5F6FA] rounded-xl p-3 text-center">
           {t('Este profesional todavía no subió ningún documento')}
         </p>
       ) : (
@@ -468,7 +468,7 @@ function ProfessionalDocsSection({ professionalId }: { professionalId: string })
       )}
 
       {missing.length > 0 && (
-        <p className="text-[10px] text-[#A0A8BF] mt-2">
+        <p className="text-[10px] text-[#64748B] mt-2">
           Falta subir: {missing.map((t) => DOC_LABELS[t] || t).join(', ')}
         </p>
       )}
@@ -570,7 +570,7 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">{t('Comisión individual')}</p>
+        <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide">{t('Comisión individual')}</p>
         <button onClick={() => setOpen((v) => !v)} className="text-xs text-[#185FA5] hover:underline">
           {open ? 'Ocultar' : current ? 'Editar' : 'Configurar'}
         </button>
@@ -586,7 +586,7 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
           </p>
         </div>
       ) : (
-        <p className="text-xs text-[#A0A8BF] mb-2">{t('Sin comisión individual — usa la comisión general de la plataforma.')}</p>
+        <p className="text-xs text-[#64748B] mb-2">{t('Sin comisión individual — usa la comisión general de la plataforma.')}</p>
       )}
 
       {open && (
@@ -596,18 +596,18 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
           <div className="flex rounded-lg overflow-hidden border border-[#DDE1EE] text-xs">
             <button
               onClick={() => setMode('permanent')}
-              className={`flex-1 py-1.5 ${mode === 'permanent' ? 'bg-[#185FA5] text-white' : 'bg-white text-[#6B738A]'}`}
+              className={`flex-1 py-1.5 ${mode === 'permanent' ? 'bg-[#185FA5] text-white' : 'bg-white text-[#475569]'}`}
             >
               {t('Permanente')}
             </button>
             <button
               onClick={() => setMode('promo')}
-              className={`flex-1 py-1.5 ${mode === 'promo' ? 'bg-[#185FA5] text-white' : 'bg-white text-[#6B738A]'}`}
+              className={`flex-1 py-1.5 ${mode === 'promo' ? 'bg-[#185FA5] text-white' : 'bg-white text-[#475569]'}`}
             >
               {t('Promoción con fecha')}
             </button>
           </div>
-          <p className="text-[10px] text-[#A0A8BF]">
+          <p className="text-[10px] text-[#64748B]">
             {mode === 'permanent'
               ? 'Aplica desde hoy y no tiene fecha de fin. Reemplaza la comisión general para este profesional hasta que la desactives.'
               : 'Aplica solo entre las fechas indicadas (ej. "5% los primeros 3 meses"). Al terminar, vuelve a aplicarse la comisión permanente o la general.'}
@@ -615,13 +615,13 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs text-[#6B738A] mb-1">{t('% comisión')}</label>
+              <label className="block text-xs text-[#475569] mb-1">{t('% comisión')}</label>
               <input type="number" min={0} max={100} value={percent}
                 onChange={(e) => setPercent(e.target.value)}
                 className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
             </div>
             <div>
-              <label className="block text-xs text-[#6B738A] mb-1">{t('Etiqueta (opcional)')}</label>
+              <label className="block text-xs text-[#475569] mb-1">{t('Etiqueta (opcional)')}</label>
               <input value={label} onChange={(e) => setLabel(e.target.value)}
                 placeholder={mode === 'permanent' ? 'Comisión fija' : 'Bienvenida'}
                 className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
@@ -629,12 +629,12 @@ function ProfessionalCommissionSection({ professionalId }: { professionalId: str
             {mode === 'promo' && (
               <>
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">{t('Desde')}</label>
+                  <label className="block text-xs text-[#475569] mb-1">{t('Desde')}</label>
                   <input type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)}
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">{t('Hasta (opcional)')}</label>
+                  <label className="block text-xs text-[#475569] mb-1">{t('Hasta (opcional)')}</label>
                   <input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)}
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
                 </div>
@@ -766,7 +766,7 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">Membresía mensual</p>
+        <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide">Membresía mensual</p>
         <button onClick={() => setOpen((v) => !v)} className="text-xs text-[#185FA5] hover:underline">
           {open ? 'Ocultar' : current ? 'Ver / deshabilitar' : 'Habilitar'}
         </button>
@@ -781,7 +781,7 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
           </p>
         </div>
       ) : (
-        <p className="text-xs text-[#A0A8BF] mb-2">Sin membresía activa — paga comisión normal por cada consulta.</p>
+        <p className="text-xs text-[#64748B] mb-2">Sin membresía activa — paga comisión normal por cada consulta.</p>
       )}
 
       {open && (
@@ -790,14 +790,14 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
 
           {current ? (
             <>
-              <p className="text-[10px] text-[#A0A8BF]">
+              <p className="text-[10px] text-[#64748B]">
                 {current.ends_at
                   ? `Sigue vigente hasta el ${fmtDate(current.ends_at)} — puedes renovarla desde ya (se suma a esa fecha) o deshabilitarla antes de tiempo.`
                   : 'No tiene fecha de vencimiento (indefinida) — puedes deshabilitarla cuando corresponda.'}
               </p>
               <div className="flex items-end gap-2">
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">Meses a renovar</label>
+                  <label className="block text-xs text-[#475569] mb-1">Meses a renovar</label>
                   <input type="number" min={1} step={1} value={renewMonths}
                     onChange={(e) => setRenewMonths(Math.max(1, parseInt(e.target.value) || 1))}
                     className="w-24 px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
@@ -814,26 +814,26 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
             </>
           ) : (
             <>
-              <p className="text-[10px] text-[#A0A8BF]">
+              <p className="text-[10px] text-[#64748B]">
                 Actívala solo después de confirmar el pago del profesional por fuera de la plataforma. Queda un
                 registro histórico por mes — no se borra, solo se desactiva. El vencimiento se calcula solo
                 (inicio + meses pagados, mes calendario exacto).
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">Nota de período (opcional)</label>
+                  <label className="block text-xs text-[#475569] mb-1">Nota de período (opcional)</label>
                   <input value={periodLabel} onChange={(e) => setPeriodLabel(e.target.value)}
                     placeholder="Ej. 2026-07, o cualquier referencia tuya"
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">Meses pagados</label>
+                  <label className="block text-xs text-[#475569] mb-1">Meses pagados</label>
                   <input type="number" min={1} step={1} value={months}
                     onChange={(e) => setMonths(Math.max(1, parseInt(e.target.value) || 1))}
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs text-[#6B738A] mb-1">{t('Inicio')}</label>
+                  <label className="block text-xs text-[#475569] mb-1">{t('Inicio')}</label>
                   <div className="flex items-center gap-3 mb-1">
                     <label className="flex items-center gap-1 text-xs text-[#3A4256]">
                       <input type="radio" checked={startMode === 'today'}
@@ -851,7 +851,7 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
                   )}
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs text-[#6B738A] mb-1">Nota (opcional)</label>
+                  <label className="block text-xs text-[#475569] mb-1">Nota (opcional)</label>
                   <input value={note} onChange={(e) => setNote(e.target.value)}
                     placeholder="Ej. Pago recibido por QR personal, ref. 123"
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
@@ -1027,24 +1027,24 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
             )}
             <div>
               <h3 className="text-base font-semibold">{local.name}</h3>
-              <p className="text-xs text-[#6B738A]">{local.specialty}</p>
+              <p className="text-xs text-[#475569]">{local.specialty}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#141820] text-xl">✕</button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#141820] text-xl">✕</button>
         </div>
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
               <StatusBadge status={local.status} />
-              <p className="text-xs text-[#6B738A] mt-1">{t('Estado')}</p>
+              <p className="text-xs text-[#475569] mt-1">{t('Estado')}</p>
             </div>
             <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
               <p className="text-lg font-bold text-[#EF9F27]">{Number(local.rating).toFixed(1)} ★</p>
-              <p className="text-xs text-[#6B738A]">{local.total_ratings} calificaciones</p>
+              <p className="text-xs text-[#475569]">{local.total_ratings} calificaciones</p>
             </div>
             <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
               <p className="text-lg font-bold text-[#185FA5]">{local.total_consultations}</p>
-              <p className="text-xs text-[#6B738A]">{t('Consultas')}</p>
+              <p className="text-xs text-[#475569]">{t('Consultas')}</p>
             </div>
           </div>
 
@@ -1058,7 +1058,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">{t('Datos personales y profesionales')}</p>
+              <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide">{t('Datos personales y profesionales')}</p>
               {!editing && (
                 <button onClick={startEdit} className="text-xs text-[#185FA5] hover:underline">{t('Editar')}</button>
               )}
@@ -1066,60 +1066,60 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
 
             {!editing ? (
               <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-2 gap-3">
-                <div><p className="text-xs text-[#A0A8BF]">{t('Telefono')}</p><p className="text-sm font-medium">{local.phone || 'No disponible'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Email')}</p><p className="text-sm font-medium truncate">{local.email || 'No especificado'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Cedula')}</p><p className="text-sm font-medium">{local.ci || 'No disponible'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Fecha de nacimiento')}</p><p className="text-sm font-medium">{local.birth_date ? new Date(local.birth_date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' }) : 'No especificada'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Edad')}</p><p className="text-sm font-medium">{age ? `${age} anios` : 'No especificada'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Ciudad / Departamento')}</p><p className="text-sm font-medium">{local.department || 'No especificado'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Genero')}</p><p className="text-sm font-medium">{local.gender || 'No especificado'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Especialidad')}</p><p className="text-sm font-medium">{local.specialty}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Experiencia')}</p><p className="text-sm font-medium">{local.years_experience ? `${local.years_experience} anios` : 'No especificada'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Idiomas')}</p><p className="text-sm font-medium">{local.languages?.join(', ') || 'Espanol'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Sub-especialidades')}</p><p className="text-sm font-medium">{local.sub_specialties?.length ? local.sub_specialties.join(', ') : 'No especificadas'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Matrícula CMB')}</p><p className="text-sm font-medium">{local.cmb_matricula || 'No especificada'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Registro SEDES')}</p><p className="text-sm font-medium">{local.sedes_number || 'No especificado'}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Registrado el')}</p><p className="text-sm font-medium">{new Date(local.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
-                <div><p className="text-xs text-[#A0A8BF]">{t('Estado de cuenta')}</p><p className="text-sm font-medium">{local.user_status === 'ACTIVE' ? 'Activa' : local.user_status === 'SUSPENDED' ? 'Suspendida' : (local.user_status || 'No disponible')}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Telefono')}</p><p className="text-sm font-medium">{local.phone || 'No disponible'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Email')}</p><p className="text-sm font-medium truncate">{local.email || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Cedula')}</p><p className="text-sm font-medium">{local.ci || 'No disponible'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Fecha de nacimiento')}</p><p className="text-sm font-medium">{local.birth_date ? new Date(local.birth_date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' }) : 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Edad')}</p><p className="text-sm font-medium">{age ? `${age} anios` : 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Ciudad / Departamento')}</p><p className="text-sm font-medium">{local.department || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Genero')}</p><p className="text-sm font-medium">{local.gender || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Especialidad')}</p><p className="text-sm font-medium">{local.specialty}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Experiencia')}</p><p className="text-sm font-medium">{local.years_experience ? `${local.years_experience} anios` : 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Idiomas')}</p><p className="text-sm font-medium">{local.languages?.join(', ') || 'Espanol'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Sub-especialidades')}</p><p className="text-sm font-medium">{local.sub_specialties?.length ? local.sub_specialties.join(', ') : 'No especificadas'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Matrícula CMB')}</p><p className="text-sm font-medium">{local.cmb_matricula || 'No especificada'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Registro SEDES')}</p><p className="text-sm font-medium">{local.sedes_number || 'No especificado'}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Registrado el')}</p><p className="text-sm font-medium">{new Date(local.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Estado de cuenta')}</p><p className="text-sm font-medium">{local.user_status === 'ACTIVE' ? 'Activa' : local.user_status === 'SUSPENDED' ? 'Suspendida' : (local.user_status || 'No disponible')}</p></div>
               </div>
             ) : (
               <div className="bg-[#F5F6FA] rounded-xl p-3 space-y-3">
                 {saveError && <Alert type="error" message={saveError} />}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Nombre')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Nombre')}</label>
                     <input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Apellido')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Apellido')}</label>
                     <input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">CI</label>
+                    <label className="block text-xs text-[#475569] mb-1">CI</label>
                     <input value={form.ci} onChange={(e) => setForm({ ...form, ci: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Fecha de nacimiento')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Fecha de nacimiento')}</label>
                     <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Departamento')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Departamento')}</label>
                     <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
                       {DEPARTMENTS.filter((d) => d !== 'Todos').map((d) => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Género')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Género')}</label>
                     <input value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Especialidad')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Especialidad')}</label>
                     <select value={form.specialty}
                       onChange={(e) => setForm({ ...form, specialty: e.target.value, sub_specialties: [] })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
@@ -1132,34 +1132,34 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Años de experiencia')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Años de experiencia')}</label>
                     <input type="number" min={0} max={80} value={form.years_experience}
                       onChange={(e) => setForm({ ...form, years_experience: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Idiomas (coma)')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Idiomas (coma)')}</label>
                     <input value={form.languages} onChange={(e) => setForm({ ...form, languages: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Matrícula CMB')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Matrícula CMB')}</label>
                     <input value={form.cmb_matricula} onChange={(e) => setForm({ ...form, cmb_matricula: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Registro SEDES')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Registro SEDES')}</label>
                     <input value={form.sedes_number} onChange={(e) => setForm({ ...form, sedes_number: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">{t('Sub-especialidades')}</label>
+                  <label className="block text-xs text-[#475569] mb-1">{t('Sub-especialidades')}</label>
                   {!selectedSpecialtyId ? (
-                    <p className="text-xs text-[#A0A8BF]">{t('Elige una especialidad del catálogo para ver sus sub-especialidades.')}</p>
+                    <p className="text-xs text-[#64748B]">{t('Elige una especialidad del catálogo para ver sus sub-especialidades.')}</p>
                   ) : subSpecialtyCatalog.length === 0 ? (
-                    <p className="text-xs text-[#A0A8BF]">{t('Esta especialidad no tiene sub-especialidades en el catálogo.')}</p>
+                    <p className="text-xs text-[#64748B]">{t('Esta especialidad no tiene sub-especialidades en el catálogo.')}</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {subSpecialtyCatalog.map((s: CatalogItem) => (
@@ -1172,36 +1172,36 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                     </div>
                   )}
                   {form.sub_specialties.some((name) => !subSpecialtyCatalog.some((s: CatalogItem) => s.name === name)) && (
-                    <p className="text-[10px] text-[#A0A8BF] mt-1">
+                    <p className="text-[10px] text-[#64748B] mt-1">
                       También tiene guardadas: {form.sub_specialties.filter((name) => !subSpecialtyCatalog.some((s: CatalogItem) => s.name === name)).join(', ')} (fuera del catálogo actual de esta especialidad — se mantienen a menos que las quites de la lista de arriba).
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">{t('Presentación / bio')}</label>
+                  <label className="block text-xs text-[#475569] mb-1">{t('Presentación / bio')}</label>
                   <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} rows={3}
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white resize-none" />
                 </div>
 
                 {/* Precios */}
                 <div>
-                  <p className="text-xs text-[#6B738A] mb-1">{t('Precios de consulta (Bs.)')}</p>
+                  <p className="text-xs text-[#475569] mb-1">{t('Precios de consulta (Bs.)')}</p>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="block text-[10px] text-[#A0A8BF] mb-1">{t('General')}</label>
+                      <label className="block text-[10px] text-[#64748B] mb-1">{t('General')}</label>
                       <input type="number" min={0} value={form.price_general}
                         onChange={(e) => setForm({ ...form, price_general: e.target.value })}
                         className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-[#A0A8BF] mb-1">{t('Urgente')}</label>
+                      <label className="block text-[10px] text-[#64748B] mb-1">{t('Urgente')}</label>
                       <input type="number" min={0} value={form.price_urgent}
                         onChange={(e) => setForm({ ...form, price_urgent: e.target.value })}
                         className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-[#A0A8BF] mb-1">{t('Seguimiento')}</label>
+                      <label className="block text-[10px] text-[#64748B] mb-1">{t('Seguimiento')}</label>
                       <input type="number" min={0} value={form.price_follow_up}
                         onChange={(e) => setForm({ ...form, price_follow_up: e.target.value })}
                         className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
@@ -1210,7 +1210,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                 </div>
 
                 <div>
-                  <label className="block text-xs text-[#6B738A] mb-1">{t('Email')}</label>
+                  <label className="block text-xs text-[#475569] mb-1">{t('Email')}</label>
                   <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                 </div>
@@ -1222,7 +1222,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                     entrar con el número anterior — asegúrate de avisarle.
                   </p>
                   <div>
-                    <label className="block text-xs text-[#6B738A] mb-1">{t('Teléfono')}</label>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Teléfono')}</label>
                     <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
@@ -1255,11 +1255,11 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
 
           {!editing && (
             <div>
-              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Precios de consulta')}</p>
+              <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Precios de consulta')}</p>
               <div className="bg-[#F5F6FA] rounded-xl p-3 grid grid-cols-3 gap-3">
-                <div className="text-center"><p className="text-sm font-bold text-[#185FA5]">Bs. {local.price_general || 0}</p><p className="text-xs text-[#6B738A]">{t('General')}</p></div>
-                <div className="text-center"><p className="text-sm font-bold text-[#A32D2D]">Bs. {local.price_urgent || 0}</p><p className="text-xs text-[#6B738A]">{t('Urgente')}</p></div>
-                <div className="text-center"><p className="text-sm font-bold text-[#0F6E56]">Bs. {local.price_follow_up || 0}</p><p className="text-xs text-[#6B738A]">{t('Seguimiento')}</p></div>
+                <div className="text-center"><p className="text-sm font-bold text-[#185FA5]">Bs. {local.price_general || 0}</p><p className="text-xs text-[#475569]">{t('General')}</p></div>
+                <div className="text-center"><p className="text-sm font-bold text-[#A32D2D]">Bs. {local.price_urgent || 0}</p><p className="text-xs text-[#475569]">{t('Urgente')}</p></div>
+                <div className="text-center"><p className="text-sm font-bold text-[#0F6E56]">Bs. {local.price_follow_up || 0}</p><p className="text-xs text-[#475569]">{t('Seguimiento')}</p></div>
               </div>
             </div>
           )}
@@ -1272,7 +1272,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
           </div>
           {!editing && local.bio && (
             <div>
-              <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Presentacion')}</p>
+              <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Presentacion')}</p>
               <p className="text-sm text-[#3A4155] bg-[#F5F6FA] rounded-xl p-3 leading-relaxed">{local.bio}</p>
             </div>
           )}
@@ -1283,7 +1283,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
             <ConsultationHistorySection endpoint={`/admin/professionals/${local.id}/history`} counterpartField="patient_name" />
           </div>
           <div className="pt-2 border-t border-[#DDE1EE]">
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-3">{t('Acciones')}</p>
+            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-3">{t('Acciones')}</p>
             <div className="flex gap-2 flex-wrap">
               {(local.status === 'PENDING_DOCS' || local.status === 'UNDER_REVIEW') && (<>
                 <button onClick={() => onAction(local.id,'APPROVED')} disabled={loading}
@@ -1314,7 +1314,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
 function MembershipStatusBadge({ m }: { m?: ProfessionalMembership }) {
   if (!m) {
     return (
-      <span className="text-[10px] px-2 py-1 rounded-full border font-medium bg-[#F5F6FA] text-[#6B738A] border-[#DDE1EE] flex-shrink-0 whitespace-nowrap">
+      <span className="text-[10px] px-2 py-1 rounded-full border font-medium bg-[#F5F6FA] text-[#475569] border-[#DDE1EE] flex-shrink-0 whitespace-nowrap">
         Sin membresía
       </span>
     )
@@ -1347,7 +1347,7 @@ function MembershipsTabPanel({ professionals, membershipByPro, loading }: {
       {loading ? (
         <LoadingScreen />
       ) : sorted.length === 0 ? (
-        <p className="text-sm text-[#6B738A] text-center py-8">No hay profesionales para mostrar</p>
+        <p className="text-sm text-[#475569] text-center py-8">No hay profesionales para mostrar</p>
       ) : (
         <div className="divide-y divide-[#DDE1EE]">
           {sorted.map((pro) => {
@@ -1370,8 +1370,8 @@ function MembershipsTabPanel({ professionals, membershipByPro, loading }: {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{pro.name}</p>
                     <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                      <span className="text-xs text-[#6B738A]">{pro.specialty}</span>
-                      {pro.department && <span className="text-xs text-[#A0A8BF]">· {pro.department}</span>}
+                      <span className="text-xs text-[#475569]">{pro.specialty}</span>
+                      {pro.department && <span className="text-xs text-[#64748B]">· {pro.department}</span>}
                     </div>
                   </div>
                   <MembershipStatusBadge m={current} />
@@ -1478,7 +1478,7 @@ export default function AdminProfessionalsPage() {
       <div className="max-w-4xl">
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Gestion de profesionales')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">{t('Clic en un profesional para ver su detalle completo')}</p>
+          <p className="text-xs text-[#475569] mt-0.5">{t('Clic en un profesional para ver su detalle completo')}</p>
         </div>
 
         {success && <div className="mb-4"><Alert type="success" message={success} /></div>}
@@ -1494,11 +1494,11 @@ export default function AdminProfessionalsPage() {
           ] as const).map(({ key, label }) => (
             <button key={key} onClick={() => setTab(key)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                tab === key ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#6B738A]'
+                tab === key ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#475569]'
               }`}>
               {label}
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                tab === key ? 'bg-[#185FA5] text-white' : 'bg-[#DDE1EE] text-[#6B738A]'
+                tab === key ? 'bg-[#185FA5] text-white' : 'bg-[#DDE1EE] text-[#475569]'
               }`}>
                 {counts[key]}
               </span>
@@ -1509,7 +1509,7 @@ export default function AdminProfessionalsPage() {
         {/* Filtros */}
         <div className="flex gap-2 mb-3 flex-wrap">
           <div className="relative flex-1 min-w-48">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A0A8BF]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input className="w-full pl-8 pr-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
               placeholder={t('Buscar por nombre, especialidad o celular...')}
               value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -1536,7 +1536,7 @@ export default function AdminProfessionalsPage() {
         ) : isLoading ? <LoadingScreen /> : (
           <div className="card">
             {filtered.length === 0 ? (
-              <p className="text-sm text-[#6B738A] text-center py-8">{t('No hay profesionales en este estado')}</p>
+              <p className="text-sm text-[#475569] text-center py-8">{t('No hay profesionales en este estado')}</p>
             ) : (
               <div className="divide-y divide-[#DDE1EE]">
                 {filtered.map((pro: Professional) => {
@@ -1577,10 +1577,10 @@ export default function AdminProfessionalsPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">{pro.name}</p>
                         <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                          <span className="text-xs text-[#6B738A]">{pro.specialty}</span>
-                          {pro.department && <span className="text-xs text-[#A0A8BF]">· {pro.department}</span>}
-                          {age && <span className="text-xs text-[#A0A8BF]">· {age} años</span>}
-                          {pro.phone && <span className="text-xs text-[#A0A8BF]">· {pro.phone}</span>}
+                          <span className="text-xs text-[#475569]">{pro.specialty}</span>
+                          {pro.department && <span className="text-xs text-[#64748B]">· {pro.department}</span>}
+                          {age && <span className="text-xs text-[#64748B]">· {age} años</span>}
+                          {pro.phone && <span className="text-xs text-[#64748B]">· {pro.phone}</span>}
                         </div>
                       </div>
                       {pendingDocs > 0 && (

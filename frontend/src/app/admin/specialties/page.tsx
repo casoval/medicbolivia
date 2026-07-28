@@ -179,7 +179,7 @@ export default function AdminSpecialtiesPage() {
       <div className="max-w-4xl">
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Especialidades y subespecialidades')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             {t('Gestiona el catálogo y revisa las propuestas enviadas por profesionales')}
           </p>
         </div>
@@ -191,7 +191,7 @@ export default function AdminSpecialtiesPage() {
             className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
               tab === 'catalog'
                 ? 'bg-[#E6F1FB] border-[#185FA5] text-[#185FA5] font-medium'
-                : 'bg-white border-[#DDE1EE] text-[#6B738A]'
+                : 'bg-white border-[#DDE1EE] text-[#475569]'
             }`}
           >
             {t('Catálogo')}
@@ -201,7 +201,7 @@ export default function AdminSpecialtiesPage() {
             className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
               tab === 'proposals'
                 ? 'bg-[#E6F1FB] border-[#185FA5] text-[#185FA5] font-medium'
-                : 'bg-white border-[#DDE1EE] text-[#6B738A]'
+                : 'bg-white border-[#DDE1EE] text-[#475569]'
             }`}
           >
             {t('Propuestas')}
@@ -259,7 +259,7 @@ export default function AdminSpecialtiesPage() {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => setExpandedId(isExpanded ? null : s.id)}
-                              className="text-[#6B738A] flex-shrink-0"
+                              className="text-[#475569] flex-shrink-0"
                               aria-label="Expandir"
                             >
                               {isExpanded ? '▾' : '▸'}
@@ -279,7 +279,7 @@ export default function AdminSpecialtiesPage() {
                                 }}
                               />
                             ) : (
-                              <span className={`flex-1 text-sm font-medium ${!s.is_active ? 'text-[#A0A8BF] line-through' : ''}`}>
+                              <span className={`flex-1 text-sm font-medium ${!s.is_active ? 'text-[#64748B] line-through' : ''}`}>
                                 {s.name}
                               </span>
                             )}
@@ -295,7 +295,7 @@ export default function AdminSpecialtiesPage() {
                                   {t('Guardar')}
                                 </button>
                                 <button
-                                  className="text-xs text-[#6B738A] flex-shrink-0"
+                                  className="text-xs text-[#475569] flex-shrink-0"
                                   onClick={() => setEditingSpecialty(null)}
                                 >
                                   {t('Cancelar')}
@@ -323,7 +323,7 @@ export default function AdminSpecialtiesPage() {
                           {isExpanded && (
                             <div className="ml-6 mt-2 space-y-1.5">
                               {s.sub_specialties.length === 0 && (
-                                <p className="text-xs text-[#A0A8BF]">{t('Sin subespecialidades todavía')}</p>
+                                <p className="text-xs text-[#64748B]">{t('Sin subespecialidades todavía')}</p>
                               )}
                               {s.sub_specialties.map((sub) => {
                                 const isEditingSub = editingSub?.id === sub.id
@@ -343,7 +343,7 @@ export default function AdminSpecialtiesPage() {
                                         }}
                                       />
                                     ) : (
-                                      <span className={`flex-1 text-xs ${!sub.is_active ? 'text-[#A0A8BF] line-through' : 'text-[#3C4257]'}`}>
+                                      <span className={`flex-1 text-xs ${!sub.is_active ? 'text-[#64748B] line-through' : 'text-[#3C4257]'}`}>
                                         {sub.name}
                                       </span>
                                     )}
@@ -359,7 +359,7 @@ export default function AdminSpecialtiesPage() {
                                           {t('Guardar')}
                                         </button>
                                         <button
-                                          className="text-xs text-[#6B738A] flex-shrink-0"
+                                          className="text-xs text-[#475569] flex-shrink-0"
                                           onClick={() => setEditingSub(null)}
                                         >
                                           {t('Cancelar')}
@@ -435,7 +435,7 @@ export default function AdminSpecialtiesPage() {
               className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
                 statusFilter === s
                   ? 'bg-[#E6F1FB] border-[#185FA5] text-[#185FA5] font-medium'
-                  : 'bg-white border-[#DDE1EE] text-[#6B738A]'
+                  : 'bg-white border-[#DDE1EE] text-[#475569]'
               }`}
             >
               {s === 'PENDING' ? 'Pendientes' : s === 'APPROVED' ? 'Aprobadas' : 'Rechazadas'}
@@ -464,18 +464,18 @@ export default function AdminSpecialtiesPage() {
                         <span className="text-sm font-medium">{p.proposed_name}</span>
                       </div>
                       {p.type === 'SUB_SPECIALTY' && (
-                        <p className="text-xs text-[#6B738A] mt-1">
+                        <p className="text-xs text-[#475569] mt-1">
                           de {p.parent_specialty_name || p.parent_proposal_name || 'especialidad sin determinar'}
                           {p.depends_on_pending_specialty && (
                             <span className="text-[#854F0B]"> {t('· depende de una propuesta aún pendiente')}</span>
                           )}
                         </p>
                       )}
-                      <p className="text-xs text-[#A0A8BF] mt-0.5">
+                      <p className="text-xs text-[#64748B] mt-0.5">
                         {new Date(p.created_at).toLocaleString('es-BO')}
                       </p>
                       {p.admin_note && (
-                        <p className="text-xs text-[#6B738A] mt-1 italic">Nota: {p.admin_note}</p>
+                        <p className="text-xs text-[#475569] mt-1 italic">Nota: {p.admin_note}</p>
                       )}
                     </div>
                     {p.status === 'PENDING' ? (
@@ -509,7 +509,7 @@ export default function AdminSpecialtiesPage() {
             </div>
             <h3 className="text-base font-semibold mb-1">{reviewing.proposed_name}</h3>
             {reviewing.type === 'SUB_SPECIALTY' && (
-              <p className="text-xs text-[#6B738A] mb-3">
+              <p className="text-xs text-[#475569] mb-3">
                 de {reviewing.parent_specialty_name || reviewing.parent_proposal_name || 'especialidad sin determinar'}
               </p>
             )}
@@ -531,7 +531,7 @@ export default function AdminSpecialtiesPage() {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">
+                <label className="block text-xs font-medium text-[#475569] mb-1">
                   {t('Nombre final (puedes corregirlo)')}
                 </label>
                 <input
@@ -542,7 +542,7 @@ export default function AdminSpecialtiesPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">
+                <label className="block text-xs font-medium text-[#475569] mb-1">
                   {t('Nota (opcional, visible para el profesional)')}
                 </label>
                 <textarea

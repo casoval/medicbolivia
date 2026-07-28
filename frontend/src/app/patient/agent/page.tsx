@@ -78,7 +78,7 @@ function AudioBubble({ audioBase64, isUser }: { audioBase64: string; isUser: boo
     btn: 'bg-[#185FA5]/20 hover:bg-[#185FA5]/30',
     bar: 'bg-[#DDE1EE]',
     fill: 'bg-[#185FA5]',
-    time: 'text-[#6B738A]',
+    time: 'text-[#475569]',
     wave: 'bg-[#185FA5]/40',
   }
   const c = isUser ? userColors : agentColors
@@ -360,7 +360,7 @@ export default function AgentPage() {
         <div className="hidden sm:flex items-center justify-between mb-4">
           <div>
             <h1 className="text-base font-semibold">{t('Agente de orientación médica')}</h1>
-            <p className="text-xs text-[#6B738A]">
+            <p className="text-xs text-[#475569]">
               Te guío para encontrar al especialista correcto ·{' '}
               <span className="text-[#A32D2D] font-medium">{t('No emite diagnósticos')}</span>
             </p>
@@ -457,7 +457,7 @@ export default function AgentPage() {
                   )}
                   {msg.timestamp && (
                     <p className={`text-[10px] mt-1 text-right ${
-                      msg.role === 'user' ? 'text-white/60' : 'text-[#A0A8BF]'
+                      msg.role === 'user' ? 'text-white/60' : 'text-[#64748B]'
                     }`}>
                       {formatMsgTime(msg.timestamp)}
                     </p>
@@ -469,7 +469,7 @@ export default function AgentPage() {
             {(isTyping || processingVoice) && (
               <div className="flex justify-start">
                 <div className="bg-white border border-[#DDE1EE] px-3.5 py-2.5 rounded-xl rounded-bl-sm flex gap-1 items-center">
-                  {processingVoice && <span className="text-xs text-[#6B738A] mr-1">{t('Procesando...')}</span>}
+                  {processingVoice && <span className="text-xs text-[#475569] mr-1">{t('Procesando...')}</span>}
                   <span className="w-1.5 h-1.5 bg-[#A0A8BF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                   <span className="w-1.5 h-1.5 bg-[#A0A8BF] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                   <span className="w-1.5 h-1.5 bg-[#A0A8BF] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -479,7 +479,7 @@ export default function AgentPage() {
 
             {availableProfessionals.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs text-[#6B738A] font-medium">{t('Profesionales encontrados:')}</p>
+                <p className="text-xs text-[#475569] font-medium">{t('Profesionales encontrados:')}</p>
                 {availableProfessionals.map((pro: Professional) => (
                   <ProfessionalCard
                     key={pro.id}
@@ -533,7 +533,7 @@ export default function AgentPage() {
             ) : (
               <>
                 <input
-                  className="flex-1 px-3.5 py-2 border border-[#DDE1EE] rounded-full text-sm bg-[#F5F6FA] focus:outline-none focus:border-[#185FA5] text-[#141820] placeholder-[#A0A8BF]"
+                  className="flex-1 px-3.5 py-2 border border-[#DDE1EE] rounded-full text-sm bg-[#F5F6FA] focus:outline-none focus:border-[#185FA5] text-[#141820] placeholder-[#64748B]"
                   placeholder={t('Escribe o mantén 🎤 para grabar...')}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}

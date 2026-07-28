@@ -142,7 +142,7 @@ export default function LoginPage() {
             {t('Tu atención médica,')}<br />{t('donde estés')}
           </h2>
           <p
-            className="text-sm text-[#6B738A] mb-8 max-w-xs animate-fade-up"
+            className="text-sm text-[#475569] mb-8 max-w-xs animate-fade-up"
             style={{ animationDelay: '220ms' }}
           >
             {t('Telemedicina con inteligencia artificial al servicio de la salud boliviana.')}
@@ -192,7 +192,7 @@ export default function LoginPage() {
           {/* Volver a la página principal — visible siempre, arriba de todo en esta columna */}
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-sm text-[#6B738A] hover:text-[#185FA5] mb-4 animate-fade-up"
+            className="inline-flex items-center gap-1.5 text-sm text-[#475569] hover:text-[#185FA5] mb-4 animate-fade-up"
           >
             <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4">
               <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -297,13 +297,13 @@ export default function LoginPage() {
             </form>
 
             <div className="mt-4 pt-4 border-t border-[#DDE1EE] text-center space-y-2">
-              <p className="text-sm text-[#6B738A]">
+              <p className="text-sm text-[#475569]">
                 {t('¿Eres paciente nuevo?')}{' '}
                 <Link href="/auth/register/patient" className="text-[#185FA5] font-medium hover:underline">
                   {t('Regístrate aquí')}
                 </Link>
               </p>
-              <p className="text-sm text-[#6B738A]">
+              <p className="text-sm text-[#475569]">
                 {t('¿Eres profesional de salud?')}{' '}
                 <Link href="/auth/register/professional" className="text-[#0F6E56] font-medium hover:underline">
                   {t('Únete a MedicBolivia')}
@@ -312,7 +312,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <p className="text-center text-xs text-[#A0A8BF] mt-4">
+          <p className="text-center text-xs text-[#64748B] mt-4">
             {t('Al ingresar aceptas nuestros Términos de Uso y Política de Privacidad')}
           </p>
         </div>

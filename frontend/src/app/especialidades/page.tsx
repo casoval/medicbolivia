@@ -57,7 +57,7 @@ export default function EspecialidadesPage() {
         <h1 className="text-3xl sm:text-4xl font-bold text-[#141820] text-center mb-4">
           Especialidades médicas online en Bolivia
         </h1>
-        <p className="text-[#6B738A] text-center max-w-2xl mx-auto mb-10">
+        <p className="text-[#475569] text-center max-w-2xl mx-auto mb-10">
           En MedicBolivia contás tus síntomas a nuestro agente de orientación
           con inteligencia artificial y te conecta, en minutos, con el médico
           o especialista verificado que corresponde — por videoconsulta,
@@ -76,7 +76,7 @@ export default function EspecialidadesPage() {
               </div>
               <div>
                 <p className="font-semibold text-[#141820]">{s.name}</p>
-                <p className="text-xs text-[#6B738A] mt-0.5 line-clamp-2">{s.description}</p>
+                <p className="text-xs text-[#475569] mt-0.5 line-clamp-2">{s.description}</p>
               </div>
             </Link>
           ))}
@@ -86,7 +86,7 @@ export default function EspecialidadesPage() {
           <h2 className="text-xl font-bold text-[#141820] mb-3">
             ¿Cómo funciona la consulta con especialistas en MedicBolivia?
           </h2>
-          <ol className="space-y-2 text-sm text-[#6B738A] list-decimal list-inside">
+          <ol className="space-y-2 text-sm text-[#475569] list-decimal list-inside">
             <li>Contale tus síntomas a Medi, nuestro agente de orientación con IA, por texto o por voz.</li>
             <li>Medi te deriva al médico general o al especialista verificado que corresponde a tu caso.</li>
             <li>Tenés tu videoconsulta médica desde el celular o la computadora, sin salir de tu casa.</li>

@@ -75,7 +75,7 @@ export function BroadcastTab() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[#6B738A]">
+      <p className="text-sm text-[#475569]">
         {t('Escribí un anuncio y elegí a quién llega. Se crea como notificación in-app y, si querés, también por WhatsApp — en ese caso los mensajes salen de a uno, con una espera aleatoria entre cada uno, para no verse como un envío automatizado.')}
       </p>
 
@@ -84,7 +84,7 @@ export function BroadcastTab() {
         {error && <Alert type="error" message={error} />}
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">{t('Título')}</label>
+          <label className="text-xs font-medium text-[#475569]">{t('Título')}</label>
           <input
             className="input mt-1"
             value={title}
@@ -95,18 +95,18 @@ export function BroadcastTab() {
         </div>
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">{t('Mensaje')}</label>
+          <label className="text-xs font-medium text-[#475569]">{t('Mensaje')}</label>
           <textarea
             className="input mt-1 min-h-[100px]"
             value={body}
             onChange={(e) => setBody(e.target.value.slice(0, BODY_MAX_LENGTH))}
             placeholder={t('Escribí el mensaje que van a recibir...')}
           />
-          <p className="text-[10px] text-[#6B738A] mt-1 text-right">{body.length}/{BODY_MAX_LENGTH}</p>
+          <p className="text-[10px] text-[#475569] mt-1 text-right">{body.length}/{BODY_MAX_LENGTH}</p>
         </div>
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">{t('Audiencia')}</label>
+          <label className="text-xs font-medium text-[#475569]">{t('Audiencia')}</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
             {AUDIENCE_OPTIONS.map((opt) => (
               <button
@@ -116,7 +116,7 @@ export function BroadcastTab() {
                 className={`text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
                   audience === opt.value
                     ? 'border-[#185FA5] bg-[#EAF2FB] text-[#141820]'
-                    : 'border-[#DDE1EE] text-[#6B738A] hover:border-[#B7C0D6]'
+                    : 'border-[#DDE1EE] text-[#475569] hover:border-[#B7C0D6]'
                 }`}
               >
                 <span className="font-medium block">{t(opt.label)}</span>
@@ -124,7 +124,7 @@ export function BroadcastTab() {
               </button>
             ))}
           </div>
-          <p className="text-xs text-[#6B738A] mt-2">
+          <p className="text-xs text-[#475569] mt-2">
             {previewLoading
               ? t('Calculando destinatarios...')
               : t('Destinatarios estimados:') + ' ' }
@@ -161,7 +161,7 @@ export function BroadcastTab() {
       </form>
 
       <div className="space-y-2">
-        <h3 className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide pt-2">{t('Historial de anuncios')}</h3>
+        <h3 className="text-xs font-semibold text-[#475569] uppercase tracking-wide pt-2">{t('Historial de anuncios')}</h3>
         {historyLoading ? (
           <LoadingScreen text={t('Cargando historial...')} />
         ) : history.length === 0 ? (
@@ -172,15 +172,15 @@ export function BroadcastTab() {
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className={AUDIENCE_BADGE[b.audience] || 'badge-gray'}>{AUDIENCE_LABEL[b.audience] || b.audience}</span>
                 {b.send_whatsapp && <span className="badge-blue">WhatsApp</span>}
-                <span className="text-[10px] text-[#6B738A]">
+                <span className="text-[10px] text-[#475569]">
                   · {b.recipients_count} {t('destinatario(s)')}
                 </span>
                 {b.created_at && (
-                  <span className="text-[10px] text-[#6B738A]">· {new Date(b.created_at).toLocaleString()}</span>
+                  <span className="text-[10px] text-[#475569]">· {new Date(b.created_at).toLocaleString()}</span>
                 )}
               </div>
               <p className="text-sm font-medium text-[#141820]">{b.title}</p>
-              <p className="text-xs text-[#6B738A] mt-1 whitespace-pre-wrap">{b.body}</p>
+              <p className="text-xs text-[#475569] mt-1 whitespace-pre-wrap">{b.body}</p>
             </div>
           ))
         )}

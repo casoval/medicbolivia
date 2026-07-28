@@ -93,7 +93,7 @@ function BlockPatientMenu({ patientId, patientName }: { patientId: string; patie
     <div className="relative" onClick={(e) => e.stopPropagation()}>
       <button
         onClick={() => setMenuOpen((o) => !o)}
-        className="p-1.5 text-[#6B738A] hover:bg-[#F5F6FA] rounded-lg"
+        className="p-1.5 text-[#475569] hover:bg-[#F5F6FA] rounded-lg"
         title="Opciones"
       >
         <IconDots />
@@ -126,7 +126,7 @@ function BlockPatientMenu({ patientId, patientName }: { patientId: string; patie
           <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div>
               <h3 className="text-sm font-semibold text-[#141820]">Bloquear a {patientName}</h3>
-              <p className="text-xs text-[#6B738A] mt-1">
+              <p className="text-xs text-[#475569] mt-1">
                 Esto bloqueará por completo tu relación con este paciente: no podrán chatear,
                 el paciente ya no te verá en sus búsquedas y no podrá agendar nuevas citas contigo.
                 Tu historial clínico con este paciente se conserva.
@@ -148,7 +148,7 @@ function BlockPatientMenu({ patientId, patientName }: { patientId: string; patie
             {reportChecked && (
               <div className="space-y-3 pl-6">
                 <div>
-                  <label className="text-xs text-[#6B738A] block mb-1">{t('Motivo')}</label>
+                  <label className="text-xs text-[#475569] block mb-1">{t('Motivo')}</label>
                   <select
                     value={reasonCategory}
                     onChange={(e) => setReasonCategory(e.target.value as ChatReasonCategory)}
@@ -160,7 +160,7 @@ function BlockPatientMenu({ patientId, patientName }: { patientId: string; patie
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-[#6B738A] block mb-1">Detalle (opcional)</label>
+                  <label className="text-xs text-[#475569] block mb-1">Detalle (opcional)</label>
                   <textarea
                     value={reasonText}
                     onChange={(e) => setReasonText(e.target.value)}
@@ -174,7 +174,7 @@ function BlockPatientMenu({ patientId, patientName }: { patientId: string; patie
             )}
 
             <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-[#6B738A] hover:bg-[#F5F6FA] rounded-lg">
+              <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-[#475569] hover:bg-[#F5F6FA] rounded-lg">
                 {t('Cancelar')}
               </button>
               <button
@@ -245,12 +245,12 @@ function PatientCard({ group, membershipActive, onSchedule }: {
               </span>
             )}
             {!isBlocked && group.linkWasRevoked && (
-              <span className="text-[10px] bg-[#F5F6FA] text-[#6B738A] px-2 py-0.5 rounded-full font-medium flex-shrink-0" title="El paciente se desvinculó: conservas su historial, pero ya no puedes agendarle directo.">
+              <span className="text-[10px] bg-[#F5F6FA] text-[#475569] px-2 py-0.5 rounded-full font-medium flex-shrink-0" title="El paciente se desvinculó: conservas su historial, pero ya no puedes agendarle directo.">
                 🔗 Se desvinculó
               </span>
             )}
           </div>
-          <p className={`text-xs ${isBlocked ? 'text-[#A0A5B5]' : 'text-[#6B738A]'}`}>
+          <p className={`text-xs ${isBlocked ? 'text-[#A0A5B5]' : 'text-[#475569]'}`}>
             {group.total} consulta{group.total > 1 ? 's' : ''} · {group.completed} completada{group.completed !== 1 ? 's' : ''} · última {fmtFechaHora(group.lastAt)}
           </p>
         </div>
@@ -278,7 +278,7 @@ function PatientCard({ group, membershipActive, onSchedule }: {
           )}
           {/* Historial de consultas */}
           <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">
+            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">
               🗓️ Consultas ({sortedConsultations.length})
             </p>
             <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
@@ -286,7 +286,7 @@ function PatientCard({ group, membershipActive, onSchedule }: {
                 <div key={c.id} className="flex items-center gap-2 bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{c.specialty || 'Consulta general'}</p>
-                    <p className="text-[11px] text-[#6B738A]">
+                    <p className="text-[11px] text-[#475569]">
                       {c.scheduled_at ? fmtFechaHoraLocal(c.scheduled_at) : fmtFechaHora(c.created_at)} · Bs. {parseFloat(c.professional_earning ?? c.amount ?? 0).toFixed(2)}
                     </p>
                   </div>
@@ -301,7 +301,7 @@ function PatientCard({ group, membershipActive, onSchedule }: {
 
           {/* Recetas + historias clínicas mías, y compartidas si está activo */}
           <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">
+            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">
               {t('🗂️ Historial clínico')}
             </p>
             <PatientRecordSummary patientId={group.patientId} showSharedFromOthers={group.isActive} />
@@ -362,7 +362,7 @@ export default function ProfessionalPatientsPage() {
       <div className="max-w-2xl">
         <div className="mb-4">
           <h1 className="text-lg font-semibold text-[#141820]">{t('Mis pacientes')}</h1>
-          <p className="text-sm text-[#6B738A] mt-0.5">
+          <p className="text-sm text-[#475569] mt-0.5">
             {allPatients.length} paciente{allPatients.length !== 1 ? 's' : ''}
             {activeCount > 0 ? ` · ${activeCount} activo${activeCount > 1 ? 's' : ''} ahora` : ''}
           </p>
@@ -387,7 +387,7 @@ export default function ProfessionalPatientsPage() {
         )}
 
         <div className="relative mb-4">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A0A8BF]"><IconSearch /></span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]"><IconSearch /></span>
           <input
             type="text"
             value={search}

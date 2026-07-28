@@ -16,7 +16,7 @@ export function LoadingScreen({ text = 'Cargando...' }: { text?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 gap-3">
       <Spinner size="md" />
-      <p className="text-sm text-[#6B738A]">{text}</p>
+      <p className="text-sm text-[#475569]">{text}</p>
     </div>
   )
 }
@@ -30,7 +30,7 @@ export function EmptyState({ title, description, action }: {
   return (
     <div className="text-center py-10">
       <p className="text-sm font-medium text-[#141820]">{title}</p>
-      {description && <p className="text-xs text-[#6B738A] mt-1">{description}</p>}
+      {description && <p className="text-xs text-[#475569] mt-1">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   )

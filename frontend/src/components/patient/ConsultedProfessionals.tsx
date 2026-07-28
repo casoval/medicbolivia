@@ -202,13 +202,13 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
               <button
                 onClick={(e) => { e.stopPropagation(); linkMutation.mutate() }}
                 disabled={linkMutation.isPending}
-                className="text-[10px] border border-[#DDE1EE] text-[#6B738A] hover:border-[#185FA5] hover:text-[#185FA5] px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+                className="text-[10px] border border-[#DDE1EE] text-[#475569] hover:border-[#185FA5] hover:text-[#185FA5] px-2 py-0.5 rounded-full font-medium flex-shrink-0"
               >
                 {linkMutation.isPending ? '...' : 'Vincularme'}
               </button>
             ) : null}
           </div>
-          <p className="text-xs text-[#6B738A]">
+          <p className="text-xs text-[#475569]">
             {group.specialty ? `${group.specialty} · ` : ''}
             {group.total} consulta{group.total > 1 ? 's' : ''} · {group.completed} completada{group.completed !== 1 ? 's' : ''} · última {fmtFechaHora(group.lastAt)}
           </p>
@@ -221,7 +221,7 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
         <div className="bg-[#FAFBFC] border-t border-[#DDE1EE] px-4 py-4 space-y-5">
           {/* Historial de consultas */}
           <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">
+            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">
               🗓️ Consultas ({sortedConsultations.length})
             </p>
             <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
@@ -229,7 +229,7 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
                 <div key={c.id} className="flex items-center gap-2 bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{c.specialty || 'Consulta general'}</p>
-                    <p className="text-[11px] text-[#6B738A]">
+                    <p className="text-[11px] text-[#475569]">
                       {c.scheduled_at ? fmtFechaHoraLocal(c.scheduled_at) : fmtFechaHora(c.created_at)} · Bs. {parseFloat(c.amount ?? 0).toFixed(2)}
                     </p>
                   </div>
@@ -244,7 +244,7 @@ function ProfessionalCard({ group }: { group: ProfessionalGroup }) {
 
           {/* Recetas + historias clínicas que tengo con este profesional */}
           <div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">
+            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">
               {t('🗂️ Mi historial con este médico')}
             </p>
             <ProfessionalRecordSummary prescriptions={group.prescriptions} notes={group.notes} />
@@ -291,14 +291,14 @@ export function ConsultedProfessionals() {
   return (
     <div>
       <div className="mb-4">
-        <p className="text-sm text-[#6B738A]">
+        <p className="text-sm text-[#475569]">
           {allProfessionals.length} médico{allProfessionals.length !== 1 ? 's' : ''}
           {activeCount > 0 ? ` · ${activeCount} con cita pendiente` : ''}
         </p>
       </div>
 
       <div className="relative mb-4">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A0A8BF]"><IconSearch2 /></span>
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]"><IconSearch2 /></span>
         <input
           type="text"
           value={search}

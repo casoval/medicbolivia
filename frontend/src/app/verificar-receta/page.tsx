@@ -80,7 +80,7 @@ function VerifyForm() {
           🔍
         </div>
         <h1 className="text-xl font-bold text-[#141820]">Verificar receta médica</h1>
-        <p className="text-sm text-[#6B738A] mt-1">
+        <p className="text-sm text-[#475569] mt-1">
           Escaneá el código QR de la receta o ingresá el código manualmente para confirmar
           que fue emitida por un profesional verificado en MedicBolivia.
         </p>
@@ -140,40 +140,40 @@ function VerifyForm() {
 
           <div className="bg-white rounded-lg p-4 space-y-3 text-sm">
             <div>
-              <p className="text-[10px] uppercase text-[#6B738A] font-medium">Paciente</p>
+              <p className="text-[10px] uppercase text-[#475569] font-medium">Paciente</p>
               <p className="text-[#141820]">{result.patient_name} · CI {result.patient_ci} · {result.patient_age} años</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase text-[#6B738A] font-medium">Emitida por</p>
+              <p className="text-[10px] uppercase text-[#475569] font-medium">Emitida por</p>
               <p className="text-[#141820]">
                 {result.professional_name} — {result.professional_specialty}
                 {result.cmb_matricula ? ` (Mat. CMB ${result.cmb_matricula})` : ''}
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase text-[#6B738A] font-medium">Fecha de emisión</p>
+              <p className="text-[10px] uppercase text-[#475569] font-medium">Fecha de emisión</p>
               <p className="text-[#141820]">{result.signed_at && fmtFechaHora(result.signed_at)}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase text-[#6B738A] font-medium">Medicamentos</p>
+              <p className="text-[10px] uppercase text-[#475569] font-medium">Medicamentos</p>
               <ul className="mt-1 space-y-1.5">
                 {(result.medications ?? []).map((m, i) => (
                   <li key={i} className="text-[#141820]">
                     <span className="font-medium">{m.name}</span>
                     {m.presentation ? ` (${m.presentation})` : ''} — {m.dosage}, {m.frequency}, {m.duration}
-                    {m.notes ? <span className="text-[#6B738A]"> · {m.notes}</span> : null}
+                    {m.notes ? <span className="text-[#475569]"> · {m.notes}</span> : null}
                   </li>
                 ))}
               </ul>
             </div>
             {result.instructions && (
               <div>
-                <p className="text-[10px] uppercase text-[#6B738A] font-medium">Indicaciones</p>
+                <p className="text-[10px] uppercase text-[#475569] font-medium">Indicaciones</p>
                 <p className="text-[#141820] whitespace-pre-wrap">{result.instructions}</p>
               </div>
             )}
             <div className="pt-2 border-t border-[#ECEEF5]">
-              <p className="text-[10px] text-[#6B738A] font-mono break-all">
+              <p className="text-[10px] text-[#475569] font-mono break-all">
                 Código: {result.qr_code} · Hash: {result.digital_hash?.slice(0, 16)}…
               </p>
             </div>
@@ -193,7 +193,7 @@ function VerifyForm() {
 export default function VerifyPrescriptionPage() {
   return (
     <div className="min-h-screen bg-[#F5F6FA] px-4 py-10">
-      <Suspense fallback={<div className="text-center text-sm text-[#6B738A]">Cargando...</div>}>
+      <Suspense fallback={<div className="text-center text-sm text-[#475569]">Cargando...</div>}>
         <VerifyForm />
       </Suspense>
     </div>

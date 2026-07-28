@@ -73,7 +73,7 @@ function ScheduledAcceptDeadlineTimer({ createdAt, scheduledAt }: { createdAt: s
 
   if (secs <= 0) {
     return (
-      <span className="text-xs text-[#A0A8BF] flex-shrink-0">
+      <span className="text-xs text-[#64748B] flex-shrink-0">
         {limitedByAppointment ? 'Cita muy próxima — ya no se puede responder' : 'Plazo vencido'}
       </span>
     )
@@ -174,23 +174,23 @@ function PrescriptionModal({ consultationId, onClose }: { consultationId: string
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">{t('Recetas de esta consulta')}</h3>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando recetas...')}</p>}
+        {isLoading && <p className="text-sm text-[#475569] text-center py-6">{t('Cargando recetas...')}</p>}
         {data && data.length === 0 && (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">💊</p>
-            <p className="text-sm text-[#6B738A]">{t('No hay recetas para esta consulta')}</p>
+            <p className="text-sm text-[#475569]">{t('No hay recetas para esta consulta')}</p>
           </div>
         )}
         {data && data.map((rx: any) => (
           <div key={rx.id} className="border border-[#DDE1EE] rounded-xl p-4 mb-3">
             <div className="border-b border-[#DDE1EE] pb-3 mb-3">
-              <p className="text-xs text-[#6B738A]">{t('Paciente')}</p>
+              <p className="text-xs text-[#475569]">{t('Paciente')}</p>
               <p className="font-semibold text-sm">{rx.patient_name || 'Paciente'}</p>
-              {rx.patient_age != null && <p className="text-xs text-[#6B738A]">{rx.patient_age} años{rx.patient_ci ? ` · CI ${rx.patient_ci}` : ''}</p>}
+              {rx.patient_age != null && <p className="text-xs text-[#475569]">{rx.patient_age} años{rx.patient_ci ? ` · CI ${rx.patient_ci}` : ''}</p>}
             </div>
-            <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Medicamentos')}</p>
+            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Medicamentos')}</p>
             <div className="space-y-2 mb-3">
               {rx.medications?.map((m: any, i: number) => (
                 <div key={i} className="bg-[#F5F6FA] rounded-lg p-2">
@@ -236,7 +236,7 @@ function ClinicalNoteModal({ consultationId, onClose }: { consultationId: string
   const field = (label: string, value?: string | null) =>
     value ? (
       <div className="bg-[#F5F6FA] rounded-xl p-3 mb-3">
-        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-1">{label}</p>
+        <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-1">{label}</p>
         <p className="text-sm whitespace-pre-wrap">{value}</p>
       </div>
     ) : null
@@ -245,20 +245,20 @@ function ClinicalNoteModal({ consultationId, onClose }: { consultationId: string
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">{t('Historia clínica de esta consulta')}</h3>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando historia clínica...')}</p>}
+        {isLoading && <p className="text-sm text-[#475569] text-center py-6">{t('Cargando historia clínica...')}</p>}
         {!isLoading && !note && (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">📋</p>
-            <p className="text-sm text-[#6B738A]">{t('Aún no registraste historia clínica para esta consulta')}</p>
+            <p className="text-sm text-[#475569]">{t('Aún no registraste historia clínica para esta consulta')}</p>
           </div>
         )}
         {note && (
           <>
             {note.patient_name && (
               <div className="border-b border-[#DDE1EE] pb-3 mb-3">
-                <p className="text-xs text-[#6B738A]">{t('Paciente')}</p>
+                <p className="text-xs text-[#475569]">{t('Paciente')}</p>
                 <p className="font-semibold text-sm">{note.patient_name}</p>
               </div>
             )}
@@ -267,7 +267,7 @@ function ClinicalNoteModal({ consultationId, onClose }: { consultationId: string
             {field('Diagnóstico (Evaluación)', note.assessment)}
             {field('Plan / Indicaciones', note.plan)}
             {!note.subjective && !note.objective && !note.assessment && !note.plan && (
-              <p className="text-sm text-[#6B738A] text-center py-4">{t('Aún no completaste el detalle.')}</p>
+              <p className="text-sm text-[#475569] text-center py-4">{t('Aún no completaste el detalle.')}</p>
             )}
           </>
         )}
@@ -302,9 +302,9 @@ function PatientHistoryModal({
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-base font-semibold">🗂️ Historial de {patientName}</h3>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#1C2133]"><IconClose /></button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#1C2133]"><IconClose /></button>
         </div>
-        <p className="text-xs text-[#6B738A] mb-4">{t('Antecedentes para revisar antes de atender.')}</p>
+        <p className="text-xs text-[#475569] mb-4">{t('Antecedentes para revisar antes de atender.')}</p>
 
         <PatientRecordSummary patientId={patientId} showSharedFromOthers={showSharedFromOthers} />
 
@@ -514,7 +514,7 @@ export default function ProfessionalDashboard() {
           <h1 className="text-lg font-semibold text-[#141820]">
             {getGreeting()}{user?.first_name ? `, Dr. ${user.first_name}` : ''} 👋
           </h1>
-          <p className="text-sm text-[#6B738A] mt-0.5">
+          <p className="text-sm text-[#475569] mt-0.5">
             {t('Vista general de tu actividad, citas y consultas del día')}
           </p>
         </div>
@@ -524,7 +524,7 @@ export default function ProfessionalDashboard() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <p className="text-sm font-semibold">{t('Tu disponibilidad ahora')}</p>
-              <p className="text-xs text-[#6B738A] mt-0.5">
+              <p className="text-xs text-[#475569] mt-0.5">
                 {autoAvailability
                   ? 'Modo automático: se calcula según tu horario semanal'
                   : 'El agente IA te asignará pacientes cuando estés disponible'}
@@ -537,7 +537,7 @@ export default function ProfessionalDashboard() {
                 className={`text-xs py-1.5 px-3 rounded-lg border transition-colors ${
                   autoAvailability
                     ? 'bg-[#E6F1FB] border-[#185FA5] text-[#185FA5] font-medium'
-                    : 'bg-white border-[#DDE1EE] text-[#6B738A]'
+                    : 'bg-white border-[#DDE1EE] text-[#475569]'
                 }`}
               >
                 {autoAvailability ? '✓ Automático' : 'Automático'}
@@ -559,7 +559,7 @@ export default function ProfessionalDashboard() {
             </div>
           </div>
           {autoAvailability && (
-            <p className="text-xs text-[#A0A8BF] mt-2">
+            <p className="text-xs text-[#64748B] mt-2">
               {t('Define tus bloques en')} <a href="/professional/schedule" className="text-[#185FA5] hover:underline">{t('Horarios')}</a> {t('para que el modo automático funcione bien.')}
             </p>
           )}
@@ -570,21 +570,21 @@ export default function ProfessionalDashboard() {
         <div className="grid grid-cols-4 gap-3 mb-5">
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#185FA5]">{consultations.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Total')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Total')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#854F0B]">{incoming.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Pendientes')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Pendientes')}</p>
           </div>
           <div className="bg-[#F5F6FA] rounded-lg p-3 text-center">
             <p className="text-xl font-bold text-[#0F6E56]">{completed.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Completadas')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Completadas')}</p>
           </div>
           <a href="/professional/ratings" className="bg-[#F5F6FA] rounded-lg p-3 text-center hover:bg-[#EEF0F7] transition-colors">
             <p className="text-xl font-bold text-[#F5A623]">
               {(ratingsData?.average ?? 0) > 0 ? ratingsData!.average.toFixed(1) : '—'}
             </p>
-            <p className="text-xs text-[#6B738A] mt-0.5">
+            <p className="text-xs text-[#475569] mt-0.5">
               ★ {(ratingsData?.total ?? 0) > 0 ? `${ratingsData!.total} opiniones` : 'Sin calificaciones'}
             </p>
           </a>
@@ -601,7 +601,7 @@ export default function ProfessionalDashboard() {
             </span>
             <div>
               <p className="text-xs font-semibold text-[#141820]">{t('Calendario de citas agendadas')}</p>
-              <p className="text-[11px] text-[#6B738A]">{t('Mira tu agenda por día, semana o mes')}</p>
+              <p className="text-[11px] text-[#475569]">{t('Mira tu agenda por día, semana o mes')}</p>
             </div>
           </div>
           <span className="text-[#185FA5] text-xs font-medium">{t('Abrir →')}</span>
@@ -622,7 +622,7 @@ export default function ProfessionalDashboard() {
                   <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#FCEBEB] text-[#E24B4A]" />
                   <div className="flex-1">
                     <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
-                    <p className="text-xs text-[#6B738A]">
+                    <p className="text-xs text-[#475569]">
                       {c.specialty || 'Consulta general'} · Bs. {parseFloat(c.amount).toFixed(2)} · {new Date(c.created_at).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
@@ -642,7 +642,7 @@ export default function ProfessionalDashboard() {
                   <button
                     onClick={() => rejectMutation.mutate(c.id)}
                     disabled={rejectMutation.isPending}
-                    className="py-2 px-4 bg-[#F5F6FA] hover:bg-[#DDE1EE] text-[#6B738A] text-xs font-medium rounded-lg transition-colors"
+                    className="py-2 px-4 bg-[#F5F6FA] hover:bg-[#DDE1EE] text-[#475569] text-xs font-medium rounded-lg transition-colors"
                   >
                     {t('Rechazar')}
                   </button>
@@ -667,7 +667,7 @@ export default function ProfessionalDashboard() {
                   <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#E6F1FB] text-[#185FA5]" />
                   <div className="flex-1">
                     <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
-                    <p className="text-xs text-[#6B738A]">
+                    <p className="text-xs text-[#475569]">
                       {c.specialty || 'Consulta general'} · Bs. {parseFloat(c.amount).toFixed(2)}
                     </p>
                     {c.scheduled_at && (
@@ -682,7 +682,7 @@ export default function ProfessionalDashboard() {
                 </div>
                 {c.chief_complaint && (
                   <div className="ml-12 mt-2 bg-[#F5F6FA] rounded-lg px-3 py-2">
-                    <p className="text-xs text-[#A0A8BF] mb-0.5">{t('Motivo de la consulta')}</p>
+                    <p className="text-xs text-[#64748B] mb-0.5">{t('Motivo de la consulta')}</p>
                     <p className="text-xs text-[#141820]">{c.chief_complaint}</p>
                   </div>
                 )}
@@ -697,7 +697,7 @@ export default function ProfessionalDashboard() {
                   <button
                     onClick={() => rejectMutation.mutate(c.id)}
                     disabled={rejectMutation.isPending}
-                    className="py-2 px-4 bg-[#F5F6FA] hover:bg-[#DDE1EE] text-[#6B738A] text-xs font-medium rounded-lg transition-colors"
+                    className="py-2 px-4 bg-[#F5F6FA] hover:bg-[#DDE1EE] text-[#475569] text-xs font-medium rounded-lg transition-colors"
                   >
                     {t('Rechazar')}
                   </button>
@@ -769,7 +769,7 @@ export default function ProfessionalDashboard() {
                     <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#E6F1FB] text-[#185FA5]" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
-                      <p className="text-xs text-[#6B738A]">
+                      <p className="text-xs text-[#475569]">
                         {c.specialty || 'Consulta general'} · Bs. {parseFloat(c.amount).toFixed(2)} · Pagó a las {new Date(paidAt).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                       <button
@@ -815,7 +815,7 @@ export default function ProfessionalDashboard() {
                     <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#E6F1FB] text-[#185FA5]" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
-                      <p className="text-xs text-[#6B738A]">
+                      <p className="text-xs text-[#475569]">
                         {c.specialty || 'Consulta general'} · Bs. {parseFloat(c.amount).toFixed(2)}
                       </p>
                       {scheduledAt && (
@@ -831,7 +831,7 @@ export default function ProfessionalDashboard() {
                       if (!canStart) {
                         return (
                           <div className="flex-shrink-0 text-right">
-                            <p className="text-[10px] text-[#A0A8BF] mb-0.5">{t('Inicia en')}</p>
+                            <p className="text-[10px] text-[#64748B] mb-0.5">{t('Inicia en')}</p>
                             <p className="text-xs font-mono font-semibold text-[#185FA5]">{label}</p>
                           </div>
                         )
@@ -887,7 +887,7 @@ export default function ProfessionalDashboard() {
                         </button>
                         <button
                           onClick={() => respondRescheduleMutation.mutate({ id: c.id, decision: 'REJECT' })}
-                          className="text-xs bg-white border border-[#DDE1EE] text-[#6B738A] px-3 py-1 rounded-lg"
+                          className="text-xs bg-white border border-[#DDE1EE] text-[#475569] px-3 py-1 rounded-lg"
                         >
                           {t('Rechazar')}
                         </button>
@@ -896,7 +896,7 @@ export default function ProfessionalDashboard() {
                   )}
 
                   {hasOwnPendingProposal && (
-                    <p className="ml-12 mt-2 text-xs text-[#A0A8BF]">
+                    <p className="ml-12 mt-2 text-xs text-[#64748B]">
                       {t('Propusiste cambiar el horario — esperando respuesta del paciente.')}
                     </p>
                   )}
@@ -918,7 +918,7 @@ export default function ProfessionalDashboard() {
                             >
                               {t('Enviar propuesta')}
                             </button>
-                            <button onClick={() => setReschedulingId(null)} className="text-xs text-[#6B738A]">
+                            <button onClick={() => setReschedulingId(null)} className="text-xs text-[#475569]">
                               {t('Cancelar')}
                             </button>
                           </div>
@@ -969,7 +969,7 @@ export default function ProfessionalDashboard() {
                 <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-9 h-9" colorClasses="bg-[#E1F5EE] text-[#0F6E56]" />
                 <div className="flex-1">
                   <p className="text-sm font-medium">{patientNameOf(c) || 'Paciente'}</p>
-                  <p className="text-xs text-[#6B738A]">
+                  <p className="text-xs text-[#475569]">
                     {c.specialty || 'Consulta general'} · Iniciada {new Date(c.started_at || c.created_at).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                   <button
@@ -1001,7 +1001,7 @@ export default function ProfessionalDashboard() {
         <div className="card">
           <h2 className="text-sm font-semibold mb-3">{t('Consultas recientes')}</h2>
           {consultations.length === 0 ? (
-            <p className="text-sm text-[#6B738A] text-center py-4">{t('Aún no tienes consultas')}</p>
+            <p className="text-sm text-[#475569] text-center py-4">{t('Aún no tienes consultas')}</p>
           ) : (
             <div className="divide-y divide-[#DDE1EE]">
               {consultations.slice(0, 5).map((c: any) => {
@@ -1010,26 +1010,26 @@ export default function ProfessionalDashboard() {
                 const wasRefunded = wasActuallyRefunded(c)
                 return (
                   <div key={c.id} className="py-2.5 flex items-start gap-3">
-                    <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-8 h-8" colorClasses="bg-[#F5F6FA] text-[#6B738A]" />
+                    <PatientAvatar firstName={c.patient_first_name} lastName={c.patient_last_name} photoUrl={c.patient_photo_url} size="w-8 h-8" colorClasses="bg-[#F5F6FA] text-[#475569]" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{patientNameOf(c) || c.specialty || 'Consulta'}</p>
-                      <p className="text-xs text-[#6B738A] truncate">
+                      <p className="text-xs text-[#475569] truncate">
                         {c.specialty ? `${c.specialty} · ` : ''}
                         {new Date(c.created_at + (c.created_at?.endsWith('Z') ? '' : 'Z')).toLocaleDateString('es-BO', { timeZone: 'America/La_Paz' })} · Bs. {parseFloat(c.professional_earning).toFixed(2)}
                       </p>
                       {isCancelled && (
                         <>
-                          <p className="text-xs text-[#6B738A] mt-0.5 truncate">
+                          <p className="text-xs text-[#475569] mt-0.5 truncate">
                             {outcomeLabel(c, 'PROFESSIONAL')}
                           </p>
                           <div className="flex items-center gap-1.5 flex-wrap mt-1">
                             {who && (
-                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#6B738A]">
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#475569]">
                                 {who}
                               </span>
                             )}
                             {c.updated_at && (
-                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#6B738A]">
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#475569]">
                                 {fmtFechaHora(c.updated_at)}
                               </span>
                             )}
@@ -1110,11 +1110,11 @@ export default function ProfessionalDashboard() {
             <h3 className="text-base font-semibold text-center text-[#1C2340] mb-1">
               {t('¿Cancelar esta cita?')}
             </h3>
-            <p className="text-xs text-center text-[#6B738A] mb-1">
+            <p className="text-xs text-center text-[#475569] mb-1">
               {t('Paciente:')} <span className="font-medium text-[#3C4257]">{cancelTarget.patientName}</span>
             </p>
             {cancelTarget.scheduledAt && (
-              <p className="text-xs text-center text-[#6B738A] mb-4">
+              <p className="text-xs text-center text-[#475569] mb-4">
                 {t('Fecha:')} <span className="font-medium text-[#3C4257]">
                   {cancelTarget.scheduledAt.toLocaleString('es-BO', {
                     weekday: 'short', day: 'numeric', month: 'short',
@@ -1134,7 +1134,7 @@ export default function ProfessionalDashboard() {
             <div className="flex gap-3">
               <button
                 onClick={() => setCancelTarget(null)}
-                className="flex-1 py-2.5 rounded-xl border border-[#DDE1EE] text-sm text-[#6B738A] hover:bg-[#F5F6FA] transition-colors"
+                className="flex-1 py-2.5 rounded-xl border border-[#DDE1EE] text-sm text-[#475569] hover:bg-[#F5F6FA] transition-colors"
               >
                 {t('Volver')}
               </button>

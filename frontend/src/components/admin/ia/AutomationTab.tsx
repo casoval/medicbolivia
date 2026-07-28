@@ -87,7 +87,7 @@ export function AutomationTab() {
     <div className="space-y-4">
       <div className="card p-4">
         <SectionTitle>{t('Backups automáticos a Gmail')}</SectionTitle>
-        <p className="text-xs text-[#6B738A] mb-3">
+        <p className="text-xs text-[#475569] mb-3">
           Genera un dump comprimido de la base de datos y lo manda por correo con la frecuencia que definas acá.
           Si el dump supera el límite de adjunto de Gmail (~20MB), se sube automáticamente a almacenamiento
           privado y el correo lleva un link de descarga en vez del archivo.
@@ -100,7 +100,7 @@ export function AutomationTab() {
         <div className="flex items-center justify-between py-3 border-b border-[#DDE1EE]">
           <div>
             <p className="text-sm font-medium">{t('Backups activos')}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Si está apagado, no se manda nada automáticamente')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Si está apagado, no se manda nada automáticamente')}</p>
           </div>
           <Toggle
             on={localConfig.is_active}
@@ -110,7 +110,7 @@ export function AutomationTab() {
 
         <div className="grid grid-cols-2 gap-3 py-3 border-b border-[#DDE1EE]">
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">{t('Frecuencia')}</label>
+            <label className="text-xs font-medium text-[#475569]">{t('Frecuencia')}</label>
             <select
               className="input mt-1"
               value={localConfig.frequency}
@@ -121,18 +121,18 @@ export function AutomationTab() {
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">{t('Hora (UTC)')}</label>
+            <label className="text-xs font-medium text-[#475569]">{t('Hora (UTC)')}</label>
             <input
               type="number" min={0} max={23} className="input mt-1"
               value={localConfig.hour_utc}
               onChange={(e) => setLocalConfig({ ...localConfig, hour_utc: Number(e.target.value) })}
             />
-            <p className="text-[10px] text-[#6B738A] mt-1">{utcHourToLocalLabel(localConfig.hour_utc)}</p>
+            <p className="text-[10px] text-[#475569] mt-1">{utcHourToLocalLabel(localConfig.hour_utc)}</p>
           </div>
         </div>
 
         <div className="py-3">
-          <label className="text-xs font-medium text-[#6B738A]">{t('Correos destinatarios')}</label>
+          <label className="text-xs font-medium text-[#475569]">{t('Correos destinatarios')}</label>
           <div className="flex gap-2 mt-1">
             <input
               className="input flex-1" type="email" placeholder={t('tu-correo@gmail.com')}
@@ -149,7 +149,7 @@ export function AutomationTab() {
                 <button onClick={() => removeEmail(email)} className="text-[#185FA5] hover:text-[#A32D2D]">×</button>
               </span>
             ))}
-            {localConfig.recipient_emails.length === 0 && <p className="text-xs text-[#6B738A]">{t('Sin destinatarios todavía')}</p>}
+            {localConfig.recipient_emails.length === 0 && <p className="text-xs text-[#475569]">{t('Sin destinatarios todavía')}</p>}
           </div>
         </div>
 
@@ -180,9 +180,9 @@ export function AutomationTab() {
                       Link R2
                     </span>
                   )}
-                  <span className="ml-2 text-[#6B738A]">{new Date(log.created_at).toLocaleString('es-BO')}</span>
+                  <span className="ml-2 text-[#475569]">{new Date(log.created_at).toLocaleString('es-BO')}</span>
                 </div>
-                <div className="text-[#6B738A] text-right">
+                <div className="text-[#475569] text-right">
                   {log.file_size_bytes && <span>{(log.file_size_bytes / 1024 / 1024).toFixed(1)} MB · </span>}
                   {log.error_detail ? <span className="text-[#A32D2D]">{log.error_detail}</span> : <span>{log.recipients.join(', ')}</span>}
                 </div>

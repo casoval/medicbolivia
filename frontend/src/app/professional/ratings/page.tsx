@@ -34,7 +34,7 @@ export default function RatingsPage() {
       <div className="max-w-3xl">
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Mis calificaciones')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">{t('Lo que los pacientes piensan de tu atención')}</p>
+          <p className="text-xs text-[#475569] mt-0.5">{t('Lo que los pacientes piensan de tu atención')}</p>
         </div>
 
         {isLoading ? (
@@ -43,7 +43,7 @@ export default function RatingsPage() {
           <div className="card text-center py-8">
             <p className="text-2xl mb-2">⚠️</p>
             <p className="text-sm text-[#E24B4A]">{t('Error al cargar calificaciones')}</p>
-            <p className="text-xs text-[#6B738A] mt-1">{t('Intenta recargar la página')}</p>
+            <p className="text-xs text-[#475569] mt-1">{t('Intenta recargar la página')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -62,7 +62,7 @@ export default function RatingsPage() {
                     <div className="text-center">
                       <p className="text-4xl font-bold text-[#141820]">{average.toFixed(1)}</p>
                       <Stars score={Math.round(average)} size="lg" />
-                      <p className="text-xs text-[#6B738A] mt-1">
+                      <p className="text-xs text-[#475569] mt-1">
                         {total} {total === 1 ? 'calificación' : 'calificaciones'}
                       </p>
                     </div>
@@ -71,14 +71,14 @@ export default function RatingsPage() {
                         const pct = total > 0 ? Math.round((count / total) * 100) : 0
                         return (
                           <div key={star} className="flex items-center gap-2">
-                            <span className="text-xs text-[#6B738A] w-4">{star}</span>
+                            <span className="text-xs text-[#475569] w-4">{star}</span>
                             <div className="flex-1 h-1.5 bg-[#F5F6FA] rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-[#EF9F27] rounded-full transition-all"
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
-                            <span className="text-xs text-[#A0A8BF] w-5 text-right">{count}</span>
+                            <span className="text-xs text-[#64748B] w-5 text-right">{count}</span>
                           </div>
                         )
                       })}
@@ -87,11 +87,11 @@ export default function RatingsPage() {
                   <div className="grid grid-cols-2 gap-2 pt-3 border-t border-[#DDE1EE]">
                     <div className="bg-[#F5F6FA] rounded-lg p-2.5 text-center">
                       <p className="text-sm font-bold text-[#0F6E56]">{recommendPct}%</p>
-                      <p className="text-xs text-[#6B738A]">{t('recomendarían')}</p>
+                      <p className="text-xs text-[#475569]">{t('recomendarían')}</p>
                     </div>
                     <div className="bg-[#F5F6FA] rounded-lg p-2.5 text-center">
                       <p className="text-sm font-bold text-[#185FA5]">{average.toFixed(1)}</p>
-                      <p className="text-xs text-[#6B738A]">{t('promedio general')}</p>
+                      <p className="text-xs text-[#475569]">{t('promedio general')}</p>
                     </div>
                   </div>
                 </>
@@ -116,7 +116,7 @@ export default function RatingsPage() {
                         </p>
                         <div className="flex items-center gap-1.5">
                           <Stars score={Math.round(r.score)} size="sm" />
-                          <span className="text-xs text-[#A0A8BF]">
+                          <span className="text-xs text-[#64748B]">
                             {new Date(r.created_at).toLocaleDateString('es-BO', {
                               day: 'numeric', month: 'short', year: 'numeric'
                             })}
@@ -124,12 +124,12 @@ export default function RatingsPage() {
                         </div>
                       </div>
                       {r.comment && (
-                        <p className="text-xs text-[#6B738A] leading-relaxed">"{r.comment}"</p>
+                        <p className="text-xs text-[#475569] leading-relaxed">"{r.comment}"</p>
                       )}
                     </div>
                   ))}
                   {ratings.length > 8 && (
-                    <p className="text-xs text-center text-[#6B738A] pt-1">
+                    <p className="text-xs text-center text-[#475569] pt-1">
                       +{ratings.length - 8} calificaciones más
                     </p>
                   )}

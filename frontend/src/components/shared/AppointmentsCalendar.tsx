@@ -46,14 +46,14 @@ const STATUS_CHIP_BG: Record<string, string> = {
   PROFESSIONAL_ACCEPTED: 'bg-[#E6F1FB] border-[#85B7EB] text-[#185FA5]',
   AGENT_TRIAGING: 'bg-[#E6F1FB] border-[#85B7EB] text-[#185FA5]',
   WAITING_PAYMENT: 'bg-[#FAEEDA] border-[#FAC775] text-[#854F0B]',
-  CANCELLED: 'bg-[#ECEEF5] border-[#DDE1EE] text-[#6B738A]',
-  REFUNDED: 'bg-[#ECEEF5] border-[#DDE1EE] text-[#6B738A]',
+  CANCELLED: 'bg-[#ECEEF5] border-[#DDE1EE] text-[#475569]',
+  REFUNDED: 'bg-[#ECEEF5] border-[#DDE1EE] text-[#475569]',
 }
 function dotClass(status: string) {
   return STATUS_DOT[status] || 'bg-[#6B738A]'
 }
 function chipClass(status: string) {
-  return STATUS_CHIP_BG[status] || 'bg-[#ECEEF5] border-[#DDE1EE] text-[#6B738A]'
+  return STATUS_CHIP_BG[status] || 'bg-[#ECEEF5] border-[#DDE1EE] text-[#475569]'
 }
 function isCancelledStatus(status: string) {
   return status === 'CANCELLED' || status === 'REFUNDED'
@@ -348,7 +348,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
             key={v}
             onClick={() => setView(v)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
-              view === v ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#6B738A]'
+              view === v ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#475569]'
             }`}
           >
             {v === 'agenda' ? 'Agenda' : v === 'day' ? 'Día' : v === 'week' ? 'Semana' : 'Mes'}
@@ -367,7 +367,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
           </button>
           <button
             onClick={goPrev}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-[#DDE1EE] text-[#6B738A] hover:bg-[#F4F6FB]"
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-[#DDE1EE] text-[#475569] hover:bg-[#F4F6FB]"
             aria-label="Anterior"
           >
             ‹
@@ -375,7 +375,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
           <span className="text-sm font-semibold text-[#141820] min-w-[9rem] text-center">{headerLabel}</span>
           <button
             onClick={goNext}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-[#DDE1EE] text-[#6B738A] hover:bg-[#F4F6FB]"
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-[#DDE1EE] text-[#475569] hover:bg-[#F4F6FB]"
             aria-label="Siguiente"
           >
             ›
@@ -384,7 +384,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
             <SpanishDatePicker value={cursor} onChange={setCursor} />
           </span>
         </div>
-        <label className="flex items-center gap-1.5 text-xs text-[#6B738A]">
+        <label className="flex items-center gap-1.5 text-xs text-[#475569]">
           <input
             type="checkbox"
             checked={includeCancelled}
@@ -400,7 +400,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
         {LEGEND.map((l) => (
           <div key={l.status} className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${dotClass(l.status)}`} />
-            <span className="text-xs text-[#6B738A]">{l.label}</span>
+            <span className="text-xs text-[#475569]">{l.label}</span>
           </div>
         ))}
       </div>
@@ -480,7 +480,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
 
               {(canManageDirectly(detail) || canRecordPayment(detail)) && (
                 <div className="mt-3 pt-3 border-t border-[#ECEEF5]">
-                  <p className="text-[11px] text-[#A0A8BF] mb-2">
+                  <p className="text-[11px] text-[#64748B] mb-2">
                     Tú agendaste esta cita directamente — el cobro es directo contigo, no vía
                     plataforma.
                   </p>
@@ -489,7 +489,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
 
                   {canSetModality(detail) && !editing && !confirmingCancel && !recordingPayment && (
                     <div className="mb-2">
-                      <label className="block text-[11px] text-[#6B738A] mb-1">¿Cómo se atiende?</label>
+                      <label className="block text-[11px] text-[#475569] mb-1">¿Cómo se atiende?</label>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           onClick={() => setModalityMutation.mutate({ id: detail.id, modality: 'VIDEO_CALL' })}
@@ -497,7 +497,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
                           className={`text-xs font-medium rounded-lg py-1.5 border transition-colors disabled:opacity-50 ${
                             detail.modality !== 'IN_PERSON'
                               ? 'bg-[#0F6E56] border-[#0F6E56] text-white'
-                              : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                              : 'border-[#DDE1EE] text-[#475569] hover:bg-[#F5F6FA]'
                           }`}
                         >
                           🎥 Videollamada
@@ -508,7 +508,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
                           className={`text-xs font-medium rounded-lg py-1.5 border transition-colors disabled:opacity-50 ${
                             detail.modality === 'IN_PERSON'
                               ? 'bg-[#993C1D] border-[#993C1D] text-white'
-                              : 'border-[#DDE1EE] text-[#6B738A] hover:bg-[#F5F6FA]'
+                              : 'border-[#DDE1EE] text-[#475569] hover:bg-[#F5F6FA]'
                           }`}
                         >
                           🏥 Presencial
@@ -530,7 +530,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
                         </button>
                         <button
                           onClick={() => { setEditing(false); setNewDateTime(''); setPickerOpen(false) }}
-                          className="text-xs text-[#6B738A] px-2"
+                          className="text-xs text-[#475569] px-2"
                         >
                           Cancelar
                         </button>
@@ -559,7 +559,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
                         <button
                           onClick={() => setConfirmingCancel(false)}
                           disabled={cancelMutation.isPending}
-                          className="text-xs text-[#6B738A] px-2"
+                          className="text-xs text-[#475569] px-2"
                         >
                           Volver
                         </button>
@@ -569,14 +569,14 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
 
                   {recordingPayment && (
                     <div className="bg-[#F5F6FA] rounded-lg p-3 mb-2">
-                      <p className="text-[11px] text-[#6B738A] mb-2">
+                      <p className="text-[11px] text-[#475569] mb-2">
                         El cobro puede pasar en cualquier momento — a mitad de la consulta, al
                         final, o en otra fecha. Registra cuánto y cuándo cobraste realmente; puedes
                         volver a editarlo después si cambia.
                       </p>
                       <div className="flex flex-col gap-2">
                         <div>
-                          <label className="block text-[11px] text-[#6B738A] mb-1">Monto cobrado (Bs.)</label>
+                          <label className="block text-[11px] text-[#475569] mb-1">Monto cobrado (Bs.)</label>
                           <input
                             type="number"
                             min={0}
@@ -586,7 +586,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] text-[#6B738A] mb-1">Fecha en que cobraste</label>
+                          <label className="block text-[11px] text-[#475569] mb-1">Fecha en que cobraste</label>
                           <SpanishDateTimePicker value={paymentDate} onChange={setPaymentDate} onOpenChange={setPickerOpen} />
                         </div>
                       </div>
@@ -606,7 +606,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
                         <button
                           onClick={() => setRecordingPayment(false)}
                           disabled={recordPaymentMutation.isPending}
-                          className="text-xs text-[#6B738A] px-2"
+                          className="text-xs text-[#475569] px-2"
                         >
                           Volver
                         </button>
@@ -681,17 +681,17 @@ function AgendaView({
 }) {
   return (
     <div className="border border-[#DDE1EE] rounded-xl overflow-hidden">
-      <div className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-[110px_1fr_140px] bg-[#F5F6FA] text-[11px] font-semibold text-[#6B738A] uppercase px-3 py-2 gap-2">
+      <div className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-[110px_1fr_140px] bg-[#F5F6FA] text-[11px] font-semibold text-[#475569] uppercase px-3 py-2 gap-2">
         <span>Hora</span>
         <span>{role === 'PATIENT' ? 'Profesional' : 'Paciente'}</span>
         <span className="text-right sm:text-left">Estado</span>
       </div>
       {appts.length === 0 ? (
         <div className="flex items-center gap-3 px-3 py-6">
-          <span className="w-9 h-9 rounded-full bg-[#F5F6FA] text-[#6B738A] text-xs font-semibold flex items-center justify-center flex-shrink-0">
+          <span className="w-9 h-9 rounded-full bg-[#F5F6FA] text-[#475569] text-xs font-semibold flex items-center justify-center flex-shrink-0">
             {day.getDate()}
           </span>
-          <p className="text-xs text-[#6B738A]">
+          <p className="text-xs text-[#475569]">
             No hay citas registradas para el {WEEKDAYS_LONG[(day.getDay() + 6) % 7]} {day.getDate()} de{' '}
             {MONTHS[day.getMonth()].toLowerCase()}.
           </p>
@@ -707,7 +707,7 @@ function AgendaView({
               <span className="text-xs font-medium text-[#141820]">{timeOf(c.scheduled_at as string)}</span>
               <span className="min-w-0">
                 <span className="block text-xs font-medium text-[#141820] truncate">{nameOf(c)}</span>
-                <span className="block text-[11px] text-[#A0A8BF] truncate">{typeLabel(c)}</span>
+                <span className="block text-[11px] text-[#64748B] truncate">{typeLabel(c)}</span>
               </span>
               <span className="flex flex-col items-end sm:items-start gap-1 justify-self-end sm:justify-self-start">
                 <StatusBadge status={c.status} createdByRole={c.created_by_role} />
@@ -804,7 +804,7 @@ function DayGrid({
           <span className="text-xs font-semibold text-[#141820]">
             {WEEKDAYS_LONG[(day.getDay() + 6) % 7].toUpperCase()} {day.getDate()} DE {MONTHS[day.getMonth()].toUpperCase()}
           </span>
-          {appts.length > 0 && <span className="text-[11px] text-[#6B738A]">{appts.length} cita(s)</span>}
+          {appts.length > 0 && <span className="text-[11px] text-[#475569]">{appts.length} cita(s)</span>}
         </div>
       )}
       <div className="overflow-y-auto" style={{ maxHeight: compact ? 420 : 560 }}>
@@ -813,7 +813,7 @@ function DayGrid({
           <div className="w-14 flex-shrink-0 border-r border-[#ECEEF5] sticky left-0 bg-white z-10">
             {labels.map((l) => (
               <div key={l} style={{ height: HOUR_PX }} className="relative">
-                <span className="absolute -top-2 right-1.5 text-[10px] text-[#A0A8BF]">{l}</span>
+                <span className="absolute -top-2 right-1.5 text-[10px] text-[#64748B]">{l}</span>
               </div>
             ))}
           </div>
@@ -897,7 +897,7 @@ function WeekView({
           <div />
           {days.map((d) => (
             <div key={d.toISOString()} className="text-center py-1.5 border-l border-[#ECEEF5]">
-              <p className="text-[9px] text-[#6B738A] uppercase">{WEEKDAYS[(d.getDay() + 6) % 7]}</p>
+              <p className="text-[9px] text-[#475569] uppercase">{WEEKDAYS[(d.getDay() + 6) % 7]}</p>
               <p
                 className={`text-[11px] font-semibold mx-auto mt-0.5 w-5 h-5 rounded-full flex items-center justify-center ${
                   sameDay(d, today) ? 'bg-[#185FA5] text-white' : 'text-[#141820]'
@@ -914,7 +914,7 @@ function WeekView({
             <div className="relative border-r border-[#ECEEF5] sticky left-0 bg-white z-10">
               {labels.map((l) => (
                 <div key={l} style={{ height: HOUR_PX }} className="relative">
-                  <span className="absolute -top-2 right-1 text-[9px] text-[#A0A8BF]">{l}</span>
+                  <span className="absolute -top-2 right-1 text-[9px] text-[#64748B]">{l}</span>
                 </div>
               ))}
             </div>
@@ -950,7 +950,7 @@ function WeekView({
           </div>
         </div>
       </div>
-      <p className="sm:hidden text-[10px] text-[#A0A8BF] text-center py-1.5 border-t border-[#ECEEF5]">
+      <p className="sm:hidden text-[10px] text-[#64748B] text-center py-1.5 border-t border-[#ECEEF5]">
         ← Desliza para ver toda la semana →
       </p>
     </div>
@@ -998,7 +998,7 @@ function MonthView({
       <div className="hidden sm:block">
         <div className="grid grid-cols-7 mb-1">
           {WEEKDAYS.map((w) => (
-            <div key={w} className="text-[11px] font-medium text-[#6B738A] text-center py-1">
+            <div key={w} className="text-[11px] font-medium text-[#475569] text-center py-1">
               {w}
             </div>
           ))}
@@ -1047,7 +1047,7 @@ function MonthView({
       <div className="sm:hidden">
         <div className="grid grid-cols-7 mb-1">
           {WEEKDAYS.map((w) => (
-            <div key={w} className="text-[10px] font-medium text-[#6B738A] text-center py-1">
+            <div key={w} className="text-[10px] font-medium text-[#475569] text-center py-1">
               {w[0]}
             </div>
           ))}
@@ -1102,7 +1102,7 @@ function MonthView({
             </span>
           </div>
           {(byDay.get(`${selectedDay.getFullYear()}-${selectedDay.getMonth()}-${selectedDay.getDate()}`) || []).length === 0 ? (
-            <p className="text-xs text-[#6B738A] text-center py-6">No hay citas agendadas ese día.</p>
+            <p className="text-xs text-[#475569] text-center py-6">No hay citas agendadas ese día.</p>
           ) : (
             <div className="divide-y divide-[#ECEEF5]">
               {(byDay.get(`${selectedDay.getFullYear()}-${selectedDay.getMonth()}-${selectedDay.getDate()}`) || []).map((c) => (

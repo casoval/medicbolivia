@@ -105,9 +105,9 @@ export default function OnboardingPage() {
         {/* Header */}
         <div className="text-center mb-6">
           <h1 className="text-xl font-bold text-[#042C53]">
-            {t('Medic')}<span className="font-normal text-[#6B738A]">{t('Bolivia')}</span>
+            {t('Medic')}<span className="font-normal text-[#475569]">{t('Bolivia')}</span>
           </h1>
-          <p className="text-sm text-[#6B738A] mt-1">
+          <p className="text-sm text-[#475569] mt-1">
             {t('Tu agente de bienvenida te guiará en los primeros pasos')}
           </p>
         </div>
@@ -190,7 +190,7 @@ export default function OnboardingPage() {
           {/* Input */}
           <div className="px-3 py-2.5 border-t border-[#DDE1EE] bg-white flex gap-2">
             <input
-              className="flex-1 px-3.5 py-2 border border-[#DDE1EE] rounded-full text-sm bg-[#F5F6FA] focus:outline-none focus:border-[#185FA5] text-[#141820] placeholder-[#A0A8BF]"
+              className="flex-1 px-3.5 py-2 border border-[#DDE1EE] rounded-full text-sm bg-[#F5F6FA] focus:outline-none focus:border-[#185FA5] text-[#141820] placeholder-[#64748B]"
               placeholder={t('Escribe tu respuesta...')}
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -207,7 +207,7 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-[#A0A8BF] mt-3">
+        <p className="text-center text-xs text-[#64748B] mt-3">
           {t('Puedes saltarte esto y completarlo después desde tu perfil')}
         </p>
       </div>

@@ -29,7 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen flex items-center justify-center bg-[#F5F6FA]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-[#185FA5] border-t-transparent rounded-full animate-spin-slow" />
-          <p className="text-sm text-[#6B738A]">Cargando MedicBolivia...</p>
+          <p className="text-sm text-[#475569]">Cargando MedicBolivia...</p>
         </div>
       </div>
     )

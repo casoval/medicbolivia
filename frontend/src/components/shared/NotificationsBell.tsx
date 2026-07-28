@@ -60,14 +60,14 @@ export function NotificationsBell({ role }: { role: 'PATIENT' | 'PROFESSIONAL' }
               <p className="text-xs font-semibold">{t('Notificaciones')}</p>
             </div>
             {notifications.length === 0 ? (
-              <p className="text-xs text-[#6B738A] text-center py-6">{t('No tenés notificaciones todavía')}</p>
+              <p className="text-xs text-[#475569] text-center py-6">{t('No tenés notificaciones todavía')}</p>
             ) : (
               <div className="divide-y divide-[#DDE1EE]">
                 {notifications.map((n) => (
                   <div key={n.id} className="p-3">
                     <p className="text-xs font-medium">{n.title}</p>
-                    <p className="text-xs text-[#6B738A] mt-0.5">{n.body}</p>
-                    <p className="text-[10px] text-[#A0A8BF] mt-1">
+                    <p className="text-xs text-[#475569] mt-0.5">{n.body}</p>
+                    <p className="text-[10px] text-[#64748B] mt-1">
                       {new Date(n.created_at).toLocaleString('es-BO')}
                     </p>
                   </div>

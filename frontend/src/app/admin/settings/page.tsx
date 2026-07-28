@@ -122,7 +122,7 @@ function CommissionPeriodsSection() {
   return (
     <div className="card lg:col-span-2">
       <SectionTitle>{t('Promociones de comisión (toda la plataforma)')}</SectionTitle>
-      <p className="text-xs text-[#6B738A] mb-3">
+      <p className="text-xs text-[#475569] mb-3">
         Crea periodos con % distinto al de la comisión por defecto de arriba — por ejemplo, 10% este mes y 15% el próximo.
         Las consultas ya cobradas conservan el % que estaba vigente cuando se generaron, nunca se recalculan.
         Para dar un % distinto a un profesional puntual (ej. promo de bienvenida), hazlo desde su perfil en{' '}
@@ -133,7 +133,7 @@ function CommissionPeriodsSection() {
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end mb-4 bg-[#F5F6FA] rounded-lg p-3">
         <div>
-          <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('% comisión')}</label>
+          <label className="block text-xs font-medium text-[#475569] mb-1">{t('% comisión')}</label>
           <input
             type="number" min={0} max={100}
             className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
@@ -142,7 +142,7 @@ function CommissionPeriodsSection() {
           />
         </div>
         <div className="col-span-2 sm:col-span-1">
-          <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Etiqueta (opcional)')}</label>
+          <label className="block text-xs font-medium text-[#475569] mb-1">{t('Etiqueta (opcional)')}</label>
           <input
             className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
             placeholder={t('Promo julio')}
@@ -151,7 +151,7 @@ function CommissionPeriodsSection() {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Desde')}</label>
+          <label className="block text-xs font-medium text-[#475569] mb-1">{t('Desde')}</label>
           <input
             type="date"
             className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
@@ -160,7 +160,7 @@ function CommissionPeriodsSection() {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Hasta (opcional)')}</label>
+          <label className="block text-xs font-medium text-[#475569] mb-1">{t('Hasta (opcional)')}</label>
           <input
             type="date"
             className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm"
@@ -180,7 +180,7 @@ function CommissionPeriodsSection() {
       {loading ? (
         <div className="h-16 animate-pulse bg-[#F5F6FA] rounded-lg" />
       ) : periods.length === 0 ? (
-        <p className="text-xs text-[#A0A8BF]">{t('No hay promociones globales configuradas. Se usa la comisión por defecto.')}</p>
+        <p className="text-xs text-[#64748B]">{t('No hay promociones globales configuradas. Se usa la comisión por defecto.')}</p>
       ) : (
         <div className="space-y-2">
           {periods.map((p) => {
@@ -192,21 +192,21 @@ function CommissionPeriodsSection() {
               <div key={p.id} className="flex items-center justify-between bg-[#F5F6FA] rounded-lg px-3 py-2">
                 <div>
                   <p className="text-sm font-medium">
-                    {p.percent}% {p.label && <span className="text-[#6B738A] font-normal">— {p.label}</span>}
+                    {p.percent}% {p.label && <span className="text-[#475569] font-normal">— {p.label}</span>}
                   </p>
-                  <p className="text-xs text-[#A0A8BF]">
+                  <p className="text-xs text-[#64748B]">
                     Desde {fmtDate(p.starts_at)} {p.ends_at ? `hasta ${fmtDate(p.ends_at)}` : '· sin fecha de fin'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {!p.active ? (
-                    <span className="text-xs text-[#A0A8BF]">{t('Desactivada')}</span>
+                    <span className="text-xs text-[#64748B]">{t('Desactivada')}</span>
                   ) : isCurrent ? (
                     <span className="text-xs text-[#0F6E56] font-medium">{t('● Vigente ahora')}</span>
                   ) : isFuture ? (
                     <span className="text-xs text-[#185FA5] font-medium">{t('Programada')}</span>
                   ) : (
-                    <span className="text-xs text-[#A0A8BF]">{t('Finalizada')}</span>
+                    <span className="text-xs text-[#64748B]">{t('Finalizada')}</span>
                   )}
                   {p.active && (
                     <button
@@ -311,7 +311,7 @@ export default function AdminSettingsPage() {
       <div className="max-w-3xl">
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Configuración de la plataforma')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">{t('Ajustes generales de MedicBolivia')}</p>
+          <p className="text-xs text-[#475569] mt-0.5">{t('Ajustes generales de MedicBolivia')}</p>
         </div>
 
         {error && <div className="mb-4"><Alert type="error" message={error} /></div>}
@@ -331,7 +331,7 @@ export default function AdminSettingsPage() {
                 <SectionTitle>{t('General')}</SectionTitle>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Nombre de la plataforma')}</label>
+                    <label className="block text-xs font-medium text-[#475569] mb-1">{t('Nombre de la plataforma')}</label>
                     <input
                       className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] disabled:opacity-60"
                       value={appName}
@@ -340,7 +340,7 @@ export default function AdminSettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[#6B738A] mb-1">
+                    <label className="block text-xs font-medium text-[#475569] mb-1">
                       {t('Comisión de la plataforma (%)')}
                     </label>
                     <div className="flex items-center gap-2">
@@ -353,8 +353,8 @@ export default function AdminSettingsPage() {
                         value={commission}
                         onChange={(e) => handleCommissionChange(e.target.value)}
                       />
-                      <span className="text-xs text-[#6B738A]">%</span>
-                      <span className="text-xs text-[#A0A8BF]">
+                      <span className="text-xs text-[#475569]">%</span>
+                      <span className="text-xs text-[#64748B]">
                         → Profesional recibe {100 - commission}%
                       </span>
                     </div>
@@ -364,14 +364,14 @@ export default function AdminSettingsPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium">{t('Registro de pacientes')}</p>
-                        <p className="text-xs text-[#6B738A]">{t('Permite nuevos registros')}</p>
+                        <p className="text-xs text-[#475569]">{t('Permite nuevos registros')}</p>
                       </div>
                       <Toggle on={openRegistration} onChange={setOpenRegistration} disabled={saving} />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium">{t('Registro de profesionales')}</p>
-                        <p className="text-xs text-[#6B738A]">{t('Permite nuevos profesionales')}</p>
+                        <p className="text-xs text-[#475569]">{t('Permite nuevos profesionales')}</p>
                       </div>
                       <Toggle on={openProfessionals} onChange={setOpenProfessionals} disabled={saving} />
                     </div>
@@ -401,7 +401,7 @@ export default function AdminSettingsPage() {
             <SectionTitle>{t('Chat')}</SectionTitle>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">
+                <label className="block text-xs font-medium text-[#475569] mb-1">
                   Días de chat después de la cita
                 </label>
                 <div className="flex items-center gap-2">
@@ -417,9 +417,9 @@ export default function AdminSettingsPage() {
                       if (!Number.isNaN(n)) setChatWindowDays(Math.min(90, Math.max(1, n)))
                     }}
                   />
-                  <span className="text-xs text-[#6B738A]">{t('días')}</span>
+                  <span className="text-xs text-[#475569]">{t('días')}</span>
                 </div>
-                <p className="text-xs text-[#A0A8BF] mt-1">
+                <p className="text-xs text-[#64748B] mt-1">
                   Aplica solo a consultas nuevas creadas a partir de guardar — las conversaciones
                   ya activas o cerradas conservan la ventana que tenían.
                 </p>
@@ -429,14 +429,14 @@ export default function AdminSettingsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">Adjuntos — pacientes</p>
-                    <p className="text-xs text-[#6B738A]">Permitir subir archivos al chat</p>
+                    <p className="text-xs text-[#475569]">Permitir subir archivos al chat</p>
                   </div>
                   <Toggle on={chatAttachmentsPatient} onChange={setChatAttachmentsPatient} disabled={saving} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">Adjuntos — profesionales</p>
-                    <p className="text-xs text-[#6B738A]">Permitir subir archivos al chat</p>
+                    <p className="text-xs text-[#475569]">Permitir subir archivos al chat</p>
                   </div>
                   <Toggle on={chatAttachmentsProfessional} onChange={setChatAttachmentsProfessional} disabled={saving} />
                 </div>
@@ -477,19 +477,19 @@ export default function AdminSettingsPage() {
                   { label: 'Tareas en segundo plano', value: systemInfo.background_jobs },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-[#F5F6FA] rounded-lg p-3 text-center">
-                    <p className="text-xs text-[#6B738A]">{label}</p>
+                    <p className="text-xs text-[#475569]">{label}</p>
                     <p className="text-sm font-semibold mt-1 break-words">{value}</p>
                   </div>
                 ))}
                 <div className="bg-[#F5F6FA] rounded-lg p-3 text-center col-span-2 sm:col-span-4">
-                  <p className="text-xs text-[#6B738A]">{t('Hora del servidor (UTC)')}</p>
+                  <p className="text-xs text-[#475569]">{t('Hora del servidor (UTC)')}</p>
                   <p className="text-sm font-semibold mt-1">
                     {new Date(systemInfo.server_time_utc).toLocaleString('es-BO', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'medium' })}
                   </p>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-[#6B738A] text-center py-4">{t('No se pudo cargar la información del sistema')}</p>
+              <p className="text-sm text-[#475569] text-center py-4">{t('No se pudo cargar la información del sistema')}</p>
             )}
           </div>
         </div>

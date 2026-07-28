@@ -106,7 +106,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
           <p className="text-sm font-medium text-[#1A1F2E] truncate">
             {note.patient_name || `Paciente · ${note.patient_id.slice(0, 8).toUpperCase()}`}
           </p>
-          <p className="text-xs text-[#6B738A]">
+          <p className="text-xs text-[#475569]">
             {fmtFecha(note.created_at)}
             {filledFields.length > 0 && ` · ${filledFields.length} campo${filledFields.length > 1 ? 's' : ''}`}
           </p>
@@ -118,7 +118,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
           {note.shared_with_professionals && (
             <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium">{t('Compartida')}</span>
           )}
-          <span className="text-[#6B738A] text-xs">{open ? '▲' : '▼'}</span>
+          <span className="text-[#475569] text-xs">{open ? '▲' : '▼'}</span>
         </div>
       </button>
 
@@ -126,7 +126,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
         <div className="bg-[#FAFBFC] border-t border-[#DDE1EE] px-4 py-4 space-y-3">
 
           <div className="flex items-center justify-between">
-            <p className="text-[11px] text-[#A0A8BF]">
+            <p className="text-[11px] text-[#64748B]">
               {t('Consulta:')} <span className="font-mono">{note.consultation_id}</span>
             </p>
             {isEditable ? (
@@ -147,7 +147,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
           </div>
 
           {!isEditable && !showAddendum && (
-            <p className="text-[11px] text-[#A0A8BF] bg-[#F5F6FA] rounded-lg px-3 py-2">
+            <p className="text-[11px] text-[#64748B] bg-[#F5F6FA] rounded-lg px-3 py-2">
               🔒 Pasaron más de 24h desde que se creó esta nota, así que ya no se puede editar
               directamente. Si necesitas corregir o agregar algo, usa "+ Agregar addendum".
             </p>
@@ -155,7 +155,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
 
           {showAddendum && (
             <div className="space-y-2 bg-white border border-[#DDE1EE] rounded-lg p-3">
-              <label className="text-[11px] text-[#6B738A] block">
+              <label className="text-[11px] text-[#475569] block">
                 Corrección del {new Date().toLocaleDateString('es-BO')} — no reemplaza la nota original
               </label>
               <textarea
@@ -187,7 +187,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
             <div className="space-y-3">
               {SOAP_LABELS.map(f => (
                 <div key={f.key}>
-                  <label className="text-[11px] text-[#6B738A] mb-1 block">{f.icon} {f.label}</label>
+                  <label className="text-[11px] text-[#475569] mb-1 block">{f.icon} {f.label}</label>
                   <textarea
                     className="w-full border border-[#DDE1EE] rounded-lg px-3 py-2 text-xs outline-none focus:border-[#185FA5] transition-colors resize-none"
                     rows={3}
@@ -196,7 +196,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
                   />
                 </div>
               ))}
-              <label className="flex items-center gap-2 text-xs text-[#6B738A]">
+              <label className="flex items-center gap-2 text-xs text-[#475569]">
                 <input
                   type="checkbox"
                   checked={form.is_visible_to_patient}
@@ -216,7 +216,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
             /* ── Modo lectura ── */
             <>
               {filledFields.length === 0 ? (
-                <p className="text-xs text-[#A0A8BF] text-center py-2">
+                <p className="text-xs text-[#64748B] text-center py-2">
                   {t('Esta nota no tiene contenido. Pulsa "Editar nota" para completarla.')}
                 </p>
               ) : (
@@ -232,7 +232,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
 
               {note.addenda && note.addenda.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold text-[#6B738A] uppercase tracking-wide">
+                  <p className="text-[11px] font-semibold text-[#475569] uppercase tracking-wide">
                     📝 Addenda ({note.addenda.length})
                   </p>
                   {note.addenda.map(a => (
@@ -244,7 +244,7 @@ function NoteCard({ note, onChanged }: { note: ClinicalNote; onChanged: () => vo
                 </div>
               )}
 
-              <div className="bg-[#F5F6FA] rounded-lg px-3 py-2 text-[11px] text-[#6B738A]">
+              <div className="bg-[#F5F6FA] rounded-lg px-3 py-2 text-[11px] text-[#475569]">
                 {note.is_visible_to_patient
                   ? '👁 El paciente puede ver esta nota en su historial.'
                   : '🔒 Nota interna — el paciente no la ve.'}
@@ -290,11 +290,11 @@ function PatientGroup({
         />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-[#1A1F2E] truncate">{group.patientName}</p>
-          <p className="text-xs text-[#6B738A]">
+          <p className="text-xs text-[#475569]">
             {group.notes.length} nota{group.notes.length !== 1 ? 's' : ''} clínica{group.notes.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <span className="text-[#A0A8BF] text-xs flex-shrink-0">{open ? '▲' : '▼'}</span>
+        <span className="text-[#64748B] text-xs flex-shrink-0">{open ? '▲' : '▼'}</span>
       </button>
 
       {/* Lista de notas del paciente */}
@@ -360,19 +360,19 @@ function NewNoteForm({
     <div className="card mb-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-semibold text-[#1A1F2E]">{t('Nueva historia clínica')}</p>
-        <button onClick={onCancel} className="text-xs text-[#6B738A] hover:underline">{t('Cancelar')}</button>
+        <button onClick={onCancel} className="text-xs text-[#475569] hover:underline">{t('Cancelar')}</button>
       </div>
 
       {error && <div className="mb-3"><Alert type="error" message={error} /></div>}
 
       {consultations.length === 0 ? (
-        <p className="text-xs text-[#6B738A]">
+        <p className="text-xs text-[#475569]">
           {t('No tienes consultas completadas sin historia clínica pendiente. Todas tus consultas completadas o en curso ya tienen una registrada.')}
         </p>
       ) : (
         <form onSubmit={handleCreate} className="space-y-3">
           <div>
-            <label className="text-[11px] text-[#6B738A] mb-1 block">{t('Consulta')}</label>
+            <label className="text-[11px] text-[#475569] mb-1 block">{t('Consulta')}</label>
             <select
               className="w-full border border-[#DDE1EE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#185FA5]"
               value={consultationId}
@@ -394,7 +394,7 @@ function NewNoteForm({
 
           {SOAP_LABELS.map(f => (
             <div key={f.key}>
-              <label className="text-[11px] text-[#6B738A] mb-1 block">{f.icon} {f.label}</label>
+              <label className="text-[11px] text-[#475569] mb-1 block">{f.icon} {f.label}</label>
               <textarea
                 className="w-full border border-[#DDE1EE] rounded-lg px-3 py-2 text-xs outline-none focus:border-[#185FA5] transition-colors resize-none"
                 rows={3}
@@ -404,7 +404,7 @@ function NewNoteForm({
             </div>
           ))}
 
-          <label className="flex items-center gap-2 text-xs text-[#6B738A]">
+          <label className="flex items-center gap-2 text-xs text-[#475569]">
             <input
               type="checkbox"
               checked={form.is_visible_to_patient}
@@ -509,7 +509,7 @@ export default function ProfessionalClinicalNotesPage() {
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-base font-semibold">{t('Mis historias clínicas')}</h1>
-            <p className="text-xs text-[#6B738A] mt-0.5">
+            <p className="text-xs text-[#475569] mt-0.5">
               {t('Puedes consultarlas si un paciente regresa.')}
             </p>
           </div>
@@ -543,7 +543,7 @@ export default function ProfessionalClinicalNotesPage() {
           {search && (
             <button
               onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A0A8BF] hover:text-[#6B738A] text-lg leading-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#475569] text-lg leading-none"
             >
               ✕
             </button>
@@ -560,31 +560,31 @@ export default function ProfessionalClinicalNotesPage() {
           <div className="card text-center py-14">
             <p className="text-4xl mb-3">📋</p>
             <p className="text-sm font-semibold text-[#1A1F2E]">{t('Sin historias clínicas aún')}</p>
-            <p className="text-xs text-[#6B738A] mt-1 max-w-xs mx-auto">
+            <p className="text-xs text-[#475569] mt-1 max-w-xs mx-auto">
               Puedes crear la historia clínica de un paciente durante la videollamada usando el botón 📋,
               o usar "+ Nueva historia clínica" arriba para cualquier consulta ya completada.
             </p>
           </div>
         ) : totalPatients === 0 ? (
           <div className="card text-center py-10">
-            <p className="text-sm text-[#6B738A]">No se encontraron notas para "{search}"</p>
+            <p className="text-sm text-[#475569]">No se encontraron notas para "{search}"</p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-[#A0A8BF]">
+              <p className="text-xs text-[#64748B]">
                 {totalPatients} paciente{totalPatients !== 1 ? 's' : ''} · {totalNotes} nota{totalNotes !== 1 ? 's' : ''}
               </p>
               <div className="flex gap-1 bg-[#F5F6FA] rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('date')}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'date' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#475569]'}`}
                 >
                   {t('🕐 Por fecha')}
                 </button>
                 <button
                   onClick={() => setViewMode('patient')}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'patient' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#6B738A]'}`}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${viewMode === 'patient' ? 'bg-white text-[#185FA5] shadow-sm' : 'text-[#475569]'}`}
                 >
                   {t('👤 Por paciente')}
                 </button>

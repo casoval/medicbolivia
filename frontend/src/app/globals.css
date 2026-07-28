@@ -78,11 +78,11 @@ body { background: var(--bg); color: var(--ink); line-height: 1.6; }
   .input {
     @apply w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm
            focus:outline-none focus:border-[#185FA5] focus:ring-1 focus:ring-[#185FA5]
-           bg-white text-[#141820] placeholder-[#A0A8BF];
+           bg-white text-[#141820] placeholder-[#64748B];
   }
 
   .label {
-    @apply block text-xs font-medium text-[#6B738A] mb-1;
+    @apply block text-xs font-medium text-[#475569] mb-1;
   }
 
   /* Badges */
@@ -90,5 +90,5 @@ body { background: var(--bg); color: var(--ink); line-height: 1.6; }
   .badge-blue   { @apply bg-[#E6F1FB] text-[#185FA5] text-xs font-medium px-2 py-0.5 rounded-full; }
   .badge-amber  { @apply bg-[#FAEEDA] text-[#854F0B] text-xs font-medium px-2 py-0.5 rounded-full; }
   .badge-red    { @apply bg-[#FCEBEB] text-[#A32D2D] text-xs font-medium px-2 py-0.5 rounded-full; }
-  .badge-gray   { @apply bg-[#ECEEF5] text-[#6B738A] text-xs font-medium px-2 py-0.5 rounded-full; }
+  .badge-gray   { @apply bg-[#ECEEF5] text-[#475569] text-xs font-medium px-2 py-0.5 rounded-full; }
 }

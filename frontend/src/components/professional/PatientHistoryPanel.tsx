@@ -47,22 +47,22 @@ function NotePreview({ note }: { note: ClinicalNote }) {
             {note.professional_name || 'Médico anterior'}
             {note.professional_specialty ? ` · ${note.professional_specialty}` : ''}
           </p>
-          <p className="text-[11px] text-[#6B738A]">
+          <p className="text-[11px] text-[#475569]">
             {fmtFecha(note.created_at)}
             {filled.length > 0 && ` · ${filled.length} campo${filled.length > 1 ? 's' : ''}`}
           </p>
         </div>
-        <span className="text-[#A0A8BF] text-xs flex-shrink-0">{open ? '▲' : '▼'}</span>
+        <span className="text-[#64748B] text-xs flex-shrink-0">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
         <div className="bg-[#FAFBFC] border-t border-[#DDE1EE] px-3 py-3 space-y-2">
           {filled.length === 0 ? (
-            <p className="text-[11px] text-[#A0A8BF]">{t('Sin contenido registrado.')}</p>
+            <p className="text-[11px] text-[#64748B]">{t('Sin contenido registrado.')}</p>
           ) : (
             filled.map(f => (
               <div key={f.key}>
-                <p className="text-[10px] font-semibold text-[#6B738A] mb-0.5">{f.icon} {f.label}</p>
+                <p className="text-[10px] font-semibold text-[#475569] mb-0.5">{f.icon} {f.label}</p>
                 <p className="text-xs text-[#3C4257] leading-relaxed whitespace-pre-wrap">{note[f.key] as string}</p>
               </div>
             ))
@@ -133,14 +133,14 @@ export function PatientHistoryPanel({ patientId, patientName, currentConsultatio
           )}
 
           {!isLoading && ownPrior.length === 0 && otherShared.length === 0 && (
-            <p className="text-[11px] text-[#A0A8BF] py-2">
+            <p className="text-[11px] text-[#64748B] py-2">
               {t('No hay historial clínico previo disponible para este paciente.')}
             </p>
           )}
 
           {ownPrior.length > 0 && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] mb-1.5 uppercase tracking-wide">
+              <p className="text-[10px] font-semibold text-[#475569] mb-1.5 uppercase tracking-wide">
                 {t('Mis notas anteriores')}
               </p>
               <div className="space-y-1.5">
@@ -151,7 +151,7 @@ export function PatientHistoryPanel({ patientId, patientName, currentConsultatio
 
           {otherShared.length > 0 && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] mb-1.5 uppercase tracking-wide">
+              <p className="text-[10px] font-semibold text-[#475569] mb-1.5 uppercase tracking-wide">
                 {t('De otros médicos (compartido por el paciente)')}
               </p>
               <div className="space-y-1.5">

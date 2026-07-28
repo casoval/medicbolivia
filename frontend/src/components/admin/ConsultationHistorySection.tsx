@@ -79,8 +79,8 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_CLASS: Record<string, string> = {
   COMPLETED: 'bg-[#E1F5EE] text-[#0F6E56] border-[#9FE1CB]',
   IN_PROGRESS: 'bg-[#E6F1FB] text-[#185FA5] border-[#85B7EB]',
-  CANCELLED: 'bg-[#F0F1F5] text-[#6B738A] border-[#DDE1EE]',
-  REFUNDED: 'bg-[#F0F1F5] text-[#6B738A] border-[#DDE1EE]',
+  CANCELLED: 'bg-[#F0F1F5] text-[#475569] border-[#DDE1EE]',
+  REFUNDED: 'bg-[#F0F1F5] text-[#475569] border-[#DDE1EE]',
 }
 const TYPE_LABELS: Record<string, string> = { IMMEDIATE: 'Inmediata', SCHEDULED: 'Programada', FOLLOW_UP: 'Seguimiento' }
 const OUTCOME_LABELS: Record<string, string> = {
@@ -113,12 +113,12 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{counterpartName}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${STATUS_CLASS[item.status] || 'bg-[#F0F1F5] text-[#6B738A] border-[#DDE1EE]'}`}>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${STATUS_CLASS[item.status] || 'bg-[#F0F1F5] text-[#475569] border-[#DDE1EE]'}`}>
               {STATUS_LABELS[item.status] || item.status}
             </span>
-            <span className="text-[10px] text-[#A0A8BF]">{TYPE_LABELS[item.consultation_type] || item.consultation_type}</span>
+            <span className="text-[10px] text-[#64748B]">{TYPE_LABELS[item.consultation_type] || item.consultation_type}</span>
           </div>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             {fmtDateTime(item.scheduled_at || item.created_at)}
             {item.specialty && ` · ${item.specialty}`}
             {item.duration_minutes ? ` · ${item.duration_minutes} min` : ''}
@@ -142,14 +142,14 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
         <div className="p-3 border-t border-[#DDE1EE] bg-[#FAFBFC] space-y-3">
           {item.chief_complaint && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">{t('Motivo de consulta')}</p>
+              <p className="text-[10px] font-semibold text-[#475569] uppercase tracking-wide mb-1">{t('Motivo de consulta')}</p>
               <p className="text-xs text-[#3A4155]">{item.chief_complaint}</p>
             </div>
           )}
 
           {item.payment && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">{t('Pago')}</p>
+              <p className="text-[10px] font-semibold text-[#475569] uppercase tracking-wide mb-1">{t('Pago')}</p>
               <div className="text-xs text-[#3A4155] bg-white rounded-lg border border-[#DDE1EE] p-2 space-y-0.5">
                 <p>{t('Estado:')} <span className="font-medium">{item.payment.status}</span></p>
                 {item.payment.paid_at && <p>Pagado: {fmtDateTime(item.payment.paid_at)}</p>}
@@ -161,7 +161,7 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
 
           {hasRx && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">Receta{item.prescriptions.length > 1 ? 's' : ''}</p>
+              <p className="text-[10px] font-semibold text-[#475569] uppercase tracking-wide mb-1">Receta{item.prescriptions.length > 1 ? 's' : ''}</p>
               <div className="space-y-2">
                 {item.prescriptions.map((rx) => (
                   <div key={rx.id} className="text-xs bg-white rounded-lg border border-[#DDE1EE] p-2">
@@ -176,7 +176,7 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
                         <li key={i}>{m.name} — {m.dosage} {m.frequency ? `· ${m.frequency}` : ''} {m.duration ? `· ${m.duration}` : ''}</li>
                       ))}
                     </ul>
-                    {rx.instructions && <p className="text-[#6B738A] mt-1">Indicaciones: {rx.instructions}</p>}
+                    {rx.instructions && <p className="text-[#475569] mt-1">Indicaciones: {rx.instructions}</p>}
                     {rx.void_reason && <p className="text-[#A32D2D] mt-1">Motivo de anulación: {rx.void_reason}</p>}
                   </div>
                 ))}
@@ -186,13 +186,13 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
 
           {hasClinicalNote && item.clinical_note && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">{t('Historia clínica (SOAP)')}</p>
+              <p className="text-[10px] font-semibold text-[#475569] uppercase tracking-wide mb-1">{t('Historia clínica (SOAP)')}</p>
               <div className="text-xs bg-white rounded-lg border border-[#DDE1EE] p-2 space-y-1.5">
                 {item.clinical_note.subjective && <p><span className="font-medium">S:</span> {item.clinical_note.subjective}</p>}
                 {item.clinical_note.objective && <p><span className="font-medium">O:</span> {item.clinical_note.objective}</p>}
                 {item.clinical_note.assessment && <p><span className="font-medium">A:</span> {item.clinical_note.assessment}</p>}
                 {item.clinical_note.plan && <p><span className="font-medium">P:</span> {item.clinical_note.plan}</p>}
-                <p className="text-[10px] text-[#A0A8BF] pt-1 border-t border-[#DDE1EE]">
+                <p className="text-[10px] text-[#64748B] pt-1 border-t border-[#DDE1EE]">
                   {item.clinical_note.is_visible_to_patient ? 'Visible para el paciente' : 'Nota interna (no visible para el paciente)'}
                   {' · '}
                   {item.clinical_note.shared_with_professionals ? 'Compartida con otros profesionales' : 'No compartida con otros profesionales'}
@@ -203,7 +203,7 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
 
           {item.rating && (
             <div>
-              <p className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide mb-1">{t('Calificación del paciente')}</p>
+              <p className="text-[10px] font-semibold text-[#475569] uppercase tracking-wide mb-1">{t('Calificación del paciente')}</p>
               <div className="text-xs bg-white rounded-lg border border-[#DDE1EE] p-2">
                 <p className="text-[#EF9F27] font-medium">{'★'.repeat(item.rating.score)}{'☆'.repeat(5 - item.rating.score)} ({item.rating.score}/5)</p>
                 {item.rating.comment && <p className="text-[#3A4155] mt-1">"{item.rating.comment}"</p>}
@@ -212,7 +212,7 @@ function ConsultationRow({ item, counterpartName }: { item: HistoryItem; counter
           )}
 
           {!item.chief_complaint && !hasRx && !hasClinicalNote && !item.rating && !item.payment && (
-            <p className="text-xs text-[#A0A8BF]">{t('Sin más detalles registrados para esta consulta.')}</p>
+            <p className="text-xs text-[#64748B]">{t('Sin más detalles registrados para esta consulta.')}</p>
           )}
         </div>
       )}
@@ -234,7 +234,7 @@ export function ConsultationHistorySection({
   })
 
   if (isLoading) {
-    return <p className="text-xs text-[#6B738A] py-4 text-center">{t('Cargando historial...')}</p>
+    return <p className="text-xs text-[#475569] py-4 text-center">{t('Cargando historial...')}</p>
   }
   if (isError) {
     return <p className="text-xs text-[#A32D2D] py-4 text-center">{t('No se pudo cargar el historial.')}</p>
@@ -243,12 +243,12 @@ export function ConsultationHistorySection({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide">{t('Historial detallado')}</p>
-        <span className="text-[10px] text-[#A0A8BF]">{history.length} consulta{history.length !== 1 ? 's' : ''}</span>
+        <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide">{t('Historial detallado')}</p>
+        <span className="text-[10px] text-[#64748B]">{history.length} consulta{history.length !== 1 ? 's' : ''}</span>
       </div>
 
       {history.length === 0 ? (
-        <p className="text-sm text-[#6B738A] bg-[#F5F6FA] rounded-xl p-3 text-center">
+        <p className="text-sm text-[#475569] bg-[#F5F6FA] rounded-xl p-3 text-center">
           {t('Todavía no hay consultas registradas')}
         </p>
       ) : (

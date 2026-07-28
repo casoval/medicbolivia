@@ -77,7 +77,7 @@ export default function TelemedicinaPage() {
         <h1 className="text-3xl sm:text-4xl font-bold text-[#141820] text-center mb-4">
           Telemedicina en Bolivia, coordinada por inteligencia artificial
         </h1>
-        <p className="text-[#6B738A] text-center max-w-2xl mx-auto mb-12">
+        <p className="text-[#475569] text-center max-w-2xl mx-auto mb-12">
           MedicBolivia conecta pacientes con médicos y especialistas
           verificados a través de videoconsulta. Un agente de IA te escucha
           primero, entiende tu caso y te deriva al profesional correcto —
@@ -92,7 +92,7 @@ export default function TelemedicinaPage() {
               </div>
               <div>
                 <p className="font-semibold text-[#141820] mb-1">{f.title}</p>
-                <p className="text-sm text-[#6B738A]">{f.text}</p>
+                <p className="text-sm text-[#475569]">{f.text}</p>
               </div>
             </div>
           ))}
@@ -102,7 +102,7 @@ export default function TelemedicinaPage() {
           <h2 className="text-xl font-bold text-[#141820] mb-2">
             ¿Qué especialidad necesitás?
           </h2>
-          <p className="text-sm text-[#6B738A] mb-5">
+          <p className="text-sm text-[#475569] mb-5">
             Medicina general, pediatría, ginecología, cardiología, dermatología,
             psicología y muchas más especialidades disponibles online.
           </p>

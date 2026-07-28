@@ -47,7 +47,7 @@ function MyDocViewerModal({ label, url, onClose }: { label: string; url: string;
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-[#DDE1EE]">
           <p className="text-sm font-semibold">{label}</p>
-          <button onClick={onClose} className="text-[#6B738A] hover:text-[#141820] text-xl">✕</button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#141820] text-xl">✕</button>
         </div>
         <div className="flex-1 overflow-auto bg-[#F5F6FA] flex items-center justify-center p-4">
           {pdf ? (
@@ -296,7 +296,7 @@ export default function ProfilePage() {
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h1 className="text-base font-semibold">{t('Perfil y documentos')}</h1>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Tu perfil público y estado de verificación')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Tu perfil público y estado de verificación')}</p>
           </div>
 
           <NotificationsBell role="PROFESSIONAL" />
@@ -308,21 +308,21 @@ export default function ProfilePage() {
           {registrationData && (
             <div className="card lg:col-span-2">
               <SectionTitle>{t('Datos de registro')}</SectionTitle>
-              <p className="text-xs text-[#6B738A] mb-3">
+              <p className="text-xs text-[#475569] mb-3">
                 Esta es la información que colocaste al registrarte. Para corregir tu CI, fecha de
                 nacimiento, departamento o contacto, escribe a soporte.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">{t('Nombre completo')}</p>
+                  <p className="text-xs font-medium text-[#475569]">{t('Nombre completo')}</p>
                   <p className="text-sm">{registrationData.first_name} {registrationData.last_name}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">{t('Cédula de identidad')}</p>
+                  <p className="text-xs font-medium text-[#475569]">{t('Cédula de identidad')}</p>
                   <p className="text-sm">{registrationData.ci || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">{t('Fecha de nacimiento')}</p>
+                  <p className="text-xs font-medium text-[#475569]">{t('Fecha de nacimiento')}</p>
                   <p className="text-sm">
                     {registrationData.birth_date
                       ? new Date(registrationData.birth_date).toLocaleDateString('es-BO')
@@ -330,19 +330,19 @@ export default function ProfilePage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">{t('Departamento')}</p>
+                  <p className="text-xs font-medium text-[#475569]">{t('Departamento')}</p>
                   <p className="text-sm">{registrationData.department || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">{t('Género')}</p>
+                  <p className="text-xs font-medium text-[#475569]">{t('Género')}</p>
                   <p className="text-sm">{registrationData.gender || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">{t('Especialidad')}</p>
+                  <p className="text-xs font-medium text-[#475569]">{t('Especialidad')}</p>
                   <p className="text-sm">{registrationData.specialty || '—'}</p>
                 </div>
                 <div className="sm:col-span-2 md:col-span-1">
-                  <p className="text-xs font-medium text-[#6B738A]">{t('Subespecialidades')}</p>
+                  <p className="text-xs font-medium text-[#475569]">{t('Subespecialidades')}</p>
                   <p className="text-sm">
                     {registrationData.sub_specialties && registrationData.sub_specialties.length > 0
                       ? registrationData.sub_specialties.join(', ')
@@ -350,22 +350,22 @@ export default function ProfilePage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">{t('Correo electrónico')}</p>
+                  <p className="text-xs font-medium text-[#475569]">{t('Correo electrónico')}</p>
                   <p className="text-sm">{registrationData.email || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#6B738A]">{t('Celular')}</p>
+                  <p className="text-xs font-medium text-[#475569]">{t('Celular')}</p>
                   <p className="text-sm">{registrationData.phone || '—'}</p>
                 </div>
                 {registrationData.cmb_matricula && (
                   <div>
-                    <p className="text-xs font-medium text-[#6B738A]">{t('Matrícula CMB')}</p>
+                    <p className="text-xs font-medium text-[#475569]">{t('Matrícula CMB')}</p>
                     <p className="text-sm">{registrationData.cmb_matricula}</p>
                   </div>
                 )}
                 {registrationData.sedes_number && (
                   <div>
-                    <p className="text-xs font-medium text-[#6B738A]">{t('N° SEDES')}</p>
+                    <p className="text-xs font-medium text-[#475569]">{t('N° SEDES')}</p>
                     <p className="text-sm">{registrationData.sedes_number}</p>
                   </div>
                 )}
@@ -381,7 +381,7 @@ export default function ProfilePage() {
 
             {/* Foto de perfil */}
             <div className="flex flex-col items-center mb-4">
-              <p className="text-xs font-medium text-[#6B738A] mb-2 self-start">{t('Foto de perfil')}</p>
+              <p className="text-xs font-medium text-[#475569] mb-2 self-start">{t('Foto de perfil')}</p>
               <div className="relative">
                 <div className="w-24 h-24 rounded-full border-2 border-[#DDE1EE] overflow-hidden bg-[#F5F6FA] flex items-center justify-center">
                   {photoPreview ? (
@@ -428,7 +428,7 @@ export default function ProfilePage() {
                   </button>
                 </div>
               )}
-              <p className="text-xs text-[#A0A8BF] mt-1">{t('JPG, PNG o WebP · Máximo 5MB')}</p>
+              <p className="text-xs text-[#64748B] mt-1">{t('JPG, PNG o WebP · Máximo 5MB')}</p>
               <p className="text-xs text-[#185FA5] mt-0.5 text-center">
                 {t('Una foto profesional aumenta la confianza de los pacientes')}
               </p>
@@ -437,7 +437,7 @@ export default function ProfilePage() {
             {/* Datos del perfil */}
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">
+                <label className="block text-xs font-medium text-[#475569] mb-1">
                   {t('Presentación (visible al paciente)')}
                 </label>
                 <textarea
@@ -448,22 +448,22 @@ export default function ProfilePage() {
                   onChange={(e) => setBio(e.target.value)}
                   maxLength={400}
                 />
-                <p className="text-xs text-[#A0A8BF] mt-1 text-right">{bio.length}/400</p>
+                <p className="text-xs text-[#64748B] mt-1 text-right">{bio.length}/400</p>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Idiomas de atención')}</label>
+                <label className="block text-xs font-medium text-[#475569] mb-1">{t('Idiomas de atención')}</label>
                 <input
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
                   placeholder={t('Español, Aymara, Quechua...')}
                   value={langs}
                   onChange={(e) => setLangs(e.target.value)}
                 />
-                <p className="text-xs text-[#A0A8BF] mt-1">{t('Separa con comas')}</p>
+                <p className="text-xs text-[#64748B] mt-1">{t('Separa con comas')}</p>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Años de experiencia')}</label>
+                <label className="block text-xs font-medium text-[#475569] mb-1">{t('Años de experiencia')}</label>
                 <input
                   type="number" min={0} max={50}
                   className="w-24 px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
@@ -481,7 +481,7 @@ export default function ProfilePage() {
           {/* Precios de consulta */}
           <div className="card">
             <SectionTitle>{t('Precios de consulta')}</SectionTitle>
-            <p className="text-xs text-[#6B738A] mb-3">
+            <p className="text-xs text-[#475569] mb-3">
               {t('Define cuánto cobras según el tipo de consulta. El paciente ve el precio correspondiente antes de confirmar.')}
             </p>
 
@@ -518,7 +518,7 @@ export default function ProfilePage() {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">
+                <label className="block text-xs font-medium text-[#475569] mb-1">
                   {samePriceAll ? 'Precio único (Bs.)' : 'Consulta agendada (Bs.)'}
                 </label>
                 <input
@@ -532,14 +532,14 @@ export default function ProfilePage() {
                   <p className="text-xs text-[#0F6E56] mt-1 font-medium">Recibes Bs. {netOfPrice(priceGeneral)}</p>
                 )}
                 {!samePriceAll && (
-                  <p className="text-xs text-[#A0A8BF] mt-1">{t('El paciente agenda una cita para más adelante')}</p>
+                  <p className="text-xs text-[#64748B] mt-1">{t('El paciente agenda una cita para más adelante')}</p>
                 )}
               </div>
 
               {!samePriceAll && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-[#6B738A] mb-1">
+                    <label className="block text-xs font-medium text-[#475569] mb-1">
                       {t('Consulta inmediata (Bs.)')}
                     </label>
                     <input
@@ -552,11 +552,11 @@ export default function ProfilePage() {
                     {netOfPrice(priceUrgent) && (
                       <p className="text-xs text-[#0F6E56] mt-1 font-medium">Recibes Bs. {netOfPrice(priceUrgent)}</p>
                     )}
-                    <p className="text-xs text-[#A0A8BF] mt-1">{t('El paciente entra ahora mismo, sin cita previa')}</p>
+                    <p className="text-xs text-[#64748B] mt-1">{t('El paciente entra ahora mismo, sin cita previa')}</p>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-[#6B738A] mb-1">
+                    <label className="block text-xs font-medium text-[#475569] mb-1">
                       {t('Consulta de seguimiento (Bs.)')}
                     </label>
                     <input
@@ -569,7 +569,7 @@ export default function ProfilePage() {
                     {netOfPrice(priceFollowUp) && (
                       <p className="text-xs text-[#0F6E56] mt-1 font-medium">Recibes Bs. {netOfPrice(priceFollowUp)}</p>
                     )}
-                    <p className="text-xs text-[#A0A8BF] mt-1">
+                    <p className="text-xs text-[#64748B] mt-1">
                       {t('Solo la ven pacientes que ya tuvieron una consulta completada contigo, y también se agenda con fecha y hora')}
                     </p>
                   </div>
@@ -585,7 +585,7 @@ export default function ProfilePage() {
           {/* Membresía */}
           <div className="card">
             <SectionTitle>Membresía</SectionTitle>
-            <p className="text-xs text-[#6B738A] mb-3">
+            <p className="text-xs text-[#475569] mb-3">
               La habilita o deshabilita el administrador manualmente. Con membresía activa no pagas comisión por tus consultas y puedes agendar directamente a los pacientes de "Mis pacientes", sin límite de horario.
             </p>
 
@@ -613,7 +613,7 @@ export default function ProfilePage() {
 
             {membership && membership.history.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">{t('Historial')}</p>
+                <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Historial')}</p>
                 <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                   {membership.history.map((m) => (
                     <div key={m.id} className="flex items-center justify-between gap-2 bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
@@ -621,13 +621,13 @@ export default function ProfilePage() {
                         <p className="text-xs font-medium truncate">
                           {m.period_label || 'Sin etiqueta'}
                         </p>
-                        <p className="text-[11px] text-[#6B738A]">
+                        <p className="text-[11px] text-[#475569]">
                           {m.starts_at ? new Date(m.starts_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                           {' → '}
                           {m.ends_at ? new Date(m.ends_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' }) : 'sin fin'}
                         </p>
                       </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${m.is_current ? 'bg-[#E1F5EE] text-[#0F6E56]' : m.active ? 'bg-[#F5F6FA] text-[#6B738A]' : 'bg-[#FEE2E2] text-[#B91C1C]'}`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${m.is_current ? 'bg-[#E1F5EE] text-[#0F6E56]' : m.active ? 'bg-[#F5F6FA] text-[#475569]' : 'bg-[#FEE2E2] text-[#B91C1C]'}`}>
                         {m.is_current ? 'Vigente' : m.active ? 'Habilitada' : 'Deshabilitada'}
                       </span>
                     </div>
@@ -667,7 +667,7 @@ export default function ProfilePage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium">{label}</p>
-                        <p className="text-xs text-[#6B738A] mt-0.5">{hint}</p>
+                        <p className="text-xs text-[#475569] mt-0.5">{hint}</p>
                         {docErrors[type] && (
                           <p className="text-xs text-[#A32D2D] mt-1">{docErrors[type]}</p>
                         )}
@@ -703,7 +703,7 @@ export default function ProfilePage() {
                             {record?.url && (
                               <button
                                 onClick={() => setViewingDoc({ label, url: record.url! })}
-                                className="text-xs text-[#6B738A] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
                                 title="Ver el documento que subiste"
                               >
                                 {t('Ver')}
@@ -716,7 +716,7 @@ export default function ProfilePage() {
                             {record?.url && (
                               <button
                                 onClick={() => setViewingDoc({ label, url: record.url! })}
-                                className="text-xs text-[#6B738A] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
                                 title="Ver el documento que subiste"
                               >
                                 {t('Ver')}
@@ -739,7 +739,7 @@ export default function ProfilePage() {
                             {record?.url && (
                               <button
                                 onClick={() => setViewingDoc({ label, url: record.url! })}
-                                className="text-xs text-[#6B738A] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
                                 title="Ver el documento que subiste"
                               >
                                 {t('Ver')}
@@ -747,7 +747,7 @@ export default function ProfilePage() {
                             )}
                             <button
                               onClick={() => fileRefs.current[type]?.click()}
-                              className="flex items-center gap-1 text-xs text-[#6B738A] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                              className="flex items-center gap-1 text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
                               title="Subir un documento diferente"
                             >
                               <IconRefresh />

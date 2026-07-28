@@ -119,7 +119,7 @@ export default function AdminFAQPage() {
   return (
     <DashboardLayout navItems={NAV} activeHref="/admin/faq" role="ADMIN">
       <SectionTitle>{t('Preguntas frecuentes')}</SectionTitle>
-      <p className="text-sm text-[#6B738A] mb-4">
+      <p className="text-sm text-[#475569] mb-4">
         Estas preguntas se muestran en la página principal (medicbolivia.com), visibles para
         cualquier visitante sin necesidad de iniciar sesión.
       </p>
@@ -133,7 +133,7 @@ export default function AdminFAQPage() {
         {error && <Alert type="error" message={error} />}
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">{t('Pregunta')}</label>
+          <label className="text-xs font-medium text-[#475569]">{t('Pregunta')}</label>
           <input
             className="input mt-1"
             value={form.question}
@@ -144,7 +144,7 @@ export default function AdminFAQPage() {
         </div>
 
         <div>
-          <label className="text-xs font-medium text-[#6B738A]">{t('Respuesta')}</label>
+          <label className="text-xs font-medium text-[#475569]">{t('Respuesta')}</label>
           <textarea
             className="input mt-1 min-h-[90px]"
             value={form.answer}
@@ -155,7 +155,7 @@ export default function AdminFAQPage() {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">{t('Audiencia')}</label>
+            <label className="text-xs font-medium text-[#475569]">{t('Audiencia')}</label>
             <select
               className="input mt-1"
               value={form.audience}
@@ -168,7 +168,7 @@ export default function AdminFAQPage() {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-[#6B738A]">{t('Orden')}</label>
+            <label className="text-xs font-medium text-[#475569]">{t('Orden')}</label>
             <input
               type="number"
               className="input mt-1"
@@ -210,7 +210,7 @@ export default function AdminFAQPage() {
             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
               filter === f
                 ? 'bg-[#185FA5] text-white border-[#185FA5]'
-                : 'bg-white text-[#6B738A] border-[#DDE1EE]'
+                : 'bg-white text-[#475569] border-[#DDE1EE]'
             }`}
           >
             {f === 'ALL' ? 'Todas' : AUDIENCE_LABEL[f]}
@@ -231,10 +231,10 @@ export default function AdminFAQPage() {
                 <div className="flex items-center gap-2 mb-1">
                   <span className={AUDIENCE_BADGE[faq.audience]}>{AUDIENCE_LABEL[faq.audience]}</span>
                   {!faq.is_active && <span className="badge-gray">{t('Oculta')}</span>}
-                  <span className="text-[10px] text-[#6B738A]">orden: {faq.display_order}</span>
+                  <span className="text-[10px] text-[#475569]">orden: {faq.display_order}</span>
                 </div>
                 <p className="text-sm font-medium text-[#141820]">{faq.question}</p>
-                <p className="text-xs text-[#6B738A] mt-1 whitespace-pre-wrap">{faq.answer}</p>
+                <p className="text-xs text-[#475569] mt-1 whitespace-pre-wrap">{faq.answer}</p>
               </div>
               <div className="flex flex-col gap-1.5 flex-shrink-0">
                 <button className="text-xs text-[#185FA5] hover:underline" onClick={() => startEdit(faq)}>

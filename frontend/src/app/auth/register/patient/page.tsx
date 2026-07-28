@@ -83,7 +83,7 @@ export default function RegisterPatientPage() {
           <Link href="/" className="inline-block">
             <Image src="/logo1.png" alt="MedicBolivia" width={1262} height={173} className="h-8 w-auto mx-auto" priority />
           </Link>
-          <p className="text-sm text-[#6B738A] mt-1">{t('Registro de paciente')}</p>
+          <p className="text-sm text-[#475569] mt-1">{t('Registro de paciente')}</p>
         </div>
 
         <div className="card">
@@ -169,7 +169,7 @@ export default function RegisterPatientPage() {
               </div>
             </div>
 
-            <p className="text-xs text-[#A0A8BF]">
+            <p className="text-xs text-[#64748B]">
               <span className="text-[#E24B4A]">*</span> {t('Campos obligatorios')}
             </p>
 
@@ -179,7 +179,7 @@ export default function RegisterPatientPage() {
             </button>
           </form>
 
-          <p className="text-center text-sm text-[#6B738A] mt-4 pt-4 border-t border-[#DDE1EE]">
+          <p className="text-center text-sm text-[#475569] mt-4 pt-4 border-t border-[#DDE1EE]">
             {t('¿Ya tienes cuenta?')}{' '}
             <Link href="/auth/login" className="text-[#185FA5] font-medium hover:underline">
               {t('Inicia sesión')}

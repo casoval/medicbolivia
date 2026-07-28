@@ -67,7 +67,7 @@ function TagListEditor({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-[#6B738A] mb-3">{t('Todavía no registraste nada acá.')}</p>
+        <p className="text-xs text-[#475569] mb-3">{t('Todavía no registraste nada acá.')}</p>
       )}
 
       <div className="flex gap-2">
@@ -201,7 +201,7 @@ export default function PatientProfilePage() {
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h1 className="text-lg font-semibold text-[#141820]">{t('Perfil')}</h1>
-            <p className="text-xs text-[#6B738A] mt-0.5">
+            <p className="text-xs text-[#475569] mt-0.5">
               {t('Tus datos personales y tu información médica en un solo lugar.')}
             </p>
           </div>
@@ -215,7 +215,7 @@ export default function PatientProfilePage() {
           {photoError   && <div className="mb-3"><Alert type="error"   message={photoError} /></div>}
 
           <div className="flex flex-col items-center mb-5">
-            <p className="text-xs font-medium text-[#6B738A] mb-2 self-start">{t('Foto de perfil')}</p>
+            <p className="text-xs font-medium text-[#475569] mb-2 self-start">{t('Foto de perfil')}</p>
             <div className="relative">
               <div className="w-24 h-24 rounded-full border-2 border-[#DDE1EE] overflow-hidden bg-[#F5F6FA] flex items-center justify-center">
                 {photoPreview ? (
@@ -254,43 +254,43 @@ export default function PatientProfilePage() {
                 </button>
               </div>
             )}
-            <p className="text-xs text-[#A0A8BF] mt-1">{t('JPG, PNG o WebP · Máximo 5MB')}</p>
-            <p className="text-xs text-[#A0A8BF] text-center">{t('Es opcional, pero ayuda a tus profesionales a identificarte mejor')}</p>
+            <p className="text-xs text-[#64748B] mt-1">{t('JPG, PNG o WebP · Máximo 5MB')}</p>
+            <p className="text-xs text-[#64748B] text-center">{t('Es opcional, pero ayuda a tus profesionales a identificarte mejor')}</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">{t('Nombre completo')}</p>
+              <p className="text-xs font-medium text-[#475569]">{t('Nombre completo')}</p>
               <p className="text-sm">{profile?.first_name} {profile?.last_name}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">{t('Cédula de identidad')}</p>
+              <p className="text-xs font-medium text-[#475569]">{t('Cédula de identidad')}</p>
               <p className="text-sm">{profile?.ci || '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">{t('Fecha de nacimiento')}</p>
+              <p className="text-xs font-medium text-[#475569]">{t('Fecha de nacimiento')}</p>
               <p className="text-sm">
                 {profile?.birth_date ? new Date(profile.birth_date).toLocaleDateString('es-BO') : '—'}
               </p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">{t('Departamento')}</p>
+              <p className="text-xs font-medium text-[#475569]">{t('Departamento')}</p>
               <p className="text-sm">{profile?.department || '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">{t('Género')}</p>
+              <p className="text-xs font-medium text-[#475569]">{t('Género')}</p>
               <p className="text-sm">{profile?.gender || '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">{t('Correo electrónico')}</p>
+              <p className="text-xs font-medium text-[#475569]">{t('Correo electrónico')}</p>
               <p className="text-sm">{profile?.email || '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#6B738A]">{t('Celular')}</p>
+              <p className="text-xs font-medium text-[#475569]">{t('Celular')}</p>
               <p className="text-sm">{profile?.phone || '—'}</p>
             </div>
           </div>
-          <p className="text-xs text-[#A0A8BF] mt-3">
+          <p className="text-xs text-[#64748B] mt-3">
             {t('Para corregir tu CI, fecha de nacimiento u otro dato de registro, escribe a soporte.')}
           </p>
         </div>
@@ -298,7 +298,7 @@ export default function PatientProfilePage() {
         {/* Datos médicos */}
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-[#141820]">{t('Mis datos médicos')}</h2>
-          <p className="text-xs text-[#6B738A] mt-0.5">
+          <p className="text-xs text-[#475569] mt-0.5">
             Esta información la ven los profesionales que te atienden antes y durante la consulta —
             mantenerla al día ayuda a que la atención sea más segura.
           </p>

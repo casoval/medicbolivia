@@ -77,7 +77,7 @@ export default function MaintenancePage() {
         </div>
 
         <h1 className="text-lg font-semibold text-[#1A1F36]">MedicBolivia está en mantenimiento</h1>
-        <p className="text-sm text-[#6B738A] mt-2">
+        <p className="text-sm text-[#475569] mt-2">
           Estamos haciendo algunos ajustes para mejorar la plataforma. Volvemos enseguida.
         </p>
 
@@ -86,7 +86,7 @@ export default function MaintenancePage() {
           <span className="w-2 h-2 rounded-full bg-[#185FA5] animate-bounce" style={{ animationDelay: '150ms' }} />
           <span className="w-2 h-2 rounded-full bg-[#185FA5] animate-bounce" style={{ animationDelay: '300ms' }} />
         </div>
-        <p className="text-xs text-[#A0A8BF] mt-3">
+        <p className="text-xs text-[#64748B] mt-3">
           {checking ? 'Comprobando…' : 'Verificamos automáticamente cada 10 segundos'}
         </p>
       </div>

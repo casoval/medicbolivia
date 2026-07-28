@@ -29,7 +29,7 @@ export function LanguageSwitcher({ variant = 'light' }: { variant?: 'light' | 'd
   const triggerClass =
     variant === 'dark'
       ? 'flex items-center gap-1.5 text-xs sm:text-sm font-medium text-white/90 hover:text-white bg-white/10 hover:bg-white/15 px-2 sm:px-2.5 py-1.5 rounded-lg transition-colors shrink-0'
-      : 'flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[#6B738A] hover:text-[#141820] border border-[#DDE1EE] hover:bg-[#F5F6FA] px-2 sm:px-2.5 py-1.5 rounded-lg transition-colors shrink-0'
+      : 'flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[#475569] hover:text-[#141820] border border-[#DDE1EE] hover:bg-[#F5F6FA] px-2 sm:px-2.5 py-1.5 rounded-lg transition-colors shrink-0'
 
   return (
     <div className="relative" ref={ref}>
@@ -63,12 +63,12 @@ export function LanguageSwitcher({ variant = 'light' }: { variant?: 'light' | 'd
             >
               <span>{l.nativeLabel}</span>
               {l.code !== 'es' && (
-                <span className="text-[10px] text-[#6B738A] font-normal">{l.label}</span>
+                <span className="text-[10px] text-[#475569] font-normal">{l.label}</span>
               )}
             </button>
           ))}
           <div className="px-3.5 py-2 border-t border-[#DDE1EE] bg-[#F5F6FA]">
-            <p className="text-[10px] text-[#6B738A] leading-snug">
+            <p className="text-[10px] text-[#475569] leading-snug">
               Traducción visual en revisión, aún no validada por hablantes nativos.
             </p>
           </div>

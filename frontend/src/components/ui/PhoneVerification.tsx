@@ -121,7 +121,7 @@ export function PhoneVerification({ phone, onVerified, verified }: PhoneVerifica
         </button>
       ) : (
         <div className="space-y-2 bg-[#F5F6FA] border border-[#DDE1EE] rounded-lg p-3">
-          <p className="text-xs text-[#6B738A]">
+          <p className="text-xs text-[#475569]">
             Te enviamos un código de 6 dígitos por WhatsApp al{' '}
             <span className="font-medium text-[#3A4155]">+{phone}</span>.
             {expireMinutes != null && (
@@ -155,7 +155,7 @@ export function PhoneVerification({ phone, onVerified, verified }: PhoneVerifica
             type="button"
             onClick={handleSend}
             disabled={cooldown > 0 || sending}
-            className="text-xs text-[#185FA5] font-medium disabled:text-[#A0A8BF] disabled:cursor-not-allowed"
+            className="text-xs text-[#185FA5] font-medium disabled:text-[#64748B] disabled:cursor-not-allowed"
           >
             {cooldown > 0 ? `Reenviar código (${cooldown}s)` : 'Reenviar código'}
           </button>

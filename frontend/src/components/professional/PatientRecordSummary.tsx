@@ -24,7 +24,7 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null
   return (
     <div className="mb-1.5 last:mb-0">
-      <span className="text-[10px] font-semibold text-[#6B738A] uppercase tracking-wide">{label}: </span>
+      <span className="text-[10px] font-semibold text-[#475569] uppercase tracking-wide">{label}: </span>
       <span className="text-xs">{value}</span>
     </div>
   )
@@ -64,13 +64,13 @@ export function PatientRecordSummary({
 
   return (
     <div>
-      {isLoading && <p className="text-sm text-[#6B738A] text-center py-6">{t('Cargando historial...')}</p>}
+      {isLoading && <p className="text-sm text-[#475569] text-center py-6">{t('Cargando historial...')}</p>}
 
       {!isLoading && medicalInfo && (
         medicalInfo.allergies.length > 0 || medicalInfo.chronic_conditions.length > 0 || medicalInfo.current_medications.length > 0
       ) && (
         <div className="mb-5">
-          <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">
+          <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">
             {t('🩺 Datos médicos del paciente')}
           </p>
           <div className="space-y-2">
@@ -111,25 +111,25 @@ export function PatientRecordSummary({
       {nothingAtAll && (
         <div className="text-center py-6">
           <p className="text-3xl mb-2">🗂️</p>
-          <p className="text-sm text-[#6B738A]">{t('Todavía no hay recetas ni historias clínicas de este paciente.')}</p>
+          <p className="text-sm text-[#475569]">{t('Todavía no hay recetas ni historias clínicas de este paciente.')}</p>
         </div>
       )}
 
       {myNotes.length > 0 && (
         <div className="mb-5">
-          <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">
+          <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">
             📋 Mis historias clínicas ({myNotes.length})
           </p>
           <div className="space-y-2">
             {myNotes.map((note: any) => (
               <div key={note.id} className="border border-[#DDE1EE] rounded-xl p-3">
-                <p className="text-[11px] text-[#A0A8BF] mb-1.5">{fmtDate(note.created_at)}</p>
+                <p className="text-[11px] text-[#64748B] mb-1.5">{fmtDate(note.created_at)}</p>
                 <Field label="Motivo (S)" value={note.subjective} />
                 <Field label="Hallazgos (O)" value={note.objective} />
                 <Field label="Diagnóstico (A)" value={note.assessment} />
                 <Field label="Plan (P)" value={note.plan} />
                 {!note.subjective && !note.objective && !note.assessment && !note.plan && (
-                  <p className="text-xs text-[#A0A8BF]">{t('Sin detalle registrado.')}</p>
+                  <p className="text-xs text-[#64748B]">{t('Sin detalle registrado.')}</p>
                 )}
               </div>
             ))}
@@ -139,13 +139,13 @@ export function PatientRecordSummary({
 
       {myRx.length > 0 && (
         <div className="mb-5">
-          <p className="text-xs font-semibold text-[#6B738A] uppercase tracking-wide mb-2">
+          <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">
             💊 Mis recetas ({myRx.length})
           </p>
           <div className="space-y-2">
             {myRx.map((rx: any) => (
               <div key={rx.id} className="border border-[#DDE1EE] rounded-xl p-3">
-                <p className="text-[11px] text-[#A0A8BF] mb-1.5">
+                <p className="text-[11px] text-[#64748B] mb-1.5">
                   {fmtDate(rx.signed_at)}{rx.status === 'VOIDED' ? ' · Anulada' : ''}
                 </p>
                 <div className="space-y-1">
@@ -166,7 +166,7 @@ export function PatientRecordSummary({
           <p className="text-xs font-semibold text-[#185FA5] uppercase tracking-wide mb-1">
             🔗 Compartido por otros médicos ({sharedNotes.length})
           </p>
-          <p className="text-[11px] text-[#6B738A] mb-2">
+          <p className="text-[11px] text-[#475569] mb-2">
             {t('El paciente autorizó compartir estas notas con médicos de la plataforma.')}
           </p>
           <div className="space-y-2">
@@ -175,7 +175,7 @@ export function PatientRecordSummary({
                 <p className="text-[11px] text-[#185FA5] font-medium mb-1">
                   {note.professional_name || 'Médico'}{note.professional_specialty ? ` · ${note.professional_specialty}` : ''}
                 </p>
-                <p className="text-[11px] text-[#A0A8BF] mb-1.5">{fmtDate(note.created_at)}</p>
+                <p className="text-[11px] text-[#64748B] mb-1.5">{fmtDate(note.created_at)}</p>
                 <Field label="Motivo (S)" value={note.subjective} />
                 <Field label="Hallazgos (O)" value={note.objective} />
                 <Field label="Diagnóstico (A)" value={note.assessment} />

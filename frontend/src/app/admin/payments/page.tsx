@@ -71,7 +71,7 @@ function formatSlaStatus(
 }
 
 const SLA_TIER_STYLES: Record<string, string> = {
-  ok: 'bg-[#F5F6FA] text-[#6B738A]',
+  ok: 'bg-[#F5F6FA] text-[#475569]',
   warning: 'bg-[#FFF4E5] text-[#B25E09]',
   critical: 'bg-[#FCEBEB] text-[#A32D2D] font-semibold',
 }
@@ -177,7 +177,7 @@ export default function AdminPaymentsPage() {
       <div className="max-w-4xl">
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Pagos y finanzas')}</h1>
-          <p className="text-xs text-[#6B738A] mt-0.5">{t('Transacciones QR y gestion de reembolsos')}</p>
+          <p className="text-xs text-[#475569] mt-0.5">{t('Transacciones QR y gestion de reembolsos')}</p>
         </div>
 
         {success && <div className="mb-4"><Alert type="success" message={success} /></div>}
@@ -186,19 +186,19 @@ export default function AdminPaymentsPage() {
         <div className="grid grid-cols-4 gap-3 mb-5">
           <div className="card py-3 text-center">
             <p className="text-xl font-bold text-[#0F6E56]">Bs. {totalConfirmed.toFixed(2)}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Total recaudado')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Total recaudado')}</p>
           </div>
           <div className="card py-3 text-center">
             <p className="text-xl font-bold text-[#185FA5]">Bs. {totalPlatform.toFixed(2)}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Comision plataforma')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Comision plataforma')}</p>
           </div>
           <div className="card py-3 text-center">
             <p className="text-xl font-bold text-[#854F0B]">{pendingCount}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Pendientes')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('Pendientes')}</p>
           </div>
           <div className="card py-3 text-center">
             <p className="text-xl font-bold text-[#A32D2D]">{disputedPayments.length}</p>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('En disputa')}</p>
+            <p className="text-xs text-[#475569] mt-0.5">{t('En disputa')}</p>
           </div>
         </div>
 
@@ -207,7 +207,7 @@ export default function AdminPaymentsPage() {
           <button
             onClick={() => setActiveTab('transactions')}
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              activeTab === 'transactions' ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#6B738A]'
+              activeTab === 'transactions' ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#475569]'
             }`}
           >
             {t('Transacciones')}
@@ -215,7 +215,7 @@ export default function AdminPaymentsPage() {
           <button
             onClick={() => setActiveTab('disputes')}
             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              activeTab === 'disputes' ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#6B738A]'
+              activeTab === 'disputes' ? 'bg-white text-[#141820] border border-[#DDE1EE]' : 'text-[#475569]'
             }`}
           >
             Disputas {disputedPayments.length > 0 && (
@@ -251,7 +251,7 @@ export default function AdminPaymentsPage() {
                             <p className="text-xs font-medium">
                               {DISPUTE_CATEGORY_LABELS[d.dispute_category || ''] || d.dispute_category || 'Sin categoría'}
                             </p>
-                            <p className="text-xs text-[#6B738A] mt-0.5">
+                            <p className="text-xs text-[#475569] mt-0.5">
                               Reportado {d.disputed_at ? new Date(d.disputed_at).toLocaleString('es-BO') : '—'}
                             </p>
                           </div>
@@ -264,14 +264,14 @@ export default function AdminPaymentsPage() {
                           <p className="text-xs">{d.dispute_reason}</p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap mb-2">
-                          <span className={`text-[11px] px-1.5 py-0.5 rounded ${d.has_clinical_note ? 'bg-[#E1F5EE] text-[#0F6E56]' : 'bg-[#F5F6FA] text-[#6B738A]'}`}>
+                          <span className={`text-[11px] px-1.5 py-0.5 rounded ${d.has_clinical_note ? 'bg-[#E1F5EE] text-[#0F6E56]' : 'bg-[#F5F6FA] text-[#475569]'}`}>
                             {d.has_clinical_note ? '✓ Con historia clínica' : '✗ Sin historia clínica'}
                           </span>
-                          <span className={`text-[11px] px-1.5 py-0.5 rounded ${d.has_prescription ? 'bg-[#E1F5EE] text-[#0F6E56]' : 'bg-[#F5F6FA] text-[#6B738A]'}`}>
+                          <span className={`text-[11px] px-1.5 py-0.5 rounded ${d.has_prescription ? 'bg-[#E1F5EE] text-[#0F6E56]' : 'bg-[#F5F6FA] text-[#475569]'}`}>
                             {d.has_prescription ? '✓ Con receta' : '✗ Sin receta'}
                           </span>
                           {d.consultation_duration_minutes != null && (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#6B738A]">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F6FA] text-[#475569]">
                               {d.consultation_duration_minutes} min de consulta
                             </span>
                           )}
@@ -303,13 +303,13 @@ export default function AdminPaymentsPage() {
           <div className="card">
             <div className="flex items-center justify-between">
               <SectionTitle>{t('Ultimas transacciones QR')}</SectionTitle>
-              {isFetching && <span className="text-[10px] text-[#A0A8BF]">{t('Actualizando...')}</span>}
+              {isFetching && <span className="text-[10px] text-[#64748B]">{t('Actualizando...')}</span>}
             </div>
 
             {/* Filtros */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 pb-4 border-b border-[#DDE1EE]">
               <div>
-                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">{t('Desde')}</label>
+                <label className="block text-[10px] font-medium text-[#475569] mb-1">{t('Desde')}</label>
                 <input
                   type="date"
                   className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-xs focus:outline-none focus:border-[#185FA5]"
@@ -318,7 +318,7 @@ export default function AdminPaymentsPage() {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">{t('Hasta')}</label>
+                <label className="block text-[10px] font-medium text-[#475569] mb-1">{t('Hasta')}</label>
                 <input
                   type="date"
                   className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-xs focus:outline-none focus:border-[#185FA5]"
@@ -327,7 +327,7 @@ export default function AdminPaymentsPage() {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">{t('Paciente')}</label>
+                <label className="block text-[10px] font-medium text-[#475569] mb-1">{t('Paciente')}</label>
                 <input
                   type="text"
                   placeholder={t('Nombre o apellido')}
@@ -337,7 +337,7 @@ export default function AdminPaymentsPage() {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-medium text-[#6B738A] mb-1">{t('Profesional')}</label>
+                <label className="block text-[10px] font-medium text-[#475569] mb-1">{t('Profesional')}</label>
                 <input
                   type="text"
                   placeholder={t('Nombre o apellido')}
@@ -348,7 +348,7 @@ export default function AdminPaymentsPage() {
               </div>
               {hasActiveFilters && (
                 <div className="col-span-2 sm:col-span-4 flex items-center justify-between">
-                  <p className="text-[10px] text-[#6B738A]">
+                  <p className="text-[10px] text-[#475569]">
                     {payments.length} transacción{payments.length !== 1 ? 'es' : ''} encontrada{payments.length !== 1 ? 's' : ''} con estos filtros
                   </p>
                   <button onClick={clearFilters} className="text-xs text-[#185FA5] hover:underline">
@@ -359,7 +359,7 @@ export default function AdminPaymentsPage() {
             </div>
 
             {payments.length === 0 ? (
-              <p className="text-sm text-[#6B738A] text-center py-8">
+              <p className="text-sm text-[#475569] text-center py-8">
                 {hasActiveFilters ? 'No hay transacciones con estos filtros' : 'No hay transacciones aun'}
               </p>
             ) : (
@@ -376,7 +376,7 @@ export default function AdminPaymentsPage() {
                           <p className="text-xs font-medium truncate">
                             {p.patient_name || 'Paciente desconocido'} → {p.professional_name || 'Profesional desconocido'}
                           </p>
-                          <p className="text-xs text-[#6B738A] mt-0.5">
+                          <p className="text-xs text-[#475569] mt-0.5">
                             {new Date(p.created_at).toLocaleString('es-BO')}
                             {p.specialty && <span> · {p.specialty}</span>}
                           </p>
@@ -384,8 +384,8 @@ export default function AdminPaymentsPage() {
                         <div className="text-right flex-shrink-0">
                           {p.status === 'CANCELLED_NO_CHARGE' ? (
                             <>
-                              <p className="text-sm font-bold text-[#A0A8BF]">{t('Bs. 0.00')}</p>
-                              <p className="text-xs text-[#A0A8BF]">{t('prof. 0.00')}</p>
+                              <p className="text-sm font-bold text-[#64748B]">{t('Bs. 0.00')}</p>
+                              <p className="text-xs text-[#64748B]">{t('prof. 0.00')}</p>
                             </>
                           ) : (
                             <>
@@ -413,7 +413,7 @@ export default function AdminPaymentsPage() {
                         )}
                         <svg
                           width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          className={`text-[#A0A8BF] flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                          className={`text-[#64748B] flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                         >
                           <path d="M6 9l6 6 6-6" />
                         </svg>
@@ -423,94 +423,94 @@ export default function AdminPaymentsPage() {
                         <div className="pb-4 px-2 -mt-1">
                           <div className="bg-[#F5F6FA] rounded-lg p-3 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-xs">
                             <div>
-                              <p className="text-[#A0A8BF]">{t('ID de pago')}</p>
+                              <p className="text-[#64748B]">{t('ID de pago')}</p>
                               <p className="font-mono text-[10px] text-[#3C4257] break-all">{p.id}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('ID de consulta')}</p>
+                              <p className="text-[#64748B]">{t('ID de consulta')}</p>
                               <p className="font-mono text-[10px] text-[#3C4257] break-all">{p.consultation_id || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Tipo de consulta')}</p>
+                              <p className="text-[#64748B]">{t('Tipo de consulta')}</p>
                               <p className="text-[#3C4257]">{p.consultation_type || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Paciente')}</p>
+                              <p className="text-[#64748B]">{t('Paciente')}</p>
                               <p className="text-[#3C4257]">{p.patient_name || '—'} {p.patient_ci && `(CI ${p.patient_ci})`}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Profesional')}</p>
+                              <p className="text-[#64748B]">{t('Profesional')}</p>
                               <p className="text-[#3C4257]">{p.professional_name || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Especialidad')}</p>
+                              <p className="text-[#64748B]">{t('Especialidad')}</p>
                               <p className="text-[#3C4257]">{p.specialty || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Monto total')}</p>
+                              <p className="text-[#64748B]">{t('Monto total')}</p>
                               <p className="text-[#3C4257]">Bs. {p.status === 'CANCELLED_NO_CHARGE' ? '0.00' : Number(p.amount).toFixed(2)}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Comisión plataforma')}</p>
+                              <p className="text-[#64748B]">{t('Comisión plataforma')}</p>
                               <p className="text-[#3C4257]">Bs. {p.status === 'CANCELLED_NO_CHARGE' ? '0.00' : Number(p.platform_fee).toFixed(2)}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Neto profesional')}</p>
+                              <p className="text-[#64748B]">{t('Neto profesional')}</p>
                               <p className="text-[#3C4257]">Bs. {p.status === 'CANCELLED_NO_CHARGE' ? '0.00' : Number(p.professional_net).toFixed(2)}</p>
                             </div>
                             {p.status === 'CANCELLED_NO_CHARGE' && (
                               <div className="col-span-2 sm:col-span-3">
-                                <p className="text-[#A0A8BF] text-[10px]">
+                                <p className="text-[#64748B] text-[10px]">
                                   Se canceló antes de generarse el cobro (precio de referencia de la consulta: Bs. {Number(p.amount).toFixed(2)}).
                                 </p>
                               </div>
                             )}
                             {p.outcome_note && (
                               <div className="col-span-2 sm:col-span-3">
-                                <p className="text-[#A0A8BF]">{t('Qué pasó')}</p>
+                                <p className="text-[#64748B]">{t('Qué pasó')}</p>
                                 <p className="text-[#3C4257]">{formatOutcomeNote(p.outcome_note)}</p>
                               </div>
                             )}
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Banco')}</p>
+                              <p className="text-[#64748B]">{t('Banco')}</p>
                               <p className="text-[#3C4257]">{p.bank_name || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('ID transacción bancaria')}</p>
+                              <p className="text-[#64748B]">{t('ID transacción bancaria')}</p>
                               <p className="text-[#3C4257]">{p.bank_tx_id || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Estado de la consulta')}</p>
+                              <p className="text-[#64748B]">{t('Estado de la consulta')}</p>
                               <p className="text-[#3C4257]">{p.consultation_status || '—'}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Fecha de creación')}</p>
+                              <p className="text-[#64748B]">{t('Fecha de creación')}</p>
                               <p className="text-[#3C4257]">{new Date(p.created_at).toLocaleString('es-BO')}</p>
                             </div>
                             <div>
-                              <p className="text-[#A0A8BF]">{t('Fecha de pago')}</p>
+                              <p className="text-[#64748B]">{t('Fecha de pago')}</p>
                               <p className="text-[#3C4257]">{p.paid_at ? new Date(p.paid_at).toLocaleString('es-BO') : '—'}</p>
                             </div>
                             {p.scheduled_at && (
                               <div>
-                                <p className="text-[#A0A8BF]">{t('Horario agendado')}</p>
+                                <p className="text-[#64748B]">{t('Horario agendado')}</p>
                                 <p className="text-[#3C4257]">{new Date(p.scheduled_at).toLocaleString('es-BO')}</p>
                               </div>
                             )}
                             {p.refunded_at && (
                               <>
                                 <div>
-                                  <p className="text-[#A0A8BF]">{t('Fecha de reembolso')}</p>
+                                  <p className="text-[#64748B]">{t('Fecha de reembolso')}</p>
                                   <p className="text-[#3C4257]">{new Date(p.refunded_at).toLocaleString('es-BO')}</p>
                                 </div>
                                 <div>
-                                  <p className="text-[#A0A8BF]">{t('Monto reembolsado')}</p>
+                                  <p className="text-[#64748B]">{t('Monto reembolsado')}</p>
                                   <p className="text-[#3C4257]">
                                     {p.refunded_amount != null ? `Bs. ${Number(p.refunded_amount).toFixed(2)}` : '— (registro anterior, ver bitácora)'}
                                   </p>
                                 </div>
                                 <div className="col-span-2">
-                                  <p className="text-[#A0A8BF]">{t('Motivo del reembolso')}</p>
+                                  <p className="text-[#64748B]">{t('Motivo del reembolso')}</p>
                                   <p className="text-[#3C4257]">{p.refund_note || '—'}</p>
                                 </div>
                               </>
@@ -518,20 +518,20 @@ export default function AdminPaymentsPage() {
                             {p.disputed_at && (
                               <>
                                 <div>
-                                  <p className="text-[#A0A8BF]">{t('Fecha de disputa')}</p>
+                                  <p className="text-[#64748B]">{t('Fecha de disputa')}</p>
                                   <p className="text-[#3C4257]">{new Date(p.disputed_at).toLocaleString('es-BO')}</p>
                                 </div>
                                 <div>
-                                  <p className="text-[#A0A8BF]">{t('Categoría de disputa')}</p>
+                                  <p className="text-[#64748B]">{t('Categoría de disputa')}</p>
                                   <p className="text-[#3C4257]">{DISPUTE_CATEGORY_LABELS[p.dispute_category] || p.dispute_category || '—'}</p>
                                 </div>
                                 <div className="col-span-2 sm:col-span-3">
-                                  <p className="text-[#A0A8BF]">{t('Motivo del paciente')}</p>
+                                  <p className="text-[#64748B]">{t('Motivo del paciente')}</p>
                                   <p className="text-[#3C4257]">{p.dispute_reason || '—'}</p>
                                 </div>
                                 {p.resolution_note && (
                                   <div className="col-span-2 sm:col-span-3">
-                                    <p className="text-[#A0A8BF]">{t('Nota de resolución del admin')}</p>
+                                    <p className="text-[#64748B]">{t('Nota de resolución del admin')}</p>
                                     <p className="text-[#3C4257]">{p.resolution_note}</p>
                                   </div>
                                 )}
@@ -552,11 +552,11 @@ export default function AdminPaymentsPage() {
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
               <h3 className="text-base font-semibold mb-1">{t('Procesar reembolso')}</h3>
-              <p className="text-xs text-[#6B738A] mb-4">
+              <p className="text-xs text-[#475569] mb-4">
                 Monto: Bs. {Number(refundModal.amount).toFixed(2)}
               </p>
               <div className="mb-4">
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Motivo')}</label>
+                <label className="block text-xs font-medium text-[#475569] mb-1">{t('Motivo')}</label>
                 <textarea
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] resize-none"
                   rows={3}
@@ -588,7 +588,7 @@ export default function AdminPaymentsPage() {
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
               <h3 className="text-base font-semibold mb-1">{t('Resolver disputa')}</h3>
-              <p className="text-xs text-[#6B738A] mb-4">
+              <p className="text-xs text-[#475569] mb-4">
                 Monto en disputa: Bs. {resolveModal.amount.toFixed(2)} · profesional recibiría Bs. {resolveModal.professional_net.toFixed(2)}
               </p>
 
@@ -609,7 +609,7 @@ export default function AdminPaymentsPage() {
 
               {resolution === 'REFUND_PARTIAL' && (
                 <div className="mb-4">
-                  <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Monto a reembolsar (Bs.)')}</label>
+                  <label className="block text-xs font-medium text-[#475569] mb-1">{t('Monto a reembolsar (Bs.)')}</label>
                   <input
                     type="number"
                     min="0.01"
@@ -623,7 +623,7 @@ export default function AdminPaymentsPage() {
               )}
 
               <div className="mb-4">
-                <label className="block text-xs font-medium text-[#6B738A] mb-1">{t('Nota de resolución (mínimo 10 caracteres)')}</label>
+                <label className="block text-xs font-medium text-[#475569] mb-1">{t('Nota de resolución (mínimo 10 caracteres)')}</label>
                 <textarea
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] resize-none"
                   rows={3}

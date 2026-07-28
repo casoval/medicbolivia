@@ -29,7 +29,7 @@ export function PublicHeader() {
           <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-7 sm:h-11 w-auto" priority />
         </Link>
 
-        <nav className="hidden sm:flex items-center gap-6 text-sm text-[#6B738A]">
+        <nav className="hidden sm:flex items-center gap-6 text-sm text-[#475569]">
           {NAV_LINKS.map((link) => (
             <Link key={link.href} href={link.href} className="hover:text-[#141820] transition-colors">
               {link.label}
