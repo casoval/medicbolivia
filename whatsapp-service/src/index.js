@@ -250,10 +250,11 @@ function connectToWhatsApp() {
     clearConnectWatchdog()
     connectionState = 'DOWN'
     logger.error(`Error al inicializar WhatsApp: ${err.message}`)
+    try { client?.destroy() } catch (_) { /* noop */ }
     setTimeout(connectToWhatsApp, 5000)
   })
-}
 
+}
 async function forwardInboundToBackend(phone, message, contactName) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS)
