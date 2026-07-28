@@ -1,12 +1,13 @@
 'use client'
 // src/app/patient/search/page.tsx
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { ProfessionalCard } from '@/components/patient/ProfessionalCard'
+import { ConsultedProfessionals } from '@/components/patient/ConsultedProfessionals'
 import { LoadingScreen, EmptyState, Alert } from '@/components/ui'
 import { professionalsAPI, consultationsAPI } from '@/lib/api'
 import type { Professional } from '@/types'
@@ -18,9 +19,13 @@ const SPECIALTIES = [
   'Traumatología y Ortopedia', 'Dermatología',
 ]
 
-export default function SearchPage() {
+function SearchPageInner() {
   const { t } = useLanguage()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const [tab, setTab] = useState<'buscar' | 'consultados'>(
+    searchParams.get('tab') === 'consultados' ? 'consultados' : 'buscar'
+  )
   const [search, setSearch]           = useState('')
   const [specialty, setSpecialty]     = useState('Todos')
   const [availableNow, setAvailableNow] = useState(false)
@@ -75,13 +80,44 @@ export default function SearchPage() {
 
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-4">
           <div>
-            <h1 className="text-base font-semibold">{t('Profesionales disponibles')}</h1>
-            <p className="text-xs text-[#6B738A] mt-0.5">{t('Consulta inmediata o agenda una cita')}</p>
+            <h1 className="text-base font-semibold">
+              {tab === 'buscar' ? t('Profesionales disponibles') : t('Profesionales consultados')}
+            </h1>
+            <p className="text-xs text-[#6B738A] mt-0.5">
+              {tab === 'buscar' ? t('Consulta inmediata o agenda una cita') : t('Médicos con los que ya tuviste alguna consulta')}
+            </p>
           </div>
-          <a href="/patient/agent" className="text-xs bg-[#E6F1FB] text-[#185FA5] border border-[#85B7EB] px-3 py-1.5 rounded-lg hover:bg-[#B5D4F4] transition-colors">
-            {t('No sé qué especialista →')}
-          </a>
+          {tab === 'buscar' && (
+            <a href="/patient/agent" className="text-xs bg-[#E6F1FB] text-[#185FA5] border border-[#85B7EB] px-3 py-1.5 rounded-lg hover:bg-[#B5D4F4] transition-colors">
+              {t('No sé qué especialista →')}
+            </a>
+          )}
         </div>
+
+        {/* Pestañas: Buscar médico / Profesionales consultados */}
+        <div className="flex gap-1 mb-4 border-b border-[#DDE1EE]">
+          <button
+            onClick={() => setTab('buscar')}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === 'buscar' ? 'border-[#185FA5] text-[#185FA5]' : 'border-transparent text-[#6B738A] hover:text-[#141820]'
+            }`}
+          >
+            {t('Buscar médico')}
+          </button>
+          <button
+            onClick={() => setTab('consultados')}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === 'consultados' ? 'border-[#185FA5] text-[#185FA5]' : 'border-transparent text-[#6B738A] hover:text-[#141820]'
+            }`}
+          >
+            {t('Profesionales consultados')}
+          </button>
+        </div>
+
+        {tab === 'consultados' ? (
+          <ConsultedProfessionals />
+        ) : (
+        <>
 
         {/* Error genérico */}
         {error && (
@@ -190,7 +226,17 @@ export default function SearchPage() {
             ))}
           </div>
         )}
+        </>
+        )}
       </div>
     </DashboardLayout>
+  )
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<LoadingScreen text="Cargando..." />}>
+      <SearchPageInner />
+    </Suspense>
   )
 }

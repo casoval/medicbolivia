@@ -508,7 +508,7 @@ export default function ProfessionalClinicalNotesPage() {
       <div className="max-w-2xl">
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-base font-semibold">{t('Mis notas clínicas')}</h1>
+            <h1 className="text-base font-semibold">{t('Mis historias clínicas')}</h1>
             <p className="text-xs text-[#6B738A] mt-0.5">
               {t('Puedes consultarlas si un paciente regresa.')}
             </p>
@@ -559,7 +559,7 @@ export default function ProfessionalClinicalNotesPage() {
         ) : totalPatients === 0 && !search ? (
           <div className="card text-center py-14">
             <p className="text-4xl mb-3">📋</p>
-            <p className="text-sm font-semibold text-[#1A1F2E]">{t('Sin notas clínicas aún')}</p>
+            <p className="text-sm font-semibold text-[#1A1F2E]">{t('Sin historias clínicas aún')}</p>
             <p className="text-xs text-[#6B738A] mt-1 max-w-xs mx-auto">
               Puedes crear la historia clínica de un paciente durante la videollamada usando el botón 📋,
               o usar "+ Nueva historia clínica" arriba para cualquier consulta ya completada.

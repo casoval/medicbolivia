@@ -19,7 +19,7 @@
 
 import {
   IconHome, IconSearch, IconBot, IconClock, IconFile, IconRx, IconNote,
-  IconStetho, IconGrid, IconUsers, IconCal, IconStar, IconUser,
+  IconGrid, IconUsers, IconCal, IconStar, IconUser,
   IconPatients, IconCard, IconLog, IconCog, IconTag, IconChat, IconHelp,
 } from '@/components/nav-icons'
 
@@ -72,13 +72,6 @@ export const PATIENT_NAV: NavItem[] = [
     href: '/patient/search',
     icon: <IconSearch />,
     description: 'Encuentra y filtra profesionales por especialidad y disponibilidad',
-    group: 'Consultar',
-  },
-  {
-    label: 'Mis profesionales',
-    href: '/patient/professionals',
-    icon: <IconStetho />,
-    description: 'Médicos que ya has consultado o guardado como favoritos',
     group: 'Consultar',
   },
   {
@@ -180,7 +173,7 @@ export const PROFESSIONAL_NAV: NavItem[] = [
     group: 'Pacientes',
   },
   {
-    label: 'Notas clínicas',
+    label: 'Historias clínicas',
     href: '/professional/clinical-notes',
     icon: <IconNote />,
     description: 'Diagnósticos y observaciones que registras por consulta',
@@ -191,13 +184,6 @@ export const PROFESSIONAL_NAV: NavItem[] = [
     href: '/professional/prescriptions',
     icon: <IconFile />,
     description: 'Medicamentos que has recetado a tus pacientes',
-    group: 'Pacientes',
-  },
-  {
-    label: 'Mensajes',
-    href: '/professional/chat',
-    icon: <IconChat />,
-    description: 'Chat interno para el seguimiento posterior a tus consultas',
     group: 'Pacientes',
   },
   {
@@ -212,6 +198,13 @@ export const PROFESSIONAL_NAV: NavItem[] = [
     href: '/professional/ratings',
     icon: <IconStar />,
     description: 'Reseñas y puntaje que te dejan tus pacientes',
+    group: 'Cuenta',
+  },
+  {
+    label: 'Mensajes',
+    href: '/professional/chat',
+    icon: <IconChat />,
+    description: 'Chat interno para el seguimiento posterior a tus consultas',
     group: 'Cuenta',
   },
   {
