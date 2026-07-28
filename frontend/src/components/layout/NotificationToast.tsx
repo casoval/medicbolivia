@@ -417,6 +417,8 @@ export function NotificationToast() {
   // duplicarla. El contenido del evento en sí no se usa para nada más
   // que disparar el refetch — la lista fresca de /consultations/my sigue
   // siendo la fuente de verdad.
+  // eslint-disable-next-line no-console
+  console.log('[DIAG NotificationToast] render, user =', user, 'user?.id =', user?.id)
   useNotificationSocket(user?.id, useCallback(() => { refetch() }, [refetch]))
 
   useEffect(() => {

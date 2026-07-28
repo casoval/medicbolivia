@@ -45,14 +45,24 @@ export function useNotificationSocket(
   onEventRef.current = onEvent
 
   useEffect(() => {
-    if (!currentUserId) return
+    // eslint-disable-next-line no-console
+    console.log('[DIAG useNotificationSocket] effect corrió, currentUserId =', currentUserId)
+    if (!currentUserId) {
+      console.log('[DIAG useNotificationSocket] currentUserId vacío, NO se conecta')
+      return
+    }
     shouldReconnect.current = true
 
     function connect() {
-      const ws = new WebSocket(buildNotificationWebSocketUrl())
+      const url = buildNotificationWebSocketUrl()
+      console.log('[DIAG useNotificationSocket] intentando conectar a', url)
+      const ws = new WebSocket(url)
       wsRef.current = ws
 
-      ws.onopen = () => setConnected(true)
+      ws.onopen = () => {
+        console.log('[DIAG useNotificationSocket] ✅ conectado')
+        setConnected(true)
+      }
 
       ws.onmessage = (event) => {
         try {
@@ -64,6 +74,7 @@ export function useNotificationSocket(
       }
 
       ws.onclose = (event) => {
+        console.log('[DIAG useNotificationSocket] 🔒 cerrado, code:', event.code, 'reason:', event.reason)
         setConnected(false)
         // 4001 token inválido: no tiene sentido reintentar hasta que
         // haya una sesión nueva (currentUserId cambia y el efecto corre
@@ -77,7 +88,10 @@ export function useNotificationSocket(
         }
       }
 
-      ws.onerror = () => ws.close()
+      ws.onerror = (e) => {
+        console.log('[DIAG useNotificationSocket] ❌ error', e)
+        ws.close()
+      }
     }
 
     connect()
