@@ -97,7 +97,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
         : role === 'PROFESSIONAL'
         ? 'bg-[#E7F8EF] text-[#0F6E56] font-medium'
         : 'bg-[#E7F8EF] text-[#0F6E56] font-medium'
-      : 'text-[#6B738A] hover:bg-[#F5F6FA] hover:text-[#141820]'
+      : 'text-[#475569] hover:bg-[#F5F6FA] hover:text-[#141820]'
     }
   `
 
@@ -149,7 +149,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
           <div key={groupName} className="mt-2">
             <button
               onClick={() => toggleGroup(groupName)}
-              className="w-full flex items-center justify-between gap-2 px-5 py-1.5 text-xs font-bold uppercase tracking-wide text-[#9AA0B4] hover:text-[#6B738A] transition-opacity"
+              className="w-full flex items-center justify-between gap-2 px-5 py-1.5 text-xs font-bold uppercase tracking-wide text-[#475569] hover:text-[#1E293B] transition-opacity"
               aria-expanded={isOpen}
             >
               <span>{t(groupName)}</span>
@@ -163,7 +163,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
             {/* Guía vertical + indentación: deja claro que estos ítems son
                 hijos del encabezado de arriba, no otro nivel de menú principal. */}
             {isOpen && (
-              <div className="ml-5 pl-2 border-l-2 border-[#E5E7F0] space-y-0.5 py-0.5">
+              <div className="ml-5 pl-2 border-l-2 border-[#64748B] space-y-0.5 py-0.5">
                 {sidebarItems.filter((item) => item.group === groupName).map((item) => renderLink(item, false))}
               </div>
             )}
@@ -233,7 +233,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
                       href={item.href}
                       onClick={() => setAccountMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg text-sm ${
-                        activeHref === item.href ? 'text-[#141820] font-medium bg-[#F5F6FA]' : 'text-[#6B738A] hover:bg-[#F5F6FA] hover:text-[#141820]'
+                        activeHref === item.href ? 'text-[#141820] font-medium bg-[#F5F6FA]' : 'text-[#475569] hover:bg-[#F5F6FA] hover:text-[#141820]'
                       }`}
                       title={item.description}
                     >
@@ -244,7 +244,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
                   <div className="my-1 border-t border-[#DDE1EE]" />
                   <button
                     onClick={logout}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 mx-1 text-sm text-[#6B738A] hover:bg-[#FCEBEB] hover:text-[#A32D2D] rounded-lg transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 mx-1 text-sm text-[#475569] hover:bg-[#FCEBEB] hover:text-[#A32D2D] rounded-lg transition-colors"
                     style={{ width: 'calc(100% - 0.5rem)' }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -287,7 +287,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
             <span className="text-sm font-semibold text-[#141820]">Menú</span>
             <button
               onClick={() => setMenuOpen(false)}
-              className="w-8 h-8 flex items-center justify-center text-[#6B738A] hover:text-[#141820]"
+              className="w-8 h-8 flex items-center justify-center text-[#475569] hover:text-[#141820]"
               aria-label="Cerrar menú"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -306,7 +306,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
             {accountItems.map((item) => renderLink(item))}
             <button
               onClick={logout}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 mx-2 text-sm text-[#6B738A] hover:bg-[#FCEBEB] hover:text-[#A32D2D] rounded-lg transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 mx-2 text-sm text-[#475569] hover:bg-[#FCEBEB] hover:text-[#A32D2D] rounded-lg transition-colors"
               style={{ width: 'calc(100% - 1rem)' }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
