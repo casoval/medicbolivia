@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { consultationsAPI } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { useNotificationSocket } from '@/lib/useNotificationSocket'
 
 interface Toast {
   id: string
@@ -188,7 +189,7 @@ export function NotificationToast() {
     }
   }, [dismiss])
 
-  useQuery({
+  const { refetch } = useQuery({
     queryKey: ['notifications-poll'],
     queryFn: async () => {
       if (!user) return null
@@ -398,9 +399,25 @@ export function NotificationToast() {
       return consultations
     },
     enabled: !!user,
-    refetchInterval: 4000,
+    // Antes esto era 4000 (cada 4 segundos, en TODA la app, para
+    // cualquier usuario logueado — ver useNotificationSocket de abajo,
+    // que ahora es la vía principal). Se deja como respaldo lento: si el
+    // WebSocket se corta (app en segundo plano, wifi inestable,
+    // reconexión en curso), esto igual garantiza que el usuario se entere
+    // del cambio tarde o temprano, sin depender al 100% de que el socket
+    // esté siempre vivo.
+    refetchInterval: 60000,
     refetchOnWindowFocus: true,
   })
+
+  // Push en tiempo real: cualquier evento (cambio de estado de una
+  // consulta, mensaje de chat nuevo, etc — ver notify.py en el backend)
+  // dispara un refetch inmediato, que reusa TODA la lógica de arriba
+  // (detección de cambios de estado, generación de toasts) sin
+  // duplicarla. El contenido del evento en sí no se usa para nada más
+  // que disparar el refetch — la lista fresca de /consultations/my sigue
+  // siendo la fuente de verdad.
+  useNotificationSocket(user?.id, useCallback(() => { refetch() }, [refetch]))
 
   useEffect(() => {
     if (typeof window !== 'undefined' && Notification.permission === 'default') {

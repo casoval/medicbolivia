@@ -25,6 +25,7 @@ from app.models.models import (
     Consultation, ConsultationStatus, ConsultationType, Professional, Patient,
     Payment, PaymentStatus, Notification,
 )
+from app.services.notify import push_notification_ws
 
 
 class ConsultationActionError(Exception):
@@ -132,6 +133,7 @@ async def accept_consultation_core(
                     409,
                 )
 
+    ws_push_user_id = None
     if consultation.consultation_type in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP):
         consultation.status = ConsultationStatus.PAYMENT_CONFIRMED
 
@@ -146,6 +148,7 @@ async def accept_consultation_core(
                 entity_type="Consultation",
                 entity_id=consultation.id,
             ))
+            ws_push_user_id = patient_n.user_id
     else:
         consultation.status = ConsultationStatus.WAITING_PAYMENT
         # Import local para evitar import circular (consultations.py importa
@@ -157,6 +160,13 @@ async def accept_consultation_core(
     await db.commit()
     logger.info(f"Consulta {consultation.id} aceptada por profesional {professional.id}")
 
+    if ws_push_user_id:
+        await push_notification_ws(
+            ws_push_user_id, "CONSULTATION_CONFIRMED", "¡Cita confirmada!",
+            f"Tu cita del {consultation.scheduled_at.strftime('%d/%m/%Y a las %H:%M')} fue confirmada por el profesional.",
+            "Consultation", consultation.id,
+        )
+
 
 async def reject_consultation_core(
     db: AsyncSession, professional: Professional, consultation: Consultation
@@ -164,6 +174,7 @@ async def reject_consultation_core(
     consultation.status = ConsultationStatus.CANCELLED
     consultation.outcome_note = "REJECTED_BY_PROFESSIONAL"
 
+    ws_push_user_id = None
     if consultation.consultation_type in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP):
         pay_result = await db.execute(
             select(Payment).where(
@@ -188,6 +199,14 @@ async def reject_consultation_core(
                 entity_type="Consultation",
                 entity_id=consultation.id,
             ))
+            ws_push_user_id = patient_r.user_id
 
     await db.commit()
     logger.info(f"Consulta {consultation.id} rechazada por profesional {professional.id}")
+
+    if ws_push_user_id:
+        await push_notification_ws(
+            ws_push_user_id, "CONSULTATION_REJECTED_REFUND", "Cita no disponible — devolución en camino",
+            f"El profesional no pudo confirmar tu cita del {consultation.scheduled_at.strftime('%d/%m/%Y a las %H:%M')}. Se procesará la devolución completa.",
+            "Consultation", consultation.id,
+        )

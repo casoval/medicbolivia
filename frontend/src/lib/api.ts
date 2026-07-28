@@ -1426,3 +1426,8 @@ export function buildChatWebSocketUrl(conversationId: string): string {
   const wsBase = BASE_URL.replace(/^http/, 'ws')
   return `${wsBase}/chat/ws/${conversationId}`
 }
+
+export function buildNotificationWebSocketUrl(): string {
+  const wsBase = BASE_URL.replace(/^http/, 'ws')
+  return `${wsBase}/ws/notifications`
+}

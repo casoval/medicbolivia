@@ -2,6 +2,7 @@
 app/api/v1/endpoints/auth.py
 Endpoints de autenticación: registro, login, logout, perfil.
 """
+import hmac
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
@@ -258,7 +259,7 @@ async def verify_otp(data: OTPVerifyRequest):
             detail="El código expiró o no fue solicitado. Pedí uno nuevo."
         )
 
-    if stored_code != data.code:
+    if not hmac.compare_digest(stored_code, data.code):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código incorrecto")
 
     # Código correcto: se consume y se marca el teléfono como verificado
@@ -358,7 +359,7 @@ async def reset_password(
         )
 
     stored_code = await redis_client.get(f"otp_pwd:{data.phone}")
-    if not stored_code or stored_code != data.code:
+    if not stored_code or not hmac.compare_digest(stored_code, data.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Código incorrecto o expirado"

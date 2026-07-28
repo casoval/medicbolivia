@@ -43,6 +43,7 @@ from sqlalchemy import select
 from loguru import logger
 
 from app.models.models import Notification, User, WhatsAppAudience, AgentConfig
+from app.core.notification_ws_manager import notification_manager
 
 
 async def _get_agent_config(db: AsyncSession) -> Optional[AgentConfig]:
@@ -63,6 +64,36 @@ def _audience_for_role(role: str) -> str:
         "ADMIN": WhatsAppAudience.ADMIN.value,
     }
     return mapping.get(role, WhatsAppAudience.PUBLIC.value)
+
+
+async def push_notification_ws(
+    user_id: str,
+    notification_type: str,
+    title: str,
+    body: str,
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+) -> None:
+    """
+    Empuja un evento de notificación por WebSocket SIN crear la fila en
+    la tabla `notifications` — para los ~10 sitios de consultations.py y
+    consultation_actions.py que todavía arman `Notification(...)` a mano
+    en vez de pasar por notify_user() (esa migración quedó pendiente,
+    ver docstring de este archivo).
+
+    A diferencia del push de adentro de notify_user() (que corre ANTES
+    del commit del caller, sin alternativa limpia), a estos sitios se los
+    llama DESPUÉS de `await db.commit()` — así el usuario solo recibe el
+    aviso en tiempo real de algo que ya quedó guardado de verdad.
+    """
+    await notification_manager.publish(user_id, {
+        "type": "notification",
+        "notification_type": notification_type,
+        "title": title,
+        "body": body,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+    })
 
 
 async def notify_user(
@@ -93,6 +124,23 @@ async def notify_user(
     )
     db.add(notification)
     await db.flush()
+
+    # Push en tiempo real (WebSocket) — igual que el envío de WhatsApp
+    # de acá abajo, esto se dispara ANTES del commit del caller (no hay
+    # forma limpia de esperar el commit desde acá sin un cambio mayor de
+    # arquitectura). Es la misma decisión que ya existía para WhatsApp en
+    # esta función: en el peor caso (el caller hace rollback después),
+    # el frontend recibe un aviso de "revisá tus consultas" de más y
+    # simplemente no encuentra nada nuevo al refrescar — no hay corrupción
+    # de datos posible, solo un refetch de más.
+    await notification_manager.publish(user_id, {
+        "type": "notification",
+        "notification_type": type_,
+        "title": title,
+        "body": body,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+    })
 
     if send_whatsapp:
         await _maybe_send_whatsapp(db, user_id, title, body, entity_type, entity_id)

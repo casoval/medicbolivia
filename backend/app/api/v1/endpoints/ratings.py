@@ -107,7 +107,33 @@ async def check_rating(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Devuelve { rated: bool, rating: RatingResponse | null }"""
+    """Devuelve { rated: bool, rating: RatingResponse | null }.
+
+    Antes esto no verificaba que quien pregunta sea parte de la consulta
+    — cualquier usuario logueado podía consultar el estado (y, si ya
+    estaba calificada, el puntaje y comentario) de una consulta ajena si
+    conocía su UUID. En la práctica es difícil de explotar porque los
+    UUID no se adivinan, pero es un control de acceso que faltaba y es
+    barato de cerrar.
+    """
+    cons_result = await db.execute(select(Consultation).where(Consultation.id == consultation_id))
+    consultation = cons_result.scalar_one_or_none()
+    if not consultation:
+        raise HTTPException(status_code=404, detail="Consulta no encontrada")
+
+    is_owner = False
+    if current_user.role.value == "PATIENT":
+        patient_result = await db.execute(select(Patient).where(Patient.user_id == current_user.id))
+        patient = patient_result.scalar_one_or_none()
+        is_owner = bool(patient and patient.id == consultation.patient_id)
+    elif current_user.role.value == "PROFESSIONAL":
+        prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+        professional = prof_result.scalar_one_or_none()
+        is_owner = bool(professional and professional.id == consultation.professional_id)
+
+    if not is_owner:
+        raise HTTPException(status_code=403, detail="No tenés acceso a esta consulta")
+
     existing = await db.execute(
         select(Rating).where(Rating.consultation_id == consultation_id)
     )

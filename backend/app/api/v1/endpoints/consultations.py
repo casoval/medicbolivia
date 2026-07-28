@@ -31,6 +31,7 @@ from app.services.payment import generate_qr_data, calculate_amounts, compute_pr
 from app.services.commission import resolve_commission_percent
 from app.services.patient_links import has_effective_link, professional_has_active_membership
 from app.services.system_reminders import fire_system_reminder
+from app.services.notify import push_notification_ws
 from app.db.seed_system_reminders import SystemReminderID
 from app.services.consultation_actions import (
     ConsultationActionError,
@@ -132,6 +133,12 @@ async def auto_cancel_professional_timeout_with_refund(consultation_id: str, db_
 
         await db.commit()
         logger.info(f"[AUTO-CANCEL] Cita agendada {consultation_id} cancelada con devolución — profesional no respondió en {timeout_minutes} min")
+        if patient:
+            await push_notification_ws(
+                patient.user_id, "AUTO_CANCELLED_REFUND", "Cita cancelada — devolución en camino",
+                "El profesional no confirmó tu cita a tiempo. Se procesará la devolución completa de tu pago.",
+                "Consultation", consultation_id,
+            )
     await engine.dispose()
 
 async def auto_release_payment_after_hold(consultation_id: str, db_url: str, hold_minutes: int):
@@ -314,6 +321,20 @@ async def notify_and_cancel_if_immediate_running(scheduled_consultation_id: str,
 
         await db.commit()
         await engine.dispose()
+
+        if patient:
+            await push_notification_ws(
+                patient.user_id, "SCHEDULE_CONFLICT_WARNING", "Cita a punto de comenzar",
+                f"Tu cita agendada debería iniciar ahora, pero sigues en una consulta inmediata. "
+                f"Tienes {GRACE_MINUTES} minutos antes de que se cancele automáticamente.",
+                "Consultation", scheduled_consultation_id,
+            )
+        if scheduled.professional_id and prof:
+            await push_notification_ws(
+                prof.user_id, "SCHEDULE_CONFLICT_WARNING", "Paciente retrasado",
+                f"El paciente está en otra consulta. Se esperarán {GRACE_MINUTES} minutos antes de cancelar la cita.",
+                "Consultation", scheduled_consultation_id,
+            )
 
         # Esperar la gracia
         await asyncio.sleep(GRACE_MINUTES * 60)
@@ -836,6 +857,14 @@ async def professional_reschedule_consultation(
 
     await db.commit()
     await db.refresh(consultation)
+
+    if patient:
+        await push_notification_ws(
+            patient.user_id, "PROFESSIONAL_RESCHEDULED_DIRECT", "Tu cita cambió de horario",
+            f"El profesional reprogramó tu cita del {old_scheduled_at.strftime('%d/%m %H:%M')} "
+            f"al {data.scheduled_at.strftime('%d/%m %H:%M')}.",
+            "Consultation", consultation.id,
+        )
 
     logger.info(
         f"Profesional {professional.id} reprogramó directamente la cita {consultation_id}: "
@@ -2167,6 +2196,12 @@ async def propose_reschedule(
 
         await db.commit()
 
+        await push_notification_ws(
+            other_user_id, "RESCHEDULE_PROPOSED", "Propuesta de reprogramación",
+            f"Te proponen cambiar tu cita al {new_time.strftime('%d/%m/%Y %H:%M')}. Revisa y responde.",
+            "Consultation", consultation.id,
+        )
+
     logger.info(f"Reprogramación propuesta: consulta {consultation_id} → {new_time} por {role}")
     return {
         "message": "Propuesta de reprogramación enviada. Espera la confirmación de la otra parte.",
@@ -2320,6 +2355,14 @@ async def respond_reschedule(
             entity_id=consultation.id,
         ))
         await db.commit()
+
+        await push_notification_ws(
+            notify_user_id, "RESCHEDULE_RESOLVED",
+            "Reprogramación " + ("aceptada" if data.decision == "ACCEPT" else "rechazada"),
+            f"Tu propuesta de cambiar la cita al {proposed_time.strftime('%d/%m/%Y %H:%M')} fue "
+            + ("aceptada." if data.decision == "ACCEPT" else "rechazada. La cita sigue en su horario original."),
+            "Consultation", consultation.id,
+        )
 
     logger.info(f"Reprogramación {data.decision}: consulta {consultation_id} por {role}")
     return {"message": message, "scheduled_at": consultation.scheduled_at}
@@ -2861,6 +2904,14 @@ async def cancel_no_video_immediate(
 
     await db.commit()
     logger.info(f"[GAP1] Paciente canceló consulta inmediata {consultation_id} — médico no inició video, devolución completa")
+
+    if consultation.professional_id and professional:
+        await push_notification_ws(
+            professional.user_id, "PATIENT_CANCELLED_NO_VIDEO", "Consulta cancelada por el paciente",
+            "El paciente canceló la consulta inmediata porque la videollamada no se inició a tiempo.",
+            "Consultation", consultation_id,
+        )
+
     return {"message": "Consulta cancelada y dinero devuelto.", "consultation_id": consultation_id}
 
 
@@ -2950,4 +3001,12 @@ async def cancel_no_video_scheduled(
 
     await db.commit()
     logger.info(f"[GAP2] Paciente canceló cita agendada {consultation_id} — médico no inició video, devolución completa")
+
+    if consultation.professional_id and professional:
+        await push_notification_ws(
+            professional.user_id, "PATIENT_CANCELLED_NO_VIDEO", "Cita cancelada por el paciente",
+            "El paciente canceló la cita agendada porque la videollamada no se inició a la hora.",
+            "Consultation", consultation_id,
+        )
+
     return {"message": "Cita cancelada y dinero devuelto.", "consultation_id": consultation_id}
