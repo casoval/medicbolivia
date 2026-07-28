@@ -87,9 +87,10 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
     ? `${user.first_name[0]}${user.last_name?.[0] ?? ''}`.toUpperCase()
     : user.role === 'PATIENT' ? 'P' : user.role === 'PROFESSIONAL' ? 'M' : 'A'
 
-  const navLinkClass = (isActive: boolean) => `
+  const navLinkClass = (isActive: boolean, topLevel: boolean) => `
     flex items-center gap-2.5 px-3 py-2.5 mx-2 rounded-lg text-sm
     transition-colors duration-100
+    ${topLevel && !isActive ? 'font-medium' : ''}
     ${isActive
       ? role === 'PATIENT'
         ? 'bg-[#E6F1FB] text-[#185FA5] font-medium'
@@ -115,10 +116,10 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
     if (item.group && !groupNames.includes(item.group)) groupNames.push(item.group)
   })
 
-  const renderLink = (item: NavItem) => {
+  const renderLink = (item: NavItem, topLevel = false) => {
     const isActive = activeHref === item.href
     return (
-      <Link key={item.href} href={item.href} className={navLinkClass(isActive)} title={item.description}>
+      <Link key={item.href} href={item.href} className={navLinkClass(isActive, topLevel)} title={item.description}>
         <span className="flex-shrink-0">{item.icon}</span>
         <span className="flex-1">{t(item.label)}</span>
         {item.badge !== undefined && item.badge > 0 && (
@@ -141,14 +142,14 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
 
   const NavLinks = () => (
     <nav className="py-3">
-      {ungroupedItems.map(renderLink)}
+      {ungroupedItems.map((item) => renderLink(item, true))}
       {groupNames.map((groupName) => {
         const isOpen = openGroups.has(groupName)
         return (
-          <div key={groupName} className="mt-1">
+          <div key={groupName} className="mt-2">
             <button
               onClick={() => toggleGroup(groupName)}
-              className="w-full flex items-center justify-between gap-2 px-5 py-2 text-[11px] font-medium uppercase tracking-wide text-[#9AA0B4] hover:text-[#6B738A]"
+              className="w-full flex items-center justify-between gap-2 px-5 py-1.5 text-xs font-bold uppercase tracking-wide text-[#9AA0B4] hover:text-[#6B738A] transition-opacity"
               aria-expanded={isOpen}
             >
               <span>{t(groupName)}</span>
@@ -159,7 +160,13 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
                 <polyline points="6,9 12,15 18,9" />
               </svg>
             </button>
-            {isOpen && sidebarItems.filter((item) => item.group === groupName).map(renderLink)}
+            {/* Guía vertical + indentación: deja claro que estos ítems son
+                hijos del encabezado de arriba, no otro nivel de menú principal. */}
+            {isOpen && (
+              <div className="ml-5 pl-2 border-l-2 border-[#E5E7F0] space-y-0.5 py-0.5">
+                {sidebarItems.filter((item) => item.group === groupName).map((item) => renderLink(item, false))}
+              </div>
+            )}
           </div>
         )
       })}
@@ -296,7 +303,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
 
           {/* Cuenta: Perfil/Ayuda + Cerrar sesión, separados del resto para no competir con las tareas diarias */}
           <div className="px-2 py-2 border-t border-[#DDE1EE] flex-shrink-0">
-            {accountItems.map(renderLink)}
+            {accountItems.map((item) => renderLink(item))}
             <button
               onClick={logout}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 mx-2 text-sm text-[#6B738A] hover:bg-[#FCEBEB] hover:text-[#A32D2D] rounded-lg transition-colors"
