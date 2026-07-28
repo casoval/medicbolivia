@@ -30,6 +30,21 @@ export interface NavItem {
   badge?: number
   /** Frase corta y clara: qué hace esta sección. Se muestra bajo el label. */
   description: string
+  /**
+   * Nombre del grupo al que pertenece este ítem en el sidebar (p. ej. "Consultar").
+   * Los ítems sin "group" (Inicio/Resumen) se muestran sueltos, arriba de todo.
+   * Los ítems del mismo grupo se muestran juntos bajo un encabezado compartido,
+   * para que el sidebar se lea como 3-4 bloques en vez de una lista plana de 12.
+   */
+  group?: string
+  /**
+   * Ítems secundarios (Perfil, Ayuda) no se listan en el sidebar: viven en el
+   * menú desplegable del avatar en el topbar. Se mantienen en este array para
+   * conservar un solo lugar de verdad (label/icon/href) y porque activeHref
+   * los sigue necesitando para resaltar la página activa si el usuario llega
+   * a /patient/profile o /professional/help directamente.
+   */
+  secondary?: boolean
 }
 
 // Flujo del paciente: llega al inicio, si no sabe qué especialista necesita
@@ -50,66 +65,77 @@ export const PATIENT_NAV: NavItem[] = [
     href: '/patient/agent',
     icon: <IconBot />,
     description: 'Cuéntale tus síntomas y te orienta a la especialidad correcta',
+    group: 'Consultar',
   },
   {
     label: 'Buscar médico',
     href: '/patient/search',
     icon: <IconSearch />,
     description: 'Encuentra y filtra profesionales por especialidad y disponibilidad',
+    group: 'Consultar',
   },
   {
     label: 'Mis profesionales',
     href: '/patient/professionals',
     icon: <IconStetho />,
     description: 'Médicos que ya has consultado o guardado como favoritos',
+    group: 'Consultar',
   },
   {
     label: 'Sala de espera',
     href: '/patient/waiting-room',
     icon: <IconClock />,
     description: 'Espera en línea a que tu profesional te atienda',
+    group: 'Consultar',
   },
   {
     label: 'Mis consultas',
     href: '/patient/history',
     icon: <IconFile />,
     description: 'Historial de todas tus consultas, pasadas y en curso',
-  },
-  {
-    label: 'Mensajes',
-    href: '/patient/chat',
-    icon: <IconChat />,
-    description: 'Chatea con tus profesionales para el seguimiento posterior a la cita',
+    group: 'Mi historial médico',
   },
   {
     label: 'Historia clínica',
     href: '/patient/clinical-history',
     icon: <IconNote />,
     description: 'Diagnósticos y notas médicas que registraron tus profesionales',
+    group: 'Mi historial médico',
   },
   {
     label: 'Mis recetas',
     href: '/patient/prescriptions',
     icon: <IconRx />,
     description: 'Medicamentos recetados en tus consultas',
+    group: 'Mi historial médico',
+  },
+  {
+    label: 'Mensajes',
+    href: '/patient/chat',
+    icon: <IconChat />,
+    description: 'Chatea con tus profesionales para el seguimiento posterior a la cita',
+    group: 'Cuenta',
   },
   {
     label: 'Mis pagos',
     href: '/patient/payments',
     icon: <IconCard />,
     description: 'Cobros e historial de pagos de tus consultas',
+    group: 'Cuenta',
   },
   {
     label: 'Perfil',
     href: '/patient/profile',
     icon: <IconUser />,
     description: 'Tus datos personales y de contacto',
+    secondary: true,
   },
   {
     label: 'Ayuda',
     href: '/patient/help',
     icon: <IconHelp />,
     description: 'Resuelve dudas sobre cómo usar la plataforma, en cualquier momento',
+    secondary: true,
   },
 ]
 
@@ -130,66 +156,77 @@ export const PROFESSIONAL_NAV: NavItem[] = [
     href: '/professional/schedule',
     icon: <IconCal />,
     description: 'Configura los horarios en que estás disponible para atender',
+    group: 'Agenda',
   },
   {
     label: 'Citas agendadas',
     href: '/professional/appointments',
     icon: <IconCal />,
     description: 'Consultas programadas por tus pacientes',
+    group: 'Agenda',
   },
   {
     label: 'Consultas inmediatas',
     href: '/professional/consultations',
     icon: <IconUsers />,
     description: 'Pacientes esperando ser atendidos ahora mismo',
+    group: 'Agenda',
   },
   {
     label: 'Mis pacientes',
     href: '/professional/patients',
     icon: <IconPatients />,
     description: 'Listado de pacientes que has atendido',
-  },
-  {
-    label: 'Mensajes',
-    href: '/professional/chat',
-    icon: <IconChat />,
-    description: 'Chat interno para el seguimiento posterior a tus consultas',
+    group: 'Pacientes',
   },
   {
     label: 'Notas clínicas',
     href: '/professional/clinical-notes',
     icon: <IconNote />,
     description: 'Diagnósticos y observaciones que registras por consulta',
+    group: 'Pacientes',
   },
   {
     label: 'Recetario',
     href: '/professional/prescriptions',
     icon: <IconFile />,
     description: 'Medicamentos que has recetado a tus pacientes',
+    group: 'Pacientes',
   },
   {
-    label: 'Calificaciones',
-    href: '/professional/ratings',
-    icon: <IconStar />,
-    description: 'Reseñas y puntaje que te dejan tus pacientes',
+    label: 'Mensajes',
+    href: '/professional/chat',
+    icon: <IconChat />,
+    description: 'Chat interno para el seguimiento posterior a tus consultas',
+    group: 'Pacientes',
   },
   {
     label: 'Mis pagos',
     href: '/professional/earnings',
     icon: <IconCard />,
     description: 'Tus ingresos y el historial de cobros por consulta',
+    group: 'Cuenta',
+  },
+  {
+    label: 'Calificaciones',
+    href: '/professional/ratings',
+    icon: <IconStar />,
+    description: 'Reseñas y puntaje que te dejan tus pacientes',
+    group: 'Cuenta',
   },
   {
     label: 'Mi perfil',
     href: '/professional/profile',
     icon: <IconUser />,
     description: 'Tus datos, especialidad y credenciales profesionales',
+    secondary: true,
   },
   {
     label: 'Ayuda',
     href: '/professional/help',
     icon: <IconHelp />,
     description: 'Resuelve dudas sobre cómo usar la plataforma, en cualquier momento',
+    secondary: true,
   },
 ]
 

@@ -17,6 +17,8 @@ interface NavItem {
   icon: React.ReactNode
   badge?: number
   description?: string
+  group?: string
+  secondary?: boolean
 }
 
 interface DashboardLayoutProps {
@@ -30,6 +32,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
   const router = useRouter()
   const { user, isAuthenticated, logout } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const { t } = useLanguage()
 
   useEffect(() => {
@@ -80,35 +83,48 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
     }
   `
 
+  // Ítems secundarios (Perfil, Ayuda) no van en el sidebar: viven en el
+  // menú desplegable del avatar en el topbar, para no competir visualmente
+  // con las tareas de uso diario.
+  const sidebarItems = navItems.filter((item) => !item.secondary)
+  const accountItems = navItems.filter((item) => item.secondary)
+
+  // Ítems sin "group" (Inicio/Resumen) van sueltos arriba; el resto se
+  // agrupa bajo el encabezado compartido de su "group", en el orden en
+  // que aparece cada grupo por primera vez.
+  const ungroupedItems = sidebarItems.filter((item) => !item.group)
+  const groupNames: string[] = []
+  sidebarItems.forEach((item) => {
+    if (item.group && !groupNames.includes(item.group)) groupNames.push(item.group)
+  })
+
+  const renderLink = (item: NavItem) => {
+    const isActive = activeHref === item.href
+    return (
+      <Link key={item.href} href={item.href} className={navLinkClass(isActive)} title={item.description}>
+        <span className="flex-shrink-0">{item.icon}</span>
+        <span className="flex-1">{t(item.label)}</span>
+        {item.badge !== undefined && item.badge > 0 && (
+          <span className="w-5 h-5 bg-[#E24B4A] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+            {item.badge}
+          </span>
+        )}
+      </Link>
+    )
+  }
+
   const NavLinks = () => (
     <nav className="py-3">
-      {navItems.map((item) => {
-        const isActive = activeHref === item.href
-        return (
-          <Link key={item.href} href={item.href} className={navLinkClass(isActive)} title={item.description}>
-            <span className="flex-shrink-0">{item.icon}</span>
-            <span className="flex-1">{t(item.label)}</span>
-            {item.badge !== undefined && item.badge > 0 && (
-              <span className="w-5 h-5 bg-[#E24B4A] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                {item.badge}
-              </span>
-            )}
-          </Link>
-        )
-      })}
+      {ungroupedItems.map(renderLink)}
+      {groupNames.map((groupName) => (
+        <div key={groupName} className="mt-3 first:mt-0">
+          <p className="px-5 mb-1 text-[11px] font-medium uppercase tracking-wide text-[#9AA0B4]">
+            {t(groupName)}
+          </p>
+          {sidebarItems.filter((item) => item.group === groupName).map(renderLink)}
+        </div>
+      ))}
     </nav>
-  )
-
-  const LogoutButton = () => (
-    <button
-      onClick={logout}
-      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-[#6B738A] hover:bg-[#FCEBEB] hover:text-[#A32D2D] rounded-lg transition-colors"
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
-      </svg>
-      {t('Cerrar sesión')}
-    </button>
   )
 
   return (
@@ -151,8 +167,48 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
           <span className={`${firstName ? 'hidden' : 'inline'} sm:inline shrink-0 text-xs bg-white/15 text-white px-2.5 py-1 rounded-full font-medium whitespace-nowrap`}>
             {t(roleLabels[role])}
           </span>
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-white text-[#0F6E56] shrink-0">
-            {initials}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setAccountMenuOpen((open) => !open)}
+              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-white text-[#0F6E56]"
+              aria-label={t('Cuenta')}
+              aria-expanded={accountMenuOpen}
+            >
+              {initials}
+            </button>
+            {accountMenuOpen && (
+              <>
+                {/* Overlay para cerrar el dropdown al hacer clic afuera */}
+                <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} aria-hidden="true" />
+                <div className="absolute right-0 top-9 w-56 bg-white rounded-lg border border-[#DDE1EE] shadow-lg z-50 py-1">
+                  {accountItems.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setAccountMenuOpen(false)}
+                      className={`flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg text-sm ${
+                        activeHref === item.href ? 'text-[#141820] font-medium bg-[#F5F6FA]' : 'text-[#6B738A] hover:bg-[#F5F6FA] hover:text-[#141820]'
+                      }`}
+                      title={item.description}
+                    >
+                      <span className="flex-shrink-0">{item.icon}</span>
+                      <span>{t(item.label)}</span>
+                    </Link>
+                  ))}
+                  <div className="my-1 border-t border-[#DDE1EE]" />
+                  <button
+                    onClick={logout}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 mx-1 text-sm text-[#6B738A] hover:bg-[#FCEBEB] hover:text-[#A32D2D] rounded-lg transition-colors"
+                    style={{ width: 'calc(100% - 0.5rem)' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+                    </svg>
+                    {t('Cerrar sesión')}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -199,9 +255,19 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
             <NavLinks />
           </div>
 
-          {/* Cerrar sesión */}
-          <div className="px-2 py-3 border-t border-[#DDE1EE] md:border-t-0 flex-shrink-0">
-            <LogoutButton />
+          {/* Cuenta: Perfil/Ayuda + Cerrar sesión, separados del resto para no competir con las tareas diarias */}
+          <div className="px-2 py-2 border-t border-[#DDE1EE] flex-shrink-0">
+            {accountItems.map(renderLink)}
+            <button
+              onClick={logout}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 mx-2 text-sm text-[#6B738A] hover:bg-[#FCEBEB] hover:text-[#A32D2D] rounded-lg transition-colors"
+              style={{ width: 'calc(100% - 1rem)' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+              </svg>
+              {t('Cerrar sesión')}
+            </button>
           </div>
         </aside>
 
