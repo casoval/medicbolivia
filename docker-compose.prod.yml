@@ -77,6 +77,15 @@ services:
       # en whatsapp-service/.env, default "./auth_info") — así la sesión de
       # WhatsApp ya vinculada se reutiliza y NO hay que volver a escanear
       # el QR al migrar a Docker.
+      #
+      # IMPORTANTE — permisos: el proceso adentro del contenedor corre como
+      # pptruser (uid 10042, gid 999), pero esta carpeta del HOST puede quedar
+      # con dueño root:root si se recrea a mano o se restaura de un backup.
+      # Si eso pasa, Puppeteer va a fallar con "The browser is already running
+      # for /app/auth_info/session" (en realidad es un error de permisos de
+      # escritura sobre SingletonLock, mal interpretado por Puppeteer como un
+      # browser vivo). Arreglo: chown -R 10042:999 sobre esta carpeta en el
+      # HOST (no dentro del contenedor) antes de levantar el servicio.
       - /var/www/medicbolivia/whatsapp-service/auth_info:/app/auth_info
 
   frontend:
