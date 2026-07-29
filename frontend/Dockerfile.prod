@@ -2,6 +2,12 @@
 # Build de producción de Next.js. Usa el frontend/.env.production que ya
 # existe en el VPS (lo crea scripts/setup_frontend.sh) — Next.js lo lee
 # automáticamente durante "pnpm build" porque NODE_ENV=production.
+# frontend/Dockerfile.prod
+# Variante de producción del frontend. Puerto 3002 (no 3000): en producción
+# nginx proxya a 3002 a propósito, para poder correr este contenedor en
+# paralelo al frontend de PM2 (puerto 3000) durante la migración a Docker
+# sin que compitan por el mismo puerto — ver docker-compose.prod.yml y
+# scripts/medicbolivia.nginx.
 FROM node:20-slim AS builder
 
 WORKDIR /app
@@ -22,5 +28,5 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 ENV NODE_ENV=production
 COPY --from=builder /app ./
 
-EXPOSE 3000
+EXPOSE 3002
 CMD ["npx", "next", "start", "-p", "3002"]

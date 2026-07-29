@@ -66,8 +66,14 @@ server {
     }
 
     # ── Frontend Next.js ──────────────────────────────
+    # Puerto 3002 (no 3000): en esta migración a Docker, el contenedor del
+    # frontend corre en 3002 a propósito, en paralelo al viejo proceso de
+    # PM2 en 3000, para no competir por el mismo puerto durante la
+    # transición — ver frontend/Dockerfile.prod y docker-compose.prod.yml.
+    # Si en algún momento se da de baja el PM2 del frontend para siempre,
+    # tiene sentido simplificar esto de nuevo a 3000.
     location / {
-        proxy_pass         http://127.0.0.1:3000;
+        proxy_pass         http://127.0.0.1:3002;
         proxy_http_version 1.1;
         proxy_set_header   Upgrade $http_upgrade;
         proxy_set_header   Connection "upgrade";
@@ -80,7 +86,7 @@ server {
 
     # ── Archivos estáticos Next.js ────────────────────
     location /_next/static/ {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3002;
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
