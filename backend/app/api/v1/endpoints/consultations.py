@@ -572,6 +572,11 @@ async def create_consultation(
             settings.DATABASE_URL,
         )
         logger.info(f"Cita/seguimiento creado: {consultation.id} → esperando pago del paciente (30 min)")
+        await push_notification_ws(
+            professional.user_id, "NEW_SCHEDULED_REQUEST", "Nueva cita agendada",
+            f"{patient.first_name} {patient.last_name} agendó una cita — esperando su pago.",
+            "Consultation", consultation.id,
+        )
     else:
         # Inmediata: el profesional tiene 5 min para aceptar.
         background_tasks.add_task(
@@ -587,6 +592,19 @@ async def create_consultation(
         # app/tasks/reminder_tasks.py::notify_professional_patient_waiting.
         from app.tasks.reminder_tasks import notify_professional_patient_waiting
         notify_professional_patient_waiting.delay(consultation.id)
+
+        # Aviso in-app en tiempo real (WebSocket). Antes este caso dependía
+        # 100% del polling de 4s de NotificationToast.tsx para que el
+        # profesional viera aparecer la solicitud — al bajar ese polling a
+        # 60s (respaldo) asumiendo que el WS cubriría todo, este caso
+        # puntual quedó sin cubrir porque nunca hubo un push del servidor
+        # para la CREACIÓN de una consulta (solo para cambios de estado de
+        # una ya existente). Esto lo corrige.
+        await push_notification_ws(
+            professional.user_id, "NEW_IMMEDIATE_REQUEST", "🔔 Nueva solicitud de consulta",
+            f"{patient.first_name} {patient.last_name} necesita una consulta ahora.",
+            "Consultation", consultation.id,
+        )
 
     return ConsultationResponse.model_validate(consultation)
 
@@ -739,6 +757,12 @@ async def professional_schedule_consultation(
         f"Cita agendada por profesional {professional.id} para paciente {patient.id}: "
         f"{consultation.id} → cobro directo {'confirmado' if data.charge_now else 'pendiente de registrar'} "
         f"(monto: {amount}, fuera de la plataforma)"
+    )
+
+    await push_notification_ws(
+        patient.user_id, "PROFESSIONAL_SCHEDULED_DIRECT", "Nueva cita agendada",
+        f"El Dr./Dra. {professional.first_name} {professional.last_name} te agendó una cita.",
+        "Consultation", consultation.id,
     )
 
     return ConsultationResponse.model_validate(consultation)
