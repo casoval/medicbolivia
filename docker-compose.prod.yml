@@ -30,6 +30,13 @@ services:
       dockerfile: Dockerfile.prod
     network_mode: host
     restart: unless-stopped
+    # Techo defensivo: si algún día hay un memory leak, que se lo coma el
+    # contenedor (Docker lo mata y restart:unless-stopped lo revive) en vez
+    # de comerse la RAM del VPS entero, donde Postgres/Redis corren nativos
+    # al lado (ver comentario de arriba). Los números salen de lo que ya
+    # consume hoy en uso real (ver `docker stats`), con margen amplio.
+    mem_limit: 1200m
+    mem_reservation: 400m
     env_file:
       - ./backend/.env
     environment:
@@ -46,6 +53,8 @@ services:
       dockerfile: Dockerfile.prod
     network_mode: host
     restart: unless-stopped
+    mem_limit: 800m
+    mem_reservation: 250m
     command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
     env_file:
       - ./backend/.env
@@ -59,6 +68,8 @@ services:
       dockerfile: Dockerfile.prod
     network_mode: host
     restart: unless-stopped
+    mem_limit: 256m
+    mem_reservation: 64m
     command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
     env_file:
       - ./backend/.env
@@ -70,6 +81,20 @@ services:
     build: ./whatsapp-service
     network_mode: host
     restart: unless-stopped
+    # init: true → usa el tini embebido de Docker como PID 1 del contenedor,
+    # en vez de que "node src/index.js" (ver Dockerfile) corra directo como
+    # PID 1. Motivo: cuando Chrome (Puppeteer) crashea o se reinicia, sus
+    # procesos hijos (chrome_crashpad, renderers) quedan huérfanos y se
+    # re-asignan a PID 1 para que alguien los "reapee" (wait()) — pero
+    # Node.js NO hace ese trabajo de init automáticamente, así que quedan
+    # como <defunct> para siempre (confirmado: 10 procesos zombie viejos
+    # de un par de reinicios de Chrome el día que arrancó este contenedor,
+    # ver `ps -eo pid,ppid,stat,cmd | grep Z` en el host). Con tini como
+    # PID 1, cualquier zombie futuro se reapea solo, sin tocar el código
+    # de la app ni el Dockerfile.
+    init: true
+    mem_limit: 1500m
+    mem_reservation: 400m
     env_file:
       - ./whatsapp-service/.env
     volumes:
@@ -94,3 +119,5 @@ services:
       dockerfile: Dockerfile.prod
     network_mode: host
     restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 128m
