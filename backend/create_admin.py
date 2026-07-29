@@ -10,9 +10,12 @@ import asyncio
 import getpass
 import sys
 
+from sqlalchemy.exc import IntegrityError
+
 from app.db.database import AsyncSessionLocal
 from app.models.models import User, Admin, UserRole, UserStatus
 from app.core.security import hash_password
+from app.core.phone import normalize_bo_phone, InvalidPhoneError, display_phone
 
 
 async def create_admin(phone: str, password: str, name: str):
@@ -26,18 +29,31 @@ async def create_admin(phone: str, password: str, name: str):
             onboarding_completed=True,
         )
         db.add(user)
-        await db.flush()
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            print(f"❌ Ya existe un usuario con el teléfono {display_phone(phone)}")
+            sys.exit(1)
 
         admin = Admin(user_id=user.id, name=name)
         db.add(admin)
         await db.commit()
-        print(f"✅ Admin creado exitosamente (teléfono: {phone})")
+        print(f"✅ Admin creado exitosamente (teléfono: {display_phone(phone)})")
 
 
 if __name__ == "__main__":
-    phone = input("Teléfono del nuevo admin: ").strip()
-    if not phone:
+    phone_raw = input("Teléfono del nuevo admin (ej: 72345678): ").strip()
+    if not phone_raw:
         print("❌ El teléfono no puede estar vacío")
+        sys.exit(1)
+    try:
+        # Mismo formato canónico ("591XXXXXXXX") que usa el resto del
+        # proyecto, incluido el login — si no se normaliza acá, el admin
+        # queda guardado con un teléfono que el login nunca va a matchear.
+        phone = normalize_bo_phone(phone_raw)
+    except InvalidPhoneError as e:
+        print(f"❌ {e}")
         sys.exit(1)
 
     password = getpass.getpass("Contraseña (no se mostrará en pantalla): ")
