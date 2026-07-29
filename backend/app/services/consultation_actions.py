@@ -91,6 +91,21 @@ async def accept_consultation_core(
     corresponde. No hace commit del caller — si algo fuera mal después de
     llamar esta función, es responsabilidad del caller.
     """
+    # Lock de fila sobre el profesional: sin esto, dos aceptaciones para el
+    # MISMO profesional casi al mismo tiempo (dos pestañas, un doble clic muy
+    # preciso, o la app + WhatsApp respondiendo a la vez) podían leer ambas
+    # "no hay solapamiento" ANTES de que cualquiera de las dos escribiera su
+    # cambio, y terminar aceptando dos citas que se pisan en el horario (o
+    # dos consultas inmediatas EN_CURSO a la vez). El SELECT FOR UPDATE hace
+    # que la segunda transacción espere a que la primera termine (commit o
+    # rollback) antes de poder leer — así ve el cambio ya aplicado y el
+    # chequeo de solapamiento de abajo es correcto de verdad, no solo "por
+    # las dudas". No hace falta liberar el lock a mano: Postgres lo suelta
+    # solo al terminar la transacción (commit/rollback), que hace el caller.
+    await db.execute(
+        select(Professional.id).where(Professional.id == professional.id).with_for_update()
+    )
+
     if consultation.consultation_type == ConsultationType.IMMEDIATE:
         busy_result = await db.execute(
             select(Consultation).where(
