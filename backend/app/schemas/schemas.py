@@ -546,7 +546,12 @@ class ProfessionalMembershipUpdateRequest(BaseModel):
 
 
 class PaymentWebhookRequest(BaseModel):
-    """Webhook del banco cuando confirma el pago QR."""
+    """
+    Webhook ANTERIOR (QR simulado, propio). Se mantiene por compatibilidad
+    mientras el banco no esté configurado — ver PAYMENT_WEBHOOK_SECRET en
+    config.py. El flujo real del banco usa BankPaymentConfirmRequest más
+    abajo (POST /bank-integration/payments).
+    """
     bank_tx_id: str
     qr_code: str
     bank_name: str
@@ -554,6 +559,36 @@ class PaymentWebhookRequest(BaseModel):
     timestamp: str
     # Nota: la verificación real de origen se hace con el header
     # X-Webhook-Secret (ver auth por HMAC en el endpoint), no por body.
+
+
+# ─────────────────────────────────────────────────────
+# BANCO GANADERO — endpoints INBOUND (el banco nos llama)
+# Especificación v1.7, secciones 6 y 7.
+# ─────────────────────────────────────────────────────
+
+class BankLoginRequest(BaseModel):
+    """Sección 6 de la spec: el banco se autentica contra MedicBolivia."""
+    userName: str
+    password: str
+
+
+class BankLoginResponse(BaseModel):
+    result: str
+    message: str
+    token: str
+    expirationTime: int
+
+
+class BankPaymentConfirmRequest(BaseModel):
+    """Sección 7 de la spec: el banco confirma el pago de una orden."""
+    qrId: str
+    transactionId: int
+    payDate: str  # ddmmyyyy, según la spec
+
+
+class BankPaymentConfirmResponse(BaseModel):
+    result: str
+    message: str
 
 
 # ─────────────────────────────────────────────────────

@@ -27,7 +27,8 @@ from app.schemas.schemas import (
     DisputeCreateRequest, ProfessionalScheduleRequest, ProfessionalRescheduleRequest, RecordDirectPaymentRequest,
     SetConsultationModalityRequest,
 )
-from app.services.payment import generate_qr_data, calculate_amounts, compute_professional_scheduled_qr_deadline
+from app.services.payment import calculate_amounts, compute_professional_scheduled_qr_deadline
+from app.services import bank_qr
 from app.services.commission import resolve_commission_percent
 from app.services.patient_links import has_effective_link, professional_has_active_membership
 from app.services.system_reminders import fire_system_reminder
@@ -238,6 +239,7 @@ async def auto_cancel_payment_expired(consultation_id: str, db_url: str):
                 # reembolso, es una cancelación sin cobro.
                 payment.status = PaymentStatus.CANCELLED_NO_CHARGE
                 payment.refund_note = "No se generó cobro: el paciente no completó el pago a tiempo."
+                await bank_qr.cancel_qr_best_effort(payment.bank_qr_id)
             await db.commit()
             logger.info(f"[AUTO-CANCEL] Consulta {consultation_id} cancelada — paciente no pagó en {PAYMENT_TIMEOUT_MINUTES} min")
     await engine.dispose()
@@ -1151,34 +1153,40 @@ async def generate_payment_qr(
             else None
         )
 
-    qr_data = generate_qr_data(
+    # QR aún válido — devolver el mismo (sin llamar de nuevo al banco: la
+    # imagen real solo se entrega una vez al crear la orden, así que se
+    # sirve la que quedó cacheada en qr_image_url).
+    if existing_payment and existing_payment.qr_expires_at and existing_payment.qr_expires_at > utcnow_naive():
+        return QRPaymentResponse(
+            payment_id=existing_payment.id,
+            qr_image_url=existing_payment.qr_image_url or (
+                f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={existing_payment.qr_code}&format=png"
+            ),
+            amount=consultation.amount,
+            expires_at=existing_payment.qr_expires_at,
+            consultation_id=consultation.id,
+            professional_name=prof_name
+        )
+
+    expires_at = utcnow_naive() + timedelta(
+        minutes=qr_expiry if qr_expiry is not None else settings.QR_EXPIRY_MINUTES
+    )
+    qr_data = await bank_qr.generate_qr_or_fallback(
         consultation_id=consultation.id,
         amount=consultation.amount,
         professional_name=prof_name,
-        expiry_minutes=qr_expiry,
+        expires_at=expires_at,
     )
 
     if existing_payment:
-        # Solo regenerar si el QR ya expiró
-        if existing_payment.qr_expires_at and existing_payment.qr_expires_at > utcnow_naive():
-            # QR aún válido — devolver el mismo
-            return QRPaymentResponse(
-                payment_id=existing_payment.id,
-                qr_image_url=f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={existing_payment.qr_code}&format=png",
-                amount=consultation.amount,
-                expires_at=existing_payment.qr_expires_at,
-                consultation_id=consultation.id,
-                professional_name=prof_name
-            )
-        # QR expirado — regenerar
-        qr_data = generate_qr_data(
-            consultation_id=consultation.id,
-            amount=consultation.amount,
-            professional_name=prof_name,
-            expiry_minutes=qr_expiry,
-        )
+        # QR expirado — regenerar (posiblemente anulando primero la orden
+        # vieja en el banco si tenía una real, para no dejar huérfanas).
+        await bank_qr.cancel_qr_best_effort(existing_payment.bank_qr_id)
         existing_payment.qr_code = qr_data["qr_code"]
         existing_payment.qr_expires_at = qr_data["expires_at"]
+        existing_payment.bank_qr_id = qr_data["bank_qr_id"]
+        existing_payment.qr_image_url = qr_data["qr_image_url"]
+        existing_payment.currency = qr_data["currency"]
         await db.commit()
         return QRPaymentResponse(
             payment_id=existing_payment.id,
@@ -1198,6 +1206,9 @@ async def generate_payment_qr(
         professional_net=consultation.professional_earning,
         qr_code=qr_data["qr_code"],
         qr_expires_at=qr_data["expires_at"],
+        bank_qr_id=qr_data["bank_qr_id"],
+        qr_image_url=qr_data["qr_image_url"],
+        currency=qr_data["currency"],
         status=PaymentStatus.PENDING,
     )
     db.add(payment)
@@ -1264,6 +1275,7 @@ async def cancel_consultation(
         consultation.outcome_note = (
             "CANCELLED_BY_PATIENT_BEFORE_PAYMENT" if was_waiting_payment else "CANCELLED_BY_PATIENT"
         )
+        await bank_qr.cancel_qr_best_effort(payment.bank_qr_id)
     else:
         # No había pago PENDING — para citas agendadas/seguimiento, esto puede
         # significar que el paciente ya pagó y está en WAITING_PROFESSIONAL
@@ -1310,42 +1322,28 @@ async def cancel_consultation(
     return {"status": "cancelled", "consultation_id": consultation_id}
 
 
-# ── POST /api/v1/consultations/webhook/payment ──────
-@router.post("/webhook/payment", summary="Webhook del banco: confirmar pago QR")
-async def payment_webhook(
-    data: PaymentWebhookRequest,
+async def confirm_payment_and_activate_consultation(
+    db: AsyncSession,
+    payment: Payment,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
-    x_webhook_secret: str | None = Header(default=None, alias="X-Webhook-Secret"),
-):
-    # El qr_code no es secreto: el paciente lo puede leer directo de la URL
-    # de la imagen del QR (qr_image_url). Sin esta verificación, cualquiera
-    # que copie ese valor podría llamar este webhook y marcar su propia
-    # consulta como pagada sin transferir nada.
-    # TEMPORAL hasta integrar la pasarela bancaria real (que traerá su
-    # propio esquema de firma) — mientras tanto, esta es la única barrera,
-    # así que PAYMENT_WEBHOOK_SECRET tiene que estar configurado siempre.
-    if not settings.PAYMENT_WEBHOOK_SECRET or not hmac.compare_digest(
-        x_webhook_secret or "", settings.PAYMENT_WEBHOOK_SECRET
-    ):
-        raise HTTPException(status_code=401, detail="Firma de webhook inválida")
+    *,
+    bank_tx_id: str,
+    bank_name: str,
+) -> Consultation | None:
+    """
+    Lógica común de "un pago se confirmó, activar lo que corresponda".
+    Compartida entre el webhook legado (QR simulado, ver payment_webhook
+    más abajo) y el endpoint real que expone el banco para la sección 7
+    de la spec (ver app.api.v1.endpoints.bank_qr_inbound.confirm_payment).
 
-    payment_result = await db.execute(
-        select(Payment).where(
-            Payment.qr_code == data.qr_code,
-            Payment.status == PaymentStatus.PENDING
-        )
-    )
-    payment = payment_result.scalar_one_or_none()
-    if not payment:
-        return {"status": "not_found"}
-
-    if payment.qr_expires_at and payment.qr_expires_at < utcnow_naive():
-        return {"status": "expired"}
-
+    Precondición: el caller YA validó la autenticidad de la llamada
+    (HMAC del webhook legado, o JWT propio en el endpoint del banco) y
+    YA verificó que `payment` está PENDING y no expirado. Esta función
+    solo marca CONFIRMED y activa la consulta según su tipo.
+    """
     payment.status = PaymentStatus.CONFIRMED
-    payment.bank_tx_id = data.bank_tx_id
-    payment.bank_name = data.bank_name
+    payment.bank_tx_id = bank_tx_id
+    payment.bank_name = bank_name
     payment.paid_at = utcnow_naive()
 
     cons_result = await db.execute(
@@ -1436,7 +1434,48 @@ async def payment_webhook(
                 )
 
     await db.commit()
-    logger.info(f"Pago confirmado: {payment.id} | {data.bank_name} | Bs. {data.amount}")
+    return consultation
+
+
+# ── POST /api/v1/consultations/webhook/payment ──────
+# LEGADO: webhook propio del QR simulado, protegido con
+# PAYMENT_WEBHOOK_SECRET. Se mantiene funcionando mientras el banco no
+# esté configurado (ver bank_qr.is_bank_configured). El flujo real vive
+# en POST /api/v1/bank-integration/payments — ver bank_qr_inbound.py.
+@router.post("/webhook/payment", summary="Webhook legado: confirmar pago QR simulado")
+async def payment_webhook(
+    data: PaymentWebhookRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    x_webhook_secret: str | None = Header(default=None, alias="X-Webhook-Secret"),
+):
+    # El qr_code no es secreto: el paciente lo puede leer directo de la URL
+    # de la imagen del QR (qr_image_url). Sin esta verificación, cualquiera
+    # que copie ese valor podría llamar este webhook y marcar su propia
+    # consulta como pagada sin transferir nada.
+    if not settings.PAYMENT_WEBHOOK_SECRET or not hmac.compare_digest(
+        x_webhook_secret or "", settings.PAYMENT_WEBHOOK_SECRET
+    ):
+        raise HTTPException(status_code=401, detail="Firma de webhook inválida")
+
+    payment_result = await db.execute(
+        select(Payment).where(
+            Payment.qr_code == data.qr_code,
+            Payment.status == PaymentStatus.PENDING
+        )
+    )
+    payment = payment_result.scalar_one_or_none()
+    if not payment:
+        return {"status": "not_found"}
+
+    if payment.qr_expires_at and payment.qr_expires_at < utcnow_naive():
+        return {"status": "expired"}
+
+    await confirm_payment_and_activate_consultation(
+        db, payment, background_tasks,
+        bank_tx_id=data.bank_tx_id, bank_name=data.bank_name,
+    )
+    logger.info(f"Pago confirmado (webhook legado): {payment.id} | {data.bank_name} | Bs. {data.amount}")
     return {"status": "confirmed", "payment_id": payment.id}
 
 
@@ -2795,6 +2834,7 @@ async def cancel_by_professional(
         if pending_payment:
             pending_payment.status = PaymentStatus.CANCELLED_NO_CHARGE
             pending_payment.refund_note = "No se generó cobro: el profesional canceló antes de que el paciente pagara."
+            await bank_qr.cancel_qr_best_effort(pending_payment.bank_qr_id)
 
     # Obtener el user_id del paciente (patient_id es el ID en tabla patients, no en users)
     patient_result = await db.execute(select(Patient).where(Patient.id == consultation.patient_id))

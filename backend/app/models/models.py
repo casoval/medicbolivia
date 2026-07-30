@@ -477,6 +477,21 @@ class Payment(Base):
     qr_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     bank_tx_id: Mapped[Optional[str]] = mapped_column(String(100))
     bank_name: Mapped[Optional[str]] = mapped_column(String(100))
+    # ── Integración real Banco Ganadero (Especificación v1.7) ───────────
+    # Código ISO 4217 de la transacción. BOB por defecto — el banco solo
+    # soporta BOB/USD. Antes no se registraba explícito en ningún lado.
+    currency: Mapped[str] = mapped_column(String(3), default="BOB", server_default="BOB")
+    # qrId que devuelve el banco en /qrcode/collections. Es el identificador
+    # que hay que mandar de vuelta en /cancellations. Es distinto de
+    # qr_code (que sigue siendo el string/base64 que se muestra al
+    # paciente). Null mientras el QR sea simulado (banco no configurado).
+    bank_qr_id: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    # URL/data-URI de la imagen a mostrar. Con el banco real, la imagen
+    # (base64) solo se devuelve UNA VEZ al crear la orden — a diferencia
+    # del QR simulado, no se puede reconstruir después a partir de
+    # qr_code/qr_id. Por eso hay que persistirla acá para reusarla
+    # mientras el QR siga vigente (ver generate_payment_qr).
+    qr_image_url: Mapped[Optional[str]] = mapped_column(Text)
     status: Mapped[PaymentStatus] = mapped_column(SAEnum(PaymentStatus), default=PaymentStatus.PENDING, index=True)
     paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     released_at: Mapped[Optional[datetime]] = mapped_column(DateTime)

@@ -118,6 +118,59 @@ class Settings(BaseSettings):
     # Plazo máximo (referencial, para el panel admin) para resolver una disputa.
     DISPUTE_RESOLUTION_SLA_HOURS: int = 48
 
+    # ── Banco Ganadero — Cobros & Pagos con QR (Especificación v1.7) ──
+    # A) Lo que MedicBolivia necesita para LLAMAR al banco (servicios 1-4).
+    # Vacíos por defecto a propósito: mientras no estén los 4 datos
+    # bloqueantes (URL, x-Api-Key, userName/password, accountReference),
+    # el sistema sigue generando QR simulados — ver app.services.bank_qr.
+    #
+    # IMPORTANTE: acá va la URL COMPLETA hasta ".../qrcode" (sin barra
+    # final) — NO solo el dominio. El banco no usa el path genérico
+    # "/enterprise/service/v1/qrcode" de la spec PDF; en el ambiente de
+    # pruebas (QA) que entregó a Casoval SRL el prefijo real es:
+    #   https://api.bg.com.bo/bgqa/ws-servicio-codigo-qr-empresas/service/v1/qrcode
+    # bank_qr.py arma cada llamada como BANK_QR_BASE_URL + "/access",
+    # "/collections", etc. Cuando el banco entregue el ambiente de
+    # producción, solo hay que cambiar este valor (probablemente sin el
+    # segmento "bgqa" de QA) — el resto del código no cambia.
+    BANK_QR_BASE_URL: str = ""
+    BANK_QR_API_KEY: str = ""       # header x-Api-Key de /access
+    BANK_QR_BODY_API_KEY: str = ""  # campo apiKey del body en /collections, /cancellations, /transactions.
+    # Vacío por defecto: si el banco confirma que es la misma clave que
+    # BANK_QR_API_KEY (lo más probable, ver informe de integración),
+    # dejar este campo vacío y el código cae automáticamente a
+    # BANK_QR_API_KEY como fallback (ver app.services.bank_qr).
+    BANK_QR_USERNAME: str = ""
+    BANK_QR_PASSWORD: str = ""
+    BANK_QR_ACCOUNT_REFERENCE: str = ""
+    # 0 = single use (según la spec del banco). MedicBolivia cobra por
+    # consulta puntual, así que el default correcto es "Sí, un solo uso".
+    BANK_QR_SINGLE_USE: int = 0
+    # Segundos de margen antes de que expire el token cacheado en Redis,
+    # para no arriesgarse a usar un token que expira a mitad de la llamada.
+    BANK_QR_TOKEN_CACHE_MARGIN_SECONDS: int = 30
+
+    # B) Lo que el banco necesita para LLAMARNOS a nosotros (servicios 6-7):
+    # credenciales que NOSOTROS definimos y le entregamos al banco (por un
+    # canal seguro, no por correo plano) para que se autentique contra
+    # nuestro POST /api/v1/bank-integration/login.
+    BANK_INBOUND_USERNAME: str = ""
+    BANK_INBOUND_PASSWORD: str = ""
+    # Firma de los tokens que emitimos NOSOTROS para el banco en /login —
+    # deliberadamente separado de SECRET_KEY (el de la sesión de usuarios)
+    # para poder rotarlo sin invalidar sesiones de pacientes/profesionales.
+    BANK_INBOUND_TOKEN_SECRET: str = ""
+    BANK_INBOUND_TOKEN_EXPIRE_SECONDS: int = 60 * 60 * 12  # 12h
+
+    # Salario Mínimo Nacional vigente (Bolivia) — dato público del
+    # gobierno. Normalmente se decreta ~mayo, pero para 2026 salió antes
+    # de lo usual: Bs. 3.300 fijado por el DS 5516 (13/01/2026) y la RM
+    # 088/26, con efecto retroactivo al 1/1/2026 (subió 20% desde los
+    # Bs. 2,750 de 2025). Usado para validar el tope de 5x SMN por orden
+    # que exige la spec del banco (sección 3).
+    # ¡Revisar cada año cuando se publique el nuevo decreto/resolución!
+    SMN_BOLIVIA: float = 3300.0
+
     AGENT_WAIT_SECONDS: int = 60
     AGENT_MAX_DERIVATIONS: int = 3
 

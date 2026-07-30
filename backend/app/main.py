@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.api.v1.endpoints import auth, professionals, patients, consultations, agent, admin
 from app.api.v1.endpoints import prescriptions, ratings, specialties, clinical_notes, faq
 from app.api.v1.endpoints import whatsapp, contact, chat, notifications_ws
+from app.api.v1.endpoints import bank_qr_inbound
 
 
 # ── Configurar logging con Loguru ─────────────────────
@@ -139,6 +140,7 @@ app.include_router(faq.router,           prefix=f"{PREFIX}/faq",            tags
 app.include_router(whatsapp.router,      prefix=f"{PREFIX}/whatsapp",       tags=["IA / WhatsApp"])
 app.include_router(contact.router,       prefix=f"{PREFIX}/contact",        tags=["Contacto"])
 app.include_router(chat.router,          prefix=f"{PREFIX}/chat",           tags=["Chat Interno"])
+app.include_router(bank_qr_inbound.router, prefix=f"{PREFIX}/bank-integration", tags=["Integración Bancaria (Banco Ganadero)"])
 # Sin agregar "/notifications" al prefix: el path ya lo define el propio
 # router como "/ws/notifications", así que el path final queda
 # {PREFIX}/ws/notifications (ej. /api/v1/ws/notifications).
