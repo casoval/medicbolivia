@@ -21,6 +21,7 @@ tocar nada más para que el sistema arranque sin credenciales reales.
 """
 import base64
 import uuid
+import json
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -65,14 +66,35 @@ def _body_api_key() -> str:
     return settings.BANK_QR_BODY_API_KEY or settings.BANK_QR_API_KEY
 
 
+def _jwt_ttl_seconds(token: str, fallback: int = 240) -> int:
+    """
+    Lee exp/iat directo del payload del JWT que emite el banco, sin
+    validar firma (no tenemos su clave pública/secreta — solo nos
+    interesa el campo exp para saber cuánto cachear). Confirmado en
+    pruebas reales contra el ambiente QA (30/07/2026): el banco emite
+    tokens de 300s (5 min) — la spec PDF no dice nada sobre esto, así
+    que más vale leerlo del token real que asumir un número fijo.
+    Si el token no trae exp/iat por algún motivo, cae a `fallback`
+    (con margen de sobra por debajo de los 300s observados).
+    """
+    try:
+        payload_b64 = token.split(".")[1]
+        payload_b64 += "=" * (-len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        ttl = int(payload["exp"]) - int(payload["iat"])
+        return max(ttl, 30)
+    except Exception:
+        return fallback
+
+
 async def _get_token(force_refresh: bool = False) -> str:
     """
     Devuelve un token válido de /qrcode/access, cacheado en Redis para no
-    loguearse en cada llamada. La spec no dice cuánto dura el token del
-    banco (services 1-4) — a diferencia del que emite el banco en el
-    login inverso (servicio 6), que sí trae expirationTime explícito —
-    así que acá se cachea con un TTL conservador y se refresca on-demand
-    si una llamada devuelve un error de autenticación.
+    loguearse en cada llamada. El TTL de caché se calcula a partir del
+    propio token del banco (ver _jwt_ttl_seconds) menos un margen de
+    seguridad (BANK_QR_TOKEN_CACHE_MARGIN_SECONDS), para no arriesgarse
+    a usar un token ya vencido — el banco emite tokens de vida corta
+    (300s observados en pruebas), no de 400 caracteres "eternos".
     """
     if not force_refresh:
         cached = await redis_client.get(BANK_TOKEN_REDIS_KEY)
@@ -93,10 +115,12 @@ async def _get_token(force_refresh: bool = False) -> str:
             result_code=data.get("result"),
         )
     token = data["token"]
-    # TTL conservador de 10 min: sin dato oficial de expiración, mejor
-    # refrescar seguido que arriesgarse a un token vencido a mitad de una
-    # ráfaga de QRs.
-    await redis_client.set(BANK_TOKEN_REDIS_KEY, token, ex=600)
+    # TTL = duración real del token (leída de su propio exp/iat) menos un
+    # margen de seguridad — evita servir desde caché un token que ya
+    # venció del lado del banco. Confirmado en pruebas reales: el banco
+    # emite tokens de 300s; con margen de 30s, cacheamos 270s.
+    ttl = _jwt_ttl_seconds(token) - settings.BANK_QR_TOKEN_CACHE_MARGIN_SECONDS
+    await redis_client.set(BANK_TOKEN_REDIS_KEY, token, ex=max(ttl, 30))
     return token
 
 
