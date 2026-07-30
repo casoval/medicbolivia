@@ -130,6 +130,17 @@ async def _post_with_token(resource: str, body: dict) -> dict:
     (ej. "collections", "cancellations", "transactions") — se concatena
     directo a BANK_QR_BASE_URL, que ya trae el prefijo real completo del
     ambiente (ej. ".../ws-servicio-codigo-qr-empresas/service/v1/qrcode").
+
+    Header de auth: se manda "Authorization: Bearer <token>", NO el
+    header "token" que documenta la tabla del PDF de la spec (sección
+    3-5). Confirmado con pruebas reales contra el ambiente QA
+    (30/07/2026): header "token" -> 401 "Autenticación requerida";
+    "Authorization: Bearer" -> 200 COD000. El gateway real del banco
+    (probablemente un API Manager delante del servicio bancario en sí,
+    a juzgar por el header de respuesta rdwr_response) sigue la sección
+    8 ("Notas Adicionales" -> "JWT: Bearer Token"), no la tabla
+    específica de cada endpoint.
+
     Si el token cacheado ya no sirve (COD distinto de COD000 por motivo
     de auth), se refresca una vez y se reintenta — el banco no
     documenta un código específico para "token expirado", así que
@@ -143,7 +154,7 @@ async def _post_with_token(resource: str, body: dict) -> dict:
         async with httpx.AsyncClient(timeout=15.0) as client:
             return await client.post(
                 url,
-                headers={"token": tok, "Content-Type": "application/json"},
+                headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"},
                 json=body,
             )
 
