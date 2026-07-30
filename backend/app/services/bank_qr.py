@@ -253,7 +253,36 @@ async def list_daily_transactions(start_date: datetime, end_date: datetime) -> l
         "apiKey": _body_api_key(),
     }
     data = await _post_with_token("transactions", body)
-    return data.get("orders", [])
+    return [_normalize_order_keys(o) for o in data.get("orders", [])]
+
+
+# Nombres reales que devuelve el gateway del banco -> nombres documentados
+# en la spec (camelCase, sección 5). Confirmado con prueba real
+# (30/07/2026): /transactions devuelve TODO en minúsculas
+# (ej. "qrid", "orderstate"), a diferencia de /collections que sí
+# respeta camelCase ("qrId", "qrImage") — inconsistencia del propio
+# gateway del banco entre sus distintos endpoints, no un typo nuestro.
+_ORDER_KEY_MAP = {
+    "accountreference": "accountReference",
+    "bankcode": "bankCode",
+    "bankname": "bankName",
+    "qrid": "qrId",
+    "orderstate": "orderState",
+    "orderdate": "orderDate",
+    "paydate": "payDate",
+    "transactionid": "transactionId",
+}
+
+
+def _normalize_order_keys(order: dict) -> dict:
+    """
+    Devuelve el dict de la orden con las claves siempre en camelCase
+    (los nombres que documenta la spec), sin importar si el banco las
+    mandó en minúsculas o en camelCase — así el resto del código
+    (ej. una futura tarea de reconciliación) puede confiar en un
+    formato estable en vez de tener que conocer esta inconsistencia.
+    """
+    return {_ORDER_KEY_MAP.get(k.lower(), k): v for k, v in order.items()}
 
 
 async def generate_qr_or_fallback(
