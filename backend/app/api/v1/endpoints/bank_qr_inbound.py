@@ -58,7 +58,18 @@ _BANK_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 300
 
 
 async def _check_bank_login_rate_limit(request: Request) -> None:
-    ip = request.client.host if request.client else "unknown"
+    # request.client.host NO sirve acá: en producción el backend corre
+    # detrás de nginx (network_mode: host), así que esa IP es siempre
+    # 127.0.0.1 sin importar quién llame — mezclaría el contador de TODOS
+    # los llamantes en un solo balde y podría bloquear al banco por
+    # intentos ajenos (nuestras propias pruebas, bots, etc.).
+    # nginx ya inyecta X-Real-IP con la IP real de conexión TCP
+    # ($remote_addr) en el location /api/ (ver nginx site config) — y ese
+    # valor no se puede falsificar desde afuera: nginx lo sobrescribe
+    # siempre con la conexión real, ignorando cualquier X-Real-IP que
+    # mande el cliente. Fallback a request.client.host solo por si algún
+    # día se accede directo al backend sin pasar por nginx (dev local).
+    ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "unknown")
     key = f"bank_login_rate:{ip}"
     try:
         count = await redis_client.incr(key)
