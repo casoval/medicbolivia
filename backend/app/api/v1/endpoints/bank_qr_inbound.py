@@ -18,9 +18,10 @@ demás endpoints, pero la tabla de "Parámetros Authorization Header" al
 final dice "JWT: Bearer Token". En vez de apostar a una interpretación,
 _extract_bank_token acepta las dos formas.
 """
+import hmac
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header, status
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header, Request, status
 from jose import JWTError, jwt
 from loguru import logger
 from sqlalchemy import select
@@ -28,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.timezone import utcnow_naive
+from app.core.redis_client import redis_client
 from app.db.database import get_db
 from app.models.models import Payment, PaymentStatus
 from app.schemas.schemas import (
@@ -43,6 +45,31 @@ from app.api.v1.endpoints.consultations import confirm_payment_and_activate_cons
 router = APIRouter()
 
 BANK_JWT_ALGORITHM = "HS256"
+
+# Rate limit de /bank-integration/login por IP. En uso normal, el banco
+# solo pide un token nuevo cada ~5 min (el token dura 300s, ver
+# bank_qr.py) — 20 intentos cada 5 minutos le sobra de margen a cualquier
+# reintento legítimo, pero ya alcanza para frenar en serio un intento de
+# fuerza bruta contra BANK_INBOUND_USERNAME/PASSWORD, que a diferencia del
+# resto del login de la app (con bloqueo por intentos) no tenía ningún
+# límite.
+_BANK_LOGIN_RATE_LIMIT_MAX = 20
+_BANK_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 300
+
+
+async def _check_bank_login_rate_limit(request: Request) -> None:
+    ip = request.client.host if request.client else "unknown"
+    key = f"bank_login_rate:{ip}"
+    try:
+        count = await redis_client.incr(key)
+        if count == 1:
+            await redis_client.expire(key, _BANK_LOGIN_RATE_LIMIT_WINDOW_SECONDS)
+    except Exception as e:
+        # Si Redis está caído, no tiene sentido bloquear al banco por esto.
+        logger.warning(f"No se pudo chequear rate limit de bank_login: {e}")
+        return
+    if count > _BANK_LOGIN_RATE_LIMIT_MAX:
+        raise HTTPException(status_code=429, detail="Demasiados intentos, esperá unos minutos")
 
 
 def _bank_token_secret() -> str:
@@ -94,7 +121,9 @@ def _extract_bank_token(
 # Sección 6 de la spec: "Autenticación en Empresa" — el banco inicia
 # sesión contra MedicBolivia para obtener el token que usará en /payments.
 @router.post("/login", response_model=BankLoginResponse, summary="El banco se autentica contra MedicBolivia")
-async def bank_login(data: BankLoginRequest):
+async def bank_login(data: BankLoginRequest, request: Request):
+    await _check_bank_login_rate_limit(request)
+
     if not settings.BANK_INBOUND_USERNAME or not settings.BANK_INBOUND_PASSWORD:
         # No configurado todavía — devolver un error claro en vez de un
         # 500 críptico si el banco prueba esto antes de que coordinemos
@@ -104,10 +133,14 @@ async def bank_login(data: BankLoginRequest):
             detail="Servicio de autenticación no configurado todavía del lado de MedicBolivia",
         )
 
-    # Comparación simple (no hash): son credenciales que MedicBolivia
-    # define y rota, no contraseñas de usuarios reales — no hay hash de
-    # bcrypt guardado para esto, viven directo en el .env del servidor.
-    if data.userName != settings.BANK_INBOUND_USERNAME or data.password != settings.BANK_INBOUND_PASSWORD:
+    # Comparación en tiempo constante — son credenciales que MedicBolivia
+    # define y rota (no hay hash de bcrypt guardado, viven directo en el
+    # .env del servidor), pero un endpoint de login público sigue
+    # mereciendo el mismo cuidado que el resto de las comparaciones
+    # sensibles del proyecto (ver el mismo patrón en auth.py y en el
+    # webhook de pagos legado).
+    if not hmac.compare_digest(data.userName, settings.BANK_INBOUND_USERNAME) or \
+       not hmac.compare_digest(data.password, settings.BANK_INBOUND_PASSWORD):
         logger.warning(f"[BANK-INBOUND] Intento de login fallido con userName={data.userName}")
         return BankLoginResponse(result="COD002", message="Usuario o contraseña incorrectos", token="", expirationTime=0)
 
