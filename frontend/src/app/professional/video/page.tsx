@@ -346,8 +346,21 @@ export default function ProfessionalVideoPage() {
       setUnread(u => u + 1)
     })
 
+    // `cancelled`: si el componente se desmonta (o cambian token/livekitUrl)
+    // MIENTRAS createLocalTracks()/publishTrack() siguen en vuelo, la
+    // cámara/micrófono ya se prendieron (createLocalTracks hace el
+    // getUserMedia real) pero esos tracks todavía no son parte de la sala
+    // — room.disconnect() de la función de limpieza de abajo solo apaga
+    // los tracks que YA están publicados, así que estos quedaban
+    // huérfanos con el hardware encendido (el led de la cámara seguía
+    // prendido después de salir de la videollamada). Con esta bandera,
+    // en cuanto los tracks existen se chequea si ya nos cancelaron y, si
+    // es así, se paran ahí mismo en vez de intentar publicarlos.
+    let cancelled = false
+
     room.connect(livekitUrl, token)
       .then(() => {
+        if (cancelled) return null
         if (room.remoteParticipants.size > 0) {
           setStatus('patient_joined')
           room.remoteParticipants.forEach(participant => {
@@ -367,7 +380,16 @@ export default function ProfessionalVideoPage() {
         })
       })
       .then(async tracks => {
+        if (!tracks) return
+        if (cancelled) {
+          // Ya nos cancelaron mientras esperábamos la cámara/micrófono —
+          // apagarlos ya mismo, no publicarlos a una sala de la que ya
+          // nos desconectamos.
+          tracks.forEach(t => t.stop())
+          return
+        }
         for (const track of tracks) {
+          if (cancelled) { track.stop(); continue }
           await room.localParticipant.publishTrack(
             track,
             track.kind === Track.Kind.Video
@@ -382,6 +404,7 @@ export default function ProfessionalVideoPage() {
       .catch(e => console.error('LiveKit connect error:', e))
 
     return () => {
+      cancelled = true
       connectingRef.current = false
       room.disconnect()
       roomRef.current = null
