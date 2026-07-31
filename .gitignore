@@ -224,6 +224,12 @@ backend/venv/
 backend/__pycache__/
 backend/logs/
 **/.env
+# Backups accidentales que dejan algunos editores (nano, vim, etc.) al
+# editar el .env por SSH — igual de sensibles que el .env real, no deben
+# subirse jamás al repo.
+**/.env.save*
+**/.env.bak*
+**/.env.*.swp
 frontend/.env.local
 frontend/.env.production.local
 /node_modules/ 
