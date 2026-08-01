@@ -10,7 +10,7 @@ from typing import Optional, List
 
 from sqlalchemy import (
     String, Boolean, DateTime, Numeric, Integer,
-    Text, ForeignKey, Enum as SAEnum, JSON, ARRAY, UniqueConstraint
+    Text, ForeignKey, Enum as SAEnum, JSON, ARRAY, UniqueConstraint, Index
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -708,6 +708,11 @@ class Notification(Base):
     se dispara desde el mismo punto donde se crea esta fila, sin tocar el resto del flujo.
     """
     __tablename__ = "notifications"
+    # Ver migración t4u5v6w7x8y9 — cubre GET /me/notifications de
+    # paciente y profesional (WHERE user_id = ? ORDER BY created_at DESC).
+    __table_args__ = (
+        Index("ix_notifications_user_id_created_at", "user_id", "created_at"),
+    )
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
