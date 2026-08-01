@@ -459,6 +459,16 @@ async def review_proposal(
         db.add(log)
 
         if professional:
+            # Solo una propuesta de tipo SPECIALTY pone a UNDER_REVIEW (ver
+            # create_proposal) — al rechazarla hay que revertir eso, o el
+            # profesional queda invisible para pacientes de forma
+            # permanente aunque nunca haya hecho nada mal, solo por
+            # habérsele rechazado el nombre de especialidad propuesto. La
+            # rama de APPROVE de abajo ya hacía esto — acá faltaba el
+            # espejo para REJECT.
+            if proposal.type == ProposalType.SPECIALTY and professional.status == ProfessionalStatus.UNDER_REVIEW:
+                professional.status = ProfessionalStatus.APPROVED
+
             type_label = "especialidad" if proposal.type == ProposalType.SPECIALTY else "subespecialidad"
             db.add(Notification(
                 user_id=professional.user_id,
