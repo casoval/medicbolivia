@@ -46,6 +46,19 @@ services:
       # de desarrollo local).
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
+    # Sin esto, restart:unless-stopped solo revive el contenedor si el
+    # PROCESO se cae — pero si uvicorn queda vivo aunque colgado (deadlock,
+    # loop infinito, lo que sea) y sigue respondiendo al healthcheck de
+    # Docker por dentro sin problema, Docker jamás se entera de que algo
+    # anda mal. Usa python3 (ya está en la imagen) en vez de curl, que no
+    # viene instalado en python:3.12-slim — así no hay que agregar un
+    # paquete nuevo solo para esto.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:4000/health', timeout=5).status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   celery-worker:
     build:
@@ -61,8 +74,28 @@ services:
     environment:
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
+    # `celery inspect ping` es la forma estándar de confirmar que el
+    # worker no solo está vivo como proceso, sino que efectivamente
+    # responde al broker — un worker colgado (sin poder conectar a Redis,
+    # deadlock interno) puede seguir "corriendo" como proceso sin hacer
+    # ningún trabajo real, y eso restart:unless-stopped no lo detecta.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_app inspect ping -d celery@$$HOSTNAME --timeout 10 | grep -q OK"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
 
   celery-beat:
+    # Sin healthcheck a propósito: no hay una forma liviana y confiable de
+    # confirmar "beat está funcionando de verdad" sin acoplarse a detalles
+    # internos (el archivo celerybeat-schedule, su timestamp de última
+    # escritura, etc.) — el costo de un chequeo frágil (falsos positivos
+    # reiniciando el contenedor sin necesidad) supera el beneficio acá:
+    # si beat se cuelga sin crashear, el peor caso es que los recordatorios
+    # se atrasan hasta el próximo restart manual o deploy, no que se pierda
+    # un evento crítico ni que un usuario quede sin poder usar la app.
+    # El mem_limit de abajo ya cubre el caso de memory leak.
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
@@ -112,6 +145,19 @@ services:
       # browser vivo). Arreglo: chown -R 10042:999 sobre esta carpeta en el
       # HOST (no dentro del contenedor) antes de levantar el servicio.
       - /var/www/medicbolivia/whatsapp-service/auth_info:/app/auth_info
+    # Pega al /health nuevo (sin autenticación, ver src/index.js) — a
+    # propósito NO chequea si WhatsApp está conectado en este instante,
+    # solo que el servidor Express esté vivo y respondiendo. Si dependiera
+    # de connectionState==='connected', Docker podría reiniciar el
+    # contenedor en medio de una reconexión legítima que la app ya está
+    # manejando sola (ver disconnected/auth_failure/watchdog más arriba
+    # en el código) — empeorando las cosas en vez de ayudar.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4100/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   frontend:
     build:
@@ -121,3 +167,31 @@ services:
     restart: unless-stopped
     mem_limit: 512m
     mem_reservation: 128m
+    # /robots.txt es una ruta estática (prerenderizada en el build, ver
+    # salida de `pnpm build`) — no depende de que el backend esté arriba,
+    # así que esto solo mide si el propio servidor de Next.js está vivo,
+    # sin falsos negativos si el backend está teniendo un mal momento.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/robots.txt',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Los healthchecks de arriba SOLO informan un estado ("unhealthy") —
+  # Docker no reinicia nada por sí solo cuando eso pasa; restart:
+  # unless-stopped únicamente actúa si el proceso se cae del todo, no si
+  # queda vivo pero colgado (que es justo el caso que los healthchecks
+  # están pensados para detectar). autoheal es la pieza que falta: mira
+  # el estado de salud de todos los contenedores y reinicia los que
+  # queden en "unhealthy" — cerrando el círculo de verdad. No necesita
+  # network_mode: host porque solo habla con el daemon de Docker por su
+  # socket, no por la red.
+  autoheal:
+    image: willfarrell/autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+      AUTOHEAL_INTERVAL: "30"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

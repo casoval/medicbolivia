@@ -281,6 +281,18 @@ async function forwardInboundToBackend(phone, message, contactName) {
 
 // ── Endpoints HTTP ─────────────────────────────────────
 
+// Sin autenticación a propósito — es solo para que Docker (healthcheck)
+// y quien sea pueda confirmar que el proceso Node/Express está vivo y
+// respondiendo. NO depende de si WhatsApp está conectado en este
+// instante: una desconexión temporal ya la maneja la reconexión propia
+// de más abajo (disconnected/auth_failure/watchdog), y si este endpoint
+// dependiera de connectionState==='connected', Docker podría reiniciar
+// el contenedor en medio de una reconexión legítima en curso — pisando
+// el trabajo que la app ya está haciendo sola, en vez de ayudar.
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' })
+})
+
 app.get('/status', requireInternalSecret, (req, res) => {
   res.json({ connection_state: connectionState })
 })
