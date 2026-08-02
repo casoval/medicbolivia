@@ -115,18 +115,14 @@ function SlotPicker({
     d.setHours(0, 0, 0, 0)
     if (d < today) return
     const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    console.log('[DEBUG pickDate] professionalId:', JSON.stringify(professionalId), 'iso:', iso)
     setSelectedDate(iso)
     setSelectedSlot('')
     onChange('')
     setLoadingSlots(true)
     try {
-      console.log('[DEBUG pickDate] llamando getAvailableSlots...')
       const res = await professionalsAPI.getAvailableSlots(professionalId, iso)
-      console.log('[DEBUG pickDate] respuesta:', res.data)
       setSlots(res.data.slots ?? [])
     } catch (err) {
-      console.log('[DEBUG pickDate] ERROR:', err)
       setSlots([])
     } finally { setLoadingSlots(false) }
   }
