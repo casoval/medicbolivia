@@ -1,5 +1,13 @@
 """
 migrate_professional_payouts.py
+
+⚠️ SUPERADO — esto ya se convirtió en una migración real de Alembic:
+alembic/versions/u5v6w7x8y9z0_add_professional_payouts.py. Ya NO hace
+falta correr este script: "alembic upgrade head" (que el backend corre
+solo al arrancar, ver docker-entrypoint.sh) aplica lo mismo
+automáticamente. Se deja acá solo como referencia histórica de cómo se
+aplicó por primera vez en desarrollo, antes de convertirlo.
+
 Fase 1 (semi-automática) de pago del % a profesionales — agrega:
 
   - professional_bank_accounts: cuenta bancaria de cada profesional
@@ -21,9 +29,12 @@ BANK_ACCOUNT_ENCRYPTION_KEY en el .env (ver .env.example) — sin eso,
 cualquier intento de guardar una cuenta bancaria falla con un error claro
 en vez de guardar datos sin cifrar (ver app/core/crypto.py).
 
-Es seguro correrlo varias veces: usa "IF NOT EXISTS" / DO blocks.
+Es seguro correrlo varias veces: usa "IF NOT EXISTS" / DO blocks — así
+que si por algún motivo corre por accidente en un ambiente donde la
+migración de Alembic ya se aplicó, no rompe nada, simplemente no hace
+nada nuevo.
 
-Uso:
+Uso (ya no necesario, ver nota de arriba):
     (venv) /var/www/medicbolivia/backend> python migrate_professional_payouts.py
 """
 import asyncio
