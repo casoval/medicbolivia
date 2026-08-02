@@ -240,6 +240,64 @@ class PriceUpdateRequest(BaseModel):
         return v
 
 
+# ─────────────────────────────────────────────────────
+# PAGOS A PROFESIONALES (payouts, Fase 1 semi-automática)
+# ─────────────────────────────────────────────────────
+
+class ProfessionalBankAccountRequest(BaseModel):
+    # Nombre del banco elegido en el selector, o el texto libre que el
+    # profesional escribió si eligió "Otro" (ver app.core.bank_list).
+    bank_name: str = Field(..., min_length=2, max_length=150)
+    account_type: Literal["AHORRO", "CORRIENTE"]
+    account_number: str = Field(..., min_length=4, max_length=30)
+    # Se pide dos veces en el formulario para reducir el riesgo de un
+    # typo que mande la plata a la cuenta equivocada — ver validador abajo.
+    account_number_confirm: str = Field(..., min_length=4, max_length=30)
+    account_holder_name: str = Field(..., min_length=3, max_length=200)
+    account_holder_ci: str = Field(..., min_length=5, max_length=20)
+    # El profesional debe aceptar explícitamente que los datos son su
+    # responsabilidad — sin esto no se guarda la cuenta. Ver el texto
+    # exacto del aviso en el frontend (professional/profile).
+    responsibility_acknowledged: bool
+
+    @field_validator("account_number", "account_number_confirm")
+    @classmethod
+    def digits_only(cls, v: str) -> str:
+        cleaned = v.strip().replace(" ", "").replace("-", "")
+        if not cleaned.isdigit():
+            raise ValueError("El número de cuenta solo debe contener dígitos")
+        return cleaned
+
+    @model_validator(mode="after")
+    def _check_confirmation_and_responsibility(self):
+        if self.account_number != self.account_number_confirm:
+            raise ValueError("El número de cuenta y su confirmación no coinciden. Revisa que estén escritos igual.")
+        if not self.responsibility_acknowledged:
+            raise ValueError("Debes confirmar que los datos son correctos y aceptar la responsabilidad indicada antes de guardar.")
+        return self
+
+
+class ProfessionalBankAccountResponse(BaseModel):
+    bank_name: str
+    account_type: str
+    account_number_masked: str
+    account_holder_name: str
+    verified: bool
+    verified_at: Optional[str] = None
+    updated_at: str
+
+
+class PayoutBatchCreateRequest(BaseModel):
+    # None = todos los profesionales elegibles (ganancias liberadas +
+    # cuenta bancaria verificada). Se puede pasar una lista puntual para
+    # armar un lote más chico (ej. re-intentar solo a quienes fallaron).
+    professional_ids: Optional[List[str]] = None
+
+
+class PayoutBatchConfirmRequest(BaseModel):
+    bank_reference_note: Optional[str] = Field(None, max_length=500)
+
+
 class AvailabilityUpdateRequest(BaseModel):
     availability: Optional[AvailabilityMode] = None
     auto_availability: Optional[bool] = None

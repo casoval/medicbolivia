@@ -104,6 +104,12 @@ class PaymentStatus(str, enum.Enum):
     # — usar REFUNDED_FULL aquí es lo que causaba el bug de mostrar
     # "Reembolso total" en el panel de admin sin que se haya cobrado nada.
     CANCELLED_NO_CHARGE = "CANCELLED_NO_CHARGE"
+    # Fase 1 de payouts (semi-automática, ver app/services/payout.py):
+    # RELEASED_TO_PROFESSIONAL es solo la foto contable ("esta plata ya es
+    # suya"), pero el dinero seguía en la cuenta de la plataforma. PAID_OUT
+    # es el paso siguiente: un admin ya transfirió de verdad (o confirmó
+    # el lote) y el profesional lo recibió en su cuenta bancaria.
+    PAID_OUT = "PAID_OUT"
 
 
 class PaymentChannel(str, enum.Enum):
@@ -259,6 +265,7 @@ class Professional(Base):
     prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="professional")
     earnings: Mapped[List["Earning"]] = relationship(back_populates="professional")
     specialty_proposals: Mapped[List["SpecialtyProposal"]] = relationship(back_populates="professional")
+    bank_account: Mapped[Optional["ProfessionalBankAccount"]] = relationship(back_populates="professional", uselist=False)
 
 
 class ProfessionalDoc(Base):
@@ -521,11 +528,102 @@ class Earning(Base):
     professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"))
     payment_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("payments.id"), unique=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # Cuándo se "liberó" contablemente — a partir de acá la plata es del
+    # profesional, aunque siga físicamente en la cuenta de la plataforma.
     released_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    # ── Fase 1 de payouts semi-automática (ver app/services/payout.py) ──
+    # payout_batch_id: a qué lote de pago quedó asignado este earning
+    # (None mientras esté pendiente de agrupar). paid_out_at: cuándo se
+    # confirmó que la transferencia real ya se hizo — distinto de
+    # released_at, que es solo la foto contable de arriba.
+    payout_batch_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("payout_batches.id"), index=True)
+    paid_out_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     professional: Mapped["Professional"] = relationship(back_populates="earnings")
     payment: Mapped["Payment"] = relationship(back_populates="earning")
+    payout_batch: Mapped[Optional["PayoutBatch"]] = relationship(back_populates="earnings")
+
+
+class BankAccountType(str, enum.Enum):
+    AHORRO = "AHORRO"
+    CORRIENTE = "CORRIENTE"
+
+
+class ProfessionalBankAccount(Base):
+    """
+    Cuenta bancaria donde se le transfiere a un profesional su % de cada
+    consulta cobrada por QR — Fase 1 semi-automática: todavía no hay
+    integración bancaria de transferencias salientes, así que esto solo
+    alimenta el CSV que un admin sube a mano a la banca en línea de la
+    empresa (ver app/services/payout.py).
+
+    account_number y account_holder_ci se guardan CIFRADOS (Fernet, ver
+    app.core.crypto) — son datos financieros sensibles. bank_name viene
+    de una lista cerrada de bancos bolivianos regulados por ASFI (ver
+    app.core.bank_list), con "Otro" como texto libre para cooperativas de
+    ahorro y crédito u otras entidades no listadas.
+
+    Solo una cuenta por profesional en v1 (unique=True). Si la edita,
+    vuelve a verified=False automáticamente — un admin tiene que
+    revisarla de nuevo antes de que entre en el próximo lote de pago.
+    """
+    __tablename__ = "professional_bank_accounts"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    professional_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("professionals.id", ondelete="CASCADE"), unique=True
+    )
+    bank_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    account_type: Mapped[BankAccountType] = mapped_column(SAEnum(BankAccountType), nullable=False)
+    account_number_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    account_holder_ci_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    # Últimos 4 dígitos en claro, solo para mostrar "****1234" en pantalla
+    # sin tener que descifrar en cada request de solo lectura.
+    account_number_last4: Mapped[str] = mapped_column(String(4), nullable=False)
+    account_holder_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    verified_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
+    # Momento en que el profesional aceptó el aviso de responsabilidad por
+    # errores en los datos que ingresó — sin esto no se puede guardar la
+    # cuenta (ver validación en ProfessionalBankAccountRequest).
+    responsibility_acknowledged_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
+
+    professional: Mapped["Professional"] = relationship(back_populates="bank_account")
+
+
+class PayoutBatchStatus(str, enum.Enum):
+    DRAFT = "DRAFT"          # recién armado, earnings ya asignados pero nada exportado
+    EXPORTED = "EXPORTED"    # el admin ya descargó el CSV para subirlo al banco
+    CONFIRMED = "CONFIRMED"  # el admin confirmó que ya transfirió — earnings marcados paid_out_at
+    CANCELLED = "CANCELLED"  # se armó por error y se deshizo antes de confirmar
+
+
+class PayoutBatch(Base):
+    """
+    Lote de pago a profesionales (Fase 1 semi-automática). Agrupa los
+    Earning liberados y no pagados de varios profesionales para que el
+    admin genere UN archivo CSV, lo suba a la banca en línea de la
+    empresa y confirme acá cuando ya transfirió — ver app/services/payout.py.
+    """
+    __tablename__ = "payout_batches"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    status: Mapped[PayoutBatchStatus] = mapped_column(SAEnum(PayoutBatchStatus), default=PayoutBatchStatus.DRAFT)
+    period_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    professional_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"))
+    exported_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    confirmed_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"))
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    bank_reference_note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+
+    earnings: Mapped[List["Earning"]] = relationship(back_populates="payout_batch")
 
 
 class Prescription(Base):

@@ -429,6 +429,21 @@ export const professionalsAPI = {
   getMyEarnings: (params?: { status?: string; limit?: number; offset?: number }) =>
     api.get<ProfessionalEarningsResponse>('/professionals/me/earnings', { params }).then(r => r.data),
 
+  // Lista cerrada de bancos bolivianos (ASFI) para el selector del
+  // formulario de cuenta bancaria — ver app.core.bank_list en el backend.
+  getBankList: () =>
+    api.get<{ banks: string[]; other_label: string }>('/professionals/bank-list').then(r => r.data),
+
+  // Mi cuenta bancaria para recibir el % de cada consulta (Fase 1
+  // semi-automática de pagos). Devuelve null si todavía no la registró.
+  getMyBankAccount: () =>
+    api.get<BankAccount | null>('/professionals/me/bank-account').then(r => r.data),
+
+  // Alta o edición — siempre reemplaza (una sola cuenta activa por
+  // profesional). Vuelve a quedar sin verificar cada vez que se guarda.
+  updateMyBankAccount: (data: BankAccountUpdateRequest) =>
+    api.put<{ message: string; verified: boolean }>('/professionals/me/bank-account', data).then(r => r.data),
+
   // Pacientes que se vincularon a mí (ver PatientProfessionalLink) —
   // el vínculo lo crea/revoca siempre el paciente, esto es solo lectura.
   getMyPatients: () =>
@@ -539,6 +554,9 @@ export interface ProfessionalEarningItem {
   paid_at: string | null
   created_at: string
   released_at: string | null
+  // Distinto de released_at (foto contable): cuándo se confirmó la
+  // transferencia bancaria real — ver app/services/payout.py.
+  paid_out_at: string | null
   refunded_at: string | null
   refunded_amount: number | null
   disputed_at: string | null
@@ -560,6 +578,69 @@ export interface ProfessionalEarningItem {
 export interface ProfessionalEarningsResponse {
   stats: ProfessionalEarningStats
   items: ProfessionalEarningItem[]
+}
+
+// ── Cuenta bancaria del profesional (payouts, Fase 1 semi-automática) ──
+export interface BankAccount {
+  bank_name: string
+  account_type: 'AHORRO' | 'CORRIENTE'
+  account_number_masked: string
+  account_holder_name: string
+  verified: boolean
+  verified_at: string | null
+  updated_at: string | null
+}
+
+export interface BankAccountUpdateRequest {
+  bank_name: string
+  account_type: 'AHORRO' | 'CORRIENTE'
+  account_number: string
+  account_number_confirm: string
+  account_holder_name: string
+  account_holder_ci: string
+  responsibility_acknowledged: boolean
+}
+
+// ── Payouts (admin) ──
+export interface PayoutPendingItem {
+  professional_id: string
+  professional_name: string
+  has_bank_account: boolean
+  bank_account_verified: boolean
+  bank_name: string | null
+  account_number_masked: string | null
+  earning_count: number
+  total_amount: number
+}
+
+export interface PayoutPendingResponse {
+  payable: PayoutPendingItem[]
+  blocked: PayoutPendingItem[]
+  payable_total: number
+  blocked_total: number
+}
+
+export interface PayoutBatch {
+  id: string
+  status: 'DRAFT' | 'EXPORTED' | 'CONFIRMED' | 'CANCELLED'
+  period_end: string
+  total_amount: number
+  professional_count: number
+  exported_at: string | null
+  confirmed_at: string | null
+  bank_reference_note: string | null
+  created_at: string
+}
+
+export interface ProfessionalBankAccountFull {
+  bank_name: string
+  account_type: string
+  account_number: string
+  account_holder_name: string
+  account_holder_ci: string
+  verified: boolean
+  responsibility_acknowledged_at: string
+  updated_at: string | null
 }
 
 export const patientsAPI = {
@@ -1286,6 +1367,38 @@ export const adminAPI = {
 
   inviteDoctorLead: (id: string, message: string, includePdf: boolean = true) =>
     api.post<DoctorLead>(`/admin/doctor-leads/${id}/invite`, { message, include_pdf: includePdf }).then(r => r.data),
+
+  // ── Pagos a profesionales (payouts, Fase 1 semi-automática) ──
+  // Ver documento de diseño y app/services/payout.py en el backend.
+  getPendingPayouts: () =>
+    api.get<PayoutPendingResponse>('/admin/payouts/pending').then(r => r.data),
+
+  createPayoutBatch: (professionalIds?: string[]) =>
+    api.post<{ id: string; status: string; total_amount: number; professional_count: number; blocked_count: number }>(
+      '/admin/payouts/batches', { professional_ids: professionalIds ?? null }
+    ).then(r => r.data),
+
+  listPayoutBatches: () =>
+    api.get<PayoutBatch[]>('/admin/payouts/batches').then(r => r.data),
+
+  // Descarga el CSV del lote — responseType 'blob' porque es un archivo,
+  // no JSON. El caller arma el <a download> con el blob devuelto.
+  exportPayoutBatch: (batchId: string) =>
+    api.get(`/admin/payouts/batches/${batchId}/export`, { responseType: 'blob' }).then(r => r.data as Blob),
+
+  confirmPayoutBatch: (batchId: string, bankReferenceNote?: string) =>
+    api.post<{ message: string; id: string }>(
+      `/admin/payouts/batches/${batchId}/confirm`, { bank_reference_note: bankReferenceNote ?? null }
+    ).then(r => r.data),
+
+  cancelPayoutBatch: (batchId: string) =>
+    api.post<{ message: string; id: string }>(`/admin/payouts/batches/${batchId}/cancel`).then(r => r.data),
+
+  getProfessionalBankAccount: (professionalId: string) =>
+    api.get<ProfessionalBankAccountFull>(`/admin/professionals/${professionalId}/bank-account`).then(r => r.data),
+
+  verifyProfessionalBankAccount: (professionalId: string) =>
+    api.post<{ message: string }>(`/admin/professionals/${professionalId}/bank-account/verify`).then(r => r.data),
 }
 
 export const maintenanceAPI = {

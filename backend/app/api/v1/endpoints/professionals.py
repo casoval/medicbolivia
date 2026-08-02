@@ -18,14 +18,18 @@ from app.models.models import (
     User, UserRole, Professional, ProfessionalDoc, ProfessionalStatus,
     AvailabilityMode, DocType, DocStatus, AuditLog, Notification,
     Consultation, ConsultationStatus, ConsultationType, Schedule,
-    Payment, PaymentStatus, Patient, ProfessionalPatientVisibility, PaymentChannel
+    Payment, PaymentStatus, Patient, ProfessionalPatientVisibility, PaymentChannel,
+    ProfessionalBankAccount,
 )
 from app.schemas.schemas import (
     ProfessionalPublicResponse, ProfessionalUpdateRequest,
     PriceUpdateRequest, AvailabilityUpdateRequest, DocReviewRequest,
     ScheduleSetRequest, ScheduleResponse, PatientBlockRequest, PatientBlockResponse,
-    PatientLinkResponse,
+    PatientLinkResponse, ProfessionalBankAccountRequest,
 )
+from app.core.timezone import utcnow_naive
+from app.core.bank_list import BOLIVIAN_BANKS, OTHER_BANK_LABEL
+from app.core.crypto import encrypt_value
 from app.services.storage import upload_document_to_r2, upload_photo_to_r2
 from app.services.commission import get_professional_commission_summary
 from app.services.patient_links import professional_has_active_membership
@@ -573,10 +577,12 @@ async def get_my_earnings(
     }
 
     # ── Listado paginado (con filtro opcional de estado) ────────────────
+    from sqlalchemy.orm import selectinload as _selectinload
     query = (
         select(Payment, Consultation, Patient)
         .join(Consultation, Payment.consultation_id == Consultation.id)
         .join(Patient, Consultation.patient_id == Patient.id, isouter=True)
+        .options(_selectinload(Payment.earning))
         .where(Consultation.professional_id == professional.id)
     )
     if status_filter:
@@ -598,6 +604,10 @@ async def get_my_earnings(
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
             "created_at": p.created_at.isoformat(),
             "released_at": p.released_at.isoformat() if p.released_at else None,
+            # Distinto de released_at: released_at es solo la foto contable
+            # ("ya es tuyo"), paid_out_at es cuándo se confirmó la
+            # transferencia bancaria real (ver app/services/payout.py).
+            "paid_out_at": p.earning.paid_out_at.isoformat() if p.earning and p.earning.paid_out_at else None,
             "refunded_at": p.refunded_at.isoformat() if p.refunded_at else None,
             "refunded_amount": float(p.refunded_amount) if p.refunded_amount is not None else None,
             "disputed_at": p.disputed_at.isoformat() if p.disputed_at else None,
@@ -619,6 +629,100 @@ async def get_my_earnings(
     ]
 
     return {"stats": stats, "items": items}
+
+
+# ── GET /api/v1/professionals/bank-list ──────────────
+# Lista cerrada de bancos bolivianos (ASFI) para el selector del formulario
+# de cuenta bancaria. Cualquier usuario autenticado puede pedirla (no es
+# información sensible) — la usan tanto el profesional (para registrar su
+# cuenta) como el admin (para mostrarla al revisar/verificar una cuenta).
+@router.get("/bank-list", summary="Lista de bancos bolivianos para el formulario de cuenta bancaria")
+async def get_bank_list(current_user: User = Depends(get_current_user)):
+    return {"banks": BOLIVIAN_BANKS, "other_label": OTHER_BANK_LABEL}
+
+
+# ── GET /api/v1/professionals/me/bank-account ────────
+# Cuenta bancaria donde se le paga el % de cada consulta (Fase 1
+# semi-automática — ver app/services/payout.py). Nunca devuelve el número
+# completo, solo los últimos 4 dígitos para mostrar "****1234" en pantalla.
+@router.get("/me/bank-account", summary="Mi cuenta bancaria para recibir pagos")
+async def get_my_bank_account(
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db)
+):
+    prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
+
+    result = await db.execute(
+        select(ProfessionalBankAccount).where(ProfessionalBankAccount.professional_id == professional.id)
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        return None
+
+    return {
+        "bank_name": account.bank_name,
+        "account_type": account.account_type,
+        "account_number_masked": f"****{account.account_number_last4}",
+        "account_holder_name": account.account_holder_name,
+        "verified": account.verified,
+        "verified_at": account.verified_at.isoformat() if account.verified_at else None,
+        "updated_at": account.updated_at.isoformat() if account.updated_at else None,
+    }
+
+
+# ── PUT /api/v1/professionals/me/bank-account ────────
+# Alta o edición (siempre reemplaza — una sola cuenta activa por
+# profesional en v1). Cada guardado vuelve verified=False: un admin tiene
+# que revisarla de nuevo antes de que entre en el próximo lote de pago.
+@router.put("/me/bank-account", summary="Registrar o actualizar mi cuenta bancaria para recibir pagos")
+async def upsert_my_bank_account(
+    data: ProfessionalBankAccountRequest,
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db)
+):
+    prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
+
+    result = await db.execute(
+        select(ProfessionalBankAccount).where(ProfessionalBankAccount.professional_id == professional.id)
+    )
+    account = result.scalar_one_or_none()
+    is_new = account is None
+    if account is None:
+        account = ProfessionalBankAccount(professional_id=professional.id)
+        db.add(account)
+
+    account.bank_name = data.bank_name.strip()
+    account.account_type = data.account_type
+    account.account_number_encrypted = encrypt_value(data.account_number)
+    account.account_number_last4 = data.account_number[-4:]
+    account.account_holder_name = data.account_holder_name.strip()
+    account.account_holder_ci_encrypted = encrypt_value(data.account_holder_ci)
+    account.responsibility_acknowledged_at = utcnow_naive()
+    account.verified = False
+    account.verified_at = None
+    account.verified_by = None
+
+    await db.flush()
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="BANK_ACCOUNT_CREATED" if is_new else "BANK_ACCOUNT_UPDATED",
+        entity_type="ProfessionalBankAccount",
+        entity_id=account.id,
+        metadata_={"bank_name": account.bank_name, "account_number_last4": account.account_number_last4},
+    ))
+
+    await db.commit()
+    return {
+        "message": "Cuenta bancaria guardada. Un administrador la revisará antes del próximo pago.",
+        "verified": False,
+    }
 
 
 # ── GET /api/v1/professionals/me/documents ──────────

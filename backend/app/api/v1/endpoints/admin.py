@@ -33,13 +33,16 @@ from app.models.models import (
     CommissionPeriod, CommissionScope, ProfessionalMembership,
     ChatBlock, ProfessionalPatientVisibility, ChatConversation, AdminAccessLog, PaymentChannel,
     DoctorLead, DoctorLeadStatus, DoctorLeadSource, WhatsAppMessage,
+    ProfessionalBankAccount, PayoutBatch, PayoutBatchStatus,
 )
 from app.schemas.schemas import (
     DocReviewRequest, RefundRequest, DisputeResolveRequest,
     ProfessionalMembershipCreateRequest, ProfessionalMembershipUpdateRequest,
     ProfessionalMembershipRenewRequest, BroadcastCreateRequest,
     DoctorLeadCreateRequest, DoctorLeadUpdateRequest, DoctorLeadInviteRequest,
+    PayoutBatchCreateRequest, PayoutBatchConfirmRequest,
 )
+from fastapi.responses import Response
 from app.services.payment import process_refund
 from app.services.commission import get_professional_commission_summary
 from app.services.broadcast import send_broadcast, count_recipients
@@ -2456,3 +2459,231 @@ async def invite_doctor_lead(
     # completó — solo confirma que quedó encolado (lead.status=CONTACTADO).
     invite_info_map = await _get_latest_invite_info(db, [lead.id])
     return _doctor_lead_to_dict(lead, invite_info_map.get(lead.id))
+
+# ═══════════════════════════════════════════════════════════════════
+# PAGOS A PROFESIONALES (Payouts) — Fase 1 semi-automática
+# ═══════════════════════════════════════════════════════════════════
+# Todavía no hay integración bancaria de transferencias salientes (solo
+# existe la de COBRO por QR, ver app/services/bank_qr.py). El flujo acá es:
+#   1. GET  /payouts/pending           → ver cuánto se debe, por profesional
+#   2. POST /payouts/batches           → armar un lote (DRAFT)
+#   3. GET  /payouts/batches/{id}/export → descargar el CSV, subirlo al banco A MANO
+#   4. POST /payouts/batches/{id}/confirm → confirmar que ya se transfirió
+#      (dispara la notificación WhatsApp a cada profesional)
+# Ver app/services/payout.py para toda la lógica y el documento de diseño
+# "diseno-pagos-profesionales.md" para el flujo completo.
+
+@router.get("/payouts/pending", summary="Ganancias liberadas pendientes de pagar, agrupadas por profesional")
+async def list_pending_payouts(
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.payout import get_pending_payouts_summary
+
+    summary = await get_pending_payouts_summary(db)
+
+    def _fmt(items):
+        return [{**i, "total_amount": float(i["total_amount"])} for i in items]
+
+    return {
+        "payable": _fmt(summary["payable"]),
+        "blocked": _fmt(summary["blocked"]),
+        "payable_total": float(summary["payable_total"]),
+        "blocked_total": float(summary["blocked_total"]),
+    }
+
+
+@router.post("/payouts/batches", summary="Generar un nuevo lote de pago (DRAFT)")
+async def create_payout_batch_endpoint(
+    data: PayoutBatchCreateRequest,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.payout import (
+        create_payout_batch, get_pending_payouts_summary, notify_professionals_without_bank_account,
+    )
+
+    try:
+        batch = await create_payout_batch(db, current_user.id, data.professional_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Lo que quedó afuera del lote por falta de cuenta verificada: se
+    # avisa aparte (§3.2.3 del diseño) en vez de bloquearlo en silencio.
+    summary = await get_pending_payouts_summary(db)
+    await notify_professionals_without_bank_account(db, summary["blocked"])
+
+    await db.commit()
+    return {
+        "id": batch.id,
+        "status": batch.status,
+        "total_amount": float(batch.total_amount),
+        "professional_count": batch.professional_count,
+        "created_at": batch.created_at.isoformat(),
+        "blocked_count": len(summary["blocked"]),
+    }
+
+
+@router.get("/payouts/batches", summary="Historial de lotes de pago")
+async def list_payout_batches(
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(PayoutBatch).order_by(PayoutBatch.created_at.desc()).offset(offset).limit(limit)
+    )
+    batches = result.scalars().all()
+    return [
+        {
+            "id": b.id,
+            "status": b.status,
+            "period_end": b.period_end.isoformat(),
+            "total_amount": float(b.total_amount),
+            "professional_count": b.professional_count,
+            "exported_at": b.exported_at.isoformat() if b.exported_at else None,
+            "confirmed_at": b.confirmed_at.isoformat() if b.confirmed_at else None,
+            "bank_reference_note": b.bank_reference_note,
+            "created_at": b.created_at.isoformat(),
+        }
+        for b in batches
+    ]
+
+
+async def _get_payout_batch_or_404(db: AsyncSession, batch_id: str) -> PayoutBatch:
+    result = await db.execute(select(PayoutBatch).where(PayoutBatch.id == batch_id))
+    batch = result.scalar_one_or_none()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Lote de pago no encontrado")
+    return batch
+
+
+@router.get("/payouts/batches/{batch_id}/export", summary="Descargar el CSV del lote para subir al banco")
+async def export_payout_batch(
+    batch_id: str,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.payout import generate_batch_csv
+
+    batch = await _get_payout_batch_or_404(db, batch_id)
+    if batch.status == PayoutBatchStatus.CANCELLED:
+        raise HTTPException(status_code=400, detail="Este lote fue cancelado")
+
+    csv_content = await generate_batch_csv(db, batch)
+
+    if batch.status == PayoutBatchStatus.DRAFT:
+        batch.status = PayoutBatchStatus.EXPORTED
+        batch.exported_at = utcnow_naive()
+        db.add(AuditLog(
+            user_id=current_user.id, action="PAYOUT_BATCH_EXPORTED",
+            entity_type="PayoutBatch", entity_id=batch.id,
+        ))
+        await db.commit()
+
+    filename = f"medicbolivia_pagos_{batch.period_end.strftime('%Y%m%d')}.csv"
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/payouts/batches/{batch_id}/confirm", summary="Confirmar que ya se transfirió el lote")
+async def confirm_payout_batch_endpoint(
+    batch_id: str,
+    data: PayoutBatchConfirmRequest,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.payout import confirm_payout_batch
+
+    batch = await _get_payout_batch_or_404(db, batch_id)
+    if batch.status == PayoutBatchStatus.CONFIRMED:
+        raise HTTPException(status_code=400, detail="Este lote ya estaba confirmado")
+    if batch.status == PayoutBatchStatus.CANCELLED:
+        raise HTTPException(status_code=400, detail="Este lote fue cancelado")
+
+    await confirm_payout_batch(db, batch, current_user.id, data.bank_reference_note)
+    await db.commit()
+    return {"message": "Lote confirmado. Se avisó a cada profesional por WhatsApp.", "id": batch.id}
+
+
+@router.post("/payouts/batches/{batch_id}/cancel", summary="Cancelar un lote todavía no confirmado")
+async def cancel_payout_batch_endpoint(
+    batch_id: str,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.payout import cancel_payout_batch
+
+    batch = await _get_payout_batch_or_404(db, batch_id)
+    try:
+        await cancel_payout_batch(db, batch, current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    await db.commit()
+    return {"message": "Lote cancelado. Las ganancias vuelven a estar pendientes.", "id": batch.id}
+
+
+# ── Cuenta bancaria de un profesional puntual (vista + verificación) ──
+
+@router.get("/professionals/{professional_id}/bank-account", summary="Ver la cuenta bancaria de un profesional (número completo)")
+async def get_professional_bank_account(
+    professional_id: str,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.core.crypto import decrypt_value
+
+    result = await db.execute(
+        select(ProfessionalBankAccount).where(ProfessionalBankAccount.professional_id == professional_id)
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Este profesional no registró una cuenta bancaria")
+
+    # Cada vez que un admin ve el número completo queda trazado en
+    # auditoría — es un dato sensible, no algo para mirar "de paso".
+    db.add(AuditLog(
+        user_id=current_user.id, action="BANK_ACCOUNT_VIEWED",
+        entity_type="ProfessionalBankAccount", entity_id=account.id,
+    ))
+    await db.commit()
+
+    return {
+        "bank_name": account.bank_name,
+        "account_type": account.account_type,
+        "account_number": decrypt_value(account.account_number_encrypted),
+        "account_holder_name": account.account_holder_name,
+        "account_holder_ci": decrypt_value(account.account_holder_ci_encrypted),
+        "verified": account.verified,
+        "responsibility_acknowledged_at": account.responsibility_acknowledged_at.isoformat(),
+        "updated_at": account.updated_at.isoformat() if account.updated_at else None,
+    }
+
+
+@router.post("/professionals/{professional_id}/bank-account/verify", summary="Marcar la cuenta bancaria de un profesional como verificada")
+async def verify_professional_bank_account(
+    professional_id: str,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ProfessionalBankAccount).where(ProfessionalBankAccount.professional_id == professional_id)
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Este profesional no registró una cuenta bancaria")
+
+    account.verified = True
+    account.verified_at = utcnow_naive()
+    account.verified_by = current_user.id
+    db.add(AuditLog(
+        user_id=current_user.id, action="BANK_ACCOUNT_VERIFIED",
+        entity_type="ProfessionalBankAccount", entity_id=account.id,
+    ))
+    await db.commit()
+    return {"message": "Cuenta bancaria verificada. Ya puede entrar en el próximo lote de pago."}

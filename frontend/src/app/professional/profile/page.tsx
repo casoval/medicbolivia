@@ -7,11 +7,16 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { Alert, SectionTitle } from '@/components/ui'
 import { professionalsAPI, api, getErrorMessage } from '@/lib/api'
+import type { BankAccount, BankAccountUpdateRequest } from '@/lib/api'
 import { NotificationsBell } from '@/components/shared/NotificationsBell'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconCamera = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
 const IconRefresh = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+
+// Valor sentinela para "Otro" en el selector de banco — distinto de
+// other_label (el texto que se muestra) para no confundirlo con un banco real.
+const OTHER_BANK_VALUE = '__OTHER__'
 
 const DOCUMENTS = [
   { type: 'CI_FRONT',           label: 'Cédula de identidad — anverso',    hint: 'Foto clara, todos los datos legibles' },
@@ -79,6 +84,18 @@ export default function ProfilePage() {
   const [pricesError, setPricesError]       = useState('')
   const [viewingDoc, setViewingDoc] = useState<{ label: string; url: string } | null>(null)
 
+  // ── Datos bancarios para pago (payouts, Fase 1 semi-automática) ──
+  const [selectedBank, setSelectedBank]           = useState('')
+  const [otherBankName, setOtherBankName]         = useState('')
+  const [accountType, setAccountType]             = useState<'AHORRO' | 'CORRIENTE'>('AHORRO')
+  const [accountNumber, setAccountNumber]         = useState('')
+  const [accountNumberConfirm, setAccountNumberConfirm] = useState('')
+  const [accountHolderName, setAccountHolderName] = useState('')
+  const [accountHolderCi, setAccountHolderCi]     = useState('')
+  const [responsibilityAck, setResponsibilityAck] = useState(false)
+  const [bankSuccess, setBankSuccess] = useState('')
+  const [bankError, setBankError]     = useState('')
+
   // % de comisión vigente ahora mismo (individual > promo global > default)
   // y cuánto le llegaría neto por cada tipo de consulta con los precios
   // actuales — para mostrar transparencia total antes de que se cobre nada.
@@ -114,6 +131,63 @@ export default function ProfilePage() {
     queryFn: professionalsAPI.getMyMembership,
     staleTime: 30_000,
   })
+
+  // Lista cerrada de bancos bolivianos (ASFI) para el selector, y mi
+  // cuenta bancaria actual (null si todavía no la registré).
+  const { data: bankListData } = useQuery({
+    queryKey: ['bank-list'],
+    queryFn: professionalsAPI.getBankList,
+    staleTime: 5 * 60_000,
+  })
+  const { data: myBankAccount, refetch: refetchBankAccount } = useQuery<BankAccount | null>({
+    queryKey: ['my-bank-account'],
+    queryFn: professionalsAPI.getMyBankAccount,
+  })
+
+  // Prellenar el nombre del titular con el del profesional la primera vez
+  // que carga (puede editarlo si la cuenta está a nombre de otra persona).
+  useEffect(() => {
+    if (myBankAccount?.account_holder_name && !accountHolderName) {
+      setAccountHolderName(myBankAccount.account_holder_name)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myBankAccount])
+
+  const saveBankMutation = useMutation({
+    mutationFn: (data: BankAccountUpdateRequest) => professionalsAPI.updateMyBankAccount(data),
+    onSuccess: () => {
+      setBankSuccess(t('Cuenta bancaria guardada. Un administrador la revisará antes del próximo pago.'))
+      setBankError('')
+      setAccountNumber('')
+      setAccountNumberConfirm('')
+      setResponsibilityAck(false)
+      refetchBankAccount()
+    },
+    onError: (err) => {
+      setBankError(getErrorMessage(err))
+      setBankSuccess('')
+    },
+  })
+
+  function saveBankAccount() {
+    setBankSuccess('')
+    setBankError('')
+    const bankNameFinal = selectedBank === OTHER_BANK_VALUE ? otherBankName.trim() : selectedBank
+    if (!bankNameFinal) { setBankError(t('Selecciona o escribe tu banco')); return }
+    if (!accountNumber || !accountNumberConfirm) { setBankError(t('Completa el número de cuenta')); return }
+    if (!accountHolderName.trim() || !accountHolderCi.trim()) { setBankError(t('Completa el nombre y CI del titular')); return }
+    if (!responsibilityAck) { setBankError(t('Debes aceptar la responsabilidad indicada antes de guardar')); return }
+
+    saveBankMutation.mutate({
+      bank_name: bankNameFinal,
+      account_type: accountType,
+      account_number: accountNumber,
+      account_number_confirm: accountNumberConfirm,
+      account_holder_name: accountHolderName.trim(),
+      account_holder_ci: accountHolderCi.trim(),
+      responsibility_acknowledged: responsibilityAck,
+    })
+  }
 
   function docRecordOf(type: string): DocRecord | undefined {
     return myDocs.find((d) => d.doc_type === type)
@@ -578,6 +652,159 @@ export default function ProfilePage() {
 
               <button onClick={savePrices} className="btn-primary text-xs py-1.5 px-3">
                 {t('Guardar precios')}
+              </button>
+            </div>
+          </div>
+
+          {/* Datos bancarios para pago */}
+          <div className="card">
+            <SectionTitle>{t('Datos bancarios para pago')}</SectionTitle>
+            <p className="text-xs text-[#475569] mb-3">
+              {t('Acá se te transfiere el % que te corresponde de cada consulta cobrada por QR. Todavía no está automatizado con el banco: un administrador revisa tu cuenta y hace la transferencia manualmente, así que puede demorar unos días.')}
+            </p>
+
+            {bankSuccess && <div className="mb-3"><Alert type="success" message={bankSuccess} /></div>}
+            {bankError   && <div className="mb-3"><Alert type="error"   message={bankError} /></div>}
+
+            {myBankAccount && (
+              <div className="mb-4 p-3 rounded-lg bg-[#F5F6FA] border border-[#DDE1EE]">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-semibold text-[#141820]">{myBankAccount.bank_name}</p>
+                  {myBankAccount.verified ? (
+                    <span className="text-xs font-semibold text-[#0F6E56] bg-[#E3F6EF] px-2 py-0.5 rounded-full whitespace-nowrap">
+                      ✓ {t('Verificada')}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-semibold text-[#B45309] bg-[#FEF3C7] px-2 py-0.5 rounded-full whitespace-nowrap">
+                      {t('Pendiente de revisión')}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#475569]">
+                  {myBankAccount.account_type === 'AHORRO' ? t('Cuenta de ahorro') : t('Cuenta corriente')} · {myBankAccount.account_number_masked}
+                </p>
+                <p className="text-xs text-[#475569]">{t('Titular')}: {myBankAccount.account_holder_name}</p>
+                {!myBankAccount.verified && (
+                  <p className="text-xs text-[#B45309] mt-1">
+                    {t('Un administrador la revisará antes de incluirte en el próximo pago.')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <p className="text-xs font-semibold text-[#141820] mb-2">
+              {myBankAccount ? t('Cambiar cuenta bancaria') : t('Registrar cuenta bancaria')}
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-[#475569] mb-1">{t('Banco')}</label>
+                <select
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
+                  value={selectedBank}
+                  onChange={(e) => setSelectedBank(e.target.value)}
+                >
+                  <option value="">{t('Selecciona tu banco')}</option>
+                  {(bankListData?.banks || []).map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                  <option value={OTHER_BANK_VALUE}>{bankListData?.other_label || 'Otro'}</option>
+                </select>
+              </div>
+
+              {selectedBank === OTHER_BANK_VALUE && (
+                <div>
+                  <label className="block text-xs font-medium text-[#475569] mb-1">
+                    {t('Nombre del banco o cooperativa')}
+                  </label>
+                  <input
+                    className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                    placeholder={t('Ej: Cooperativa Jesús Nazareno')}
+                    value={otherBankName}
+                    onChange={(e) => setOtherBankName(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-[#475569] mb-1">{t('Tipo de cuenta')}</label>
+                <select
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
+                  value={accountType}
+                  onChange={(e) => setAccountType(e.target.value as 'AHORRO' | 'CORRIENTE')}
+                >
+                  <option value="AHORRO">{t('Cuenta de ahorro')}</option>
+                  <option value="CORRIENTE">{t('Cuenta corriente')}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#475569] mb-1">{t('Número de cuenta')}</label>
+                <input
+                  type="text" inputMode="numeric"
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value.replace(/[^\d]/g, ''))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#475569] mb-1">
+                  {t('Confirma tu número de cuenta')}
+                </label>
+                <input
+                  type="text" inputMode="numeric"
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                  value={accountNumberConfirm}
+                  onChange={(e) => setAccountNumberConfirm(e.target.value.replace(/[^\d]/g, ''))}
+                />
+                <p className="text-xs text-[#64748B] mt-1">
+                  {t('Revisa bien cada dígito — una vez transferido, un error en la cuenta puede ser difícil o imposible de corregir.')}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#475569] mb-1">
+                  {t('Nombre completo del titular')}
+                </label>
+                <input
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                  placeholder={t('Tal como figura en el banco')}
+                  value={accountHolderName}
+                  onChange={(e) => setAccountHolderName(e.target.value)}
+                />
+                <p className="text-xs text-[#64748B] mt-1">
+                  {t('Puede ser otra persona, por ejemplo si la cuenta no está a tu nombre')}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#475569] mb-1">{t('CI del titular')}</label>
+                <input
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                  value={accountHolderCi}
+                  onChange={(e) => setAccountHolderCi(e.target.value)}
+                />
+              </div>
+
+              <label className="flex items-start gap-2 text-xs text-[#475569] leading-snug">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={responsibilityAck}
+                  onChange={(e) => setResponsibilityAck(e.target.checked)}
+                />
+                <span>
+                  {t('Confirmo que el número de cuenta y los datos del titular que ingresé son correctos. Entiendo que MedicBolivia no se hace responsable por transferencias enviadas a una cuenta incorrecta si el error fue mío al registrar los datos, y que corregir un envío ya realizado puede no ser posible o tomar tiempo adicional con el banco.')}
+                </span>
+              </label>
+
+              <button
+                onClick={saveBankAccount}
+                disabled={saveBankMutation.isPending}
+                className="btn-primary text-xs py-1.5 px-3"
+              >
+                {saveBankMutation.isPending ? t('Guardando...') : t('Guardar cuenta bancaria')}
               </button>
             </div>
           </div>

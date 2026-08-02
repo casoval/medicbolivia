@@ -162,6 +162,16 @@ class Settings(BaseSettings):
     BANK_INBOUND_TOKEN_SECRET: str = ""
     BANK_INBOUND_TOKEN_EXPIRE_SECONDS: int = 60 * 60 * 12  # 12h
 
+    # ── Cifrado de cuentas bancarias de profesionales (payouts, Fase 1) ──
+    # Clave Fernet separada de SECRET_KEY (mismo criterio que
+    # BANK_INBOUND_TOKEN_SECRET) para poder rotarla sin invalidar sesiones.
+    # Generar con:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # Vacío por defecto a propósito: mientras no esté configurada, guardar
+    # una cuenta bancaria falla con un error claro (ver app.core.crypto)
+    # en vez de guardar datos financieros sin cifrar.
+    BANK_ACCOUNT_ENCRYPTION_KEY: str = ""
+
     # Salario Mínimo Nacional vigente (Bolivia) — dato público del
     # gobierno. Normalmente se decreta ~mayo, pero para 2026 salió antes
     # de lo usual: Bs. 3.300 fijado por el DS 5516 (13/01/2026) y la RM

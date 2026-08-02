@@ -20,7 +20,7 @@
 import {
   IconHome, IconSearch, IconBot, IconClock, IconFile, IconRx, IconNote,
   IconGrid, IconUsers, IconCal, IconStar, IconUser,
-  IconPatients, IconCard, IconLog, IconCog, IconTag, IconChat, IconHelp,
+  IconPatients, IconCard, IconLog, IconCog, IconTag, IconChat, IconHelp, IconSend,
 } from '@/components/nav-icons'
 
 export interface NavItem {
@@ -271,6 +271,12 @@ export const ADMIN_NAV: NavItem[] = [
     href: '/admin/payments',
     icon: <IconCard />,
     description: 'Transacciones y cobros de toda la plataforma',
+  },
+  {
+    label: 'Pagos a profesionales',
+    href: '/admin/payouts',
+    icon: <IconSend />,
+    description: 'Lotes de pago del % a profesionales — cuentas bancarias y liquidaciones',
   },
   {
     label: 'IA / WhatsApp',

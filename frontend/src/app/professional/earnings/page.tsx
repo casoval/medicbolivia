@@ -6,6 +6,7 @@
 // se llevó la plataforma de comisión.
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
@@ -114,6 +115,14 @@ export default function ProfessionalEarningsPage() {
     refetchInterval: 20000,
   })
 
+  // Para el aviso de "registra tu cuenta bancaria" — no bloquea nada acá,
+  // solo avisa. Ver professional/profile para el formulario completo.
+  const { data: bankAccount } = useQuery({
+    queryKey: ['my-bank-account'],
+    queryFn: professionalsAPI.getMyBankAccount,
+    staleTime: 60_000,
+  })
+
   const stats = data?.stats
   const items = data?.items || []
 
@@ -127,6 +136,19 @@ export default function ProfessionalEarningsPage() {
             llevó la plataforma.
           </p>
         </div>
+
+        {!isLoading && (!bankAccount || !bankAccount.verified) && (
+          <div className="mb-4 p-3 rounded-lg border bg-[#FEF3C7] border-[#F5D890] text-[#854F0B] text-xs flex items-start justify-between gap-3">
+            <span>
+              {!bankAccount
+                ? t('Todavía no registraste una cuenta bancaria. Sin ella no podemos transferirte lo que ya cobraste — si llega la fecha de pago y no la registraste, el equipo de MedicBolivia se pondrá en contacto contigo para coordinar otra forma de pago.')
+                : t('Tu cuenta bancaria está pendiente de revisión por un administrador. Se te pagará una vez que quede verificada.')}
+            </span>
+            <Link href="/professional/profile" className="whitespace-nowrap font-semibold underline shrink-0">
+              {!bankAccount ? t('Registrar cuenta') : t('Ver estado')}
+            </Link>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4">
@@ -301,6 +323,18 @@ export default function ProfessionalEarningsPage() {
                                 <div>
                                   <p className="text-[#64748B]">{t('Fecha en que se te liberó')}</p>
                                   <p className="text-[#3C4257]">{fmtFechaHora(p.released_at)}</p>
+                                </div>
+                              )}
+                              {p.released_at && (
+                                <div>
+                                  <p className="text-[#64748B]">{t('Estado de la transferencia')}</p>
+                                  {p.paid_out_at ? (
+                                    <p className="text-[#0F6E56] font-medium">
+                                      {t('Pagado el')} {fmtFecha(p.paid_out_at)}
+                                    </p>
+                                  ) : (
+                                    <p className="text-[#854F0B] font-medium">{t('Liberado, transferencia pendiente')}</p>
+                                  )}
                                 </div>
                               )}
                               {p.scheduled_at && (
