@@ -12,6 +12,7 @@ Backend del menú "IA" del panel admin (4 pestañas):
 from datetime import datetime, timedelta
 from app.core.timezone import utcnow_naive
 from typing import Optional, List
+import hmac
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
@@ -503,7 +504,9 @@ async def receive_inbound_message(
     # aceptar/rechazar consultas inmediatas suplantando a un profesional
     # (ver _classify_immediate_reply más abajo). whatsapp-service ya manda
     # este header en sus propias rutas expuestas; acá faltaba exigirlo.
-    if not settings.WHATSAPP_SERVICE_INTERNAL_SECRET or x_internal_secret != settings.WHATSAPP_SERVICE_INTERNAL_SECRET:
+    if not settings.WHATSAPP_SERVICE_INTERNAL_SECRET or not hmac.compare_digest(
+        x_internal_secret, settings.WHATSAPP_SERVICE_INTERNAL_SECRET
+    ):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     # Normalizamos acá aunque whatsapp-service ya manda el número con
