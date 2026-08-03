@@ -8,7 +8,7 @@
 // Devuelve el valor en el mismo formato "YYYY-MM-DDTHH:MM" que el input nativo
 // producía, así que es un reemplazo directo en cualquier lugar que lo use.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const MESES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 const DIAS_ES  = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'] // lunes primero
@@ -166,12 +166,20 @@ export function SpanishBirthDatePicker({
   /** "YYYY-MM-DD" o "" si todavía no se eligió nada */
   value: string
   onChange: (v: string) => void
-  /** Opcional — solo para que el botón sea identificable en tests/labels */
+  /** Opcional — solo para que el input sea identificable en tests/labels */
   name?: string
 }) {
   const now = new Date()
   const minYear = now.getFullYear() - 120
   const maxYear = now.getFullYear()
+
+  function pad(n: number) { return String(n).padStart(2, '0') }
+
+  function toDisplay(v: string) {
+    if (!v) return ''
+    const [y, m, d] = v.split('-')
+    return `${d}/${m}/${y}`
+  }
 
   const parsed = value ? value.split('-').map(Number) : null
   const initialYear = parsed ? parsed[0] : maxYear - 30 // año de partida razonable
@@ -181,13 +189,44 @@ export function SpanishBirthDatePicker({
   const [viewYear, setViewYear] = useState(initialYear)
   const [viewMonth, setViewMonth] = useState(initialMonth)
 
+  // Texto que el usuario puede escribir a mano (DD/MM/AAAA), aparte de elegir
+  // del calendario — obligar a usar solo el calendario para una fecha de
+  // nacimiento (a veces décadas atrás) es incómodo. Se sincroniza con `value`
+  // cuando el cambio viene de afuera (p.ej. se eligió un día en el calendario),
+  // pero mientras el usuario está tipeando no se pisa su propio texto.
+  const [text, setText] = useState(toDisplay(value))
+  const [manualError, setManualError] = useState('')
+
+  useEffect(() => { setText(toDisplay(value)) }, [value])
+
   function openPicker() {
     setViewYear(parsed ? parsed[0] : initialYear)
     setViewMonth(parsed ? parsed[1] - 1 : initialMonth)
     setOpen(true)
   }
 
-  function pad(n: number) { return String(n).padStart(2, '0') }
+  function handleTextChange(raw: string) {
+    const digits = raw.replace(/\D/g, '').slice(0, 8) // ddmmaaaa
+    let formatted = digits
+    if (digits.length > 4) formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+    else if (digits.length > 2) formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`
+    setText(formatted)
+    setManualError('')
+
+    if (digits.length < 8) return // todavía escribiendo, no validar
+
+    const day = Number(digits.slice(0, 2))
+    const month = Number(digits.slice(2, 4))
+    const year = Number(digits.slice(4, 8))
+    const d = new Date(year, month - 1, day)
+    const isRealDate = d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day
+
+    if (!isRealDate) { setManualError('Fecha inválida'); return }
+    if (d > now) { setManualError('La fecha no puede ser futura'); return }
+    if (year < minYear) { setManualError('Revisa el año'); return }
+
+    onChange(`${year}-${pad(month)}-${pad(day)}`)
+  }
 
   const firstDay = new Date(viewYear, viewMonth, 1)
   const leadingBlanks = (firstDay.getDay() + 6) % 7 // lunes primero
@@ -196,6 +235,7 @@ export function SpanishBirthDatePicker({
 
   function pickDay(day: number) {
     onChange(`${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`)
+    setManualError('')
     setOpen(false)
   }
 
@@ -203,22 +243,34 @@ export function SpanishBirthDatePicker({
     return new Date(viewYear, viewMonth, day) > now
   }
 
-  const displayLabel = parsed
-    ? `${pad(parsed[2])}/${pad(parsed[1])}/${parsed[0]}`
-    : 'DD/MM/AAAA'
-
   const years = Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i)
 
   return (
     <div className="relative">
-      <button
-        type="button"
-        name={name}
-        onClick={() => (open ? setOpen(false) : openPicker())}
-        className="w-full text-left px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
-      >
-        <span className={value ? 'text-[#141820]' : 'text-[#94A3B8]'}>{displayLabel}</span>
-      </button>
+      <div className="flex gap-1.5">
+        <input
+          type="text"
+          inputMode="numeric"
+          name={name}
+          value={text}
+          onChange={(e) => handleTextChange(e.target.value)}
+          placeholder="DD/MM/AAAA"
+          maxLength={10}
+          className={`flex-1 min-w-0 px-3 py-2.5 border rounded-lg text-sm focus:outline-none bg-white ${
+            manualError ? 'border-[#E24B4A]' : 'border-[#DDE1EE] focus:border-[#185FA5]'
+          }`}
+        />
+        <button
+          type="button"
+          onClick={() => (open ? setOpen(false) : openPicker())}
+          aria-label="Elegir fecha del calendario"
+          className="px-2.5 border border-[#DDE1EE] rounded-lg bg-white hover:bg-[#F4F6FB] text-[#475569] flex-shrink-0"
+        >
+          🗓
+        </button>
+      </div>
+
+      {manualError && <p className="text-[11px] text-[#E24B4A] mt-1">{manualError}</p>}
 
       {open && (
         <>

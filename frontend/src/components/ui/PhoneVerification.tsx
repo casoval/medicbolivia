@@ -109,6 +109,9 @@ export function PhoneVerification({ phone, onVerified, verified }: PhoneVerifica
 
   return (
     <div className="space-y-2">
+      <p className="text-xs text-[#854F0B] bg-[#FFF8E6] border border-[#F0D88A] rounded-lg px-3 py-2">
+        ⚠️ La verificación de tu número por WhatsApp es obligatoria — no vas a poder crear la cuenta sin confirmarlo.
+      </p>
       {!sent ? (
         <button
           type="button"

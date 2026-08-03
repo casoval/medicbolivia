@@ -113,21 +113,32 @@ export default function RegisterProfessionalPage() {
     e.preventDefault()
     setError('')
 
-    if (!phoneVerified) { setError(t('Verificá tu número de celular por WhatsApp antes de continuar')); return }
-    if (form.password !== form.confirm_password) { setError(t('Las contraseñas no coinciden')); return }
-    if (!form.department) { setError(t('Selecciona tu departamento')); return }
-    if (!form.birth_date) { setError(t('Ingresa tu fecha de nacimiento')); return }
+    const missing: string[] = []
+    if (!form.first_name.trim()) missing.push(t('Nombre'))
+    if (!form.last_name.trim()) missing.push(t('Apellido'))
+    if (!form.ci.trim()) missing.push(t('Cédula de identidad'))
+    if (!form.birth_date) missing.push(t('Fecha de nacimiento'))
+    if (!form.department) missing.push(t('Departamento'))
+    if (!form.specialty) missing.push(t('Especialidad'))
+    if (selectedLanguages.length === 0 && !customLanguage.trim()) missing.push(t('Idiomas de atención'))
+    if (!form.phone.trim()) missing.push(t('Número de celular'))
+    if (!form.password) missing.push(t('Contraseña'))
+    if (!form.confirm_password) missing.push(t('Confirmar contraseña'))
+    if (missing.length > 0) {
+      setError(`${t('Faltan estos campos obligatorios')}: ${missing.join(', ')}`)
+      return
+    }
 
-    if (!form.specialty) { setError(t('Selecciona tu especialidad')); return }
+    if (form.password !== form.confirm_password) { setError(t('Las contraseñas no coinciden')); return }
+
     if (specialtyNotListed && !specialtyProposal.trim()) {
       setError(t('Escribe el nombre de tu especialidad')); return
     }
     if (subSpecialtyNotListed && !subSpecialtyProposal.trim()) {
       setError(t('Escribe el nombre de tu subespecialidad')); return
     }
-    if (selectedLanguages.length === 0 && !customLanguage.trim()) {
-      setError(t('Selecciona al menos un idioma de atención')); return
-    }
+
+    if (!phoneVerified) { setError(t('Verificá tu número de celular por WhatsApp antes de continuar')); return }
 
     // Si la especialidad es nueva, se manda el texto propuesto como
     // specialty del registro — el backend la deja en revisión apenas

@@ -7,6 +7,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { prescriptionsAPI, getErrorMessage } from '@/lib/api'
 import { Spinner } from '@/components/ui'
@@ -76,6 +77,9 @@ function VerifyForm() {
   return (
     <div className="max-w-lg mx-auto">
       <div className="text-center mb-6">
+        <Link href="/" className="inline-block mb-4">
+          <Image src="/logo1.png" alt="MedicBolivia" width={1262} height={173} className="h-8 w-auto mx-auto" priority />
+        </Link>
         <div className="w-14 h-14 rounded-2xl bg-[#E6F1FB] flex items-center justify-center mx-auto mb-3 text-2xl">
           🔍
         </div>
