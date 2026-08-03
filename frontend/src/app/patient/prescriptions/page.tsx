@@ -5,8 +5,8 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
-import { prescriptionsAPI, buildPrescriptionVerifyUrl } from '@/lib/api'
-import type { Medication, Prescription } from '@/types'
+import { prescriptionsAPI, labOrdersAPI, buildPrescriptionVerifyUrl, buildLabOrderVerifyUrl } from '@/lib/api'
+import type { Medication, Prescription, LabOrder, LabTest } from '@/types'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 function QRCode({ value, size = 140 }: { value: string; size?: number }) {
@@ -222,6 +222,135 @@ function ProfessionalRxGroup({ group }: { group: { key: string; professionalName
   )
 }
 
+function LabOrderCard({ order }: { order: LabOrder }) {
+  const { t } = useLanguage()
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const tests: LabTest[] = Array.isArray(order.tests) ? order.tests : []
+
+  function copyCode() {
+    navigator.clipboard.writeText(order.qr_verify_code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="border border-[#DDE1EE] rounded-2xl overflow-hidden bg-white shadow-sm">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-4 py-4 hover:bg-[#F5F6FA] transition-colors text-left"
+      >
+        <div className="w-10 h-10 rounded-full bg-[#EDE7F9] flex items-center justify-center text-lg flex-shrink-0">
+          🧪
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-[#1A1F2E]">{order.professional_name ?? 'Médico'}</p>
+          <p className="text-xs text-[#475569] mt-0.5">
+            {order.professional_specialty && <span className="mr-1">{order.professional_specialty} ·</span>}
+            {tests.length} {tests.length === 1 ? t('estudio') : t('estudios')} ·{' '}
+            {new Date(order.signed_at).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </p>
+        </div>
+        {order.urgency === 'URGENT' && (
+          <span className="text-[10px] bg-[#F5E6E6] text-[#A32D2D] px-2 py-0.5 rounded-full font-medium flex-shrink-0">{t('Urgente')}</span>
+        )}
+        <div className="flex-shrink-0 text-[#475569] text-xs bg-[#F5F6FA] w-6 h-6 rounded-full flex items-center justify-center">
+          {open ? '▲' : '▼'}
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-[#DDE1EE]">
+          <div className="bg-[#3A2E63] px-4 sm:px-5 py-4 text-white">
+            <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+              <div>
+                <p className="text-xs text-white/60 uppercase tracking-wide mb-0.5">{t('Médico tratante')}</p>
+                <p className="font-bold text-base">{order.professional_name ?? '—'}</p>
+                <p className="text-sm text-white/80">{order.professional_specialty}</p>
+                {order.cmb_matricula && (
+                  <p className="text-xs text-white/60 mt-1">{t('Matrícula CMB:')} <span className="text-white/90 font-mono">{order.cmb_matricula}</span></p>
+                )}
+              </div>
+              <div className="text-left sm:text-right flex-shrink-0">
+                <p className="text-xs text-white/60 uppercase tracking-wide mb-0.5">{t('Paciente')}</p>
+                <p className="text-sm font-semibold">{order.patient_name}</p>
+                <p className="text-xs text-white/70">CI: {order.patient_ci}</p>
+                <p className="text-xs text-white/70">{order.patient_age} años</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-5 py-4 space-y-4 bg-[#FAFBFC]">
+            <div>
+              <p className="text-xs font-bold text-[#475569] uppercase tracking-wide mb-2">{t('Estudios solicitados')}</p>
+              <div className="space-y-2">
+                {tests.map((test, i) => (
+                  <div key={i} className="bg-white rounded-xl border border-[#DDE1EE] p-3.5">
+                    <div className="flex items-start gap-2">
+                      <span className="text-[#5B3FA5] font-bold text-sm w-5 flex-shrink-0">{i + 1}.</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-[#1A1F2E]">{test.name}</p>
+                        {test.notes && <p className="text-xs text-[#475569] mt-0.5">{test.notes}</p>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {order.fasting_required && (
+                <span className="text-xs bg-[#FAEEDA] text-[#854F0B] px-2.5 py-1 rounded-full font-medium">🍽️ {t('Requiere ayuno')}</span>
+              )}
+              {order.urgency === 'URGENT' && (
+                <span className="text-xs bg-[#F5E6E6] text-[#A32D2D] px-2.5 py-1 rounded-full font-medium">⚡ {t('Urgente')}</span>
+              )}
+            </div>
+
+            {order.clinical_indication && (
+              <div className="bg-[#EDE7F9] rounded-xl px-4 py-3 border border-[#D8CCF0]">
+                <p className="text-xs font-bold text-[#5B3FA5] mb-1">{t('🩺 Indicación clínica')}</p>
+                <p className="text-sm text-[#5B3FA5] leading-relaxed">{order.clinical_indication}</p>
+              </div>
+            )}
+
+            {order.instructions && (
+              <div className="bg-[#FAEEDA] rounded-xl px-4 py-3 border border-[#F3D08A]">
+                <p className="text-xs font-bold text-[#854F0B] mb-1">{t('📌 Instrucciones')}</p>
+                <p className="text-sm text-[#854F0B] leading-relaxed">{order.instructions}</p>
+              </div>
+            )}
+
+            <div className="bg-white rounded-xl border border-[#DDE1EE] p-4">
+              <p className="text-xs font-bold text-[#475569] uppercase tracking-wide mb-4">{t('Verificación y firma digital')}</p>
+              <div className="flex flex-col sm:flex-row gap-5 items-start">
+                <div className="flex-shrink-0">
+                  <QRCode value={buildLabOrderVerifyUrl(order.qr_verify_code)} size={130} />
+                  <p className="text-[10px] text-[#475569] text-center mt-1 max-w-[130px]">
+                    {t('Presenta en el laboratorio para verificar')}
+                  </p>
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="bg-[#F5F6FA] rounded-lg p-2.5">
+                    <p className="text-[10px] text-[#475569] font-semibold mb-1">{t('Hash SHA-256')}</p>
+                    <p className="text-[10px] font-mono text-[#5B3FA5] break-all leading-relaxed">{order.digital_hash}</p>
+                  </div>
+                  <button
+                    onClick={copyCode}
+                    className={`w-full py-2 rounded-lg text-xs font-medium transition-colors ${copied ? 'bg-[#E1F5EE] text-[#0F6E56]' : 'bg-[#EDE7F9] text-[#5B3FA5] hover:bg-[#DCCFF2]'}`}
+                  >
+                    {copied ? '✓ Código copiado' : '📋 Copiar código de verificación'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function PatientPrescriptionsPage() {
   const { t } = useLanguage()
   const [viewMode, setViewMode] = useState<'date' | 'professional'>('date')
@@ -230,6 +359,15 @@ export default function PatientPrescriptionsPage() {
     queryKey: ['prescriptions', 'patient'],
     queryFn: () => prescriptionsAPI.getMyPatient(),
   })
+
+  const { data: labOrders = [], isLoading: loadingLabOrders } = useQuery({
+    queryKey: ['lab-orders', 'patient'],
+    queryFn: () => labOrdersAPI.getMyPatient(),
+  })
+
+  const sortedLabOrders = [...(labOrders as LabOrder[])].sort(
+    (a, b) => new Date(b.signed_at).getTime() - new Date(a.signed_at).getTime()
+  )
 
   const sortedByDate = [...(prescriptions as Prescription[])].sort(
     (a, b) => new Date(b.signed_at).getTime() - new Date(a.signed_at).getTime()
@@ -316,6 +454,39 @@ export default function PatientPrescriptionsPage() {
             )}
           </div>
         )}
+
+        {/* ── Mis órdenes de laboratorio ── */}
+        <div className="mt-8">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold">{t('Mis órdenes de laboratorio')}</h2>
+            <p className="text-xs text-[#475569] mt-0.5">
+              {t('Órdenes de estudios firmadas digitalmente. Presenta el código QR en el laboratorio para verificarlas.')}
+            </p>
+          </div>
+
+          {loadingLabOrders ? (
+            <div className="space-y-3">
+              {[1, 2].map(n => <div key={n} className="h-20 bg-[#F5F6FA] rounded-2xl animate-pulse" />)}
+            </div>
+          ) : sortedLabOrders.length === 0 ? (
+            <div className="card text-center py-14">
+              <p className="text-4xl mb-3">🧪</p>
+              <p className="text-sm font-semibold text-[#1A1F2E]">{t('Sin órdenes de laboratorio aún')}</p>
+              <p className="text-xs text-[#475569] mt-1 max-w-xs mx-auto">
+                {t('Las órdenes que te emita tu médico cuando necesites estudios aparecerán aquí.')}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-[#64748B]">
+                {sortedLabOrders.length} {sortedLabOrders.length === 1 ? t('orden') : t('órdenes')}
+              </p>
+              {sortedLabOrders.map((order) => (
+                <LabOrderCard key={order.id} order={order} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </DashboardLayout>
   )

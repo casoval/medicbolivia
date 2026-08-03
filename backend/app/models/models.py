@@ -74,6 +74,11 @@ class PrescriptionStatus(str, enum.Enum):
     VOIDED = "VOIDED"
 
 
+class LabOrderUrgency(str, enum.Enum):
+    ROUTINE = "ROUTINE"
+    URGENT = "URGENT"
+
+
 class ConsultationStatus(str, enum.Enum):
     AGENT_TRIAGING = "AGENT_TRIAGING"
     PROFESSIONAL_ACCEPTED = "PROFESSIONAL_ACCEPTED"
@@ -263,6 +268,7 @@ class Professional(Base):
     consultations: Mapped[List["Consultation"]] = relationship(back_populates="professional")
     ratings: Mapped[List["Rating"]] = relationship(back_populates="professional")
     prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="professional")
+    lab_orders: Mapped[List["LabOrder"]] = relationship(back_populates="professional")
     earnings: Mapped[List["Earning"]] = relationship(back_populates="professional")
     specialty_proposals: Mapped[List["SpecialtyProposal"]] = relationship(back_populates="professional")
     bank_account: Mapped[Optional["ProfessionalBankAccount"]] = relationship(back_populates="professional", uselist=False)
@@ -442,6 +448,7 @@ class Consultation(Base):
     professional: Mapped[Optional["Professional"]] = relationship(back_populates="consultations")
     payment: Mapped[Optional["Payment"]] = relationship(back_populates="consultation", uselist=False)
     prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="consultation")
+    lab_orders: Mapped[List["LabOrder"]] = relationship(back_populates="consultation")
     rating: Mapped[Optional["Rating"]] = relationship(back_populates="consultation", uselist=False)
     agent_logs: Mapped[List["AgentLog"]] = relationship(back_populates="consultation")
     derivations: Mapped[List["Derivation"]] = relationship(back_populates="consultation")
@@ -655,6 +662,56 @@ class Prescription(Base):
 
     consultation: Mapped["Consultation"] = relationship(back_populates="prescriptions")
     professional: Mapped["Professional"] = relationship(back_populates="prescriptions")
+
+
+class LabOrder(Base):
+    """
+    Orden de laboratorio/imagenología digital, firmada — documento
+    separado de Prescription a propósito: lo lee un técnico de
+    laboratorio, no un farmacéutico, y necesita datos que una receta de
+    medicamentos no (indicación clínica, ayuno, urgencia). Comparte el
+    mismo patrón de firma/verificación que Prescription: hash SHA-256 +
+    QR verificable + nunca se edita, solo se anula y se reemite.
+
+    Se emite desde la misma pantalla/flujo que la receta (misma consulta,
+    mismo médico), pero es su propio documento legal e independiente —
+    un médico puede emitir una orden de laboratorio sin receta, o una
+    receta sin orden de laboratorio, o ambas juntas.
+    """
+    __tablename__ = "lab_orders"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    consultation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("consultations.id"), index=True)
+    professional_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("professionals.id"), index=True)
+    patient_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    patient_ci: Mapped[str] = mapped_column(String(20), nullable=False)
+    patient_age: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Lista de estudios solicitados: [{"name": "Hemograma completo", "notes": "..."}].
+    # Cada item puede venir del catálogo (app.core.lab_test_catalog) o ser
+    # texto libre que el médico escribió a mano — se guardan igual, sin
+    # distinguir el origen, porque para el laboratorio da lo mismo.
+    tests: Mapped[list] = mapped_column(JSON, nullable=False)
+    clinical_indication: Mapped[Optional[str]] = mapped_column(Text)
+    fasting_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    urgency: Mapped[LabOrderUrgency] = mapped_column(SAEnum(LabOrderUrgency), default=LabOrderUrgency.ROUTINE)
+    instructions: Mapped[Optional[str]] = mapped_column(Text)
+    digital_hash: Mapped[str] = mapped_column(String(256), unique=True, nullable=False)
+    qr_verify_code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    pdf_url: Mapped[Optional[str]] = mapped_column(String(500))
+    signed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+
+    # Mismo patrón de anulación/reemisión que Prescription — nunca se
+    # edita una orden ya firmada.
+    status: Mapped[str] = mapped_column(String(20), default=PrescriptionStatus.ACTIVE.value)
+    voided_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    void_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    replaces_lab_order_id: Mapped[Optional[str]] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("lab_orders.id"), nullable=True
+    )
+
+    consultation: Mapped["Consultation"] = relationship(back_populates="lab_orders")
+    professional: Mapped["Professional"] = relationship(back_populates="lab_orders")
 
 
 class ClinicalNote(Base):

@@ -2,7 +2,7 @@
 import axios, { AxiosError } from 'axios'
 import type {
   AuthResponse, User, Professional, Consultation,
-  Payment, Prescription, AgentResponse, Rating, FAQ,
+  Payment, Prescription, LabOrder, AgentResponse, Rating, FAQ,
   ChatConversationSummary, ChatMessage, ChatReasonCategory,
 } from '@/types'
 
@@ -14,6 +14,11 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v
 export function buildPrescriptionVerifyUrl(code: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medicbolivia.com'
   return `${origin}/verificar-receta?code=${encodeURIComponent(code)}`
+}
+
+export function buildLabOrderVerifyUrl(code: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medicbolivia.com'
+  return `${origin}/verificar-orden-lab?code=${encodeURIComponent(code)}`
 }
 
 // ── Configuración de la plataforma (admin → Configuración) ──
@@ -971,6 +976,49 @@ export const prescriptionsAPI = {
 
   verify: (code: string) =>
     api.get(`/prescriptions/verify/${code}`),
+}
+
+// ── Órdenes de laboratorio (documento separado de la receta, mismo
+// patrón de firma/QR — ver LabOrder en el backend) ──
+export const labOrdersAPI = {
+  getCatalog: async (): Promise<{ catalog: Record<string, string[]> }> => {
+    const res = await api.get<{ catalog: Record<string, string[]> }>('/lab-orders/test-catalog')
+    return res.data
+  },
+
+  create: (data: {
+    consultation_id: string
+    tests: { name: string; notes?: string }[]
+    clinical_indication?: string
+    fasting_required?: boolean
+    urgency?: 'ROUTINE' | 'URGENT'
+    instructions?: string
+    replaces_lab_order_id?: string
+  }) => api.post<LabOrder>('/lab-orders', data),
+
+  void: (labOrderId: string, reason?: string) =>
+    api.post<LabOrder>(`/lab-orders/${labOrderId}/void`, { reason }),
+
+  getMy: async (): Promise<LabOrder[]> => {
+    const res = await api.get<LabOrder[]>('/lab-orders/my')
+    return res.data
+  },
+
+  getMyPatient: async (): Promise<LabOrder[]> => {
+    const res = await api.get<LabOrder[]>('/lab-orders/patient/my')
+    return res.data
+  },
+
+  getByConsultation: (consultationId: string) =>
+    api.get<LabOrder[]>(`/lab-orders/consultation/${consultationId}`),
+
+  getMineForPatient: async (patientId: string): Promise<LabOrder[]> => {
+    const res = await api.get<LabOrder[]>(`/lab-orders/patient/${patientId}/mine`)
+    return res.data
+  },
+
+  verify: (code: string) =>
+    api.get(`/lab-orders/verify/${code}`),
 }
 
 // ── FAQ (landing pública + admin) ─────────────────────

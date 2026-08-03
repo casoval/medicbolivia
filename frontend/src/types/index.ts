@@ -193,6 +193,39 @@ export interface Medication {
   notes?: string
 }
 
+// ── Orden de laboratorio (documento separado de la receta) ──
+export interface LabTest {
+  name: string
+  notes?: string
+}
+
+export interface LabOrder {
+  id: string
+  consultation_id: string
+  patient_name: string
+  patient_ci: string
+  patient_age: number
+  patient_photo_url?: string | null
+  tests: LabTest[]
+  clinical_indication?: string | null
+  fasting_required: boolean
+  urgency: 'ROUTINE' | 'URGENT'
+  instructions?: string | null
+  digital_hash: string
+  qr_verify_code: string
+  pdf_url?: string
+  signed_at: string
+  status: 'ACTIVE' | 'VOIDED'
+  voided_at?: string | null
+  void_reason?: string | null
+  replaces_lab_order_id?: string | null
+  professional_name?: string
+  professional_specialty?: string
+  professional_sub_specialties?: string[]
+  professional_department?: string
+  cmb_matricula?: string
+}
+
 export interface Rating {
   id: string
   score: number

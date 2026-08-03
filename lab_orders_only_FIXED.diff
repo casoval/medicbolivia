@@ -545,29 +545,6 @@ index 0000000..3ec4790
 +        "cmb_matricula":          professional.cmb_matricula if professional else "",
 +        "message":                "Orden válida y auténtica. Emitida por MedicBolivia."
 +    }
-diff --git a/backend/app/api/v1/endpoints/whatsapp.py b/backend/app/api/v1/endpoints/whatsapp.py
-index 3a0cf2b..970a810 100644
---- a/backend/app/api/v1/endpoints/whatsapp.py
-+++ b/backend/app/api/v1/endpoints/whatsapp.py
-@@ -12,6 +12,7 @@ Backend del menú "IA" del panel admin (4 pestañas):
- from datetime import datetime, timedelta
- from app.core.timezone import utcnow_naive
- from typing import Optional, List
-+import hmac
- 
- import httpx
- from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
-@@ -503,7 +504,9 @@ async def receive_inbound_message(
-     # aceptar/rechazar consultas inmediatas suplantando a un profesional
-     # (ver _classify_immediate_reply más abajo). whatsapp-service ya manda
-     # este header en sus propias rutas expuestas; acá faltaba exigirlo.
--    if not settings.WHATSAPP_SERVICE_INTERNAL_SECRET or x_internal_secret != settings.WHATSAPP_SERVICE_INTERNAL_SECRET:
-+    if not settings.WHATSAPP_SERVICE_INTERNAL_SECRET or not hmac.compare_digest(
-+        x_internal_secret, settings.WHATSAPP_SERVICE_INTERNAL_SECRET
-+    ):
-         raise HTTPException(status_code=401, detail="No autorizado")
- 
-     # Normalizamos acá aunque whatsapp-service ya manda el número con
 diff --git a/backend/app/core/lab_test_catalog.py b/backend/app/core/lab_test_catalog.py
 new file mode 100644
 index 0000000..943319e
@@ -823,40 +800,6 @@ index 545a2f7..3fe6f3a 100644
  # ─────────────────────────────────────────────────────
  # HISTORIA CLÍNICA (Gap 4)
  # ─────────────────────────────────────────────────────
-diff --git a/backend/app/services/payment.py b/backend/app/services/payment.py
-index 66eef44..3bb12f2 100644
---- a/backend/app/services/payment.py
-+++ b/backend/app/services/payment.py
-@@ -95,14 +95,26 @@ def calculate_amounts(consultation_amount: Decimal, commission_percent: Decimal)
-     esta función ya no decide el %, solo hace la aritmética, para que el
-     mismo cálculo sirva tanto para la comisión global por defecto como
-     para promociones por período o comisiones individuales por profesional.
-+
-+    IMPORTANTE sobre el redondeo: platform_fee se redondea primero, y
-+    professional_net se DERIVA por resta exacta de ese valor ya redondeado
-+    (no se redondea por separado). Redondear los dos de forma independiente
-+    parece inofensivo pero no lo es: para ciertas combinaciones de monto y
-+    %, cada redondeo cae para lados opuestos y platform_fee + professional_net
-+    termina un centavo por encima o por debajo del monto real cobrado (se
-+    verificó con un barrido de ~97.000 combinaciones: sin este orden, ~0.02%
-+    de los casos desbalanceaban; con este orden, 0). Con consultation_amount
-+    ya en centavos exactos (como es siempre en dinero), restar dos valores
-+    exactos de 2 decimales es siempre exacto — no hace falta volver a
-+    redondear professional_net.
-     """
-     fraction = commission_percent / Decimal("100")
--    platform_fee = consultation_amount * fraction
-+    platform_fee = (consultation_amount * fraction).quantize(Decimal("0.01"))
-     professional_net = consultation_amount - platform_fee
-     return {
-         "amount": consultation_amount,
--        "platform_fee": platform_fee.quantize(Decimal("0.01")),
--        "professional_net": professional_net.quantize(Decimal("0.01")),
-+        "platform_fee": platform_fee,
-+        "professional_net": professional_net,
-         "commission_percent": commission_percent,
-     }
- 
 diff --git a/frontend/src/app/patient/prescriptions/page.tsx b/frontend/src/app/patient/prescriptions/page.tsx
 index 98466d5..a64e435 100644
 --- a/frontend/src/app/patient/prescriptions/page.tsx

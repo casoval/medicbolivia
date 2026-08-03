@@ -703,6 +703,62 @@ class PrescriptionResponse(BaseModel):
 
 
 # ─────────────────────────────────────────────────────
+# ÓRDENES DE LABORATORIO (documento separado de la receta —
+# ver LabOrder en app/models/models.py y app.core.lab_test_catalog)
+# ─────────────────────────────────────────────────────
+
+class LabTestItem(BaseModel):
+    name: str
+    # Notas puntuales del estudio (ej. "solo brazo izquierdo", "con
+    # contraste") — opcional, no confundir con clinical_indication de
+    # LabOrderCreateRequest, que es el motivo general de toda la orden.
+    notes: Optional[str] = None
+
+
+class LabOrderCreateRequest(BaseModel):
+    consultation_id: str
+    tests: List[LabTestItem] = Field(..., min_length=1)
+    clinical_indication: Optional[str] = None
+    fasting_required: bool = False
+    urgency: Literal["ROUTINE", "URGENT"] = "ROUTINE"
+    instructions: Optional[str] = None
+    replaces_lab_order_id: Optional[str] = None
+
+
+class LabOrderVoidRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class LabOrderResponse(BaseModel):
+    id: str
+    consultation_id: str
+    patient_name: str
+    patient_ci: str
+    patient_age: int
+    patient_photo_url: Optional[str] = None
+    tests: List[dict]
+    clinical_indication: Optional[str]
+    fasting_required: bool
+    urgency: str
+    instructions: Optional[str]
+    digital_hash: str
+    qr_verify_code: str
+    pdf_url: Optional[str]
+    signed_at: datetime
+    status: str = "ACTIVE"
+    voided_at: Optional[datetime] = None
+    void_reason: Optional[str] = None
+    replaces_lab_order_id: Optional[str] = None
+    professional_name: Optional[str] = None
+    professional_specialty: Optional[str] = None
+    professional_sub_specialties: Optional[List[str]] = None
+    professional_department: Optional[str] = None
+    cmb_matricula: Optional[str] = None
+
+    model_config = {"from_attributes": True, "populate_by_name": True}
+
+
+# ─────────────────────────────────────────────────────
 # HISTORIA CLÍNICA (Gap 4)
 # ─────────────────────────────────────────────────────
 

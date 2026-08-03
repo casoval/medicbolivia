@@ -7,6 +7,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta
 from app.core.timezone import utcnow_naive
 from zoneinfo import ZoneInfo
@@ -562,7 +563,24 @@ async def create_consultation(
     )
     db.add(consultation)
     await db.flush()
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        # Última línea de defensa contra la condición de carrera de
+        # agendamiento: compute_available_slots (arriba) valida "leyendo"
+        # las citas existentes, pero entre esa lectura y este commit otro
+        # paciente puede haber tomado el mismo horario con el mismo
+        # profesional en simultáneo — sobre todo en horarios populares.
+        # uq_professional_active_slot (índice único parcial, ver migración
+        # add_unique_active_slot) es quien realmente lo evita: si dos
+        # requests corren la carrera, el segundo INSERT falla acá.
+        await db.rollback()
+        if "uq_professional_active_slot" in str(e.orig):
+            raise HTTPException(
+                status_code=409,
+                detail="Ese horario ya fue tomado por otro paciente justo ahora. Por favor elige otro horario.",
+            )
+        raise
     await db.refresh(consultation)
 
     if data.consultation_type in (ConsultationType.SCHEDULED, ConsultationType.FOLLOW_UP):

@@ -7,8 +7,11 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { Alert, SectionTitle } from '@/components/ui'
 import { PatientAvatar } from '@/components/shared/PatientAvatar'
-import { prescriptionsAPI, consultationsAPI, getErrorMessage, buildPrescriptionVerifyUrl } from '@/lib/api'
-import type { Medication, Prescription } from '@/types'
+import {
+  prescriptionsAPI, labOrdersAPI, consultationsAPI, getErrorMessage,
+  buildPrescriptionVerifyUrl, buildLabOrderVerifyUrl,
+} from '@/lib/api'
+import type { Medication, Prescription, LabOrder, LabTest } from '@/types'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const EMPTY_MED: Medication = { name: '', presentation: '', dosage: '', frequency: '', duration: '', notes: '' }
@@ -270,6 +273,180 @@ function PatientRxGroup({
   )
 }
 
+// ── Tarjeta de una orden de laboratorio emitida ──────
+function LabOrderCard({
+  order, onVoid, isVoiding,
+}: {
+  order: LabOrder
+  onVoid: (id: string, reason: string) => void
+  isVoiding: boolean
+}) {
+  const { t } = useLanguage()
+  const [open, setOpen]             = useState(false)
+  const [copied, setCopied]         = useState(false)
+  const [voidPanel, setVoidPanel]   = useState(false)
+  const [voidReason, setVoidReason] = useState('')
+  const tests: LabTest[] = Array.isArray(order.tests) ? order.tests : []
+  const isVoided = order.status === 'VOIDED'
+
+  function copyCode() {
+    navigator.clipboard.writeText(order.qr_verify_code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  function confirmVoid() {
+    onVoid(order.id, voidReason)
+    setVoidPanel(false)
+    setVoidReason('')
+  }
+
+  return (
+    <div className={`border rounded-xl overflow-hidden ${isVoided ? 'border-[#F0D9D9] bg-[#FFFBFB]' : 'border-[#DDE1EE]'}`}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#F5F6FA] transition-colors text-left"
+      >
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 ${isVoided ? 'bg-[#F5E6E6] text-[#A32D2D]' : 'bg-[#EDE7F9] text-[#5B3FA5]'}`}>
+          🧪
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-medium truncate ${isVoided ? 'text-[#64748B] line-through' : ''}`}>{order.patient_name}</p>
+          <p className="text-xs text-[#475569]">
+            CI: {order.patient_ci} · {order.patient_age} años · {fmtFecha(order.signed_at)} · {tests.length} {tests.length === 1 ? t('estudio') : t('estudios')}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {!isVoided && order.urgency === 'URGENT' && (
+            <span className="text-[10px] bg-[#F5E6E6] text-[#A32D2D] px-2 py-0.5 rounded-full font-medium">{t('Urgente')}</span>
+          )}
+          {isVoided && (
+            <span className="text-[10px] bg-[#F5E6E6] text-[#A32D2D] px-2 py-0.5 rounded-full font-medium">{t('Anulada')}</span>
+          )}
+          <span className="hidden sm:block text-[10px] font-mono text-[#475569] bg-[#F5F6FA] px-2 py-0.5 rounded-full">
+            {order.qr_verify_code}
+          </span>
+          <span className="text-[#475569] text-xs">{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {open && (
+        <div className="bg-[#FAFBFC] border-t border-[#DDE1EE]">
+          <div className="px-4 py-4 space-y-3">
+
+            {isVoided && (
+              <div className="bg-[#F5E6E6] rounded-lg px-3 py-2.5">
+                <p className="text-xs font-semibold text-[#A32D2D]">
+                  ⛔ Orden anulada {order.voided_at ? `el ${fmtFecha(order.voided_at)}` : ''}
+                </p>
+                {order.void_reason && <p className="text-xs text-[#A32D2D] mt-0.5">Motivo: {order.void_reason}</p>}
+                <p className="text-[10px] text-[#A32D2D] mt-1">
+                  {t('Esta orden ya no es válida. El hash y QR se conservan solo como registro histórico.')}
+                </p>
+              </div>
+            )}
+
+            {/* Estudios solicitados */}
+            <div className="space-y-2">
+              {tests.map((test, i) => (
+                <div key={i} className="bg-white rounded-lg border border-[#DDE1EE] p-3">
+                  <div className="flex gap-2">
+                    <span className="text-[#5B3FA5] font-bold text-sm">{i + 1}.</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-[#1A1F2E]">{test.name}</p>
+                      {test.notes && <p className="text-xs text-[#475569]">{test.notes}</p>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-2 text-xs">
+              {order.fasting_required && (
+                <span className="bg-[#FAEEDA] text-[#854F0B] px-2 py-0.5 rounded-full">🍽️ {t('Requiere ayuno')}</span>
+              )}
+              {order.urgency === 'URGENT' && (
+                <span className="bg-[#F5E6E6] text-[#A32D2D] px-2 py-0.5 rounded-full">⚡ {t('Urgente')}</span>
+              )}
+            </div>
+
+            {order.clinical_indication && (
+              <div className="bg-[#EDE7F9] rounded-lg px-3 py-2">
+                <p className="text-xs font-semibold text-[#5B3FA5] mb-0.5">{t('🩺 Indicación clínica')}</p>
+                <p className="text-xs text-[#5B3FA5]">{order.clinical_indication}</p>
+              </div>
+            )}
+
+            {order.instructions && (
+              <div className="bg-[#FAEEDA] rounded-lg px-3 py-2">
+                <p className="text-xs font-semibold text-[#854F0B] mb-0.5">{t('📌 Instrucciones')}</p>
+                <p className="text-xs text-[#854F0B]">{order.instructions}</p>
+              </div>
+            )}
+
+            {/* QR + firma */}
+            <div className="bg-white rounded-lg border border-[#DDE1EE] p-3 flex gap-4 items-start">
+              <QRCode value={buildLabOrderVerifyUrl(order.qr_verify_code)} size={110} />
+              <div className="flex-1 space-y-2">
+                <div>
+                  <p className="text-xs font-semibold text-[#1A1F2E]">{t('Código QR de verificación')}</p>
+                  <p className="text-[10px] text-[#475569] mt-0.5">{t('El laboratorio puede escanear este QR para verificar la autenticidad de la orden.')}</p>
+                </div>
+                <div className="bg-[#F5F6FA] rounded px-2 py-1.5">
+                  <p className="text-[9px] text-[#475569] font-semibold mb-0.5">{t('Hash SHA-256')}</p>
+                  <p className="text-[9px] font-mono text-[#5B3FA5] break-all">{order.digital_hash}</p>
+                </div>
+                <button onClick={copyCode} className={`w-full py-1.5 rounded text-[10px] font-medium transition-colors ${copied ? 'bg-[#E1F5EE] text-[#0F6E56]' : 'bg-[#EDE7F9] text-[#5B3FA5] hover:bg-[#DCCFF2]'}`}>
+                  {copied ? '✓ Copiado' : '📋 Copiar código'}
+                </button>
+              </div>
+            </div>
+
+            {/* Anular — una orden firmada nunca se edita directamente */}
+            {!isVoided && (
+              voidPanel ? (
+                <div className="bg-white border border-[#DDE1EE] rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-semibold text-[#1A1F2E]">{t('¿Por qué anulas esta orden?')}</p>
+                  <textarea
+                    className="input text-xs resize-none"
+                    rows={2}
+                    placeholder={t('Motivo (opcional, ej: se agregó un estudio que faltaba)')}
+                    value={voidReason}
+                    onChange={e => setVoidReason(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={confirmVoid}
+                      disabled={isVoiding}
+                      className="flex-1 py-1.5 bg-[#A32D2D] hover:bg-[#832222] disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                    >
+                      {isVoiding ? 'Anulando...' : 'Confirmar anulación'}
+                    </button>
+                    <button
+                      onClick={() => { setVoidPanel(false); setVoidReason('') }}
+                      className="px-3 py-1.5 text-xs text-[#475569] hover:underline"
+                    >
+                      {t('Cancelar')}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setVoidPanel(true)}
+                  className="w-full py-1.5 text-xs font-medium text-[#A32D2D] border border-[#F0D9D9] rounded-lg hover:bg-[#F5E6E6] transition-colors"
+                >
+                  {t('⛔ Anular orden (por error o corrección)')}
+                </button>
+              )
+            )}
+
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function PrescriptionsPage() {
   const { t } = useLanguage()
   const qc = useQueryClient()
@@ -282,6 +459,16 @@ export default function PrescriptionsPage() {
   const [replacesId, setReplacesId]         = useState<string | null>(null)
   const [viewMode, setViewMode]             = useState<'date' | 'patient'>('date')
 
+  // ── Orden de laboratorio (documento separado, opcional, mismo formulario) ──
+  const [showLabOrder, setShowLabOrder]         = useState(false)
+  const [labTests, setLabTests]                 = useState<LabTest[]>([])
+  const [selectedCatalogTest, setSelectedCatalogTest] = useState('')
+  const [manualTestName, setManualTestName]     = useState('')
+  const [clinicalIndication, setClinicalIndication] = useState('')
+  const [fastingRequired, setFastingRequired]   = useState(false)
+  const [urgency, setUrgency]                   = useState<'ROUTINE' | 'URGENT'>('ROUTINE')
+  const [labInstructions, setLabInstructions]   = useState('')
+
   const { data: consultations = [], isLoading: loadingConsultations } = useQuery({
     queryKey: ['consultations', 'professional'],
     queryFn: () => consultationsAPI.getMyConsultations().then(r => r.data),
@@ -292,6 +479,17 @@ export default function PrescriptionsPage() {
     queryFn: () => prescriptionsAPI.getMy(),
   })
 
+  const { data: myLabOrders = [], isLoading: loadingLabOrders, error: labOrdersError } = useQuery({
+    queryKey: ['lab-orders', 'my'],
+    queryFn: () => labOrdersAPI.getMy(),
+  })
+
+  const { data: catalogData } = useQuery({
+    queryKey: ['lab-test-catalog'],
+    queryFn: () => labOrdersAPI.getCatalog(),
+    staleTime: 60 * 60_000, // el catálogo casi no cambia, cachear 1h
+  })
+
   // Consultas con una receta ACTIVA vigente (no anulada) — ya no deben
   // ofrecerse de nuevo, para no terminar con más de una receta activa
   // por consulta. Si la única receta de esa consulta fue anulada, sí
@@ -299,29 +497,26 @@ export default function PrescriptionsPage() {
   const consultationIdsWithActiveRx = new Set(
     myPrescriptions.filter(p => p.status !== 'VOIDED').map(p => p.consultation_id)
   )
+  // Mismo criterio para órdenes de laboratorio, pero es un documento
+  // independiente de la receta: una consulta puede tener las dos, una
+  // sola, o ninguna. Por eso el filtro de abajo usa OR, no AND — solo
+  // se oculta la consulta si YA tiene los dos documentos activos.
+  const consultationIdsWithActiveLabOrder = new Set(
+    myLabOrders.filter(lo => lo.status !== 'VOIDED').map(lo => lo.consultation_id)
+  )
 
   const completedConsultations = consultations.filter((c: any) =>
     ['COMPLETED', 'IN_PROGRESS'].includes(c.status) &&
-    !consultationIdsWithActiveRx.has(c.id)
+    (!consultationIdsWithActiveRx.has(c.id) || !consultationIdsWithActiveLabOrder.has(c.id))
   )
 
   const createMutation = useMutation({
     mutationFn: () => prescriptionsAPI.create({
       consultation_id: consultationId,
-      medications,
+      medications: medications.filter(m => m.name || m.dosage || m.frequency),
       instructions,
       replaces_prescription_id: replacesId || undefined,
     }),
-    onSuccess: () => {
-      setSuccess(replacesId ? 'Receta corregida emitida y firmada. Reemplaza a la anulada.' : 'Receta emitida y firmada digitalmente. El paciente ya puede verla.')
-      setConsultationId('')
-      setMedications([{ ...EMPTY_MED }])
-      setInstructions('')
-      setReplacesId(null)
-      qc.invalidateQueries({ queryKey: ['prescriptions'] })
-      setTimeout(() => setSuccess(''), 5000)
-    },
-    onError: (err) => setError(getErrorMessage(err)),
   })
 
   const voidMutation = useMutation({
@@ -330,21 +525,107 @@ export default function PrescriptionsPage() {
     onError: (err) => setError(getErrorMessage(err)),
   })
 
+  // ── Orden de laboratorio: mismo patrón, documento independiente ──
+  const createLabOrderMutation = useMutation({
+    mutationFn: () => labOrdersAPI.create({
+      consultation_id: consultationId,
+      tests: labTests,
+      clinical_indication: clinicalIndication || undefined,
+      fasting_required: fastingRequired,
+      urgency,
+      instructions: labInstructions || undefined,
+    }),
+  })
+
+  const voidLabOrderMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => labOrdersAPI.void(id, reason || undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lab-orders'] }),
+    onError: (err) => setError(getErrorMessage(err)),
+  })
+
+  function addCatalogTest(name: string) {
+    if (!name || labTests.some(x => x.name === name)) { setSelectedCatalogTest(''); return }
+    setLabTests(prev => [...prev, { name, notes: '' }])
+    setSelectedCatalogTest('')
+  }
+
+  function addManualTest() {
+    const name = manualTestName.trim()
+    if (!name) return
+    if (labTests.some(x => x.name.toLowerCase() === name.toLowerCase())) { setManualTestName(''); return }
+    setLabTests(prev => [...prev, { name, notes: '' }])
+    setManualTestName('')
+  }
+
+  function removeTest(i: number) {
+    setLabTests(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  function resetLabOrderForm() {
+    setShowLabOrder(false)
+    setLabTests([])
+    setSelectedCatalogTest('')
+    setManualTestName('')
+    setClinicalIndication('')
+    setFastingRequired(false)
+    setUrgency('ROUTINE')
+    setLabInstructions('')
+  }
+
   function addMedication()       { setMedications(p => [...p, { ...EMPTY_MED }]) }
   function removeMedication(i: number) { setMedications(p => p.filter((_, idx) => idx !== i)) }
   function updateMed(i: number, field: keyof Medication, value: string) {
     setMedications(p => p.map((m, idx) => idx === i ? { ...m, [field]: value } : m))
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    setSuccess('')
     if (!consultationId) { setError('Selecciona la consulta'); return }
-    if (medications.some(m => !m.name || !m.dosage || !m.frequency)) {
-      setError('Completa nombre, dosis y frecuencia de todos los medicamentos')
+
+    // Los medicamentos son opcionales ahora: si el médico solo quiere
+    // emitir una orden de laboratorio (sin receta), puede dejar esta
+    // sección vacía. Pero si empezó a llenar alguna fila, esa fila sí
+    // tiene que estar completa.
+    const filledMeds = medications.filter(m => m.name || m.dosage || m.frequency || m.duration || m.presentation)
+    const medsFilled = filledMeds.length > 0
+    if (medsFilled && filledMeds.some(m => !m.name || !m.dosage || !m.frequency)) {
+      setError('Completa nombre, dosis y frecuencia de todos los medicamentos que agregaste')
       return
     }
-    createMutation.mutate()
+    const labOrderFilled = showLabOrder && labTests.length > 0
+    if (showLabOrder && labTests.length === 0) {
+      setError('Agrega al menos un estudio a la orden de laboratorio, o desactiva esa sección')
+      return
+    }
+    if (!medsFilled && !labOrderFilled) {
+      setError('Agrega al menos un medicamento, o activa y completa la orden de laboratorio')
+      return
+    }
+
+    const messages: string[] = []
+    try {
+      if (medsFilled) {
+        await createMutation.mutateAsync()
+        messages.push(replacesId ? 'receta corregida emitida' : 'receta emitida')
+      }
+      if (labOrderFilled) {
+        await createLabOrderMutation.mutateAsync()
+        messages.push('orden de laboratorio emitida')
+      }
+      setSuccess(`✅ ${messages.join(' y ')} y firmada digitalmente. El paciente ya puede verla${messages.length > 1 ? 's' : ''}.`)
+      setConsultationId('')
+      setMedications([{ ...EMPTY_MED }])
+      setInstructions('')
+      setReplacesId(null)
+      resetLabOrderForm()
+      qc.invalidateQueries({ queryKey: ['prescriptions'] })
+      qc.invalidateQueries({ queryKey: ['lab-orders'] })
+      setTimeout(() => setSuccess(''), 5000)
+    } catch (err) {
+      setError(getErrorMessage(err))
+    }
   }
 
   function handleReissue(rx: Prescription) {
@@ -393,6 +674,10 @@ export default function PrescriptionsPage() {
     (a, b) => new Date(b.signed_at).getTime() - new Date(a.signed_at).getTime()
   )
 
+  const sortedLabOrders = [...myLabOrders].sort(
+    (a, b) => new Date(b.signed_at).getTime() - new Date(a.signed_at).getTime()
+  )
+
   return (
     <DashboardLayout navItems={NAV} activeHref="/professional/prescriptions" role="PROFESSIONAL">
       <div className="max-w-4xl">
@@ -406,6 +691,7 @@ export default function PrescriptionsPage() {
         {success && <div className="mb-4"><Alert type="success" message={success} /></div>}
         {error   && <div className="mb-4"><Alert type="error"   message={error}   /></div>}
         {rxError && <div className="mb-4"><Alert type="error"   message={`No se pudieron cargar tus recetas: ${getErrorMessage(rxError)}`} /></div>}
+        {labOrdersError && <div className="mb-4"><Alert type="error" message={`No se pudieron cargar tus órdenes de laboratorio: ${getErrorMessage(labOrdersError)}`} /></div>}
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
 
@@ -532,24 +818,143 @@ export default function PrescriptionsPage() {
                 />
               </div>
 
+              {/* ── Orden de laboratorio (opcional, documento separado) ── */}
+              <div className="border border-[#DDE1EE] rounded-xl p-3">
+                {!showLabOrder ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowLabOrder(true)}
+                    className="w-full text-left text-sm font-medium text-[#5B3FA5] hover:underline flex items-center gap-1.5"
+                  >
+                    🧪 {t('+ Agregar orden de laboratorio')}
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-[#5B3FA5] flex items-center gap-1.5">
+                        🧪 {t('Orden de laboratorio')}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={resetLabOrderForm}
+                        className="text-xs text-[#475569] hover:underline"
+                      >
+                        {t('Quitar')}
+                      </button>
+                    </div>
+                    <p className="text-xs text-[#475569]">
+                      {t('Se emite como un documento separado de la receta, con su propio QR — el laboratorio lo verifica igual que la farmacia verifica la receta.')}
+                    </p>
+
+                    {/* Selector del catálogo */}
+                    <div>
+                      <label className="label">{t('Agregar estudio del catálogo')}</label>
+                      <select
+                        className="input"
+                        value={selectedCatalogTest}
+                        onChange={e => addCatalogTest(e.target.value)}
+                      >
+                        <option value="">{t('Selecciona un estudio...')}</option>
+                        {Object.entries(catalogData?.catalog || {}).map(([category, tests]) => (
+                          <optgroup key={category} label={category}>
+                            {tests.map(name => (
+                              <option key={name} value={name} disabled={labTests.some(x => x.name === name)}>
+                                {name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* No lo encuentra en la lista → agregar a mano */}
+                    <div>
+                      <label className="label">{t('¿No está en la lista? Agrégalo manualmente')}</label>
+                      <div className="flex gap-2">
+                        <input
+                          className="input flex-1"
+                          placeholder={t('Ej: Cultivo de secreción vaginal')}
+                          value={manualTestName}
+                          onChange={e => setManualTestName(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManualTest() } }}
+                        />
+                        <button type="button" onClick={addManualTest} className="btn-secondary text-sm px-3">
+                          {t('Agregar')}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Estudios agregados */}
+                    {labTests.length > 0 && (
+                      <div className="space-y-1.5">
+                        {labTests.map((test, i) => (
+                          <div key={i} className="flex items-center justify-between bg-white border border-[#DDE1EE] rounded-lg px-3 py-1.5">
+                            <span className="text-sm text-[#1A1F2E]">{i + 1}. {test.name}</span>
+                            <button type="button" onClick={() => removeTest(i)} className="text-xs text-[#A32D2D] hover:underline">
+                              {t('Quitar')}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="label">{t('Indicación clínica / motivo (opcional)')}</label>
+                      <input
+                        className="input"
+                        placeholder={t('Ej: descartar anemia, control de rutina...')}
+                        value={clinicalIndication}
+                        onChange={e => setClinicalIndication(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex items-center gap-2 text-sm text-[#1A1F2E]">
+                        <input type="checkbox" checked={fastingRequired} onChange={e => setFastingRequired(e.target.checked)} />
+                        {t('Requiere ayuno')}
+                      </label>
+                      <select className="input" value={urgency} onChange={e => setUrgency(e.target.value as 'ROUTINE' | 'URGENT')}>
+                        <option value="ROUTINE">{t('Rutina')}</option>
+                        <option value="URGENT">{t('Urgente')}</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="label">{t('Instrucciones para el laboratorio (opcional)')}</label>
+                      <textarea
+                        className="input resize-none"
+                        rows={2}
+                        placeholder={t('Ej: tomar la muestra antes de las 10am')}
+                        value={labInstructions}
+                        onChange={e => setLabInstructions(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Aviso firma */}
               <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5">
                 <p className="text-xs text-[#185FA5]">
-                  🔒 Al emitir, la receta se firmará con SHA-256 vinculado a tu matrícula CMB.
-                  Las farmacias pueden verificar su autenticidad escaneando el QR.
-                  {' '}Una vez firmada no se puede editar: si tiene un error, deberás anularla y reemitir una nueva.
+                  🔒 Al emitir, cada documento se firma con SHA-256 vinculado a tu matrícula CMB.
+                  Farmacias y laboratorios pueden verificar su autenticidad escaneando el QR.
+                  {' '}Una vez firmado no se puede editar: si tiene un error, deberás anularlo y reemitir uno nuevo.
                 </p>
               </div>
 
               <button
                 type="submit"
-                disabled={createMutation.isPending}
+                disabled={createMutation.isPending || createLabOrderMutation.isPending}
                 className="btn-primary w-full flex items-center justify-center gap-2"
               >
-                {createMutation.isPending && (
+                {(createMutation.isPending || createLabOrderMutation.isPending) && (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 )}
-                {createMutation.isPending ? 'Firmando y emitiendo...' : (replacesId ? '✍️ Firmar receta corregida' : '✍️ Firmar y emitir receta')}
+                {createMutation.isPending
+                  ? 'Firmando receta...'
+                  : createLabOrderMutation.isPending
+                    ? 'Firmando orden de laboratorio...'
+                    : (replacesId ? '✍️ Firmar receta corregida' : '✍️ Firmar y emitir')}
               </button>
             </form>
           </div>
@@ -622,6 +1027,42 @@ export default function PrescriptionsPage() {
           </div>
 
         </div>
+
+        {/* ── Órdenes de laboratorio emitidas ── */}
+        <div className="card mt-5">
+          <div className="flex items-center justify-between mb-3">
+            <SectionTitle>{t('Órdenes de laboratorio emitidas')}</SectionTitle>
+            {myLabOrders.length > 0 && (
+              <span className="text-xs text-[#475569] bg-[#F5F6FA] px-2 py-0.5 rounded-full">
+                {myLabOrders.length} total
+              </span>
+            )}
+          </div>
+
+          {loadingLabOrders ? (
+            <div className="space-y-3">
+              {[1, 2].map(n => <div key={n} className="h-14 bg-[#F5F6FA] rounded-xl animate-pulse" />)}
+            </div>
+          ) : myLabOrders.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-3xl mb-2">🧪</p>
+              <p className="text-sm font-medium text-[#1A1F2E]">{t('Aún no has emitido órdenes de laboratorio')}</p>
+              <p className="text-xs text-[#475569] mt-1">{t('Aparecerán aquí una vez que emitas alguna, junto a la receta si corresponde')}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {sortedLabOrders.map((order: LabOrder) => (
+                <LabOrderCard
+                  key={order.id}
+                  order={order}
+                  onVoid={(id, reason) => voidLabOrderMutation.mutate({ id, reason })}
+                  isVoiding={voidLabOrderMutation.isPending}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
     </DashboardLayout>
   )
