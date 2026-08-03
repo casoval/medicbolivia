@@ -287,14 +287,6 @@ export default function PatientPaymentsPage() {
                                 <p className={`font-medium ${paymentAmountColorClass(p.status)}`}>Bs. {p.amount.toFixed(2)}</p>
                               </div>
                               <div>
-                                <p className="text-[#64748B]">{t('Comisión de la plataforma')}</p>
-                                <p className="text-[#3C4257]">Bs. {p.platform_fee.toFixed(2)}</p>
-                              </div>
-                              <div>
-                                <p className="text-[#64748B]">{t('Monto para el profesional')}</p>
-                                <p className="text-[#3C4257]">Bs. {p.professional_net.toFixed(2)}</p>
-                              </div>
-                              <div>
                                 <p className="text-[#64748B]">{t('Fecha de creación del QR')}</p>
                                 <p className="text-[#3C4257]">{fmtFechaHora(p.created_at)}</p>
                               </div>

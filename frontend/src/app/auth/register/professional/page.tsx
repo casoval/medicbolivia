@@ -8,6 +8,7 @@ import { authAPI, specialtiesAPI, getErrorMessage } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { PhoneInput } from '@/components/ui/PhoneInput'
 import { PhoneVerification } from '@/components/ui/PhoneVerification'
+import { SpanishBirthDatePicker } from '@/components/ui/SpanishDateTimePicker'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const NOT_LISTED = '__NOT_LISTED__'
@@ -246,7 +247,7 @@ export default function RegisterProfessionalPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#475569] mb-1">{t('Fecha de nacimiento')} <span className="text-[#E24B4A]">*</span></label>
-                <input name="birth_date" type="date" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" value={form.birth_date} onChange={handleChange} required />
+                <SpanishBirthDatePicker name="birth_date" value={form.birth_date} onChange={(v) => setForm((f) => ({ ...f, birth_date: v }))} />
               </div>
             </div>
 

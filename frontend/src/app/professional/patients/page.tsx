@@ -368,24 +368,6 @@ export default function ProfessionalPatientsPage() {
           </p>
         </div>
 
-        {!loadingMembership && (
-          membershipActive ? (
-            <div className="mb-4">
-              <Alert
-                type="success"
-                message="Tu membresía está activa: no pagas comisión por tus consultas y puedes agendar directamente a los pacientes vinculados (el botón 'Agendar cita' aparece en su tarjeta), en cualquier horario."
-              />
-            </div>
-          ) : (
-            <div className="mb-4">
-              <Alert
-                type="info"
-                message="No tienes una membresía activa. Contacta al administrador para habilitarla — mientras tanto, sigues operando con la comisión normal por consulta y sin agendamiento directo."
-              />
-            </div>
-          )
-        )}
-
         <div className="relative mb-4">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]"><IconSearch /></span>
           <input

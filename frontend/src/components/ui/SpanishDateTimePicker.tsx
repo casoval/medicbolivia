@@ -146,6 +146,144 @@ export function SpanishDateTimePicker({
   )
 }
 
+// ── SpanishBirthDatePicker: calendario en español (lunes primero) para fecha
+// de nacimiento. Reemplaza <input type="date">, cuyo selector nativo sale en
+// el idioma/orden del sistema operativo del navegador (en Chrome suele salir
+// en inglés con domingo primero) y no se puede forzar desde CSS/JS.
+//
+// A diferencia de SpanishDatePicker (pensado para elegir fechas cercanas a
+// hoy), acá la navegación es por mes Y año con selects, porque para una
+// fecha de nacimiento el usuario suele tener que retroceder décadas — hacerlo
+// a golpes de "‹" mes por mes sería inusable. Recibe/devuelve el mismo string
+// "YYYY-MM-DD" que usa el <input type="date"> nativo, así que es un reemplazo
+// directo en cualquier formulario que ya lo use. El botón siempre muestra el
+// valor en formato día/mes/año.
+export function SpanishBirthDatePicker({
+  value,
+  onChange,
+  name,
+}: {
+  /** "YYYY-MM-DD" o "" si todavía no se eligió nada */
+  value: string
+  onChange: (v: string) => void
+  /** Opcional — solo para que el botón sea identificable en tests/labels */
+  name?: string
+}) {
+  const now = new Date()
+  const minYear = now.getFullYear() - 120
+  const maxYear = now.getFullYear()
+
+  const parsed = value ? value.split('-').map(Number) : null
+  const initialYear = parsed ? parsed[0] : maxYear - 30 // año de partida razonable
+  const initialMonth = parsed ? parsed[1] - 1 : 0
+
+  const [open, setOpen] = useState(false)
+  const [viewYear, setViewYear] = useState(initialYear)
+  const [viewMonth, setViewMonth] = useState(initialMonth)
+
+  function openPicker() {
+    setViewYear(parsed ? parsed[0] : initialYear)
+    setViewMonth(parsed ? parsed[1] - 1 : initialMonth)
+    setOpen(true)
+  }
+
+  function pad(n: number) { return String(n).padStart(2, '0') }
+
+  const firstDay = new Date(viewYear, viewMonth, 1)
+  const leadingBlanks = (firstDay.getDay() + 6) % 7 // lunes primero
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const selectedDay = parsed && parsed[0] === viewYear && parsed[1] - 1 === viewMonth ? parsed[2] : null
+
+  function pickDay(day: number) {
+    onChange(`${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`)
+    setOpen(false)
+  }
+
+  function isFutureDay(day: number) {
+    return new Date(viewYear, viewMonth, day) > now
+  }
+
+  const displayLabel = parsed
+    ? `${pad(parsed[2])}/${pad(parsed[1])}/${parsed[0]}`
+    : 'DD/MM/AAAA'
+
+  const years = Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i)
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        name={name}
+        onClick={() => (open ? setOpen(false) : openPicker())}
+        className="w-full text-left px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
+      >
+        <span className={value ? 'text-[#141820]' : 'text-[#94A3B8]'}>{displayLabel}</span>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-[#DDE1EE] rounded-xl shadow-lg p-3 w-72">
+            <div className="flex items-center gap-2 mb-2">
+              <select
+                value={viewMonth}
+                onChange={(e) => setViewMonth(Number(e.target.value))}
+                className="flex-1 text-xs border border-[#DDE1EE] rounded-lg px-2 py-1 capitalize bg-white"
+              >
+                {MESES_ES.map((m, i) => (
+                  <option key={m} value={i} className="capitalize">{m}</option>
+                ))}
+              </select>
+              <select
+                value={viewYear}
+                onChange={(e) => setViewYear(Number(e.target.value))}
+                className="text-xs border border-[#DDE1EE] rounded-lg px-2 py-1 bg-white"
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {DIAS_ES.map((d) => (
+                <div key={d} className="text-[10px] text-center text-[#64748B] font-medium">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: leadingBlanks }).map((_, i) => <div key={`b${i}`} />)}
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+                const disabled = isFutureDay(day)
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => !disabled && pickDay(day)}
+                    className={`text-xs rounded-full py-1 ${
+                      disabled
+                        ? 'text-[#DDE1EE] cursor-not-allowed'
+                        : selectedDay === day ? 'bg-[#185FA5] text-white' : 'hover:bg-[#F5F6FA] text-[#141820]'
+                    }`}
+                  >
+                    {day}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="mt-2 flex justify-end">
+              <button type="button" onClick={() => setOpen(false)} className="text-xs text-[#475569]">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── SpanishDatePicker: mismo calendario en español (lunes primero), pero solo
 // fecha (sin hora). Reemplaza <input type="date">, cuyo selector nativo del
 // navegador sale en el idioma/orden del sistema operativo (en Chrome suele

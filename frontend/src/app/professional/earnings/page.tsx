@@ -141,7 +141,7 @@ export default function ProfessionalEarningsPage() {
           <div className="mb-4 p-3 rounded-lg border bg-[#FEF3C7] border-[#F5D890] text-[#854F0B] text-xs flex items-start justify-between gap-3">
             <span>
               {!bankAccount
-                ? t('Todavía no registraste una cuenta bancaria. Sin ella no podemos transferirte lo que ya cobraste — si llega la fecha de pago y no la registraste, el equipo de MedicBolivia se pondrá en contacto contigo para coordinar otra forma de pago.')
+                ? t('Todavía no registraste una cuenta bancaria. Es opcional: si no quieres registrarla, no hay problema — coordina con el equipo de MedicBolivia otra forma de pago cuando llegue la fecha de pago.')
                 : t('Tu cuenta bancaria está pendiente de revisión por un administrador. Se te pagará una vez que quede verificada.')}
             </span>
             <Link href="/professional/profile" className="whitespace-nowrap font-semibold underline shrink-0">

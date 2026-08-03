@@ -10,6 +10,7 @@ import { authAPI, getErrorMessage } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { PhoneInput } from '@/components/ui/PhoneInput'
 import { PhoneVerification } from '@/components/ui/PhoneVerification'
+import { SpanishBirthDatePicker } from '@/components/ui/SpanishDateTimePicker'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const DEPARTMENTS = [
@@ -46,6 +47,11 @@ export default function RegisterPatientPage() {
 
     if (form.password !== form.confirm_password) {
       setError(t('Las contraseñas no coinciden'))
+      return
+    }
+
+    if (!form.birth_date) {
+      setError(t('Ingresa tu fecha de nacimiento'))
       return
     }
 
@@ -114,7 +120,7 @@ export default function RegisterPatientPage() {
               </div>
               <div>
                 <label className="label">{t('Fecha de nacimiento')} <span className="text-[#E24B4A]">*</span></label>
-                <input name="birth_date" type="date" className="input" value={form.birth_date} onChange={handleChange} required />
+                <SpanishBirthDatePicker name="birth_date" value={form.birth_date} onChange={(v) => setForm((f) => ({ ...f, birth_date: v }))} />
               </div>
             </div>
 
