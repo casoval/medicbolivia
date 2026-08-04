@@ -67,6 +67,121 @@ function MyDocViewerModal({ label, url, onClose }: { label: string; url: string;
   )
 }
 
+// ── Lienzo para dibujar la firma (mouse, dedo o lápiz óptico) ──
+// Coordenadas del puntero se remapean del tamaño CSS real (que puede ser
+// menor a SIG_WIDTH en pantallas angostas) al espacio lógico de dibujo,
+// para que el trazo quede alineado con el dedo/cursor sin importar el
+// ancho con el que termine renderizando la tarjeta.
+const SIG_WIDTH = 500
+const SIG_HEIGHT = 190
+const SIG_INK_COLOR = '#0F2240' // mismo tono que INK_COLOR en el backend (app/services/signature_image.py)
+
+function SignaturePad({
+  onSave, onCancel, saving,
+}: {
+  onSave: (blob: Blob) => void
+  onCancel: () => void
+  saving: boolean
+}) {
+  const { t } = useLanguage()
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const drawingRef = useRef(false)
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null)
+  const [hasDrawn, setHasDrawn] = useState(false)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = SIG_WIDTH * dpr
+    canvas.height = SIG_HEIGHT * dpr
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.scale(dpr, dpr)
+      ctx.lineWidth = 2.6
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.strokeStyle = SIG_INK_COLOR
+    }
+  }, [])
+
+  function pointFromEvent(e: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
+    // Remapea de píxeles CSS reales → espacio lógico SIG_WIDTH x SIG_HEIGHT
+    const scaleX = SIG_WIDTH / rect.width
+    const scaleY = SIG_HEIGHT / rect.height
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY }
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    e.preventDefault()
+    try { canvasRef.current?.setPointerCapture(e.pointerId) } catch {}
+    drawingRef.current = true
+    lastPointRef.current = pointFromEvent(e)
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) return
+    const ctx = canvasRef.current?.getContext('2d')
+    if (!ctx || !lastPointRef.current) return
+    const point = pointFromEvent(e)
+    ctx.beginPath()
+    ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y)
+    ctx.lineTo(point.x, point.y)
+    ctx.stroke()
+    lastPointRef.current = point
+    if (!hasDrawn) setHasDrawn(true)
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
+    drawingRef.current = false
+    lastPointRef.current = null
+    try { canvasRef.current?.releasePointerCapture(e.pointerId) } catch {}
+  }
+
+  function clearCanvas() {
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    setHasDrawn(false)
+  }
+
+  function handleSave() {
+    canvasRef.current?.toBlob((blob) => {
+      if (blob) onSave(blob)
+    }, 'image/png')
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-full max-w-md rounded-xl border-2 border-[#DDE1EE] bg-white overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          style={{ width: '100%', height: SIG_HEIGHT, touchAction: 'none', cursor: 'crosshair', display: 'block' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+        />
+      </div>
+      <p className="text-xs text-[#64748B]">{t('Dibuja tu firma con el dedo, el mouse o un lápiz óptico')}</p>
+      <div className="flex gap-2 flex-wrap justify-center">
+        <button onClick={clearCanvas} disabled={!hasDrawn || saving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
+          {t('Borrar')}
+        </button>
+        <button onClick={handleSave} disabled={!hasDrawn || saving} className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50">
+          {saving ? t('Guardando...') : t('Guardar firma')}
+        </button>
+        <button onClick={onCancel} disabled={saving} className="text-xs text-[#64748B] underline self-center">
+          {t('Cancelar')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function ProfilePage() {
   const { t } = useLanguage()
   const [docStatuses, setDocStatuses] = useState<Record<string, UploadStatus>>({})
@@ -199,6 +314,17 @@ export default function ProfilePage() {
   const [photoUploading, setPhotoUploading] = useState(false)
   const photoRef = useRef<HTMLInputElement | null>(null)
 
+  // Firma para recetas imprimibles — dos caminos de captura: dibujar en
+  // lienzo (SignaturePad) o subir foto de la firma en papel (el backend
+  // le quita el fondo). 'view' | 'choose' | 'draw' | 'photo'.
+  const [signatureUrl, setSignatureUrl]         = useState<string | null>(null)
+  const [signatureMode, setSignatureMode]       = useState<'view' | 'choose' | 'draw' | 'photo'>('view')
+  const [signatureSaving, setSignatureSaving]   = useState(false)
+  const [signatureError, setSignatureError]     = useState('')
+  const [signaturePhotoFile, setSignaturePhotoFile]       = useState<File | null>(null)
+  const [signaturePhotoPreview, setSignaturePhotoPreview] = useState<string | null>(null)
+  const signaturePhotoRef = useRef<HTMLInputElement | null>(null)
+
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   // Cargar datos actuales del perfil al entrar a la página
@@ -208,6 +334,7 @@ export default function ProfilePage() {
       if (data.languages)        setLangs(data.languages)
       if (data.years_experience) setYears(data.years_experience)
       if (data.photo_url)        setPhotoPreview(data.photo_url)
+      if (data.signature_url)    setSignatureUrl(data.signature_url)
       if (data.price_general   !== undefined && data.price_general   !== null) setPriceGeneral(String(data.price_general))
       if (data.price_urgent    !== undefined && data.price_urgent    !== null) setPriceUrgent(String(data.price_urgent))
       if (data.price_follow_up !== undefined && data.price_follow_up !== null) setPriceFollowUp(String(data.price_follow_up))
@@ -278,6 +405,72 @@ export default function ProfilePage() {
       setProfileError(getErrorMessage(err))
     } finally {
       setPhotoUploading(false)
+    }
+  }
+
+  // ── Firma para recetas imprimibles ──
+  async function saveSignatureFromCanvas(blob: Blob) {
+    setSignatureSaving(true)
+    setSignatureError('')
+    try {
+      const file = new File([blob], 'firma.png', { type: 'image/png' })
+      const res = await professionalsAPI.uploadSignature(file)
+      setSignatureUrl(res.data.signature_url)
+      setSignatureMode('view')
+    } catch (err) {
+      setSignatureError(getErrorMessage(err))
+    } finally {
+      setSignatureSaving(false)
+    }
+  }
+
+  function handleSignaturePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setSignatureError('Solo se aceptan imágenes JPG, PNG o WebP')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setSignatureError('La foto no puede superar 10MB')
+      return
+    }
+    setSignaturePhotoFile(file)
+    const reader = new FileReader()
+    reader.onload = (ev) => setSignaturePhotoPreview(ev.target?.result as string)
+    reader.readAsDataURL(file)
+    setSignatureError('')
+    setSignatureMode('photo')
+  }
+
+  async function saveSignatureFromPhoto() {
+    if (!signaturePhotoFile) return
+    setSignatureSaving(true)
+    setSignatureError('')
+    try {
+      const res = await professionalsAPI.uploadSignatureFromPhoto(signaturePhotoFile)
+      setSignatureUrl(res.data.signature_url)
+      setSignatureMode('view')
+      setSignaturePhotoFile(null)
+      setSignaturePhotoPreview(null)
+    } catch (err) {
+      setSignatureError(getErrorMessage(err))
+    } finally {
+      setSignatureSaving(false)
+    }
+  }
+
+  async function removeSignature() {
+    setSignatureSaving(true)
+    setSignatureError('')
+    try {
+      await professionalsAPI.deleteSignature()
+      setSignatureUrl(null)
+    } catch (err) {
+      setSignatureError(getErrorMessage(err))
+    } finally {
+      setSignatureSaving(false)
     }
   }
 
@@ -550,6 +743,114 @@ export default function ProfilePage() {
                 {t('Guardar cambios')}
               </button>
             </div>
+          </div>
+
+          {/* Firma para recetas médicas imprimibles */}
+          <div className="card">
+            <SectionTitle>{t('Firma para recetas médicas')}</SectionTitle>
+            <p className="text-xs text-[#475569] mb-3">
+              {t('Se estampa en el PDF imprimible de tus recetas, para las farmacias que todavía piden papel. La autenticidad real de cada receta siempre la da el código QR, no esta imagen.')}
+            </p>
+            {signatureError && <div className="mb-3"><Alert type="error" message={signatureError} /></div>}
+
+            {/* Input de foto oculto — vive fuera de los bloques condicionales
+                para que la ref no se pierda al cambiar de modo */}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              ref={signaturePhotoRef}
+              onChange={handleSignaturePhotoChange}
+              className="hidden"
+            />
+
+            {signatureMode === 'view' && (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-full max-w-xs h-28 rounded-xl border-2 border-dashed border-[#DDE1EE] bg-[#F5F6FA] flex items-center justify-center overflow-hidden">
+                  {signatureUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={signatureUrl} alt={t('Firma')} className="max-h-full max-w-full object-contain p-2" />
+                  ) : (
+                    <p className="text-xs text-[#A0A8BF] px-4 text-center">{t('Todavía no cargaste tu firma')}</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setSignatureMode('choose')} className="btn-primary text-xs py-1.5 px-3">
+                    {signatureUrl ? t('Cambiar firma') : t('Agregar firma')}
+                  </button>
+                  {signatureUrl && (
+                    <button onClick={removeSignature} disabled={signatureSaving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
+                      {t('Quitar')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {signatureMode === 'choose' && (
+              <div className="flex flex-col sm:flex-row gap-3 items-stretch">
+                <button
+                  onClick={() => setSignatureMode('draw')}
+                  className="flex-1 border-2 border-[#DDE1EE] rounded-xl p-4 text-center hover:border-[#185FA5] transition-colors"
+                >
+                  <p className="text-2xl mb-1">✏️</p>
+                  <p className="text-sm font-semibold text-[#1A1F2E]">{t('Dibujar firma')}</p>
+                  <p className="text-xs text-[#64748B] mt-1">{t('Con el dedo o el mouse')}</p>
+                </button>
+                <button
+                  onClick={() => signaturePhotoRef.current?.click()}
+                  className="flex-1 border-2 border-[#DDE1EE] rounded-xl p-4 text-center hover:border-[#185FA5] transition-colors"
+                >
+                  <p className="text-2xl mb-1">📷</p>
+                  <p className="text-sm font-semibold text-[#1A1F2E]">{t('Subir foto de mi firma')}</p>
+                  <p className="text-xs text-[#64748B] mt-1">{t('Firmá en papel y fotografiá')}</p>
+                </button>
+                <button
+                  onClick={() => setSignatureMode('view')}
+                  className="text-xs text-[#64748B] underline self-center sm:self-auto"
+                >
+                  {t('Cancelar')}
+                </button>
+              </div>
+            )}
+
+            {signatureMode === 'draw' && (
+              <SignaturePad
+                saving={signatureSaving}
+                onSave={saveSignatureFromCanvas}
+                onCancel={() => setSignatureMode('view')}
+              />
+            )}
+
+            {signatureMode === 'photo' && (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-full max-w-xs h-28 rounded-xl border-2 border-[#DDE1EE] bg-[#F5F6FA] flex items-center justify-center overflow-hidden">
+                  {signaturePhotoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={signaturePhotoPreview} alt={t('Vista previa')} className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <p className="text-xs text-[#A0A8BF]">{t('Selecciona una foto')}</p>
+                  )}
+                </div>
+                <p className="text-xs text-[#64748B] text-center max-w-xs">
+                  {t('Firmá con tinta oscura sobre una hoja blanca, con buena luz. Le quitamos el fondo automáticamente.')}
+                </p>
+                <div className="flex gap-2 flex-wrap justify-center">
+                  <button onClick={() => signaturePhotoRef.current?.click()} disabled={signatureSaving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
+                    {t('Elegir otra foto')}
+                  </button>
+                  <button onClick={saveSignatureFromPhoto} disabled={!signaturePhotoFile || signatureSaving} className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50">
+                    {signatureSaving ? t('Guardando...') : t('Guardar firma')}
+                  </button>
+                  <button
+                    onClick={() => { setSignatureMode('view'); setSignaturePhotoFile(null); setSignaturePhotoPreview(null); setSignatureError('') }}
+                    disabled={signatureSaving}
+                    className="text-xs text-[#64748B] underline self-center"
+                  >
+                    {t('Cancelar')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Precios de consulta */}

@@ -178,6 +178,29 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
               </div>
             </div>
 
+            {/* Descargar / imprimir — para farmacias que piden papel */}
+            <div className="bg-[#E6F1FB] rounded-xl border border-[#B5D4F4] p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-lg flex-shrink-0">📄</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-[#0C447C]">{t('Receta en PDF')}</p>
+                  <p className="text-xs text-[#185FA5]">{t('Para las farmacias que piden receta impresa')}</p>
+                </div>
+                {rx.pdf_url ? (
+                  <a
+                    href={rx.pdf_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-shrink-0 bg-[#185FA5] text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-[#0C447C] transition-colors"
+                  >
+                    {t('Descargar')}
+                  </a>
+                ) : (
+                  <span className="flex-shrink-0 text-xs text-[#64748B] text-right max-w-[120px]">{t('No disponible por ahora')}</span>
+                )}
+              </div>
+            </div>
+
           </div>
         </div>
       )}

@@ -105,6 +105,74 @@ async def upload_photo_to_r2(
         raise Exception("Error al subir la foto de perfil. Intenta de nuevo.")
 
 
+async def upload_signature_to_r2(
+    file_content: bytes,
+    professional_id: str,
+) -> str:
+    """
+    Sube la imagen de firma del médico (PNG, idealmente con fondo
+    transparente, capturada en un canvas desde su perfil) al bucket
+    PÚBLICO de R2 — mismo criterio que upload_photo_to_r2: no es un dato
+    sensible por sí solo (no identifica a un paciente ni contiene datos
+    de salud) y así app/services/prescription_pdf.py la puede descargar
+    con un GET directo, sin necesitar una URL firmada.
+    Retorna la URL pública directa, que se guarda en Professional.signature_url.
+    """
+    key = f"signatures/{professional_id}/{uuid.uuid4()}.png"
+
+    try:
+        r2 = _get_r2_client()
+        await asyncio.to_thread(
+            r2.put_object,
+            Bucket=settings.R2_BUCKET_PHOTOS,
+            Key=key,
+            Body=file_content,
+            ContentType="image/png",
+        )
+        public_url = f"{settings.R2_PUBLIC_PHOTOS_URL.rstrip('/')}/{key}"
+        logger.info(f"Firma de médico subida a R2: {key}")
+        return public_url
+
+    except ClientError as e:
+        logger.error(f"Error subiendo firma a R2: {e}")
+        raise Exception("Error al subir la firma. Intenta de nuevo.")
+
+
+async def upload_prescription_pdf_to_r2(
+    file_content: bytes,
+    prescription_id: str,
+) -> str:
+    """
+    Sube el PDF imprimible de una receta (ver app/services/prescription_pdf.py)
+    al bucket PRIVADO de R2 (R2_BUCKET_DOCS) — a diferencia de la firma o la
+    foto de perfil, este documento SÍ contiene datos personales y de salud
+    del paciente (nombre, CI, medicamentos), así que nunca se guarda una URL
+    pública: se sirve con get_presigned_url, igual que los documentos de
+    verificación. Reutiliza el mismo bucket que documentos/adjuntos de chat
+    porque ya está configurado como privado; no hace falta uno nuevo.
+    Retorna la URL interna (formato r2://bucket/key) para guardar en
+    Prescription.pdf_url.
+    """
+    key = f"prescriptions/{prescription_id}/{uuid.uuid4()}.pdf"
+
+    try:
+        r2 = _get_r2_client()
+        await asyncio.to_thread(
+            r2.put_object,
+            Bucket=settings.R2_BUCKET_DOCS,
+            Key=key,
+            Body=file_content,
+            ContentType="application/pdf",
+        )
+        url = f"r2://{settings.R2_BUCKET_DOCS}/{key}"
+        logger.info(f"PDF de receta subido a R2: {key}")
+        return url
+
+    except ClientError as e:
+        logger.error(f"Error subiendo PDF de receta a R2: {e}")
+        raise Exception("Error al generar el PDF de la receta.")
+
+
 async def upload_chat_attachment_to_r2(
     file_content: bytes,
     file_name: str,

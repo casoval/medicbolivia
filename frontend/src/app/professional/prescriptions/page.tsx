@@ -165,6 +165,23 @@ function PrescriptionCard({
               </div>
             </div>
 
+            {/* Descargar / imprimir — para farmacias que piden papel */}
+            <div className="bg-[#E6F1FB] rounded-lg border border-[#B5D4F4] p-3 flex items-center gap-3">
+              <p className="text-xs font-semibold text-[#0C447C] flex-1">{t('📄 Receta en PDF, lista para imprimir')}</p>
+              {rx.pdf_url ? (
+                <a
+                  href={rx.pdf_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-shrink-0 bg-[#185FA5] text-white text-[10px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#0C447C] transition-colors"
+                >
+                  {t('Descargar')}
+                </a>
+              ) : (
+                <span className="flex-shrink-0 text-[10px] text-[#64748B]">{t('No disponible')}</span>
+              )}
+            </div>
+
             {/* Anular / reemitir — una receta firmada nunca se edita directamente */}
             {!isVoided && !alreadyReplaced && (
               voidPanel ? (

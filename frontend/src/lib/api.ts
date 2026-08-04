@@ -412,6 +412,31 @@ export const professionalsAPI = {
     )
   },
 
+  // Firma dibujada en el lienzo del perfil (PNG con fondo transparente,
+  // se sube tal cual). Usada para estampar la receta imprimible.
+  uploadSignature: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ signature_url: string; message: string }>(
+      '/professionals/signature',
+      form
+    )
+  },
+
+  // Foto de la firma real en papel — el backend le quita el fondo
+  // automáticamente. Acepta JPG/PNG/WebP.
+  uploadSignatureFromPhoto: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ signature_url: string; message: string }>(
+      '/professionals/signature/from-photo',
+      form
+    )
+  },
+
+  deleteSignature: () =>
+    api.delete<{ message: string }>('/professionals/signature'),
+
   // Sube un documento de verificación (CI, título, etc.)
   uploadDocument: (docType: string, file: File) => {
     const form = new FormData()

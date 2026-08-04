@@ -9,6 +9,7 @@ from typing import Optional, List
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+import asyncio
 from loguru import logger
 
 from app.db.database import get_db
@@ -30,7 +31,8 @@ from app.schemas.schemas import (
 from app.core.timezone import utcnow_naive
 from app.core.bank_list import BOLIVIAN_BANKS, OTHER_BANK_LABEL
 from app.core.crypto import encrypt_value
-from app.services.storage import upload_document_to_r2, upload_photo_to_r2
+from app.services.storage import upload_document_to_r2, upload_photo_to_r2, upload_signature_to_r2
+from app.services.signature_image import process_signature_photo, SignatureNotDetectedError
 from app.services.commission import get_professional_commission_summary
 from app.services.patient_links import professional_has_active_membership
 from app.models.models import PatientProfessionalLink, ProfessionalMembership
@@ -383,6 +385,131 @@ async def upload_profile_photo(
     return {"photo_url": photo_url, "message": "Foto de perfil actualizada correctamente"}
 
 
+# ── Helper compartido por los dos caminos de captura de firma ──
+async def _save_signature(db: AsyncSession, professional: Professional, png_bytes: bytes) -> str:
+    """Sube la imagen de firma ya lista (PNG con fondo transparente) y la
+    guarda en el perfil. Compartido por: dibujar en lienzo (PNG ya viene
+    transparente, se sube tal cual) y subir foto (se procesa antes con
+    app/services/signature_image.py)."""
+    signature_url = await upload_signature_to_r2(
+        file_content=png_bytes,
+        professional_id=str(professional.id),
+    )
+    professional.signature_url = signature_url
+    await db.commit()
+    logger.info(f"Firma actualizada: profesional {professional.id}")
+    return signature_url
+
+
+# ── POST /api/v1/professionals/signature ────────────
+# Imagen de firma (dibujada en un canvas desde el perfil) que se estampa
+# en el PDF imprimible de la receta — ver app/services/prescription_pdf.py.
+# Es una firma VISUAL, no una firma digital criptográfica: la autenticidad
+# real de cada receta la sigue dando su hash SHA-256 + qr_verify_code,
+# nunca esta imagen. Por eso no se exige aquí ninguna verificación extra
+# más allá de que el médico esté autenticado.
+@router.post(
+    "/signature",
+    summary="Subir o actualizar la imagen de firma para las recetas imprimibles"
+)
+async def upload_signature(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db)
+):
+    # Solo PNG: es lo que exporta el canvas de firma del frontend, y es el
+    # único formato que preserva el fondo transparente que necesita el PDF.
+    if file.content_type != "image/png":
+        raise HTTPException(
+            status_code=400,
+            detail="La firma debe subirse como PNG (fondo transparente)"
+        )
+
+    content = await file.read()
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="La imagen de firma no puede superar 2MB")
+
+    result = await db.execute(
+        select(Professional).where(Professional.user_id == current_user.id)
+    )
+    professional = result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
+
+    signature_url = await _save_signature(db, professional, content)
+    return {"signature_url": signature_url, "message": "Firma guardada correctamente"}
+
+
+# ── POST /api/v1/professionals/signature/from-photo ─
+# Segundo camino de captura: el médico fotografía su firma real hecha en
+# papel (tinta oscura sobre fondo blanco/claro) y el backend le quita el
+# fondo automáticamente — ver app/services/signature_image.py. Pensado
+# para el médico que prefiere que en la receta aparezca su firma real de
+# toda la vida, no una hecha con mouse.
+@router.post(
+    "/signature/from-photo",
+    summary="Subir una foto de la firma en papel — se recorta y le quita el fondo automáticamente"
+)
+async def upload_signature_from_photo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db)
+):
+    allowed_types = ["image/jpeg", "image/png", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Solo se aceptan fotos JPG, PNG o WebP")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="La foto no puede superar 10MB")
+
+    try:
+        # CPU-bound (PIL): corre en un thread aparte para no bloquear el
+        # event loop mientras se procesa — ver misma razón documentada en
+        # app/services/storage.py sobre boto3 y asyncio.to_thread.
+        processed_png = await asyncio.to_thread(process_signature_photo, content)
+    except SignatureNotDetectedError:
+        raise HTTPException(
+            status_code=400,
+            detail="No pudimos detectar una firma clara en la foto. Probá con más luz, tinta oscura "
+                   "sobre papel blanco, o usá el lienzo para dibujarla en su lugar."
+        )
+    except Exception as e:
+        logger.error(f"Error procesando foto de firma: {e}")
+        raise HTTPException(status_code=400, detail="No pudimos procesar esa imagen. Probá con otra foto.")
+
+    result = await db.execute(
+        select(Professional).where(Professional.user_id == current_user.id)
+    )
+    professional = result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
+
+    signature_url = await _save_signature(db, professional, processed_png)
+    return {"signature_url": signature_url, "message": "Firma guardada correctamente"}
+
+
+# ── DELETE /api/v1/professionals/signature ──────────
+@router.delete(
+    "/signature",
+    summary="Quitar la firma guardada (para volver a firmar desde cero)"
+)
+async def delete_signature(
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Professional).where(Professional.user_id == current_user.id)
+    )
+    professional = result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
+
+    professional.signature_url = None
+    await db.commit()
+    return {"message": "Firma eliminada"}
+
+
 # ── PATCH /api/v1/professionals/profile ─────────────
 @router.patch(
     "/profile",
@@ -475,6 +602,7 @@ async def get_my_profile(
             "net_price_follow_up": _net(professional.price_follow_up),
         },
         "photo_url": professional.photo_url,
+        "signature_url": professional.signature_url,
         "bio": professional.bio,
         "languages": ", ".join(professional.languages) if professional.languages else "Español",
         "years_experience": professional.years_experience,

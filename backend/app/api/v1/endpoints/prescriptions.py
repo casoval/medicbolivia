@@ -17,6 +17,8 @@ from app.models.models import (
     ConsultationStatus, ProfessionalStatus, PrescriptionStatus
 )
 from app.schemas.schemas import PrescriptionCreateRequest, PrescriptionResponse, PrescriptionVoidRequest
+from app.services.prescription_pdf import generate_prescription_pdf
+from app.services.storage import upload_prescription_pdf_to_r2, get_presigned_url
 
 router = APIRouter()
 
@@ -32,8 +34,12 @@ def _generate_prescription_hash(data: dict) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
 
-def _enrich(prescription: Prescription, professional: Professional | None, patient: Patient | None = None) -> PrescriptionResponse:
-    """Convierte Prescription ORM → PrescriptionResponse con datos del médico."""
+async def _enrich(prescription: Prescription, professional: Professional | None, patient: Patient | None = None) -> PrescriptionResponse:
+    """Convierte Prescription ORM → PrescriptionResponse con datos del médico.
+    pdf_url se guarda internamente como r2://bucket/key (bucket privado,
+    tiene CI y datos de salud del paciente) — acá se resuelve a una URL
+    firmada de corta duración recién al momento de responder, mismo
+    patrón que admin.py usa para los documentos de verificación."""
     base = PrescriptionResponse.model_validate(prescription)
     if professional:
         base.professional_name     = f"Dr. {professional.first_name} {professional.last_name}"
@@ -43,6 +49,12 @@ def _enrich(prescription: Prescription, professional: Professional | None, patie
         base.cmb_matricula          = professional.cmb_matricula
     if patient:
         base.patient_photo_url = patient.photo_url
+    if base.pdf_url and (base.pdf_url.startswith("r2://") or base.pdf_url.startswith("s3://")):
+        try:
+            base.pdf_url = await get_presigned_url(base.pdf_url, expires_seconds=3600)
+        except Exception as e:
+            logger.error(f"No se pudo firmar la URL del PDF de la receta {prescription.id}: {e}")
+            base.pdf_url = None
     return base
 
 
@@ -146,7 +158,35 @@ async def create_prescription(
     await db.refresh(prescription)
 
     logger.info(f"Receta emitida: {prescription.id} | profesional: {professional.id} | paciente: {patient.id}")
-    return _enrich(prescription, professional)
+
+    # PDF imprimible para las farmacias que todavía piden papel — best
+    # effort: si algo falla acá (R2 caído, firma no descargable, etc.) la
+    # receta YA quedó emitida y es válida por su hash+QR de todos modos,
+    # así que no vale la pena hacer fallar todo el endpoint por esto.
+    try:
+        pdf_bytes = await generate_prescription_pdf(
+            patient_name=prescription.patient_name,
+            patient_ci=prescription.patient_ci,
+            patient_age=prescription.patient_age,
+            professional_name=f"Dr. {professional.first_name} {professional.last_name}",
+            specialty=professional.specialty,
+            sub_specialties=professional.sub_specialties,
+            cmb_matricula=professional.cmb_matricula,
+            sedes_number=professional.sedes_number,
+            medications=medications_data,
+            instructions=data.instructions,
+            digital_hash=digital_hash,
+            qr_verify_code=qr_verify_code,
+            signed_at=signed_at,
+            signature_url=professional.signature_url,
+        )
+        prescription.pdf_url = await upload_prescription_pdf_to_r2(pdf_bytes, prescription.id)
+        await db.commit()
+        await db.refresh(prescription)
+    except Exception as e:
+        logger.error(f"No se pudo generar/subir el PDF de la receta {prescription.id}: {e}")
+
+    return await _enrich(prescription, professional)
 
 
 # ── POST /prescriptions/{id}/void ────────────────────
@@ -188,7 +228,7 @@ async def void_prescription(
     await db.refresh(prescription)
 
     logger.info(f"Receta anulada: {prescription.id} | profesional: {professional.id}")
-    return _enrich(prescription, professional)
+    return await _enrich(prescription, professional)
 
 
 # ── GET /prescriptions/my ────────────────────────────
@@ -216,7 +256,7 @@ async def get_my_prescriptions(
         .order_by(Prescription.created_at.desc())
     )
     rows = result.all()
-    return [_enrich(p, professional, pat) for p, pat in rows]
+    return [await _enrich(p, professional, pat) for p, pat in rows]
 
 
 # ── GET /prescriptions/patient/my ───────────────────
@@ -251,7 +291,7 @@ async def get_my_patient_prescriptions(
             select(Professional).where(Professional.id == p.professional_id)
         )
         prof = prof_result.scalar_one_or_none()
-        enriched.append(_enrich(p, prof))
+        enriched.append(await _enrich(p, prof))
     return enriched
 
 
@@ -288,7 +328,7 @@ async def get_my_prescriptions_for_patient(
         .order_by(Prescription.created_at.desc())
     )
     rows = result.all()
-    return [_enrich(p, professional, pat) for p, pat in rows]
+    return [await _enrich(p, professional, pat) for p, pat in rows]
 
 
 # ── GET /prescriptions/consultation/{id} ────────────
@@ -313,7 +353,7 @@ async def get_by_consultation(
             select(Professional).where(Professional.id == p.professional_id)
         )
         prof = prof_result.scalar_one_or_none()
-        enriched.append(_enrich(p, prof))
+        enriched.append(await _enrich(p, prof))
     return enriched
 
 

@@ -242,6 +242,16 @@ class Professional(Base):
     languages: Mapped[List[str]] = mapped_column(ARRAY(String), default=lambda: ["Español"])
     years_experience: Mapped[int] = mapped_column(Integer, default=0)
     photo_url: Mapped[Optional[str]] = mapped_column(String(500))
+    # Imagen de la firma del médico (PNG con fondo transparente, dibujada en
+    # un canvas desde su perfil — ver POST /professionals/signature). Es una
+    # firma VISUAL, no una firma digital criptográfica: se usa para que la
+    # receta impresa (ver app/services/prescription_pdf.py) sea reconocible
+    # a simple vista por una farmacia. La autenticidad real la sigue dando
+    # el hash SHA-256 + qr_verify_code de Prescription/LabOrder. Va al
+    # bucket PÚBLICO de R2 (mismo criterio que photo_url): no es dato
+    # sensible por sí sola, y así el servicio de PDF la descarga sin
+    # necesitar una URL firmada.
+    signature_url: Mapped[Optional[str]] = mapped_column(String(500))
     status: Mapped[ProfessionalStatus] = mapped_column(SAEnum(ProfessionalStatus), default=ProfessionalStatus.PENDING_DOCS)
     availability: Mapped[AvailabilityMode] = mapped_column(SAEnum(AvailabilityMode), default=AvailabilityMode.OFFLINE)
     # Si está activo, "availability" se calcula automáticamente comparando la
