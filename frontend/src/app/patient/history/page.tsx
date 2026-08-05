@@ -12,6 +12,7 @@ import { consultationsAPI, ratingsAPI, prescriptionsAPI, clinicalNotesAPI, getEr
 import type { ClinicalNote, DisputeCategory } from '@/lib/api'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, fmtHora, wasActuallyRefunded } from '@/lib/consultationHistory'
 import type { Consultation, Rating } from '@/types'
+import { getLicenseInfo } from '@/lib/professionalLicense'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
 import { CreatorBadge } from '@/components/shared/CreatorBadge'
 import { PaymentBadge } from '@/components/shared/ConsultationBadges'
@@ -379,7 +380,7 @@ function PrescriptionModal({ consultationId, onClose }: {
               <p className="text-xs text-[#475569]">{t('Dr./Dra.')}</p>
               <p className="font-semibold text-sm">{rx.professional_name || 'Médico'}</p>
               {rx.professional_specialty && <p className="text-xs text-[#475569]">{rx.professional_specialty}</p>}
-              {rx.cmb_matricula && <p className="text-xs text-[#475569]">Mat. CMB: {rx.cmb_matricula}</p>}
+              {getLicenseInfo(rx) && <p className="text-xs text-[#475569]">{getLicenseInfo(rx)!.label} {getLicenseInfo(rx)!.value}</p>}
             </div>
             <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Medicamentos')}</p>
             <div className="space-y-2 mb-3">

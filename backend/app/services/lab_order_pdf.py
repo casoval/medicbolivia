@@ -1,25 +1,17 @@
 """
-app/services/prescription_pdf.py
-Genera el PDF imprimible de una receta digital firmada — pensado para las
-farmacias bolivianas que todavía piden "el papel" además de (o en vez de)
-verificar el QR. Piezas compartidas con lab_order_pdf.py factorizadas en
-app/services/pdf_common.py (mismo look & feel, firma, QR y lógica de
-matrícula — ver docstring de ese módulo).
+app/services/lab_order_pdf.py
+Genera el PDF imprimible de una orden de laboratorio/imagenología
+digital firmada — el paciente la presenta en el laboratorio de su
+elección junto a su CI. Documento separado de prescription_pdf.py a
+propósito (ver docstring de LabOrder en app/models/models.py: lo lee un
+técnico de laboratorio, no un farmacéutico, y necesita datos que una
+receta no — indicación clínica, ayuno, urgencia), pero comparte estilo,
+firma, QR y lógica de matrícula con la receta vía app/services/pdf_common.py.
 
-Importante: este documento NO es la fuente de autenticidad de la receta.
-La autenticidad real la da el hash SHA-256 + qr_verify_code que ya existen
-en Prescription (ver app/api/v1/endpoints/prescriptions.py) — cualquiera
-podría recortar la imagen de firma de un PDF y pegarla en otro. Por eso
-el QR de verificación va bien visible en el documento, no como detalle
-chico: es el mecanismo real, la firma/matrícula son para que un
-farmacéutico lo reconozca a simple vista, como está acostumbrado.
-
-La firma del médico (Professional.signature_url) es una imagen (PNG,
-trazo sobre fondo transparente, capturada en un canvas desde su perfil —
-ver POST /professionals/signature), NO una firma digital criptográfica.
-Es opcional: si el médico todavía no la cargó, el PDF se genera igual,
-solo sin esa imagen — nunca bloquea la emisión de la receta ni el resto
-del flujo de la consulta.
+Igual que en prescription_pdf.py: este PDF no es la fuente de
+autenticidad — lo es el hash SHA-256 + qr_verify_code que ya existen en
+LabOrder (ver app/api/v1/endpoints/lab_orders.py). El QR de verificación
+va bien visible, no como detalle chico.
 """
 import asyncio
 import io
@@ -39,10 +31,12 @@ from app.services.pdf_common import (
     weekday_date_es, qr_png_bytes, fetch_signature_bytes, matricula_label, build_styles,
 )
 
-# Mismo origen que build...VerifyUrl() en frontend/src/lib/api.ts — acá no
-# hay window.location, así que se hardcodea el dominio de producción, igual
-# que ya se hace con CONTACT_EMAIL en invitation_pdf.py.
-VERIFY_BASE_URL = "https://medicbolivia.com/verificar-receta"
+VERIFY_BASE_URL = "https://medicbolivia.com/verificar-orden-lab"
+
+URGENT_RED = colors.HexColor("#A32D2D")
+URGENT_BG = colors.HexColor("#FBEAEA")
+ROUTINE_GREEN = colors.HexColor("#0F6E56")
+ROUTINE_BG = colors.HexColor("#E1F5EE")
 
 
 def _verify_url(qr_verify_code: str) -> str:
@@ -54,14 +48,13 @@ def _build_pdf_sync(
     patient_name: str, patient_ci: str, patient_age: int,
     professional_name: str, specialty: str, sub_specialties: list,
     professional_license_number: Optional[str], cmb_matricula: Optional[str], sedes_number: Optional[str],
-    medications: list, instructions: Optional[str],
+    tests: list, clinical_indication: Optional[str], fasting_required: bool, urgency: str,
+    instructions: Optional[str],
     digital_hash: str, qr_verify_code: str, signed_at,
     signature_bytes: Optional[bytes],
 ) -> bytes:
-    """Parte CPU-bound (QR + reportlab): corre en un thread aparte (ver
-    generate_prescription_pdf) para no bloquear el event loop mientras un
-    médico emite una receta en medio de una videollamada en curso de
-    algún otro profesional."""
+    """Igual patrón que prescription_pdf.py::_build_pdf_sync — CPU-bound,
+    se corre en un thread aparte (ver generate_lab_order_pdf)."""
     qr_bytes = qr_png_bytes(_verify_url(qr_verify_code))
     matricula = matricula_label(professional_license_number, cmb_matricula)
 
@@ -73,17 +66,23 @@ def _build_pdf_sync(
     )
 
     s = build_styles()
-    med_name_style = ParagraphStyle(
-        "MedName", parent=s["body"], fontName="Helvetica-Bold", fontSize=9.8, textColor=INK,
+    test_name_style = ParagraphStyle(
+        "TestName", parent=s["body"], fontName="Helvetica-Bold", fontSize=9.8, textColor=INK,
     )
-    med_detail_style = ParagraphStyle(
-        "MedDetail", parent=s["body"], fontSize=8.8, textColor=MUTED, spaceAfter=2,
+    test_note_style = ParagraphStyle(
+        "TestNote", parent=s["body"], fontSize=8.8, textColor=MUTED, spaceAfter=2,
     )
     verify_label_style = ParagraphStyle(
         "VerifyLabel", parent=s["body"], fontName="Helvetica-Bold", fontSize=8.3, textColor=BRAND_BLUE,
     )
     verify_note_left_style = ParagraphStyle("VerifyNoteLeft", parent=s["verify_note"], alignment=TA_LEFT)
     code_left_style = ParagraphStyle("CodeLeft", parent=s["code"], alignment=TA_LEFT)
+    badge_style = ParagraphStyle(
+        "Badge", parent=s["body"], fontName="Helvetica-Bold", fontSize=8, alignment=TA_CENTER,
+    )
+    info_label_style = ParagraphStyle(
+        "InfoLabel", parent=s["body"], fontName="Helvetica-Bold", fontSize=8, textColor=MUTED,
+    )
 
     elements = []
 
@@ -93,7 +92,7 @@ def _build_pdf_sync(
         logo.hAlign = "CENTER"
         elements.append(logo)
         elements.append(Spacer(1, 6))
-    elements.append(Paragraph("Receta Médica Digital", s["title"]))
+    elements.append(Paragraph("Orden de Laboratorio Digital", s["title"]))
     elements.append(Paragraph(f"Emitida el {weekday_date_es(signed_at)} · medicbolivia.com", s["subtitle"]))
 
     # ── Franja médico / paciente ──
@@ -102,16 +101,12 @@ def _build_pdf_sync(
         specialty_line += " · " + ", ".join(sub_specialties)
 
     doctor_cell = [
-        Paragraph("MÉDICO TRATANTE", s["label"]),
+        Paragraph("MÉDICO SOLICITANTE", s["label"]),
         Paragraph(professional_name, s["value"]),
         Paragraph(specialty_line, s["value_sub"]),
         Paragraph(matricula, s["value_sub"]),
     ]
     if cmb_matricula and professional_license_number:
-        # Caso de transición: tiene ambas, se muestra la nueva como línea
-        # principal (ya incluida en `matricula`) y la CMB como referencia
-        # adicional — no reemplaza, es informativo mientras el médico
-        # termina de migrar sus datos.
         doctor_cell.append(Paragraph(f"Matrícula CMB: {cmb_matricula}", s["value_sub"]))
     if sedes_number:
         doctor_cell.append(Paragraph(f"SEDES: {sedes_number}", s["value_sub"]))
@@ -133,33 +128,56 @@ def _build_pdf_sync(
     ]))
     elements.append(header_table)
 
-    # ── Medicamentos (Rp.) ──
-    elements.append(Paragraph("Rp. / Medicamentos prescritos", s["section"]))
-    med_rows = []
-    for i, m in enumerate(medications, start=1):
-        name = m.get("name", "")
-        presentation = m.get("presentation")
-        parts = [p for p in [m.get("dosage"), m.get("frequency"), m.get("duration")] if p]
-        detail_line = "  ·  ".join(parts)
-        cell = [Paragraph(f"{i}. {name}" + (f" — {presentation}" if presentation else ""), med_name_style)]
-        if detail_line:
-            cell.append(Paragraph(detail_line, med_detail_style))
-        if m.get("notes"):
-            cell.append(Paragraph(m["notes"], med_detail_style))
-        med_rows.append([cell])
+    # ── Datos de la orden: urgencia / ayuno / indicación clínica ──
+    is_urgent = (urgency or "ROUTINE").upper() == "URGENT"
+    urgency_badge = Paragraph(
+        "URGENTE" if is_urgent else "RUTINA",
+        ParagraphStyle("BadgeInner", parent=badge_style, textColor=(URGENT_RED if is_urgent else ROUTINE_GREEN)),
+    )
+    fasting_text = "Sí, en ayunas" if fasting_required else "No requiere ayuno"
 
-    if med_rows:
-        med_table = Table(med_rows, colWidths=[doc.width])
-        med_table.setStyle(TableStyle([
+    info_row = [
+        [Paragraph("URGENCIA", info_label_style), Paragraph("AYUNO", info_label_style)],
+        [urgency_badge, Paragraph(fasting_text, s["body"])],
+    ]
+    info_table = Table(info_row, colWidths=[doc.width * 0.32, doc.width * 0.68])
+    info_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 1), URGENT_BG if is_urgent else ROUTINE_BG),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 1), (0, 1), "CENTER"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LINEBELOW", (0, 0), (-1, 0), 0, colors.white),
+    ]))
+    elements.append(Spacer(1, 10))
+    elements.append(info_table)
+
+    if clinical_indication:
+        elements.append(Paragraph("Indicación clínica", s["section"]))
+        elements.append(Paragraph(clinical_indication, s["body"]))
+
+    # ── Estudios solicitados ──
+    elements.append(Paragraph("Estudios solicitados", s["section"]))
+    test_rows = []
+    for i, t in enumerate(tests, start=1):
+        name = t.get("name", "")
+        cell = [Paragraph(f"{i}. {name}", test_name_style)]
+        if t.get("notes"):
+            cell.append(Paragraph(t["notes"], test_note_style))
+        test_rows.append([cell])
+
+    if test_rows:
+        test_table = Table(test_rows, colWidths=[doc.width])
+        test_table.setStyle(TableStyle([
             ("BOX", (0, 0), (-1, -1), 0.6, BORDER),
             ("INNERGRID", (0, 0), (-1, -1), 0.6, BORDER),
             ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
             ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
         ]))
-        elements.append(med_table)
+        elements.append(test_table)
 
     if instructions:
-        elements.append(Paragraph("Indicaciones del médico", s["section"]))
+        elements.append(Paragraph("Indicaciones adicionales", s["section"]))
         elements.append(Paragraph(instructions, s["body"]))
 
     # ── Firma ──
@@ -177,7 +195,7 @@ def _build_pdf_sync(
     sig_cell.append(Spacer(1, 3))
     sig_cell.append(Paragraph(professional_name, s["sig_name"]))
     sig_cell.append(Paragraph(
-        matricula if (professional_license_number or cmb_matricula) else "Firma del médico tratante",
+        matricula if (professional_license_number or cmb_matricula) else "Firma del médico solicitante",
         s["sig_sub"],
     ))
     sig_table = Table([[sig_cell]], colWidths=[doc.width])
@@ -187,7 +205,7 @@ def _build_pdf_sync(
     if not signature_bytes:
         elements.append(Spacer(1, 4))
         elements.append(Paragraph(
-            "Este médico aún no cargó su firma en MedicBolivia — la autenticidad de esta receta "
+            "Este médico aún no cargó su firma en MedicBolivia — la autenticidad de esta orden "
             "se confirma con el código QR de abajo, no depende de esta imagen.",
             s["warn"],
         ))
@@ -198,7 +216,7 @@ def _build_pdf_sync(
     verify_cell = [
         Paragraph("Verificación de autenticidad", verify_label_style),
         Paragraph(
-            "Esta receta está firmada criptográficamente (SHA-256). Escanee el código o visite "
+            "Esta orden está firmada criptográficamente (SHA-256). Escanee el código o visite "
             f"{VERIFY_BASE_URL} e ingrese el código para confirmar que es auténtica y sigue vigente "
             "(no anulada).",
             verify_note_left_style,
@@ -219,9 +237,9 @@ def _build_pdf_sync(
     elements.append(HRFlowable(width="100%", thickness=0.6, color=BORDER))
     elements.append(Spacer(1, 4))
     elements.append(Paragraph(
-        "Documento generado por MedicBolivia. Los medicamentos controlados (psicotrópicos o "
-        "estupefacientes) requieren receta oficial archivada/valorada conforme a normativa de "
-        "AGEMED y no se emiten por esta plataforma.",
+        "Documento generado por MedicBolivia. Esta es la orden/solicitud de estudios, no el "
+        "resultado — preséntela junto a su cédula de identidad en el laboratorio o centro de "
+        "imagenología de su elección.",
         s["footer"],
     ))
 
@@ -229,22 +247,24 @@ def _build_pdf_sync(
     return buffer.getvalue()
 
 
-async def generate_prescription_pdf(
+async def generate_lab_order_pdf(
     *,
     patient_name: str, patient_ci: str, patient_age: int,
     professional_name: str, specialty: str, sub_specialties: Optional[list],
     professional_license_number: Optional[str], cmb_matricula: Optional[str], sedes_number: Optional[str],
-    medications: list, instructions: Optional[str],
+    tests: list, clinical_indication: Optional[str], fasting_required: bool, urgency: str,
+    instructions: Optional[str],
     digital_hash: str, qr_verify_code: str, signed_at,
     signature_url: Optional[str],
 ) -> bytes:
     """
-    Arma el PDF imprimible de una receta ya firmada (hash y qr_verify_code
-    ya generados por app/api/v1/endpoints/prescriptions.py::create_prescription)
-    y devuelve los bytes, listos para subir con
-    app/services/storage.py::upload_prescription_pdf_to_r2.
+    Arma el PDF imprimible de una orden de laboratorio ya firmada (hash y
+    qr_verify_code ya generados por
+    app/api/v1/endpoints/lab_orders.py::create_lab_order) y devuelve los
+    bytes, listos para subir con
+    app/services/storage.py::upload_lab_order_pdf_to_r2.
     Nunca lanza por un problema de la firma/logo — en el peor caso el PDF
-    sale sin esa imagen, pero la receta se emite igual.
+    sale sin esa imagen, pero la orden se emite igual.
     """
     signature_bytes = await fetch_signature_bytes(signature_url)
     return await asyncio.to_thread(
@@ -254,7 +274,8 @@ async def generate_prescription_pdf(
         sub_specialties=sub_specialties or [],
         professional_license_number=professional_license_number,
         cmb_matricula=cmb_matricula, sedes_number=sedes_number,
-        medications=medications, instructions=instructions,
+        tests=tests, clinical_indication=clinical_indication,
+        fasting_required=fasting_required, urgency=urgency, instructions=instructions,
         digital_hash=digital_hash, qr_verify_code=qr_verify_code, signed_at=signed_at,
         signature_bytes=signature_bytes,
     )

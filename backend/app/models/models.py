@@ -55,10 +55,12 @@ class DocType(str, enum.Enum):
     CI_FRONT = "CI_FRONT"
     CI_BACK = "CI_BACK"
     PROFESSIONAL_TITLE = "PROFESSIONAL_TITLE"
-    ACADEMIC_DIPLOMA = "ACADEMIC_DIPLOMA"
+    # ACADEMIC_DIPLOMA y CMB_MATRICULA se retiraron de la plataforma: el
+    # Título en Provisión Nacional ya habilita al profesional, y la
+    # Matrícula Profesional del Ministerio de Salud (HEALTH_MINISTRY)
+    # reemplaza la necesidad de la matrícula del Colegio Médico de Bolivia.
     HEALTH_MINISTRY = "HEALTH_MINISTRY"
     SEDES_REGISTRATION = "SEDES_REGISTRATION"
-    CMB_MATRICULA = "CMB_MATRICULA"
     SPECIALTY_CERT = "SPECIALTY_CERT"
     SELFIE_WITH_CI = "SELFIE_WITH_CI"
 
@@ -240,7 +242,25 @@ class Professional(Base):
     sub_specialties: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
     bio: Mapped[Optional[str]] = mapped_column(Text)
     languages: Mapped[List[str]] = mapped_column(ARRAY(String), default=lambda: ["Español"])
-    years_experience: Mapped[int] = mapped_column(Integer, default=0)
+    # Nullable a propósito: si el profesional lo deja vacío, no se muestra
+    # en el perfil público (a diferencia de antes, que siempre mostraba 0).
+    years_experience: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    # Verificado por un admin en base a los documentos subidos. Solo si es
+    # True (y el valor no está vacío) se muestra al paciente — ver
+    # ProfessionalPublicResponse en app/schemas/schemas.py.
+    years_experience_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Universidad de egreso — la llena el propio profesional en su perfil.
+    # Opcional: si la deja vacía, simplemente no aparece en el perfil
+    # público (no bloquea la aprobación del profesional).
+    university: Mapped[Optional[str]] = mapped_column(String(200))
+    university_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Matrícula profesional emitida por el Ministerio de Salud — la llena
+    # el propio profesional en su perfil y la verifica un admin contra el
+    # documento HEALTH_MINISTRY subido. Distinta de cmb_matricula (que
+    # sigue siendo un campo aparte, editable solo por el admin, usado en
+    # las recetas/órdenes de laboratorio impresas).
+    professional_license_number: Mapped[Optional[str]] = mapped_column(String(50))
+    professional_license_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     photo_url: Mapped[Optional[str]] = mapped_column(String(500))
     # Imagen de la firma del médico (PNG con fondo transparente, dibujada en
     # un canvas desde su perfil — ver POST /professionals/signature). Es una

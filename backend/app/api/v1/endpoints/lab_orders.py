@@ -20,6 +20,8 @@ from app.models.models import (
     ConsultationStatus, ProfessionalStatus, PrescriptionStatus
 )
 from app.schemas.schemas import LabOrderCreateRequest, LabOrderResponse, LabOrderVoidRequest
+from app.services.lab_order_pdf import generate_lab_order_pdf
+from app.services.storage import upload_lab_order_pdf_to_r2, get_presigned_url
 
 router = APIRouter()
 
@@ -35,17 +37,28 @@ def _generate_lab_order_hash(data: dict) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
 
-def _enrich(lab_order: LabOrder, professional: Professional | None, patient: Patient | None = None) -> LabOrderResponse:
-    """Convierte LabOrder ORM → LabOrderResponse con datos del médico."""
+async def _enrich(lab_order: LabOrder, professional: Professional | None, patient: Patient | None = None) -> LabOrderResponse:
+    """Convierte LabOrder ORM → LabOrderResponse con datos del médico.
+    pdf_url se guarda internamente como r2://bucket/key (bucket privado,
+    tiene CI y datos de salud del paciente) — acá se resuelve a una URL
+    firmada de corta duración recién al momento de responder, mismo
+    patrón que prescriptions.py::_enrich."""
     base = LabOrderResponse.model_validate(lab_order)
     if professional:
         base.professional_name     = f"Dr. {professional.first_name} {professional.last_name}"
         base.professional_specialty = professional.specialty
         base.professional_sub_specialties = professional.sub_specialties or []
         base.professional_department = professional.department
+        base.professional_license_number = professional.professional_license_number
         base.cmb_matricula          = professional.cmb_matricula
     if patient:
         base.patient_photo_url = patient.photo_url
+    if base.pdf_url and (base.pdf_url.startswith("r2://") or base.pdf_url.startswith("s3://")):
+        try:
+            base.pdf_url = await get_presigned_url(base.pdf_url, expires_seconds=3600)
+        except Exception as e:
+            logger.error(f"No se pudo firmar la URL del PDF de la orden de laboratorio {lab_order.id}: {e}")
+            base.pdf_url = None
     return base
 
 
@@ -158,7 +171,39 @@ async def create_lab_order(
     await db.refresh(lab_order)
 
     logger.info(f"Orden de laboratorio emitida: {lab_order.id} | profesional: {professional.id} | paciente: {patient.id}")
-    return _enrich(lab_order, professional)
+
+    # PDF imprimible para el laboratorio/centro de imagenología — best
+    # effort, mismo criterio que prescriptions.py::create_prescription: si
+    # esto falla la orden YA quedó emitida y es válida por su hash+QR de
+    # todos modos, no vale la pena hacer fallar todo el endpoint por esto.
+    try:
+        pdf_bytes = await generate_lab_order_pdf(
+            patient_name=lab_order.patient_name,
+            patient_ci=lab_order.patient_ci,
+            patient_age=lab_order.patient_age,
+            professional_name=f"Dr. {professional.first_name} {professional.last_name}",
+            specialty=professional.specialty,
+            sub_specialties=professional.sub_specialties,
+            professional_license_number=professional.professional_license_number,
+            cmb_matricula=professional.cmb_matricula,
+            sedes_number=professional.sedes_number,
+            tests=tests_data,
+            clinical_indication=data.clinical_indication,
+            fasting_required=data.fasting_required,
+            urgency=data.urgency,
+            instructions=data.instructions,
+            digital_hash=digital_hash,
+            qr_verify_code=qr_verify_code,
+            signed_at=signed_at,
+            signature_url=professional.signature_url,
+        )
+        lab_order.pdf_url = await upload_lab_order_pdf_to_r2(pdf_bytes, lab_order.id)
+        await db.commit()
+        await db.refresh(lab_order)
+    except Exception as e:
+        logger.error(f"No se pudo generar/subir el PDF de la orden de laboratorio {lab_order.id}: {e}")
+
+    return await _enrich(lab_order, professional)
 
 
 # ── POST /lab-orders/{id}/void ───────────────────────
@@ -200,7 +245,7 @@ async def void_lab_order(
     await db.refresh(lab_order)
 
     logger.info(f"Orden de laboratorio anulada: {lab_order.id} | profesional: {professional.id}")
-    return _enrich(lab_order, professional)
+    return await _enrich(lab_order, professional)
 
 
 # ── GET /lab-orders/my ────────────────────────────────
@@ -228,7 +273,7 @@ async def get_my_lab_orders(
         .order_by(LabOrder.created_at.desc())
     )
     rows = result.all()
-    return [_enrich(lo, professional, pat) for lo, pat in rows]
+    return [await _enrich(lo, professional, pat) for lo, pat in rows]
 
 
 # ── GET /lab-orders/patient/my ───────────────────────
@@ -262,7 +307,7 @@ async def get_my_patient_lab_orders(
             select(Professional).where(Professional.id == lo.professional_id)
         )
         prof = prof_result.scalar_one_or_none()
-        enriched.append(_enrich(lo, prof))
+        enriched.append(await _enrich(lo, prof))
     return enriched
 
 
@@ -295,7 +340,7 @@ async def get_my_lab_orders_for_patient(
         .order_by(LabOrder.created_at.desc())
     )
     rows = result.all()
-    return [_enrich(lo, professional, pat) for lo, pat in rows]
+    return [await _enrich(lo, professional, pat) for lo, pat in rows]
 
 
 # ── GET /lab-orders/consultation/{id} ────────────────
@@ -320,7 +365,7 @@ async def get_by_consultation(
             select(Professional).where(Professional.id == lo.professional_id)
         )
         prof = prof_result.scalar_one_or_none()
-        enriched.append(_enrich(lo, prof))
+        enriched.append(await _enrich(lo, prof))
     return enriched
 
 
@@ -377,6 +422,7 @@ async def verify_lab_order(
         "signed_at":              lab_order.signed_at.isoformat(),
         "professional_name":      f"Dr. {professional.first_name} {professional.last_name}" if professional else "Desconocido",
         "professional_specialty": professional.specialty if professional else "",
+        "professional_license_number": professional.professional_license_number if professional else "",
         "cmb_matricula":          professional.cmb_matricula if professional else "",
         "message":                "Orden válida y auténtica. Emitida por MedicBolivia."
     }

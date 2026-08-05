@@ -201,7 +201,20 @@ class ProfessionalPublicResponse(BaseModel):
     department: Optional[str] = None
     bio: Optional[str]
     languages: List[str]
-    years_experience: int
+    # Estos tres campos los llena el propio profesional en su perfil, pero
+    # solo se muestran al paciente si tienen valor Y un admin los verificó
+    # contra su documentación (ver model_validator más abajo). Si el
+    # profesional los deja vacíos, o todavía no fueron verificados,
+    # llegan en None/oculto — el paciente nunca ve un dato sin revisar.
+    years_experience: Optional[int] = None
+    university: Optional[str] = None
+    professional_license_number: Optional[str] = None
+    # Banderas de verificación: existen en el modelo ORM y se leen acá
+    # (from_attributes) para poder aplicar la regla de visibilidad, pero
+    # nunca se exponen tal cual en la respuesta (exclude=True).
+    years_experience_verified: bool = Field(default=False, exclude=True)
+    university_verified: bool = Field(default=False, exclude=True)
+    professional_license_verified: bool = Field(default=False, exclude=True)
     photo_url: Optional[str]
     availability: AvailabilityMode
     price_general: Decimal
@@ -218,11 +231,25 @@ class ProfessionalPublicResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @model_validator(mode="after")
+    def _hide_unverified_fields(self):
+        """Oculta años de experiencia, universidad y matrícula profesional
+        si están vacíos o si un admin todavía no los verificó."""
+        if not self.years_experience_verified:
+            self.years_experience = None
+        if not (self.university and self.university_verified):
+            self.university = None
+        if not (self.professional_license_number and self.professional_license_verified):
+            self.professional_license_number = None
+        return self
+
 
 class ProfessionalUpdateRequest(BaseModel):
     bio: Optional[str] = None
     languages: Optional[List[str]] = None
     years_experience: Optional[int] = None
+    university: Optional[str] = None
+    professional_license_number: Optional[str] = None
     sub_specialties: Optional[List[str]] = None
     appointment_duration_minutes: Optional[int] = Field(None, ge=10, le=240)
 
@@ -697,6 +724,11 @@ class PrescriptionResponse(BaseModel):
     professional_specialty: Optional[str] = None
     professional_sub_specialties: Optional[List[str]] = None
     professional_department: Optional[str] = None
+    # Matrícula profesional del Ministerio de Salud (la llena el propio
+    # profesional en su perfil). cmb_matricula queda como dato legado de
+    # médicos registrados antes de este cambio — ver prescription_pdf.py
+    # para cómo se combinan ambos en el PDF imprimible.
+    professional_license_number: Optional[str] = None
     cmb_matricula: Optional[str] = None
 
     model_config = {"from_attributes": True, "populate_by_name": True}
@@ -753,6 +785,11 @@ class LabOrderResponse(BaseModel):
     professional_specialty: Optional[str] = None
     professional_sub_specialties: Optional[List[str]] = None
     professional_department: Optional[str] = None
+    # Matrícula profesional del Ministerio de Salud (la llena el propio
+    # profesional en su perfil). cmb_matricula queda como dato legado de
+    # médicos registrados antes de este cambio — ver prescription_pdf.py
+    # para cómo se combinan ambos en el PDF imprimible.
+    professional_license_number: Optional[str] = None
     cmb_matricula: Optional[str] = None
 
     model_config = {"from_attributes": True, "populate_by_name": True}

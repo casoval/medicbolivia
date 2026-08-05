@@ -145,10 +145,15 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
         </div>
       </div>
 
-      {/* Info */}
-      <div className="flex items-center gap-3 mb-3 text-xs text-[#475569]">
-        <span>{pro.years_experience} años de exp.</span>
-        <span className="text-[#DDE1EE]">·</span>
+      {/* Info — años de experiencia solo si el profesional lo llenó y un
+          admin lo verificó (ver ProfessionalPublicResponse en el backend) */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3 text-xs text-[#475569]">
+        {pro.years_experience != null && (
+          <>
+            <span>{pro.years_experience} años de exp.</span>
+            <span className="text-[#DDE1EE]">·</span>
+          </>
+        )}
         <span>{pro.languages.join(', ')}</span>
         <span className="text-[#DDE1EE]">·</span>
         <span>{pro.total_consultations} consultas</span>

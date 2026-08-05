@@ -173,6 +173,36 @@ async def upload_prescription_pdf_to_r2(
         raise Exception("Error al generar el PDF de la receta.")
 
 
+async def upload_lab_order_pdf_to_r2(
+    file_content: bytes,
+    lab_order_id: str,
+) -> str:
+    """
+    Igual que upload_prescription_pdf_to_r2, pero para el PDF de una orden
+    de laboratorio (ver app/services/lab_order_pdf.py) — mismo bucket
+    privado, mismo criterio de nunca guardar una URL pública porque el
+    documento tiene datos personales y de salud del paciente.
+    """
+    key = f"lab-orders/{lab_order_id}/{uuid.uuid4()}.pdf"
+
+    try:
+        r2 = _get_r2_client()
+        await asyncio.to_thread(
+            r2.put_object,
+            Bucket=settings.R2_BUCKET_DOCS,
+            Key=key,
+            Body=file_content,
+            ContentType="application/pdf",
+        )
+        url = f"r2://{settings.R2_BUCKET_DOCS}/{key}"
+        logger.info(f"PDF de orden de laboratorio subido a R2: {key}")
+        return url
+
+    except ClientError as e:
+        logger.error(f"Error subiendo PDF de orden de laboratorio a R2: {e}")
+        raise Exception("Error al generar el PDF de la orden de laboratorio.")
+
+
 async def upload_chat_attachment_to_r2(
     file_content: bytes,
     file_name: str,

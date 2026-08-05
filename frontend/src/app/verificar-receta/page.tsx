@@ -12,6 +12,7 @@ import { useSearchParams } from 'next/navigation'
 import { prescriptionsAPI, getErrorMessage } from '@/lib/api'
 import { Spinner } from '@/components/ui'
 import type { Medication } from '@/types'
+import { getLicenseInfo } from '@/lib/professionalLicense'
 
 interface VerifyResult {
   valid: boolean
@@ -27,6 +28,7 @@ interface VerifyResult {
   signed_at?: string
   professional_name?: string
   professional_specialty?: string
+  professional_license_number?: string
   cmb_matricula?: string
   voided_at?: string | null
   void_reason?: string | null
@@ -151,7 +153,7 @@ function VerifyForm() {
               <p className="text-[10px] uppercase text-[#475569] font-medium">Emitida por</p>
               <p className="text-[#141820]">
                 {result.professional_name} — {result.professional_specialty}
-                {result.cmb_matricula ? ` (Mat. CMB ${result.cmb_matricula})` : ''}
+                {getLicenseInfo(result) ? ` (${getLicenseInfo(result)!.label} ${getLicenseInfo(result)!.value})` : ''}
               </p>
             </div>
             <div>

@@ -113,10 +113,11 @@ export function ProfessionalDetailModal({
         </div>
 
         <div className="px-6 pb-6">
-          {/* Datos rápidos */}
+          {/* Datos rápidos — años de exp. solo aparece si el profesional lo
+              llenó y un admin lo verificó (ver ProfessionalPublicResponse) */}
           <div className="grid grid-cols-3 gap-2 py-4 border-y border-[#DDE1EE] text-center">
             <div>
-              <p className="text-sm font-semibold text-[#141820]">{pro.years_experience}</p>
+              <p className="text-sm font-semibold text-[#141820]">{pro.years_experience != null ? pro.years_experience : '—'}</p>
               <p className="text-[10px] text-[#64748B]">{t('años de exp.')}</p>
             </div>
             <div>
@@ -128,6 +129,19 @@ export function ProfessionalDetailModal({
               <p className="text-[10px] text-[#64748B]">{t('idiomas')}</p>
             </div>
           </div>
+
+          {/* Universidad / matrícula profesional — solo si el profesional
+              los llenó y un admin los verificó contra su documentación */}
+          {(pro.university || pro.professional_license_number) && (
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#475569]">
+              {pro.university && (
+                <span>🎓 {pro.university}</span>
+              )}
+              {pro.professional_license_number && (
+                <span>✓ {t('Matrícula profesional')}: {pro.professional_license_number}</span>
+              )}
+            </div>
+          )}
 
           {/* Biografía completa, sin recortar */}
           {pro.bio && (

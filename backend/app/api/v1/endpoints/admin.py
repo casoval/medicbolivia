@@ -410,6 +410,11 @@ async def list_all_professionals(
             "bio":                 p.bio,
             "languages":           p.languages or ["Español"],
             "years_experience":    p.years_experience,
+            "years_experience_verified": p.years_experience_verified,
+            "university":          p.university,
+            "university_verified": p.university_verified,
+            "professional_license_number":   p.professional_license_number,
+            "professional_license_verified": p.professional_license_verified,
             "cmb_matricula":       p.cmb_matricula,
             "sedes_number":        p.sedes_number,
             "price_general":       float(p.price_general),
@@ -702,7 +707,12 @@ async def review_document(
             select(ProfessionalDoc).where(ProfessionalDoc.professional_id == doc.professional_id)
         )).scalars().all()
 
-        required = {'CI_FRONT', 'CI_BACK', 'PROFESSIONAL_TITLE', 'SEDES_REGISTRATION', 'CMB_MATRICULA'}
+        # CMB_MATRICULA y ACADEMIC_DIPLOMA ya no se piden (ver DocType en
+        # app/models/models.py). SEDES_REGISTRATION se reemplaza acá por
+        # HEALTH_MINISTRY, que es el documento que sí se ofrece subir en
+        # el perfil del profesional — antes este set nunca se completaba
+        # porque exigía un tipo que la UI jamás ofrecía.
+        required = {'CI_FRONT', 'CI_BACK', 'PROFESSIONAL_TITLE', 'HEALTH_MINISTRY', 'SELFIE_WITH_CI'}
         approved_types = {d.doc_type.value for d in all_docs if d.status == DocStatus.APPROVED}
 
         if required.issubset(approved_types) and professional:
@@ -1248,6 +1258,11 @@ class AdminProfessionalUpdate(BaseModel):
     bio: Optional[str] = None
     languages: Optional[list[str]] = None
     years_experience: Optional[int] = Field(None, ge=0, le=80)
+    years_experience_verified: Optional[bool] = None
+    university: Optional[str] = Field(None, max_length=200)
+    university_verified: Optional[bool] = None
+    professional_license_number: Optional[str] = Field(None, max_length=50)
+    professional_license_verified: Optional[bool] = None
     price_general: Optional[Decimal] = Field(None, gt=0)
     price_urgent: Optional[Decimal] = Field(None, gt=0)
     price_follow_up: Optional[Decimal] = Field(None, gt=0)
@@ -1381,6 +1396,8 @@ async def update_professional_admin(
     simple_fields = [
         "first_name", "last_name", "ci", "department", "gender", "specialty",
         "sub_specialties", "bio", "languages", "years_experience",
+        "years_experience_verified", "university", "university_verified",
+        "professional_license_number", "professional_license_verified",
         "price_general", "price_urgent", "price_follow_up",
         "cmb_matricula", "sedes_number",
     ]

@@ -95,15 +95,17 @@ const DOC_LABELS: Record<string, string> = {
   CI_FRONT: 'Cédula (frente)',
   CI_BACK: 'Cédula (dorso)',
   PROFESSIONAL_TITLE: 'Título profesional',
-  ACADEMIC_DIPLOMA: 'Diploma académico',
-  HEALTH_MINISTRY: 'Registro Min. Salud',
+  HEALTH_MINISTRY: 'Matrícula Profesional (Min. Salud)',
   SEDES_REGISTRATION: 'Registro SEDES',
-  CMB_MATRICULA: 'Matrícula CMB',
   SPECIALTY_CERT: 'Respaldo de Especialidad y/o Subespecialidad',
   SELFIE_WITH_CI: 'Selfie con cédula',
 }
 
-const REQUIRED_DOC_TYPES = ['CI_FRONT', 'CI_BACK', 'PROFESSIONAL_TITLE', 'SEDES_REGISTRATION', 'CMB_MATRICULA', 'SPECIALTY_CERT']
+// Diploma académico y Matrícula CMB se retiraron de la plataforma (el
+// Título en Provisión Nacional ya habilita, y la Matrícula Profesional
+// del Min. de Salud reemplaza a la del CMB). Coincide con el set
+// `required` de PATCH /admin/documents/{id}/review en el backend.
+const REQUIRED_DOC_TYPES = ['CI_FRONT', 'CI_BACK', 'PROFESSIONAL_TITLE', 'HEALTH_MINISTRY', 'SELFIE_WITH_CI']
 
 interface ProfessionalDocItem {
   id: string
@@ -163,6 +165,12 @@ interface Professional {
   phone?: string; email?: string; ci?: string; birth_date?: string; department?: string; gender?: string
   user_status?: string; photo_url?: string | null; sub_specialties?: string[]; doc_counts?: DocCounts
   penalty?: PenaltyInfo
+  // Campos que llena el propio profesional en su perfil — se muestran al
+  // paciente solo cuando *_verified es true (ver ProfessionalPublicResponse
+  // en el backend). Acá, en el panel admin, se ven siempre para poder revisarlos.
+  years_experience_verified?: boolean
+  university?: string; university_verified?: boolean
+  professional_license_number?: string; professional_license_verified?: boolean
 }
 
 function getAge(birthDate?: string): number | null {
@@ -920,7 +928,9 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
     sub_specialties: local.sub_specialties || [] as string[],
     bio: local.bio || '',
     languages: local.languages?.join(', ') || 'Español',
-    years_experience: String(local.years_experience ?? 0),
+    years_experience: local.years_experience != null ? String(local.years_experience) : '',
+    university: local.university || '',
+    professional_license_number: local.professional_license_number || '',
     price_general: String(local.price_general ?? 0),
     price_urgent: String(local.price_urgent ?? 0),
     price_follow_up: String(local.price_follow_up ?? 0),
@@ -964,7 +974,9 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
       sub_specialties: form.sub_specialties,
       bio: form.bio || undefined,
       languages: form.languages.split(',').map((s) => s.trim()).filter(Boolean),
-      years_experience: Number(form.years_experience) || 0,
+      years_experience: form.years_experience.trim() === '' ? null : Number(form.years_experience),
+      university: form.university.trim() === '' ? null : form.university.trim(),
+      professional_license_number: form.professional_license_number.trim() === '' ? null : form.professional_license_number.trim(),
       price_general: Number(form.price_general) || undefined,
       price_urgent: Number(form.price_urgent) || undefined,
       price_follow_up: Number(form.price_follow_up) || undefined,
@@ -985,7 +997,9 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
         sub_specialties: form.sub_specialties,
         bio: form.bio,
         languages: form.languages.split(',').map((s) => s.trim()).filter(Boolean),
-        years_experience: Number(form.years_experience) || 0,
+        years_experience: form.years_experience.trim() === '' ? undefined : Number(form.years_experience),
+        university: form.university.trim() || undefined,
+        professional_license_number: form.professional_license_number.trim() || undefined,
         price_general: Number(form.price_general) || 0,
         price_urgent: Number(form.price_urgent) || 0,
         price_follow_up: Number(form.price_follow_up) || 0,
@@ -998,6 +1012,22 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
       qc.invalidateQueries({ queryKey: ['admin', 'professionals'] })
     },
     onError: (err) => setSaveError(getErrorMessage(err)),
+  })
+
+  // Verificar/desverificar de un toque los 3 campos que llena el propio
+  // profesional (experiencia, universidad, matrícula) — no requiere entrar
+  // al modo de edición completo. Se usa junto a la documentación ya
+  // subida por el profesional (sección de Documentos, más abajo).
+  const [verifyError, setVerifyError] = useState('')
+  const verifyFieldMutation = useMutation({
+    mutationFn: (payload: { field: 'years_experience_verified' | 'university_verified' | 'professional_license_verified'; value: boolean }) =>
+      adminAPI.updateProfessional(local.id, { [payload.field]: payload.value }),
+    onSuccess: (_res, payload) => {
+      setLocal((prev) => ({ ...prev, [payload.field]: payload.value }))
+      setVerifyError('')
+      qc.invalidateQueries({ queryKey: ['admin', 'professionals'] })
+    },
+    onError: (err) => setVerifyError(getErrorMessage(err)),
   })
 
   function startEdit() {
@@ -1082,7 +1112,49 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                 <div><p className="text-xs text-[#64748B]">{t('Registrado el')}</p><p className="text-sm font-medium">{new Date(local.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Estado de cuenta')}</p><p className="text-sm font-medium">{local.user_status === 'ACTIVE' ? 'Activa' : local.user_status === 'SUSPENDED' ? 'Suspendida' : (local.user_status || 'No disponible')}</p></div>
               </div>
-            ) : (
+            ) : null}
+
+            {/* Campos que llena el propio profesional en su perfil — solo
+                se muestran al paciente si tienen valor Y el admin los
+                verifica acá, contra la documentación subida (más abajo). */}
+            {!editing && (
+              <div className="mt-2 space-y-1.5">
+                {verifyError && <div className="mb-1"><Alert type="error" message={verifyError} /></div>}
+                {([
+                  { key: 'years_experience_verified' as const, label: t('Años de experiencia'), value: local.years_experience != null ? `${local.years_experience} años` : '' },
+                  { key: 'university_verified' as const, label: t('Universidad'), value: local.university || '' },
+                  { key: 'professional_license_verified' as const, label: t('Matrícula profesional (Min. Salud)'), value: local.professional_license_number || '' },
+                ]).map(({ key, label, value }) => {
+                  const verified = !!(local as any)[key]
+                  return (
+                    <div key={key} className="flex items-center justify-between gap-2 bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-xs text-[#64748B]">{label}</p>
+                        <p className="text-sm font-medium truncate">{value || t('No especificado por el profesional')}</p>
+                      </div>
+                      {value && (
+                        <button
+                          onClick={() => verifyFieldMutation.mutate({ field: key, value: !verified })}
+                          disabled={verifyFieldMutation.isPending}
+                          className={`text-[10px] px-2 py-1 rounded-full border font-medium whitespace-nowrap disabled:opacity-50 ${
+                            verified
+                              ? 'bg-[#E1F5EE] text-[#0F6E56] border-[#9FE1CB] hover:bg-[#D3EFE3]'
+                              : 'bg-[#FEF3E0] text-[#854F0B] border-[#F2D49A] hover:bg-[#FBE9C7]'
+                          }`}
+                        >
+                          {verified ? `✓ ${t('Verificado')} — ${t('quitar')}` : t('Verificar')}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+                <p className="text-[10px] text-[#64748B] px-1">
+                  {t('El paciente solo ve estos 3 datos cuando el profesional los llenó Y quedaron verificados acá.')}
+                </p>
+              </div>
+            )}
+
+            {editing && (
               <div className="bg-[#F5F6FA] rounded-xl p-3 space-y-3">
                 {saveError && <Alert type="error" message={saveError} />}
                 <div className="grid grid-cols-2 gap-2">
@@ -1135,6 +1207,18 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                     <label className="block text-xs text-[#475569] mb-1">{t('Años de experiencia')}</label>
                     <input type="number" min={0} max={80} value={form.years_experience}
                       onChange={(e) => setForm({ ...form, years_experience: e.target.value })}
+                      placeholder="—"
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Universidad')}</label>
+                    <input value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })}
+                      placeholder={t('Opcional')}
+                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#475569] mb-1">{t('Matrícula profesional (Min. Salud)')}</label>
+                    <input value={form.professional_license_number} onChange={(e) => setForm({ ...form, professional_license_number: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>

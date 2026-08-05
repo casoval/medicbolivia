@@ -8,6 +8,7 @@ import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { prescriptionsAPI, labOrdersAPI, buildPrescriptionVerifyUrl, buildLabOrderVerifyUrl } from '@/lib/api'
 import type { Medication, Prescription, LabOrder, LabTest } from '@/types'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { getLicenseInfo } from '@/lib/professionalLicense'
 
 function QRCode({ value, size = 140 }: { value: string; size?: number }) {
   const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=8&color=042C53`
@@ -27,6 +28,7 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const meds: Medication[] = Array.isArray(rx.medications) ? rx.medications : []
+  const license = getLicenseInfo(rx)
 
   function copyCode() {
     navigator.clipboard.writeText(rx.qr_verify_code)
@@ -85,8 +87,8 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
                 {rx.professional_department && (
                   <p className="text-xs text-white/60 mt-0.5">{rx.professional_department}</p>
                 )}
-                {rx.cmb_matricula && (
-                  <p className="text-xs text-white/60 mt-1">{t('Matrícula CMB:')} <span className="text-white/90 font-mono">{rx.cmb_matricula}</span></p>
+                {license && (
+                  <p className="text-xs text-white/60 mt-1">{t(license.label)} <span className="text-white/90 font-mono">{license.value}</span></p>
                 )}
               </div>
               <div className="text-left sm:text-right flex-shrink-0">
@@ -250,6 +252,7 @@ function LabOrderCard({ order }: { order: LabOrder }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const tests: LabTest[] = Array.isArray(order.tests) ? order.tests : []
+  const license = getLicenseInfo(order)
 
   function copyCode() {
     navigator.clipboard.writeText(order.qr_verify_code)
@@ -290,8 +293,8 @@ function LabOrderCard({ order }: { order: LabOrder }) {
                 <p className="text-xs text-white/60 uppercase tracking-wide mb-0.5">{t('Médico tratante')}</p>
                 <p className="font-bold text-base">{order.professional_name ?? '—'}</p>
                 <p className="text-sm text-white/80">{order.professional_specialty}</p>
-                {order.cmb_matricula && (
-                  <p className="text-xs text-white/60 mt-1">{t('Matrícula CMB:')} <span className="text-white/90 font-mono">{order.cmb_matricula}</span></p>
+                {license && (
+                  <p className="text-xs text-white/60 mt-1">{t(license.label)} <span className="text-white/90 font-mono">{license.value}</span></p>
                 )}
               </div>
               <div className="text-left sm:text-right flex-shrink-0">
@@ -367,6 +370,30 @@ function LabOrderCard({ order }: { order: LabOrder }) {
                 </div>
               </div>
             </div>
+
+            {/* Descargar / imprimir — mismo criterio que la receta: hay
+                laboratorios que piden el papel además de/en vez del QR */}
+            <div className="bg-[#E6F1FB] rounded-xl border border-[#B5D4F4] p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-lg flex-shrink-0">📄</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-[#0C447C]">{t('Orden en PDF')}</p>
+                  <p className="text-xs text-[#185FA5]">{t('Para presentar en el laboratorio')}</p>
+                </div>
+                {order.pdf_url ? (
+                  <a
+                    href={order.pdf_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-shrink-0 bg-[#185FA5] text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-[#0C447C] transition-colors"
+                  >
+                    {t('Descargar')}
+                  </a>
+                ) : (
+                  <span className="flex-shrink-0 text-xs text-[#64748B] text-right max-w-[120px]">{t('No disponible por ahora')}</span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -400,7 +427,7 @@ export default function PatientPrescriptionsPage() {
   type ProfGroup = { key: string; professionalName: string; specialty?: string | null; items: Prescription[] }
   const groupedByProfessional: ProfGroup[] = Object.values(
     (prescriptions as Prescription[]).reduce((acc: Record<string, ProfGroup>, rx) => {
-      const key = rx.cmb_matricula || rx.professional_name || 'desconocido'
+      const key = rx.professional_license_number || rx.cmb_matricula || rx.professional_name || 'desconocido'
       if (!acc[key]) {
         acc[key] = {
           key,

@@ -392,12 +392,24 @@ export const professionalsAPI = {
   updatePrices: (prices: { price_general?: number; price_urgent?: number; price_follow_up?: number }) =>
     api.patch('/professionals/prices', prices),
 
-  // Actualiza bio, idiomas y años de experiencia
-  updateProfile: (data: { bio?: string; languages?: string; years_experience?: number; appointment_duration_minutes?: number }) => {
+  // Actualiza bio, idiomas, años de experiencia, universidad y matrícula
+  // profesional. Estos 3 últimos quedan pendientes de revisión por un
+  // admin cada vez que cambian (ver PATCH /professionals/profile en el
+  // backend) — un string vacío los borra (deja de mostrarse al paciente).
+  updateProfile: (data: {
+    bio?: string
+    languages?: string
+    years_experience?: string
+    university?: string
+    professional_license_number?: string
+    appointment_duration_minutes?: number
+  }) => {
     const form = new FormData()
     if (data.bio !== undefined)              form.append('bio', data.bio)
     if (data.languages !== undefined)        form.append('languages', data.languages)
-    if (data.years_experience !== undefined) form.append('years_experience', String(data.years_experience))
+    if (data.years_experience !== undefined) form.append('years_experience', data.years_experience)
+    if (data.university !== undefined)                  form.append('university', data.university)
+    if (data.professional_license_number !== undefined) form.append('professional_license_number', data.professional_license_number)
     if (data.appointment_duration_minutes !== undefined) form.append('appointment_duration_minutes', String(data.appointment_duration_minutes))
     return api.patch('/professionals/profile', form)
   },

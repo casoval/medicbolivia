@@ -70,7 +70,11 @@ export interface Professional {
   department?: string
   bio?: string
   languages: string[]
-  years_experience: number
+  // Solo llegan si el profesional los llenó en su perfil Y un admin los
+  // verificó contra su documentación — si no, el backend los omite.
+  years_experience?: number
+  university?: string
+  professional_license_number?: string
   photo_url?: string
   availability: AvailabilityMode
   auto_availability?: boolean
@@ -181,6 +185,7 @@ export interface Prescription {
   professional_specialty?: string
   professional_sub_specialties?: string[]
   professional_department?: string
+  professional_license_number?: string
   cmb_matricula?: string
 }
 
@@ -223,6 +228,7 @@ export interface LabOrder {
   professional_specialty?: string
   professional_sub_specialties?: string[]
   professional_department?: string
+  professional_license_number?: string
   cmb_matricula?: string
 }
 

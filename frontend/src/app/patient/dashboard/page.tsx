@@ -13,6 +13,7 @@ import type { ClinicalNote } from '@/lib/api'
 import { getGreeting } from '@/lib/greeting'
 import { ModalityBadge, PaymentBadge } from '@/components/shared/ConsultationBadges'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { getLicenseInfo } from '@/lib/professionalLicense'
 
 function StatusBadge({ status, createdByRole }: { status: string; createdByRole?: string | null }) {
   const map: Record<string, { cls: string; label: string }> = {
@@ -87,7 +88,7 @@ function PrescriptionModal({ consultationId, onClose }: { consultationId: string
               <p className="text-xs text-[#475569]">{t('Dr./Dra.')}</p>
               <p className="font-semibold text-sm">{rx.professional_name || 'Médico'}</p>
               {rx.professional_specialty && <p className="text-xs text-[#475569]">{rx.professional_specialty}</p>}
-              {rx.cmb_matricula && <p className="text-xs text-[#475569]">Mat. CMB: {rx.cmb_matricula}</p>}
+              {getLicenseInfo(rx) && <p className="text-xs text-[#475569]">{getLicenseInfo(rx)!.label} {getLicenseInfo(rx)!.value}</p>}
             </div>
             <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Medicamentos')}</p>
             <div className="space-y-2 mb-3">

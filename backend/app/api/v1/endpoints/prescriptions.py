@@ -46,6 +46,7 @@ async def _enrich(prescription: Prescription, professional: Professional | None,
         base.professional_specialty = professional.specialty
         base.professional_sub_specialties = professional.sub_specialties or []
         base.professional_department = professional.department
+        base.professional_license_number = professional.professional_license_number
         base.cmb_matricula          = professional.cmb_matricula
     if patient:
         base.patient_photo_url = patient.photo_url
@@ -171,6 +172,7 @@ async def create_prescription(
             professional_name=f"Dr. {professional.first_name} {professional.last_name}",
             specialty=professional.specialty,
             sub_specialties=professional.sub_specialties,
+            professional_license_number=professional.professional_license_number,
             cmb_matricula=professional.cmb_matricula,
             sedes_number=professional.sedes_number,
             medications=medications_data,
@@ -407,6 +409,7 @@ async def verify_prescription(
         "signed_at":              prescription.signed_at.isoformat(),
         "professional_name":      f"Dr. {professional.first_name} {professional.last_name}" if professional else "Desconocido",
         "professional_specialty": professional.specialty if professional else "",
+        "professional_license_number": professional.professional_license_number if professional else "",
         "cmb_matricula":          professional.cmb_matricula if professional else "",
         "message":                "Receta válida y auténtica. Emitida por MedicBolivia."
     }

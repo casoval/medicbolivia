@@ -22,12 +22,32 @@ const DOCUMENTS = [
   { type: 'CI_FRONT',           label: 'Cédula de identidad — anverso',    hint: 'Foto clara, todos los datos legibles' },
   { type: 'CI_BACK',            label: 'Cédula de identidad — reverso',    hint: 'Sin reflejos ni bordes cortados' },
   { type: 'PROFESSIONAL_TITLE', label: 'Título en Provisión Nacional',     hint: 'Título universitario habilitante para ejercer' },
-  { type: 'ACADEMIC_DIPLOMA',   label: 'Diploma académico universitario',  hint: 'Diploma de la universidad donde culminaste la carrera' },
-  { type: 'HEALTH_MINISTRY',    label: 'Registro Ministerio de Salud',     hint: 'Registro en el Ministerio de Salud de Bolivia' },
-  { type: 'CMB_MATRICULA',      label: 'Matrícula Colegio Médico Bolivia', hint: 'CMB vigente, no vencida' },
+  { type: 'HEALTH_MINISTRY',    label: 'Matrícula Profesional emitida por el Ministerio de Salud', hint: 'Matrícula vigente del Ministerio de Salud de Bolivia' },
   { type: 'SPECIALTY_CERT',     label: 'Respaldo de Especialidad y/o Subespecialidad', hint: 'Certificado, diploma o título que respalde tu especialidad o subespecialidad' },
   { type: 'SELFIE_WITH_CI',     label: 'Selfie sosteniendo tu CI',         hint: 'Tu cara y la CI deben ser legibles' },
 ]
+
+// Idiomas más comunes en Bolivia, para elegir con un toque en vez de
+// escribirlos a mano (evita errores de tipeo/espaciado en las comas que
+// antes rompían el separado por comas del input de texto libre).
+const COMMON_LANGUAGES = [
+  'Español', 'Aymara', 'Quechua', 'Guaraní', 'Inglés', 'Portugués', 'Francés',
+]
+
+// Badge de estado para los campos "verificables" del perfil (años de
+// experiencia, universidad, matrícula profesional): mientras un admin no
+// los apruebe, o si están vacíos, el paciente no los ve — este badge le
+// avisa al profesional en qué estado está cada uno.
+function VerifyBadge({ hasValue, verified, t }: { hasValue: boolean; verified: boolean; t: (s: string) => string }) {
+  if (!hasValue) return null
+  return verified ? (
+    <span className="ml-2 badge-green align-middle">{t('✓ Verificado')}</span>
+  ) : (
+    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-[#FEF3E0] text-[#854F0B] border-[#F2D49A] align-middle">
+      {t('Pendiente de verificación')}
+    </span>
+  )
+}
 
 type UploadStatus = 'idle' | 'uploading' | 'done' | 'error'
 
@@ -189,8 +209,22 @@ export default function ProfilePage() {
   const [profileSuccess, setProfileSuccess] = useState('')
   const [profileError, setProfileError]     = useState('')
   const [bio, setBio]     = useState('')
-  const [langs, setLangs] = useState('Español')
-  const [years, setYears] = useState(0)
+  // Idiomas: chips seleccionables (COMMON_LANGUAGES) + idiomas propios que
+  // el profesional va agregando uno por uno — así nunca escribe una coma
+  // de más/de menos a mano. Se guarda como array y se junta con ", " solo
+  // al mandar al backend (que sigue esperando el mismo string de siempre).
+  const [langs, setLangs] = useState<string[]>(['Español'])
+  const [customLangInput, setCustomLangInput] = useState('')
+  const [years, setYears] = useState('')
+  const [university, setUniversity] = useState('')
+  const [licenseNumber, setLicenseNumber] = useState('')
+  // Estado de verificación de los 3 campos de arriba (los llena el admin,
+  // aquí solo se muestran como badge informativo — de solo lectura)
+  const [verification, setVerification] = useState({
+    years_experience_verified: false,
+    university_verified: false,
+    professional_license_verified: false,
+  })
   const [priceGeneral, setPriceGeneral]     = useState('')
   const [priceUrgent, setPriceUrgent]       = useState('')
   const [priceFollowUp, setPriceFollowUp]   = useState('')
@@ -331,8 +365,18 @@ export default function ProfilePage() {
   useEffect(() => {
     professionalsAPI.getMyProfile().then((data: any) => {
       if (data.bio)              setBio(data.bio)
-      if (data.languages)        setLangs(data.languages)
-      if (data.years_experience) setYears(data.years_experience)
+      if (data.languages) {
+        const parsed = String(data.languages).split(',').map((s: string) => s.trim()).filter(Boolean)
+        if (parsed.length > 0) setLangs(parsed)
+      }
+      if (data.years_experience !== undefined && data.years_experience !== null) setYears(String(data.years_experience))
+      if (data.university)                        setUniversity(data.university)
+      if (data.professional_license_number)       setLicenseNumber(data.professional_license_number)
+      setVerification({
+        years_experience_verified: !!data.years_experience_verified,
+        university_verified: !!data.university_verified,
+        professional_license_verified: !!data.professional_license_verified,
+      })
       if (data.photo_url)        setPhotoPreview(data.photo_url)
       if (data.signature_url)    setSignatureUrl(data.signature_url)
       if (data.price_general   !== undefined && data.price_general   !== null) setPriceGeneral(String(data.price_general))
@@ -474,16 +518,36 @@ export default function ProfilePage() {
     }
   }
 
+  // ── Idiomas: agregar/quitar chips ──
+  function toggleLanguage(name: string) {
+    setLangs((prev) =>
+      prev.includes(name) ? prev.filter((l) => l !== name) : [...prev, name]
+    )
+  }
+  function addCustomLanguage() {
+    const value = customLangInput.trim()
+    if (!value) return
+    const alreadyThere = langs.some((l) => l.toLowerCase() === value.toLowerCase())
+    if (!alreadyThere) setLangs((prev) => [...prev, value])
+    setCustomLangInput('')
+  }
+  function removeLanguage(name: string) {
+    setLangs((prev) => prev.filter((l) => l !== name))
+  }
+  const customLangs = langs.filter((l) => !COMMON_LANGUAGES.includes(l))
+
   async function saveProfile() {
     setProfileError('')
     try {
       await professionalsAPI.updateProfile({
         bio,
-        languages: langs,
+        languages: langs.join(', '),
         years_experience: years,
+        university,
+        professional_license_number: licenseNumber,
       })
-      setProfileSuccess('Perfil actualizado correctamente')
-      setTimeout(() => setProfileSuccess(''), 3000)
+      setProfileSuccess('Perfil actualizado correctamente. Si cambiaste tu matrícula, universidad o años de experiencia, quedan pendientes de una nueva revisión por un administrador antes de volver a mostrarse a los pacientes.')
+      setTimeout(() => setProfileSuccess(''), 6000)
     } catch (err) {
       setProfileError(getErrorMessage(err))
     }
@@ -720,23 +784,114 @@ export default function ProfilePage() {
 
               <div>
                 <label className="block text-xs font-medium text-[#475569] mb-1">{t('Idiomas de atención')}</label>
-                <input
-                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
-                  placeholder={t('Español, Aymara, Quechua...')}
-                  value={langs}
-                  onChange={(e) => setLangs(e.target.value)}
-                />
-                <p className="text-xs text-[#64748B] mt-1">{t('Separa con comas')}</p>
+                {/* Chips en vez de texto libre — así nunca hay comas mal
+                    puestas o nombres mal escritos: se toca para agregar/
+                    quitar, y los que no están en la lista se agregan aparte. */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {COMMON_LANGUAGES.map((lang) => {
+                    const active = langs.includes(lang)
+                    return (
+                      <button
+                        key={lang}
+                        type="button"
+                        onClick={() => toggleLanguage(lang)}
+                        className={`text-xs px-2.5 py-1.5 rounded-full border transition-colors ${
+                          active
+                            ? 'bg-[#0F6E56] text-white border-[#0F6E56]'
+                            : 'bg-white text-[#475569] border-[#DDE1EE] hover:border-[#0F6E56]'
+                        }`}
+                      >
+                        {lang}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {customLangs.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {customLangs.map((lang) => (
+                      <span
+                        key={lang}
+                        className="text-xs px-2.5 py-1.5 rounded-full border border-[#185FA5] bg-[#E6F1FB] text-[#185FA5] flex items-center gap-1.5"
+                      >
+                        {lang}
+                        <button
+                          type="button"
+                          onClick={() => removeLanguage(lang)}
+                          className="hover:text-[#0C447C]"
+                          title={t('Quitar')}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                    placeholder={t('Ej. Italiano — presiona Agregar')}
+                    value={customLangInput}
+                    onChange={(e) => setCustomLangInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomLanguage() } }}
+                  />
+                  <button type="button" onClick={addCustomLanguage} className="btn-secondary text-xs px-3 whitespace-nowrap">
+                    {t('Agregar')}
+                  </button>
+                </div>
+                {langs.length === 0 && (
+                  <p className="text-xs text-[#A32D2D] mt-1">{t('Elige al menos un idioma')}</p>
+                )}
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#475569] mb-1">{t('Años de experiencia')}</label>
+                <label className="block text-xs font-medium text-[#475569] mb-1">
+                  {t('Años de experiencia')}
+                  <VerifyBadge hasValue={years.trim() !== ''} verified={verification.years_experience_verified} t={t} />
+                </label>
                 <input
                   type="number" min={0} max={50}
                   className="w-24 px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                  placeholder="—"
                   value={years}
-                  onChange={(e) => setYears(Number(e.target.value))}
+                  onChange={(e) => setYears(e.target.value)}
                 />
+                <p className="text-xs text-[#64748B] mt-1">
+                  {t('Si lo dejas vacío, o mientras no esté verificado, el paciente no lo verá.')}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#475569] mb-1">
+                  {t('Universidad')}
+                  <VerifyBadge hasValue={university.trim() !== ''} verified={verification.university_verified} t={t} />
+                </label>
+                <input
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                  placeholder={t('Ej. Universidad Mayor de San Andrés (opcional)')}
+                  value={university}
+                  onChange={(e) => setUniversity(e.target.value)}
+                />
+                <p className="text-xs text-[#64748B] mt-1">
+                  {t('Opcional. Se verifica contra tu Título en Provisión Nacional — si la dejas vacía, o mientras no esté verificada, el paciente no la verá.')}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#475569] mb-1">
+                  {t('Matrícula profesional (Ministerio de Salud)')}
+                  <VerifyBadge hasValue={licenseNumber.trim() !== ''} verified={verification.professional_license_verified} t={t} />
+                </label>
+                <input
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                  placeholder={t('Número de tu matrícula del Ministerio de Salud')}
+                  value={licenseNumber}
+                  onChange={(e) => setLicenseNumber(e.target.value)}
+                />
+                <p className="text-xs text-[#64748B] mt-1">
+                  {t('Se verifica contra el documento que subas en "Documentos de verificación" — si la dejas vacía, o mientras no esté verificada, el paciente no la verá.')}
+                </p>
               </div>
 
               <button onClick={saveProfile} className="btn-primary text-xs py-1.5 px-3">

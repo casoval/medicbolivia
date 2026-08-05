@@ -518,7 +518,9 @@ async def delete_signature(
 async def update_profile(
     bio: Optional[str] = Form(None),
     languages: Optional[str] = Form(None),
-    years_experience: Optional[int] = Form(None),
+    years_experience: Optional[str] = Form(None),
+    university: Optional[str] = Form(None),
+    professional_license_number: Optional[str] = Form(None),
     appointment_duration_minutes: Optional[int] = Form(None),
     current_user: User = Depends(get_current_professional),
     db: AsyncSession = Depends(get_db)
@@ -534,8 +536,31 @@ async def update_profile(
         professional.bio = bio
     if languages is not None:
         professional.languages = [l.strip() for l in languages.split(",") if l.strip()]
+
+    # years_experience, university y professional_license_number son
+    # "verificables": cada vez que el profesional cambia el valor, se
+    # oculta al paciente hasta que un admin lo vuelva a verificar contra
+    # su documentación (ver ProfessionalPublicResponse). Se mandan como
+    # texto (no int/Form directo) para poder distinguir "no lo toqué"
+    # (None) de "lo dejé vacío a propósito" (string vacío → NULL).
     if years_experience is not None:
-        professional.years_experience = years_experience
+        new_years = int(years_experience) if years_experience.strip() != "" else None
+        if new_years != professional.years_experience:
+            professional.years_experience = new_years
+            professional.years_experience_verified = False
+
+    if university is not None:
+        new_university = university.strip() or None
+        if new_university != professional.university:
+            professional.university = new_university
+            professional.university_verified = False
+
+    if professional_license_number is not None:
+        new_license = professional_license_number.strip() or None
+        if new_license != professional.professional_license_number:
+            professional.professional_license_number = new_license
+            professional.professional_license_verified = False
+
     if appointment_duration_minutes is not None:
         if not (10 <= appointment_duration_minutes <= 240):
             raise HTTPException(status_code=400, detail="La duración debe estar entre 10 y 240 minutos")
@@ -606,6 +631,11 @@ async def get_my_profile(
         "bio": professional.bio,
         "languages": ", ".join(professional.languages) if professional.languages else "Español",
         "years_experience": professional.years_experience,
+        "years_experience_verified": professional.years_experience_verified,
+        "university": professional.university,
+        "university_verified": professional.university_verified,
+        "professional_license_number": professional.professional_license_number,
+        "professional_license_verified": professional.professional_license_verified,
         "cmb_matricula": professional.cmb_matricula,
         "sedes_number": professional.sedes_number,
         "average_rating": professional.average_rating,
