@@ -63,7 +63,7 @@ def upgrade() -> None:
     # misma cola que a un documento nuevo.
     op.execute("""
         INSERT INTO professional_docs (id, professional_id, doc_type, file_url, status, created_at)
-        SELECT gen_random_uuid()::text, p.id, 'SIGNATURE', p.signature_url, 'PENDING', now()
+        SELECT gen_random_uuid(), p.id, 'SIGNATURE', p.signature_url, 'PENDING', now()
         FROM professionals p
         WHERE p.signature_url IS NOT NULL
           AND NOT EXISTS (
