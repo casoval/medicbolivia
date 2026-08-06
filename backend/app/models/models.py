@@ -63,6 +63,12 @@ class DocType(str, enum.Enum):
     SEDES_REGISTRATION = "SEDES_REGISTRATION"
     SPECIALTY_CERT = "SPECIALTY_CERT"
     SELFIE_WITH_CI = "SELFIE_WITH_CI"
+    # Firma que se estampa en el PDF imprimible de recetas/órdenes de
+    # laboratorio. Antes se guardaba libremente en Professional.signature_url
+    # sin revisión; ahora también genera un ProfessionalDoc PENDING como
+    # cualquier otro documento, para que un admin la apruebe o rechace antes
+    # de que el profesional pueda emitir documentos firmados con ella.
+    SIGNATURE = "SIGNATURE"
 
 
 class DocStatus(str, enum.Enum):

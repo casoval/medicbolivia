@@ -7,14 +7,15 @@ import uuid
 from app.core.timezone import utcnow_naive
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from loguru import logger
 
 from app.db.database import get_db
 from app.core.dependencies import get_current_user, get_current_professional
 from app.models.models import (
     User, Patient, Professional, Consultation, Prescription,
-    ConsultationStatus, ProfessionalStatus, PrescriptionStatus
+    ConsultationStatus, ProfessionalStatus, PrescriptionStatus,
+    ProfessionalDoc, DocType, DocStatus,
 )
 from app.schemas.schemas import PrescriptionCreateRequest, PrescriptionResponse, PrescriptionVoidRequest
 from app.services.prescription_pdf import generate_prescription_pdf
@@ -80,6 +81,27 @@ async def create_prescription(
 
     if professional.status != ProfessionalStatus.APPROVED:
         raise HTTPException(status_code=403, detail="Tu perfil no está verificado para emitir recetas")
+
+    # La firma es obligatoria y debe estar aprobada por un admin — chequeo
+    # aparte del status del profesional porque este último no se recalcula
+    # si, ya estando APPROVED, el profesional reemplaza o quita su firma
+    # (ver _save_signature / delete_signature en professionals.py, que
+    # dejan la firma en PENDING o la borran sin tocar professional.status).
+    sig_result = await db.execute(
+        select(ProfessionalDoc).where(
+            and_(
+                ProfessionalDoc.professional_id == professional.id,
+                ProfessionalDoc.doc_type == DocType.SIGNATURE,
+                ProfessionalDoc.status == DocStatus.APPROVED,
+            )
+        )
+    )
+    if not sig_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=403,
+            detail="Necesitas una firma aprobada por un administrador antes de poder emitir recetas. "
+                   "Sube o actualiza tu firma en tu perfil."
+        )
 
     cons_result = await db.execute(
         select(Consultation).where(

@@ -391,14 +391,45 @@ async def _save_signature(db: AsyncSession, professional: Professional, png_byte
     """Sube la imagen de firma ya lista (PNG con fondo transparente) y la
     guarda en el perfil. Compartido por: dibujar en lienzo (PNG ya viene
     transparente, se sube tal cual) y subir foto (se procesa antes con
-    app/services/signature_image.py)."""
+    app/services/signature_image.py).
+
+    Además de signature_url, hace el mismo UPSERT que POST /documents sobre
+    un ProfessionalDoc de tipo SIGNATURE: cada firma nueva (o reemplazo)
+    entra en PENDING y limpia cualquier revisión anterior, para que un admin
+    tenga que aprobarla antes de que cuente para la aprobación del perfil o
+    para poder emitir recetas/órdenes de laboratorio (ver create_prescription
+    y create_lab_order)."""
     signature_url = await upload_signature_to_r2(
         file_content=png_bytes,
         professional_id=str(professional.id),
     )
     professional.signature_url = signature_url
+
+    existing = await db.execute(
+        select(ProfessionalDoc).where(
+            and_(
+                ProfessionalDoc.professional_id == professional.id,
+                ProfessionalDoc.doc_type == DocType.SIGNATURE,
+            )
+        )
+    )
+    doc = existing.scalar_one_or_none()
+    if doc:
+        doc.file_url = signature_url
+        doc.status = DocStatus.PENDING
+        doc.review_note = None
+        doc.reviewed_at = None
+        doc.reviewed_by = None
+    else:
+        db.add(ProfessionalDoc(
+            professional_id=professional.id,
+            doc_type=DocType.SIGNATURE,
+            file_url=signature_url,
+            status=DocStatus.PENDING,
+        ))
+
     await db.commit()
-    logger.info(f"Firma actualizada: profesional {professional.id}")
+    logger.info(f"Firma actualizada: profesional {professional.id} (queda PENDING de revisión)")
     return signature_url
 
 
@@ -406,9 +437,11 @@ async def _save_signature(db: AsyncSession, professional: Professional, png_byte
 # Imagen de firma (dibujada en un canvas desde el perfil) que se estampa
 # en el PDF imprimible de la receta — ver app/services/prescription_pdf.py.
 # Es una firma VISUAL, no una firma digital criptográfica: la autenticidad
-# real de cada receta la sigue dando su hash SHA-256 + qr_verify_code,
-# nunca esta imagen. Por eso no se exige aquí ninguna verificación extra
-# más allá de que el médico esté autenticado.
+# real de cada receta la sigue dando su hash SHA-256 + qr_verify_code, nunca
+# esta imagen. Aun así, un admin debe aprobarla (igual que la cédula o el
+# título) antes de que habilite emitir recetas/órdenes de laboratorio —
+# ver _save_signature más arriba y los checks en create_prescription /
+# create_lab_order.
 @router.post(
     "/signature",
     summary="Subir o actualizar la imagen de firma para las recetas imprimibles"
@@ -507,6 +540,19 @@ async def delete_signature(
         raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
 
     professional.signature_url = None
+
+    existing = await db.execute(
+        select(ProfessionalDoc).where(
+            and_(
+                ProfessionalDoc.professional_id == professional.id,
+                ProfessionalDoc.doc_type == DocType.SIGNATURE,
+            )
+        )
+    )
+    doc = existing.scalar_one_or_none()
+    if doc:
+        await db.delete(doc)
+
     await db.commit()
     return {"message": "Firma eliminada"}
 

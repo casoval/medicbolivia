@@ -714,7 +714,13 @@ async def review_document(
         # HEALTH_MINISTRY, que es el documento que sí se ofrece subir en
         # el perfil del profesional — antes este set nunca se completaba
         # porque exigía un tipo que la UI jamás ofrecía.
-        required = {'CI_FRONT', 'CI_BACK', 'PROFESSIONAL_TITLE', 'HEALTH_MINISTRY', 'SELFIE_WITH_CI'}
+        # SIGNATURE se agregó para que un profesional no quede APPROVED sin
+        # que un admin haya revisado la imagen de firma que se estampa en
+        # sus recetas/órdenes de laboratorio (ver create_prescription y
+        # create_lab_order, que además bloquean la emisión si esta firma no
+        # está aprobada, cubriendo también al profesional que la cambie
+        # después de ya estar activo).
+        required = {'CI_FRONT', 'CI_BACK', 'PROFESSIONAL_TITLE', 'HEALTH_MINISTRY', 'SELFIE_WITH_CI', 'SIGNATURE'}
         approved_types = {d.doc_type.value for d in all_docs if d.status == DocStatus.APPROVED}
 
         if required.issubset(approved_types) and professional:

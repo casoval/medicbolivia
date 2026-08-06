@@ -99,13 +99,17 @@ const DOC_LABELS: Record<string, string> = {
   SEDES_REGISTRATION: 'Registro SEDES',
   SPECIALTY_CERT: 'Respaldo de Especialidad y/o Subespecialidad',
   SELFIE_WITH_CI: 'Selfie con cédula',
+  SIGNATURE: 'Firma para recetas/órdenes',
 }
 
 // Diploma académico y Matrícula CMB se retiraron de la plataforma (el
 // Título en Provisión Nacional ya habilita, y la Matrícula Profesional
-// del Min. de Salud reemplaza a la del CMB). Coincide con el set
-// `required` de PATCH /admin/documents/{id}/review en el backend.
-const REQUIRED_DOC_TYPES = ['CI_FRONT', 'CI_BACK', 'PROFESSIONAL_TITLE', 'HEALTH_MINISTRY', 'SELFIE_WITH_CI']
+// del Min. de Salud reemplaza a la del CMB). SIGNATURE se agregó para que
+// el admin revise la imagen de firma antes de que el profesional pueda
+// emitir recetas/órdenes de laboratorio (ver create_prescription /
+// create_lab_order en el backend). Coincide con el set `required` de
+// PATCH /admin/documents/{id}/review en el backend.
+const REQUIRED_DOC_TYPES = ['CI_FRONT', 'CI_BACK', 'PROFESSIONAL_TITLE', 'HEALTH_MINISTRY', 'SELFIE_WITH_CI', 'SIGNATURE']
 
 interface ProfessionalDocItem {
   id: string

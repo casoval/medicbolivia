@@ -9,7 +9,7 @@ import uuid
 from app.core.timezone import utcnow_naive
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from loguru import logger
 
 from app.db.database import get_db
@@ -17,7 +17,8 @@ from app.core.dependencies import get_current_user, get_current_professional
 from app.core.lab_test_catalog import LAB_TEST_CATALOG
 from app.models.models import (
     User, Patient, Professional, Consultation, LabOrder,
-    ConsultationStatus, ProfessionalStatus, PrescriptionStatus
+    ConsultationStatus, ProfessionalStatus, PrescriptionStatus,
+    ProfessionalDoc, DocType, DocStatus,
 )
 from app.schemas.schemas import LabOrderCreateRequest, LabOrderResponse, LabOrderVoidRequest
 from app.services.lab_order_pdf import generate_lab_order_pdf
@@ -93,6 +94,24 @@ async def create_lab_order(
 
     if professional.status != ProfessionalStatus.APPROVED:
         raise HTTPException(status_code=403, detail="Tu perfil no está verificado para emitir órdenes de laboratorio")
+
+    # Firma obligatoria y aprobada por un admin — chequeo aparte del status
+    # del profesional, ver comentario equivalente en prescriptions.py.
+    sig_result = await db.execute(
+        select(ProfessionalDoc).where(
+            and_(
+                ProfessionalDoc.professional_id == professional.id,
+                ProfessionalDoc.doc_type == DocType.SIGNATURE,
+                ProfessionalDoc.status == DocStatus.APPROVED,
+            )
+        )
+    )
+    if not sig_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=403,
+            detail="Necesitas una firma aprobada por un administrador antes de poder emitir órdenes de "
+                   "laboratorio. Sube o actualiza tu firma en tu perfil."
+        )
 
     cons_result = await db.execute(
         select(Consultation).where(

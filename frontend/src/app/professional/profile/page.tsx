@@ -950,6 +950,27 @@ export default function ProfilePage() {
             </p>
             {signatureError && <div className="mb-3"><Alert type="error" message={signatureError} /></div>}
 
+            {signatureUrl && (() => {
+              const sigRecord = docRecordOf('SIGNATURE')
+              const sigStatus = sigRecord?.status
+              return (
+                <div className={`mb-3 rounded-lg px-3 py-2 text-xs ${
+                  sigStatus === 'APPROVED' ? 'bg-[#E1F5EE] text-[#1D9E75]' :
+                  sigStatus === 'REJECTED' ? 'bg-[#FCEBEB] text-[#C0392B]' :
+                  'bg-[#FEF3E0] text-[#8A6D1F]'
+                }`}>
+                  {sigStatus === 'APPROVED' && t('✓ Firma verificada por un administrador. Ya podés emitir recetas y órdenes de laboratorio.')}
+                  {sigStatus === 'REJECTED' && (
+                    <>
+                      {t('✕ Firma rechazada.')}{sigRecord?.review_note && <> <span className="font-medium">{t('Motivo:')}</span> {sigRecord.review_note}</>}{' '}
+                      {t('Subí una nueva para poder emitir recetas y órdenes de laboratorio.')}
+                    </>
+                  )}
+                  {(!sigStatus || sigStatus === 'PENDING') && t('⏳ Firma en revisión (24-72h hábiles). No podés emitir recetas ni órdenes de laboratorio hasta que un administrador la apruebe.')}
+                </div>
+              )
+            })()}
+
             {/* Input de foto oculto — vive fuera de los bloques condicionales
                 para que la ref no se pierda al cambiar de modo */}
             <input
