@@ -36,7 +36,8 @@ from reportlab.platypus import (
 
 from app.services.pdf_common import (
     LOGO_PATH, BRAND_BLUE, DARK_HEADER, INK, MUTED, BORDER,
-    weekday_date_es, qr_png_bytes, fetch_signature_bytes, matricula_label, build_styles,
+    weekday_date_es, qr_png_bytes, fetch_signature_bytes, matricula_label, build_styles, build_letterhead,
+    FOOTER_RESERVED_HEIGHT, draw_pinned_footer,
 )
 
 # Mismo origen que build...VerifyUrl() en frontend/src/lib/api.ts — acá no
@@ -68,7 +69,7 @@ def _build_pdf_sync(
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=letter,
-        topMargin=1.3 * cm, bottomMargin=1.3 * cm,
+        topMargin=1.3 * cm, bottomMargin=FOOTER_RESERVED_HEIGHT,
         leftMargin=1.8 * cm, rightMargin=1.8 * cm,
     )
 
@@ -88,13 +89,11 @@ def _build_pdf_sync(
     elements = []
 
     # ── Encabezado ──
-    if LOGO_PATH.exists():
-        logo = Image(str(LOGO_PATH), width=4.2 * cm, height=4.2 * cm * (339 / 1779))
-        logo.hAlign = "CENTER"
-        elements.append(logo)
-        elements.append(Spacer(1, 6))
-    elements.append(Paragraph("Receta Médica Digital", s["title"]))
-    elements.append(Paragraph(f"Emitida el {weekday_date_es(signed_at)} · medicbolivia.com", s["subtitle"]))
+    build_letterhead(
+        elements, doc, s,
+        "Receta Médica Digital",
+        f"Emitida el {weekday_date_es(signed_at)} · medicbolivia.com",
+    )
 
     # ── Franja médico / paciente ──
     specialty_line = specialty
@@ -162,8 +161,12 @@ def _build_pdf_sync(
         elements.append(Paragraph("Indicaciones del médico", s["section"]))
         elements.append(Paragraph(instructions, s["body"]))
 
-    # ── Firma ──
-    elements.append(Spacer(1, 18))
+    # ── Firma, QR y aviso legal: fijos al pie de página (ver
+    # draw_pinned_footer) — no van en `elements`, así que no importa si la
+    # receta tiene 1 medicamento o 10: siempre quedan a la misma altura,
+    # pegados abajo, en vez de "flotar" a media hoja cuando hay poco
+    # contenido arriba.
+    footer_flowables = []
     sig_cell = []
     if signature_bytes:
         try:
@@ -182,18 +185,17 @@ def _build_pdf_sync(
     ))
     sig_table = Table([[sig_cell]], colWidths=[doc.width])
     sig_table.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
-    elements.append(sig_table)
+    footer_flowables.append(sig_table)
 
     if not signature_bytes:
-        elements.append(Spacer(1, 4))
-        elements.append(Paragraph(
+        footer_flowables.append(Spacer(1, 4))
+        footer_flowables.append(Paragraph(
             "Este médico aún no cargó su firma en MedicBolivia — la autenticidad de esta receta "
             "se confirma con el código QR de abajo, no depende de esta imagen.",
             s["warn"],
         ))
 
-    # ── Verificación ──
-    elements.append(Spacer(1, 16))
+    footer_flowables.append(Spacer(1, 14))
     qr_img = Image(io.BytesIO(qr_bytes), width=2.6 * cm, height=2.6 * cm)
     verify_cell = [
         Paragraph("Verificación de autenticidad", verify_label_style),
@@ -213,19 +215,23 @@ def _build_pdf_sync(
         ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
         ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
-    elements.append(verify_table)
+    footer_flowables.append(verify_table)
 
-    elements.append(Spacer(1, 10))
-    elements.append(HRFlowable(width="100%", thickness=0.6, color=BORDER))
-    elements.append(Spacer(1, 4))
-    elements.append(Paragraph(
+    footer_flowables.append(Spacer(1, 8))
+    footer_flowables.append(HRFlowable(width="100%", thickness=0.6, color=BORDER))
+    footer_flowables.append(Spacer(1, 4))
+    footer_flowables.append(Paragraph(
         "Documento generado por MedicBolivia. Los medicamentos controlados (psicotrópicos o "
         "estupefacientes) requieren receta oficial archivada/valorada conforme a normativa de "
         "AGEMED y no se emiten por esta plataforma.",
         s["footer"],
     ))
 
-    doc.build(elements)
+    doc.build(
+        elements,
+        onFirstPage=lambda c, d: draw_pinned_footer(c, d, footer_flowables),
+        onLaterPages=lambda c, d: draw_pinned_footer(c, d, footer_flowables),
+    )
     return buffer.getvalue()
 
 

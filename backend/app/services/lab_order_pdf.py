@@ -28,7 +28,8 @@ from reportlab.platypus import (
 
 from app.services.pdf_common import (
     LOGO_PATH, BRAND_BLUE, DARK_HEADER, INK, MUTED, BORDER,
-    weekday_date_es, qr_png_bytes, fetch_signature_bytes, matricula_label, build_styles,
+    weekday_date_es, qr_png_bytes, fetch_signature_bytes, matricula_label, build_styles, build_letterhead,
+    FOOTER_RESERVED_HEIGHT, draw_pinned_footer,
 )
 
 VERIFY_BASE_URL = "https://medicbolivia.com/verificar-orden-lab"
@@ -61,7 +62,7 @@ def _build_pdf_sync(
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=letter,
-        topMargin=1.3 * cm, bottomMargin=1.3 * cm,
+        topMargin=1.3 * cm, bottomMargin=FOOTER_RESERVED_HEIGHT,
         leftMargin=1.8 * cm, rightMargin=1.8 * cm,
     )
 
@@ -80,20 +81,15 @@ def _build_pdf_sync(
     badge_style = ParagraphStyle(
         "Badge", parent=s["body"], fontName="Helvetica-Bold", fontSize=8, alignment=TA_CENTER,
     )
-    info_label_style = ParagraphStyle(
-        "InfoLabel", parent=s["body"], fontName="Helvetica-Bold", fontSize=8, textColor=MUTED,
-    )
 
     elements = []
 
     # ── Encabezado ──
-    if LOGO_PATH.exists():
-        logo = Image(str(LOGO_PATH), width=4.2 * cm, height=4.2 * cm * (339 / 1779))
-        logo.hAlign = "CENTER"
-        elements.append(logo)
-        elements.append(Spacer(1, 6))
-    elements.append(Paragraph("Orden de Laboratorio Digital", s["title"]))
-    elements.append(Paragraph(f"Emitida el {weekday_date_es(signed_at)} · medicbolivia.com", s["subtitle"]))
+    build_letterhead(
+        elements, doc, s,
+        "Orden de Laboratorio Digital",
+        f"Emitida el {weekday_date_es(signed_at)} · medicbolivia.com",
+    )
 
     # ── Franja médico / paciente ──
     specialty_line = specialty
@@ -128,26 +124,26 @@ def _build_pdf_sync(
     ]))
     elements.append(header_table)
 
-    # ── Datos de la orden: urgencia / ayuno / indicación clínica ──
+    # ── Datos de la orden: urgencia / ayuno — una sola línea, compacto ──
     is_urgent = (urgency or "ROUTINE").upper() == "URGENT"
-    urgency_badge = Paragraph(
-        "URGENTE" if is_urgent else "RUTINA",
-        ParagraphStyle("BadgeInner", parent=badge_style, textColor=(URGENT_RED if is_urgent else ROUTINE_GREEN)),
+    urgency_inline_style = ParagraphStyle(
+        "UrgencyInline", parent=badge_style, alignment=TA_LEFT,
+        textColor=(URGENT_RED if is_urgent else ROUTINE_GREEN),
     )
     fasting_text = "Sí, en ayunas" if fasting_required else "No requiere ayuno"
 
-    info_row = [
-        [Paragraph("URGENCIA", info_label_style), Paragraph("AYUNO", info_label_style)],
-        [urgency_badge, Paragraph(fasting_text, s["body"])],
-    ]
-    info_table = Table(info_row, colWidths=[doc.width * 0.32, doc.width * 0.68])
+    info_table = Table(
+        [[
+            Paragraph("● " + ("URGENTE" if is_urgent else "RUTINA"), urgency_inline_style),
+            Paragraph(f"<b>Ayuno:</b> {fasting_text}", s["body"]),
+        ]],
+        colWidths=[doc.width * 0.32, doc.width * 0.68],
+    )
     info_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, 1), URGENT_BG if is_urgent else ROUTINE_BG),
+        ("BACKGROUND", (0, 0), (0, 0), URGENT_BG if is_urgent else ROUTINE_BG),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (0, 1), (0, 1), "CENTER"),
         ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("LINEBELOW", (0, 0), (-1, 0), 0, colors.white),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
     elements.append(Spacer(1, 10))
     elements.append(info_table)
@@ -180,8 +176,12 @@ def _build_pdf_sync(
         elements.append(Paragraph("Indicaciones adicionales", s["section"]))
         elements.append(Paragraph(instructions, s["body"]))
 
-    # ── Firma ──
-    elements.append(Spacer(1, 18))
+    # ── Firma, QR y aviso legal: fijos al pie de página (ver
+    # draw_pinned_footer) — no van en `elements`, así que no importa
+    # cuántos estudios tenga la orden: siempre quedan a la misma altura,
+    # pegados abajo, en vez de "flotar" a media hoja cuando hay poco
+    # contenido arriba.
+    footer_flowables = []
     sig_cell = []
     if signature_bytes:
         try:
@@ -200,18 +200,17 @@ def _build_pdf_sync(
     ))
     sig_table = Table([[sig_cell]], colWidths=[doc.width])
     sig_table.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
-    elements.append(sig_table)
+    footer_flowables.append(sig_table)
 
     if not signature_bytes:
-        elements.append(Spacer(1, 4))
-        elements.append(Paragraph(
+        footer_flowables.append(Spacer(1, 4))
+        footer_flowables.append(Paragraph(
             "Este médico aún no cargó su firma en MedicBolivia — la autenticidad de esta orden "
             "se confirma con el código QR de abajo, no depende de esta imagen.",
             s["warn"],
         ))
 
-    # ── Verificación ──
-    elements.append(Spacer(1, 16))
+    footer_flowables.append(Spacer(1, 14))
     qr_img = Image(io.BytesIO(qr_bytes), width=2.6 * cm, height=2.6 * cm)
     verify_cell = [
         Paragraph("Verificación de autenticidad", verify_label_style),
@@ -231,19 +230,23 @@ def _build_pdf_sync(
         ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
         ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
-    elements.append(verify_table)
+    footer_flowables.append(verify_table)
 
-    elements.append(Spacer(1, 10))
-    elements.append(HRFlowable(width="100%", thickness=0.6, color=BORDER))
-    elements.append(Spacer(1, 4))
-    elements.append(Paragraph(
+    footer_flowables.append(Spacer(1, 8))
+    footer_flowables.append(HRFlowable(width="100%", thickness=0.6, color=BORDER))
+    footer_flowables.append(Spacer(1, 4))
+    footer_flowables.append(Paragraph(
         "Documento generado por MedicBolivia. Esta es la orden/solicitud de estudios, no el "
         "resultado — preséntela junto a su cédula de identidad en el laboratorio o centro de "
         "imagenología de su elección.",
         s["footer"],
     ))
 
-    doc.build(elements)
+    doc.build(
+        elements,
+        onFirstPage=lambda c, d: draw_pinned_footer(c, d, footer_flowables),
+        onLaterPages=lambda c, d: draw_pinned_footer(c, d, footer_flowables),
+    )
     return buffer.getvalue()
 
 

@@ -19,6 +19,8 @@ from loguru import logger
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.platypus import Frame, Image, Paragraph, Spacer, Table, TableStyle
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 LOGO_PATH = ASSETS_DIR / "logo.png"
@@ -87,6 +89,71 @@ def matricula_label(
     if cmb_matricula:
         return f"Matrícula CMB: {cmb_matricula}"
     return f"Matrícula profesional: {unset_text}"
+
+
+def build_letterhead(elements: list, doc, s: dict, title_text: str, subtitle_text: str) -> None:
+    """
+    Encabezado tipo membrete: título y subtítulo a la izquierda, logo
+    agrandado en la esquina superior derecha, ambos en la misma fila.
+    Compartido entre receta y orden de laboratorio para que un ajuste de
+    tamaño/posición del logo no diverja entre los dos documentos.
+
+    Si el logo no está disponible en el filesystem (no debería pasar en
+    producción, pero por si acaso), cae de forma segura al título/subtítulo
+    centrados solos, sin logo — nunca rompe la generación del PDF.
+    """
+    title_left = ParagraphStyle("LetterheadTitle", parent=s["title"], alignment=TA_LEFT, spaceAfter=2)
+    subtitle_left = ParagraphStyle("LetterheadSubtitle", parent=s["subtitle"], alignment=TA_LEFT, spaceAfter=0)
+
+    if LOGO_PATH.exists():
+        logo_w = 7.2 * cm
+        logo = Image(str(LOGO_PATH), width=logo_w, height=logo_w * (339 / 1779))
+        title_cell = [Paragraph(title_text, title_left), Paragraph(subtitle_text, subtitle_left)]
+        row = Table([[title_cell, logo]], colWidths=[doc.width - logo_w, logo_w])
+        row.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        elements.append(row)
+    else:
+        elements.append(Paragraph(title_text, s["title"]))
+        elements.append(Paragraph(subtitle_text, s["subtitle"]))
+    elements.append(Spacer(1, 12))
+
+
+# Alto reservado al pie de página para firma + QR de verificación + aviso
+# legal — sin importar cuántos medicamentos/estudios tenga el documento
+# arriba, esto siempre queda pegado abajo (ver draw_pinned_footer), en vez
+# de aparecer "flotando" a media hoja cuando el contenido es corto.
+FOOTER_RESERVED_HEIGHT = 8.3 * cm
+
+
+def draw_pinned_footer(canvas, doc, footer_flowables: list) -> None:
+    """
+    Dibuja `footer_flowables` (firma, caja de verificación con QR, aviso
+    legal) fijos al pie de la página, en el espacio que `doc.bottomMargin`
+    dejó libre (ver FOOTER_RESERVED_HEIGHT) — independiente del flujo
+    normal de Platypus, así que no importa si la receta tiene 1 medicamento
+    o 10: la firma y el QR siempre quedan a la misma altura, pegados abajo,
+    en vez de correrse según cuánto contenido haya arriba.
+
+    Se pasa como onFirstPage/onLaterPages a doc.build(). Usa una Frame
+    "manual" (no la del flujo normal) para poder reutilizar Paragraph/Table
+    ya armados por el llamador sin reescribir su layout a mano con el
+    canvas. Se le pasa una copia de la lista (`list(footer_flowables)`)
+    porque Frame.addFromList la consume — así, si el documento llegara a
+    generar más de una página, el pie se puede volver a dibujar en la
+    siguiente sin quedar vacío.
+    """
+    canvas.saveState()
+    frame = Frame(
+        doc.leftMargin, 0.5 * cm, doc.width, FOOTER_RESERVED_HEIGHT - 0.8 * cm,
+        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0, showBoundary=0,
+    )
+    frame.addFromList(list(footer_flowables), canvas)
+    canvas.restoreState()
 
 
 def build_styles() -> dict:
