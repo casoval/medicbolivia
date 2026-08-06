@@ -168,8 +168,8 @@ interface Professional {
   // Campos que llena el propio profesional en su perfil — se muestran al
   // paciente solo cuando *_verified es true (ver ProfessionalPublicResponse
   // en el backend). Acá, en el panel admin, se ven siempre para poder revisarlos.
-  years_experience_verified?: boolean
-  university?: string; university_verified?: boolean
+  years_experience_verified?: boolean; years_experience_visible?: boolean
+  university?: string; university_verified?: boolean; university_visible?: boolean
   professional_license_number?: string; professional_license_verified?: boolean
 }
 
@@ -1121,16 +1121,23 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
               <div className="mt-2 space-y-1.5">
                 {verifyError && <div className="mb-1"><Alert type="error" message={verifyError} /></div>}
                 {([
-                  { key: 'years_experience_verified' as const, label: t('Años de experiencia'), value: local.years_experience != null ? `${local.years_experience} años` : '' },
-                  { key: 'university_verified' as const, label: t('Universidad'), value: local.university || '' },
-                  { key: 'professional_license_verified' as const, label: t('Matrícula profesional (Min. Salud)'), value: local.professional_license_number || '' },
-                ]).map(({ key, label, value }) => {
+                  { key: 'years_experience_verified' as const, visibleKey: 'years_experience_visible' as const, label: t('Años de experiencia'), value: local.years_experience != null ? `${local.years_experience} años` : '' },
+                  { key: 'university_verified' as const, visibleKey: 'university_visible' as const, label: t('Universidad'), value: local.university || '' },
+                  { key: 'professional_license_verified' as const, visibleKey: null, label: t('Matrícula profesional (Min. Salud)'), value: local.professional_license_number || '' },
+                ]).map(({ key, visibleKey, label, value }) => {
                   const verified = !!(local as any)[key]
+                  // El profesional puede ocultar del paciente un dato ya
+                  // verificado sin desverificarlo — se lo señalamos al
+                  // admin para que no piense que falta verificar de nuevo.
+                  const hiddenByProfessional = verified && visibleKey && (local as any)[visibleKey] === false
                   return (
                     <div key={key} className="flex items-center justify-between gap-2 bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
                       <div className="min-w-0">
                         <p className="text-xs text-[#64748B]">{label}</p>
                         <p className="text-sm font-medium truncate">{value || t('No especificado por el profesional')}</p>
+                        {hiddenByProfessional && (
+                          <p className="text-[10px] text-[#854F0B] mt-0.5">{t('Verificado, pero el profesional eligió ocultarlo del paciente')}</p>
+                        )}
                       </div>
                       {value && (
                         <button

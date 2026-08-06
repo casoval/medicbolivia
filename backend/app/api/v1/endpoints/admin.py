@@ -411,8 +411,10 @@ async def list_all_professionals(
             "languages":           p.languages or ["Español"],
             "years_experience":    p.years_experience,
             "years_experience_verified": p.years_experience_verified,
+            "years_experience_visible":  p.years_experience_visible,
             "university":          p.university,
             "university_verified": p.university_verified,
+            "university_visible":  p.university_visible,
             "professional_license_number":   p.professional_license_number,
             "professional_license_verified": p.professional_license_verified,
             "cmb_matricula":       p.cmb_matricula,
@@ -1259,8 +1261,10 @@ class AdminProfessionalUpdate(BaseModel):
     languages: Optional[list[str]] = None
     years_experience: Optional[int] = Field(None, ge=0, le=80)
     years_experience_verified: Optional[bool] = None
+    years_experience_visible: Optional[bool] = None
     university: Optional[str] = Field(None, max_length=200)
     university_verified: Optional[bool] = None
+    university_visible: Optional[bool] = None
     professional_license_number: Optional[str] = Field(None, max_length=50)
     professional_license_verified: Optional[bool] = None
     price_general: Optional[Decimal] = Field(None, gt=0)
@@ -1396,7 +1400,8 @@ async def update_professional_admin(
     simple_fields = [
         "first_name", "last_name", "ci", "department", "gender", "specialty",
         "sub_specialties", "bio", "languages", "years_experience",
-        "years_experience_verified", "university", "university_verified",
+        "years_experience_verified", "years_experience_visible",
+        "university", "university_verified", "university_visible",
         "professional_license_number", "professional_license_verified",
         "price_general", "price_urgent", "price_follow_up",
         "cmb_matricula", "sedes_number",

@@ -249,16 +249,31 @@ class Professional(Base):
     # True (y el valor no está vacío) se muestra al paciente — ver
     # ProfessionalPublicResponse en app/schemas/schemas.py.
     years_experience_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Universidad de egreso — la llena el propio profesional en su perfil.
-    # Opcional: si la deja vacía, simplemente no aparece en el perfil
-    # público (no bloquea la aprobación del profesional).
+    # Visibilidad controlada por el propio profesional: aunque el dato ya
+    # esté verificado por un admin, el profesional puede elegir ocultarlo
+    # del perfil público sin perder ni el valor ni la verificación (por
+    # ejemplo, si prefiere no mostrar sus años de experiencia). Nace en
+    # True para no cambiarle el comportamiento a nadie que ya estaba
+    # verificado antes de que existiera este control.
+    years_experience_visible: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Universidad de egreso — la llena el propio profesional en su perfil,
+    # UNA sola vez: es un dato que no cambia con el tiempo, así que el
+    # backend no permite modificarlo una vez tiene un valor (ver PATCH
+    # /professionals/profile) — solo un admin puede corregirlo. Opcional:
+    # si la deja vacía, simplemente no aparece en el perfil público (no
+    # bloquea la aprobación del profesional).
     university: Mapped[Optional[str]] = mapped_column(String(200))
     university_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    university_visible: Mapped[bool] = mapped_column(Boolean, default=True)
     # Matrícula profesional emitida por el Ministerio de Salud — la llena
-    # el propio profesional en su perfil y la verifica un admin contra el
-    # documento HEALTH_MINISTRY subido. Distinta de cmb_matricula (que
-    # sigue siendo un campo aparte, editable solo por el admin, usado en
-    # las recetas/órdenes de laboratorio impresas).
+    # el propio profesional en su perfil (una sola vez, igual que
+    # `university` — tampoco se puede modificar después de tener un
+    # valor) y la verifica un admin contra el documento HEALTH_MINISTRY
+    # subido. Distinta de cmb_matricula (que sigue siendo un campo
+    # aparte, editable solo por el admin, usado en las recetas/órdenes de
+    # laboratorio impresas). No tiene bandera de visibilidad propia: al
+    # ser un dato legal/regulatorio (y no editable), se muestra siempre
+    # que esté verificado, igual que antes.
     professional_license_number: Mapped[Optional[str]] = mapped_column(String(50))
     professional_license_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     photo_url: Mapped[Optional[str]] = mapped_column(String(500))

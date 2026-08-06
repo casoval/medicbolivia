@@ -209,11 +209,16 @@ class ProfessionalPublicResponse(BaseModel):
     years_experience: Optional[int] = None
     university: Optional[str] = None
     professional_license_number: Optional[str] = None
-    # Banderas de verificación: existen en el modelo ORM y se leen acá
-    # (from_attributes) para poder aplicar la regla de visibilidad, pero
-    # nunca se exponen tal cual en la respuesta (exclude=True).
+    # Banderas de verificación y de visibilidad: existen en el modelo ORM
+    # y se leen acá (from_attributes) para poder aplicar la regla de
+    # visibilidad, pero nunca se exponen tal cual en la respuesta
+    # (exclude=True). "verified" lo decide un admin; "visible" lo decide
+    # el propio profesional para ocultar (sin borrar) un dato ya
+    # verificado — ver _hide_unverified_fields más abajo.
     years_experience_verified: bool = Field(default=False, exclude=True)
+    years_experience_visible: bool = Field(default=True, exclude=True)
     university_verified: bool = Field(default=False, exclude=True)
+    university_visible: bool = Field(default=True, exclude=True)
     professional_license_verified: bool = Field(default=False, exclude=True)
     photo_url: Optional[str]
     availability: AvailabilityMode
@@ -234,10 +239,12 @@ class ProfessionalPublicResponse(BaseModel):
     @model_validator(mode="after")
     def _hide_unverified_fields(self):
         """Oculta años de experiencia, universidad y matrícula profesional
-        si están vacíos o si un admin todavía no los verificó."""
-        if not self.years_experience_verified:
+        si están vacíos, si un admin todavía no los verificó, o (para los
+        dos primeros) si el propio profesional eligió ocultarlos pese a
+        estar verificados."""
+        if not self.years_experience_verified or not self.years_experience_visible:
             self.years_experience = None
-        if not (self.university and self.university_verified):
+        if not (self.university and self.university_verified and self.university_visible):
             self.university = None
         if not (self.professional_license_number and self.professional_license_verified):
             self.professional_license_number = None

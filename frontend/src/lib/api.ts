@@ -393,14 +393,21 @@ export const professionalsAPI = {
     api.patch('/professionals/prices', prices),
 
   // Actualiza bio, idiomas, años de experiencia, universidad y matrícula
-  // profesional. Estos 3 últimos quedan pendientes de revisión por un
-  // admin cada vez que cambian (ver PATCH /professionals/profile en el
-  // backend) — un string vacío los borra (deja de mostrarse al paciente).
+  // profesional.
+  // - years_experience SÍ se puede volver a editar más adelante (cambia
+  //   con el tiempo) — cada cambio real queda pendiente de revisión por
+  //   un admin (ver PATCH /professionals/profile en el backend).
+  // - university y professional_license_number son de una sola edición:
+  //   el backend rechaza el cambio si ya tenían un valor guardado.
+  // - years_experience_visible / university_visible: no cambian el
+  //   dato, solo si se muestra o no al paciente una vez verificado.
   updateProfile: (data: {
     bio?: string
     languages?: string
     years_experience?: string
+    years_experience_visible?: boolean
     university?: string
+    university_visible?: boolean
     professional_license_number?: string
     appointment_duration_minutes?: number
   }) => {
@@ -408,7 +415,9 @@ export const professionalsAPI = {
     if (data.bio !== undefined)              form.append('bio', data.bio)
     if (data.languages !== undefined)        form.append('languages', data.languages)
     if (data.years_experience !== undefined) form.append('years_experience', data.years_experience)
+    if (data.years_experience_visible !== undefined) form.append('years_experience_visible', String(data.years_experience_visible))
     if (data.university !== undefined)                  form.append('university', data.university)
+    if (data.university_visible !== undefined)          form.append('university_visible', String(data.university_visible))
     if (data.professional_license_number !== undefined) form.append('professional_license_number', data.professional_license_number)
     if (data.appointment_duration_minutes !== undefined) form.append('appointment_duration_minutes', String(data.appointment_duration_minutes))
     return api.patch('/professionals/profile', form)

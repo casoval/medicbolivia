@@ -32,6 +32,7 @@ from app.core.timezone import utcnow_naive
 from app.core.bank_list import BOLIVIAN_BANKS, OTHER_BANK_LABEL
 from app.core.crypto import encrypt_value
 from app.services.storage import upload_document_to_r2, upload_photo_to_r2, upload_signature_to_r2
+from app.services.notify import notify_user
 from app.services.signature_image import process_signature_photo, SignatureNotDetectedError
 from app.services.commission import get_professional_commission_summary
 from app.services.patient_links import professional_has_active_membership
@@ -519,7 +520,9 @@ async def update_profile(
     bio: Optional[str] = Form(None),
     languages: Optional[str] = Form(None),
     years_experience: Optional[str] = Form(None),
+    years_experience_visible: Optional[bool] = Form(None),
     university: Optional[str] = Form(None),
+    university_visible: Optional[bool] = Form(None),
     professional_license_number: Optional[str] = Form(None),
     appointment_duration_minutes: Optional[int] = Form(None),
     current_user: User = Depends(get_current_professional),
@@ -537,34 +540,87 @@ async def update_profile(
     if languages is not None:
         professional.languages = [l.strip() for l in languages.split(",") if l.strip()]
 
-    # years_experience, university y professional_license_number son
-    # "verificables": cada vez que el profesional cambia el valor, se
-    # oculta al paciente hasta que un admin lo vuelva a verificar contra
-    # su documentación (ver ProfessionalPublicResponse). Se mandan como
+    # years_experience SÍ cambia con el tiempo (un profesional acumula
+    # experiencia), así que se mantiene editable: cada cambio real oculta
+    # el dato al paciente hasta que un admin lo vuelva a verificar (ver
+    # ProfessionalPublicResponse), y más abajo se avisa al equipo de
+    # admin para que no quede sin revisar indefinidamente. Se manda como
     # texto (no int/Form directo) para poder distinguir "no lo toqué"
     # (None) de "lo dejé vacío a propósito" (string vacío → NULL).
+    years_experience_was_verified = professional.years_experience_verified
     if years_experience is not None:
         new_years = int(years_experience) if years_experience.strip() != "" else None
         if new_years != professional.years_experience:
             professional.years_experience = new_years
             professional.years_experience_verified = False
 
+    # university y professional_license_number, en cambio, son datos que
+    # por naturaleza NO cambian una vez que el profesional los ingresa
+    # (la universidad de la que egresó, el número de su matrícula del
+    # Ministerio de Salud) — así que una vez que tienen un valor guardado,
+    # el propio profesional ya no puede modificarlos desde acá. Si se
+    # equivocó al tipearlos, la corrección la tiene que hacer un admin
+    # desde el panel (PATCH /admin/professionals/{id}, que no tiene esta
+    # restricción). Sí se pueden llenar por primera vez sin problema.
     if university is not None:
         new_university = university.strip() or None
+        if professional.university and new_university != professional.university:
+            raise HTTPException(
+                status_code=400,
+                detail="La universidad ya fue registrada y no se puede modificar. "
+                       "Si necesitas corregirla, contacta al equipo de soporte.",
+            )
         if new_university != professional.university:
             professional.university = new_university
             professional.university_verified = False
 
     if professional_license_number is not None:
         new_license = professional_license_number.strip() or None
+        if professional.professional_license_number and new_license != professional.professional_license_number:
+            raise HTTPException(
+                status_code=400,
+                detail="La matrícula profesional ya fue registrada y no se puede modificar. "
+                       "Si necesitas corregirla, contacta al equipo de soporte.",
+            )
         if new_license != professional.professional_license_number:
             professional.professional_license_number = new_license
             professional.professional_license_verified = False
+
+    # Visibilidad: el profesional puede ocultar del paciente un dato ya
+    # verificado (o volver a mostrarlo) sin tocar el valor ni la
+    # verificación — independiente de si puede editarlo o no.
+    if years_experience_visible is not None:
+        professional.years_experience_visible = years_experience_visible
+    if university_visible is not None:
+        professional.university_visible = university_visible
 
     if appointment_duration_minutes is not None:
         if not (10 <= appointment_duration_minutes <= 240):
             raise HTTPException(status_code=400, detail="La duración debe estar entre 10 y 240 minutos")
         professional.appointment_duration_minutes = appointment_duration_minutes
+
+    # Si el cambio de años de experiencia le quitó la verificación que ya
+    # tenía, avisar a los admins — si no, el dato queda invisible para el
+    # paciente indefinidamente hasta que alguien lo note revisando el
+    # panel a mano.
+    if years_experience_was_verified and not professional.years_experience_verified:
+        admins_result = await db.execute(select(User).where(User.role == UserRole.ADMIN))
+        admins = admins_result.scalars().all()
+        full_name = f"{professional.first_name} {professional.last_name}"
+        new_value = f"{professional.years_experience} años" if professional.years_experience is not None else "vacío"
+        for admin in admins:
+            await notify_user(
+                db, user_id=admin.id,
+                title="Años de experiencia por reverificar",
+                body=(
+                    f"{full_name} actualizó sus años de experiencia a {new_value}. "
+                    "El dato quedó oculto al paciente hasta que lo verifiques de nuevo."
+                ),
+                type_="PROFESSIONAL_FIELD_NEEDS_REVERIFICATION",
+                entity_type="Professional",
+                entity_id=professional.id,
+                send_whatsapp=False,
+            )
 
     await db.commit()
     return {"message": "Perfil actualizado correctamente"}
@@ -632,8 +688,10 @@ async def get_my_profile(
         "languages": ", ".join(professional.languages) if professional.languages else "Español",
         "years_experience": professional.years_experience,
         "years_experience_verified": professional.years_experience_verified,
+        "years_experience_visible": professional.years_experience_visible,
         "university": professional.university,
         "university_verified": professional.university_verified,
+        "university_visible": professional.university_visible,
         "professional_license_number": professional.professional_license_number,
         "professional_license_verified": professional.professional_license_verified,
         "cmb_matricula": professional.cmb_matricula,

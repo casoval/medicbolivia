@@ -218,6 +218,16 @@ export default function ProfilePage() {
   const [years, setYears] = useState('')
   const [university, setUniversity] = useState('')
   const [licenseNumber, setLicenseNumber] = useState('')
+  // Universidad y matrícula profesional son datos de una sola edición:
+  // una vez que llegan con valor desde el backend, el input se bloquea
+  // (ver JSX más abajo) — nunca lo escribió el profesional después de
+  // esta carga, así que no hace falta guardar un "valor original" aparte.
+  const [universityLocked, setUniversityLocked] = useState(false)
+  const [licenseLocked, setLicenseLocked] = useState(false)
+  // Visibilidad ante el paciente, controlada por el profesional — solo
+  // aplica una vez que el dato está verificado (ver checkboxes en el JSX).
+  const [yearsVisible, setYearsVisible] = useState(true)
+  const [universityVisible, setUniversityVisible] = useState(true)
   // Estado de verificación de los 3 campos de arriba (los llena el admin,
   // aquí solo se muestran como badge informativo — de solo lectura)
   const [verification, setVerification] = useState({
@@ -370,8 +380,10 @@ export default function ProfilePage() {
         if (parsed.length > 0) setLangs(parsed)
       }
       if (data.years_experience !== undefined && data.years_experience !== null) setYears(String(data.years_experience))
-      if (data.university)                        setUniversity(data.university)
-      if (data.professional_license_number)       setLicenseNumber(data.professional_license_number)
+      if (data.university) { setUniversity(data.university); setUniversityLocked(true) }
+      if (data.professional_license_number) { setLicenseNumber(data.professional_license_number); setLicenseLocked(true) }
+      if (data.years_experience_visible !== undefined) setYearsVisible(!!data.years_experience_visible)
+      if (data.university_visible !== undefined)       setUniversityVisible(!!data.university_visible)
       setVerification({
         years_experience_verified: !!data.years_experience_verified,
         university_verified: !!data.university_verified,
@@ -543,10 +555,14 @@ export default function ProfilePage() {
         bio,
         languages: langs.join(', '),
         years_experience: years,
+        years_experience_visible: yearsVisible,
         university,
+        university_visible: universityVisible,
         professional_license_number: licenseNumber,
       })
-      setProfileSuccess('Perfil actualizado correctamente. Si cambiaste tu matrícula, universidad o años de experiencia, quedan pendientes de una nueva revisión por un administrador antes de volver a mostrarse a los pacientes.')
+      setUniversityLocked(university.trim() !== '')
+      setLicenseLocked(licenseNumber.trim() !== '')
+      setProfileSuccess('Perfil actualizado correctamente. Si cambiaste tus años de experiencia, quedan pendientes de una nueva revisión por un administrador antes de volver a mostrarse a los pacientes.')
       setTimeout(() => setProfileSuccess(''), 6000)
     } catch (err) {
       setProfileError(getErrorMessage(err))
@@ -858,8 +874,18 @@ export default function ProfilePage() {
                   onChange={(e) => setYears(e.target.value)}
                 />
                 <p className="text-xs text-[#64748B] mt-1">
-                  {t('Si lo dejas vacío, o mientras no esté verificado, el paciente no lo verá.')}
+                  {t('Si lo dejas vacío, o mientras no esté verificado, el paciente no lo verá. Este dato sí lo puedes actualizar cuando quieras — cada cambio pasa de nuevo por revisión.')}
                 </p>
+                {years.trim() !== '' && verification.years_experience_verified && (
+                  <label className="flex items-center gap-2 mt-2 text-xs text-[#475569]">
+                    <input
+                      type="checkbox"
+                      checked={yearsVisible}
+                      onChange={(e) => setYearsVisible(e.target.checked)}
+                    />
+                    {t('Mostrar mis años de experiencia al paciente')}
+                  </label>
+                )}
               </div>
 
               <div>
@@ -868,14 +894,27 @@ export default function ProfilePage() {
                   <VerifyBadge hasValue={university.trim() !== ''} verified={verification.university_verified} t={t} />
                 </label>
                 <input
-                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] disabled:bg-[#F5F6FA] disabled:text-[#64748B]"
                   placeholder={t('Ej. Universidad Mayor de San Andrés (opcional)')}
                   value={university}
+                  disabled={universityLocked}
                   onChange={(e) => setUniversity(e.target.value)}
                 />
                 <p className="text-xs text-[#64748B] mt-1">
-                  {t('Opcional. Se verifica contra tu Título en Provisión Nacional — si la dejas vacía, o mientras no esté verificada, el paciente no la verá.')}
+                  {universityLocked
+                    ? t('Ya quedó registrada y no se puede modificar — es un dato que no cambia. Si necesitas corregirla, contacta a soporte.')
+                    : t('Opcional. Se verifica contra tu Título en Provisión Nacional — si la dejas vacía, o mientras no esté verificada, el paciente no la verá. Una vez guardada, no se podrá volver a editar.')}
                 </p>
+                {university.trim() !== '' && verification.university_verified && (
+                  <label className="flex items-center gap-2 mt-2 text-xs text-[#475569]">
+                    <input
+                      type="checkbox"
+                      checked={universityVisible}
+                      onChange={(e) => setUniversityVisible(e.target.checked)}
+                    />
+                    {t('Mostrar mi universidad al paciente')}
+                  </label>
+                )}
               </div>
 
               <div>
@@ -884,13 +923,16 @@ export default function ProfilePage() {
                   <VerifyBadge hasValue={licenseNumber.trim() !== ''} verified={verification.professional_license_verified} t={t} />
                 </label>
                 <input
-                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] disabled:bg-[#F5F6FA] disabled:text-[#64748B]"
                   placeholder={t('Número de tu matrícula del Ministerio de Salud')}
                   value={licenseNumber}
+                  disabled={licenseLocked}
                   onChange={(e) => setLicenseNumber(e.target.value)}
                 />
                 <p className="text-xs text-[#64748B] mt-1">
-                  {t('Se verifica contra el documento que subas en "Documentos de verificación" — si la dejas vacía, o mientras no esté verificada, el paciente no la verá.')}
+                  {licenseLocked
+                    ? t('Ya quedó registrada y no se puede modificar — es un dato que no cambia. Si necesitas corregirla, contacta a soporte.')
+                    : t('Se verifica contra el documento que subas en "Documentos de verificación" — si la dejas vacía, o mientras no esté verificada, el paciente no la verá. Una vez guardada, no se podrá volver a editar.')}
                 </p>
               </div>
 
