@@ -252,6 +252,40 @@ async def update_prices(
     return {"message": "Precios actualizados correctamente"}
 
 
+DOC_TYPE_LABELS = {
+    "CI_FRONT": "Cédula de identidad (anverso)",
+    "CI_BACK": "Cédula de identidad (reverso)",
+    "PROFESSIONAL_TITLE": "Título en Provisión Nacional",
+    "HEALTH_MINISTRY": "Matrícula Profesional (Min. de Salud) — documento",
+    "SPECIALTY_CERT": "Respaldo de Especialidad/Subespecialidad",
+    "SELFIE_WITH_CI": "Selfie con cédula",
+    "SIGNATURE": "Firma para recetas médicas",
+}
+
+
+async def _notify_admins_new_review(
+    db: AsyncSession, professional: "Professional", title: str, body: str, type_: str
+) -> None:
+    """Avisa a TODOS los admins que hay algo nuevo esperando revisión —
+    documento subido/reemplazado, firma nueva, matrícula/universidad
+    ingresadas por primera vez, etc. Se usa `send_whatsapp=True` (el
+    default de notify_user) a propósito: el panel de admin todavía no
+    tiene campanita de notificaciones (solo paciente y profesional la
+    tienen, ver notifBase() en frontend/src/lib/api.ts), así que sin
+    WhatsApp esta notificación quedaría escrita en la tabla `notifications`
+    pero invisible en la práctica — nadie la vería nunca."""
+    admins_result = await db.execute(select(User).where(User.role == UserRole.ADMIN))
+    for admin in admins_result.scalars().all():
+        await notify_user(
+            db, user_id=admin.id,
+            title=title,
+            body=body,
+            type_=type_,
+            entity_type="Professional",
+            entity_id=professional.id,
+        )
+
+
 # ── POST /api/v1/professionals/documents ────────────
 @router.post(
     "/documents",
@@ -332,6 +366,15 @@ async def upload_document(
         entity_id=doc.id,
         metadata_={"doc_type": doc_type.value, "professional_id": professional.id},
     ))
+
+    full_name = f"{professional.first_name} {professional.last_name}"
+    doc_label = DOC_TYPE_LABELS.get(doc_type.value, doc_type.value)
+    await _notify_admins_new_review(
+        db, professional,
+        title="Documento para revisar",
+        body=f"{full_name} {action} su documento: {doc_label}.",
+        type_="DOC_PENDING_REVIEW",
+    )
 
     await db.commit()
     await db.refresh(doc)
@@ -427,6 +470,14 @@ async def _save_signature(db: AsyncSession, professional: Professional, png_byte
             file_url=signature_url,
             status=DocStatus.PENDING,
         ))
+
+    full_name = f"{professional.first_name} {professional.last_name}"
+    await _notify_admins_new_review(
+        db, professional,
+        title="Firma para revisar",
+        body=f"{full_name} subió/actualizó su firma para recetas médicas.",
+        type_="DOC_PENDING_REVIEW",
+    )
 
     await db.commit()
     logger.info(f"Firma actualizada: profesional {professional.id} (queda PENDING de revisión)")
@@ -619,6 +670,11 @@ async def update_profile(
         if new_university != professional.university:
             professional.university = new_university
             professional.university_verified = False
+            university_newly_set = new_university is not None
+        else:
+            university_newly_set = False
+    else:
+        university_newly_set = False
 
     if professional_license_number is not None:
         new_license = professional_license_number.strip() or None
@@ -631,6 +687,11 @@ async def update_profile(
         if new_license != professional.professional_license_number:
             professional.professional_license_number = new_license
             professional.professional_license_verified = False
+            license_newly_set = new_license is not None
+        else:
+            license_newly_set = False
+    else:
+        license_newly_set = False
 
     # Visibilidad: el profesional puede ocultar del paciente un dato ya
     # verificado (o volver a mostrarlo) sin tocar el valor ni la
@@ -645,28 +706,39 @@ async def update_profile(
             raise HTTPException(status_code=400, detail="La duración debe estar entre 10 y 240 minutos")
         professional.appointment_duration_minutes = appointment_duration_minutes
 
-    # Si el cambio de años de experiencia le quitó la verificación que ya
-    # tenía, avisar a los admins — si no, el dato queda invisible para el
-    # paciente indefinidamente hasta que alguien lo note revisando el
-    # panel a mano.
+    # Avisar a los admins de cualquier cosa nueva que quedó esperando
+    # revisión, para que no dependan de notar el cambio a mano en el panel:
+    # - años de experiencia que ya estaba verificado y cambió (pierde la
+    #   verificación y queda oculto al paciente hasta que se re-revise)
+    # - universidad o matrícula profesional ingresadas por primera vez
+    #   (antes no se avisaba nada — el admin solo se enteraba si entraba
+    #   a revisar el perfil manualmente)
+    full_name = f"{professional.first_name} {professional.last_name}"
     if years_experience_was_verified and not professional.years_experience_verified:
-        admins_result = await db.execute(select(User).where(User.role == UserRole.ADMIN))
-        admins = admins_result.scalars().all()
-        full_name = f"{professional.first_name} {professional.last_name}"
         new_value = f"{professional.years_experience} años" if professional.years_experience is not None else "vacío"
-        for admin in admins:
-            await notify_user(
-                db, user_id=admin.id,
-                title="Años de experiencia por reverificar",
-                body=(
-                    f"{full_name} actualizó sus años de experiencia a {new_value}. "
-                    "El dato quedó oculto al paciente hasta que lo verifiques de nuevo."
-                ),
-                type_="PROFESSIONAL_FIELD_NEEDS_REVERIFICATION",
-                entity_type="Professional",
-                entity_id=professional.id,
-                send_whatsapp=False,
-            )
+        await _notify_admins_new_review(
+            db, professional,
+            title="Años de experiencia por reverificar",
+            body=(
+                f"{full_name} actualizó sus años de experiencia a {new_value}. "
+                "El dato quedó oculto al paciente hasta que lo verifiques de nuevo."
+            ),
+            type_="PROFESSIONAL_FIELD_NEEDS_REVERIFICATION",
+        )
+    if university_newly_set:
+        await _notify_admins_new_review(
+            db, professional,
+            title="Universidad para revisar",
+            body=f"{full_name} registró su universidad ({professional.university}) por primera vez.",
+            type_="PROFESSIONAL_FIELD_NEEDS_REVERIFICATION",
+        )
+    if license_newly_set:
+        await _notify_admins_new_review(
+            db, professional,
+            title="Matrícula profesional para revisar",
+            body=f"{full_name} registró su matrícula profesional ({professional.professional_license_number}) por primera vez.",
+            type_="PROFESSIONAL_FIELD_NEEDS_REVERIFICATION",
+        )
 
     await db.commit()
     return {"message": "Perfil actualizado correctamente"}
@@ -979,6 +1051,18 @@ async def upsert_my_bank_account(
         entity_id=account.id,
         metadata_={"bank_name": account.bank_name, "account_number_last4": account.account_number_last4},
     ))
+
+    full_name = f"{professional.first_name} {professional.last_name}"
+    await _notify_admins_new_review(
+        db, professional,
+        title="Cuenta bancaria para revisar",
+        body=(
+            f"{full_name} {'registró' if is_new else 'actualizó'} su cuenta bancaria "
+            f"({account.bank_name}, terminada en {account.account_number_last4}). "
+            "Verifícala antes del próximo pago."
+        ),
+        type_="BANK_ACCOUNT_PENDING_REVIEW",
+    )
 
     await db.commit()
     return {
