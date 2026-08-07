@@ -118,41 +118,40 @@ def calculate_amounts(consultation_amount: Decimal, commission_percent: Decimal)
         "commission_percent": commission_percent,
     }
 
-async def process_refund(
-    consultation_id: str,
+async def mark_payment_refunded(
+    db,
+    payment,
     refund_type: str,
     reason: str,
-    admin_id: str,
-    db=None
+    amount=None,
 ) -> None:
-    """Procesa un reembolso — actualiza el estado del pago."""
-    if db is None:
-        return
+    """
+    Registra la DECISIÓN de reembolsar un pago (foto contable: refunded_at,
+    refund_note, refunded_amount) y dispara el pedido de datos de destino
+    al paciente — ver app/services/refund_payout.py.
 
-    from app.models.models import Payment, PaymentStatus, AuditLog
-    from sqlalchemy import select
+    IMPORTANTE: esto NO transfiere plata de verdad. El banco (Banco
+    Ganadero, ver app/services/bank_qr.py) no expone ningún servicio de
+    reversa/transferencia saliente, solo cobro. La plata sigue en la
+    cuenta de la plataforma hasta que un admin la transfiere a mano y lo
+    confirma con refund_payout.confirm_refund_paid_out — mismo patrón de
+    "Fase 1 semi-automática" que ya se usa para pagar a profesionales
+    (ver app/services/payout.py).
 
-    result = await db.execute(
-        select(Payment).where(Payment.consultation_id == consultation_id)
-    )
-    payment = result.scalar_one_or_none()
-    if not payment:
-        return
+    Este helper es EL ÚNICO lugar donde se debería tocar
+    Payment.status → REFUNDED_FULL/REFUNDED_PARTIAL, para que ningún
+    flujo (cancelación automática, disputa, reembolso manual del admin)
+    se olvide de pedirle la cuenta de destino al paciente.
 
-    payment.status = (
-        PaymentStatus.REFUNDED_FULL
-        if refund_type == "FULL"
-        else PaymentStatus.REFUNDED_PARTIAL
-    )
+    No hace commit — el caller sigue controlando la transacción, igual
+    que el resto de los servicios de este módulo.
+    """
+    from app.models.models import PaymentStatus
+    from app.services.refund_payout import request_refund_account
+
+    payment.status = PaymentStatus.REFUNDED_FULL if refund_type == "FULL" else PaymentStatus.REFUNDED_PARTIAL
     payment.refunded_at = utcnow_naive()
     payment.refund_note = reason
+    payment.refunded_amount = payment.amount if refund_type == "FULL" else amount
 
-    log = AuditLog(
-        user_id=admin_id,
-        action=f"REFUND_{refund_type}",
-        entity_type="Payment",
-        entity_id=payment.id,
-        metadata_={"reason": reason, "amount": str(payment.amount)},
-    )
-    db.add(log)
-    await db.commit()
+    await request_refund_account(db, payment)

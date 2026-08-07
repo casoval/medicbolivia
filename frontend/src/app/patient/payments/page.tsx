@@ -5,11 +5,12 @@
 // pagó, cuándo, por qué consulta y en qué estado está cada pago.
 
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, EmptyState, SectionTitle } from '@/components/ui'
 import { ConsultationTypeBadge, ModalityBadge } from '@/components/shared/ConsultationBadges'
+import { RefundAccountModal } from '@/components/patient/RefundAccountModal'
 import { patientsAPI, getErrorMessage } from '@/lib/api'
 import type { PatientPaymentItem } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
@@ -124,14 +125,25 @@ function DoctorAvatar({ firstName, lastName, photoUrl }: {
 
 export default function PatientPaymentsPage() {
   const { t } = useLanguage()
+  const queryClient = useQueryClient()
   const [statusFilter, setStatusFilter] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [refundModalPayment, setRefundModalPayment] = useState<{ id: string; amount: number } | null>(null)
 
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ['patient', 'payments', statusFilter],
     queryFn: () => patientsAPI.getMyPayments({ limit: 100, ...(statusFilter ? { status: statusFilter } : {}) }),
     refetchInterval: 20000,
   })
+
+  const { data: pendingRefunds, refetch: refetchRefunds } = useQuery({
+    queryKey: ['patient', 'refunds', 'pending'],
+    queryFn: patientsAPI.getMyRefunds,
+    refetchInterval: 30000,
+  })
+
+  const refundsNeedingAccount = (pendingRefunds || []).filter((r) => r.needs_account)
+  const refundsAwaitingTransfer = (pendingRefunds || []).filter((r) => !r.needs_account)
 
   const stats = data?.stats
   const items = data?.items || []
@@ -145,6 +157,46 @@ export default function PatientPaymentsPage() {
             {t('Todo lo que pagaste, consulta por consulta: cuánto, cuándo y en qué estado está cada pago.')}
           </p>
         </div>
+
+        {refundsNeedingAccount.length > 0 && (
+          <div className="mb-4 rounded-xl border border-[#F0C36D] bg-[#FDF6E7] p-3.5">
+            <p className="text-sm font-semibold text-[#8A6116]">
+              💸 {t('Tienes')} {refundsNeedingAccount.length === 1 ? t('un reembolso aprobado') : `${refundsNeedingAccount.length} ${t('reembolsos aprobados')}`} {t('esperando tus datos')}
+            </p>
+            <p className="text-xs text-[#8A6116]/80 mt-1 mb-2.5">
+              {t('Indícanos a dónde transferirte el dinero para poder procesarlo.')}
+            </p>
+            <div className="space-y-2">
+              {refundsNeedingAccount.map((r) => (
+                <div key={r.payment_id} className="flex items-center justify-between bg-white/70 rounded-lg px-3 py-2">
+                  <div>
+                    <p className="text-xs font-medium text-[#141820]">Bs. {r.amount.toFixed(2)}</p>
+                    <p className="text-[11px] text-[#64748B]">
+                      {r.professional_first_name ? `Dr. ${r.professional_first_name} ${r.professional_last_name || ''}`.trim() : (r.specialty || 'Consulta')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setRefundModalPayment({ id: r.payment_id, amount: r.amount })}
+                    className="text-xs font-medium rounded-lg bg-[#185FA5] text-white px-3 py-1.5"
+                  >
+                    {t('Indicar destino')}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {refundsAwaitingTransfer.length > 0 && (
+          <div className="mb-4 rounded-xl border border-[#BFD9EE] bg-[#EAF2FA] p-3 flex items-center gap-2">
+            <span className="text-base">⏳</span>
+            <p className="text-xs text-[#185FA5]">
+              {refundsAwaitingTransfer.length === 1
+                ? t('Ya cargaste tus datos para 1 reembolso — el equipo lo transferirá en breve.')
+                : `${t('Ya cargaste tus datos para')} ${refundsAwaitingTransfer.length} ${t('reembolsos — el equipo los transferirá en breve.')}`}
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4">
@@ -380,6 +432,19 @@ export default function PatientPaymentsPage() {
           </>
         )}
       </div>
+
+      {refundModalPayment && (
+        <RefundAccountModal
+          paymentId={refundModalPayment.id}
+          amount={refundModalPayment.amount}
+          onClose={() => setRefundModalPayment(null)}
+          onSuccess={() => {
+            setRefundModalPayment(null)
+            refetchRefunds()
+            queryClient.invalidateQueries({ queryKey: ['patient', 'payments'] })
+          }}
+        />
+      )}
     </DashboardLayout>
   )
 }

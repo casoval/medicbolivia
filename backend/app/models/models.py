@@ -143,6 +143,19 @@ class ConsultationCreatedBy(str, enum.Enum):
     PROFESSIONAL = "PROFESSIONAL"
 
 
+class RefundMethod(str, enum.Enum):
+    """
+    Cómo quiere el paciente recibir la devolución de su dinero — ver
+    PatientRefundAccount. A diferencia del profesional (que siempre
+    registra una cuenta bancaria), el paciente puede no tener una, así
+    que se le da también la opción de billetera móvil / QR interpersonal
+    (Tigo Money, QR persona-a-persona de su banco, etc.), mucho más
+    accesible para un reembolso puntual y esporádico.
+    """
+    BANK = "BANK"
+    MOBILE_WALLET = "MOBILE_WALLET"
+
+
 class ConsultationModality(str, enum.Enum):
     """
     Cómo se realiza la consulta. Solo aplica una elección real para citas
@@ -566,6 +579,18 @@ class Payment(Base):
     # para REFUNDED_PARTIAL es el monto parcial que decidió el admin — antes
     # de este campo, ese dato solo quedaba en el AuditLog y no en el pago.
     refunded_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    # ── Reembolso a pacientes (Fase 1 semi-automática, espejo de
+    # Earning.released_at / paid_out_at — ver app/services/refund_payout.py) ──
+    # refunded_at de arriba es solo la foto contable: "se decidió devolver
+    # esto". El banco (Banco Ganadero, ver app/services/bank_qr.py) no
+    # expone ningún servicio de reversa/transferencia saliente, así que la
+    # plata todavía sigue físicamente en la cuenta de la plataforma hasta
+    # que un admin la transfiere A MANO al paciente y lo confirma acá.
+    # refund_paid_out_at queda NULL hasta ese momento.
+    refund_paid_out_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    # Nota libre que deja el admin al confirmar la transferencia real
+    # (ej. número de comprobante) — mismo rol que PayoutBatch.bank_reference_note.
+    refund_payout_reference_note: Mapped[Optional[str]] = mapped_column(Text)
     # ── Disputas del paciente sobre una consulta ya pagada ──────────────
     dispute_category: Mapped[Optional[str]] = mapped_column(String(50))
     dispute_reason: Mapped[Optional[str]] = mapped_column(Text)
@@ -577,6 +602,7 @@ class Payment(Base):
     consultation: Mapped["Consultation"] = relationship(back_populates="payment")
     patient: Mapped["Patient"] = relationship(back_populates="payments")
     earning: Mapped[Optional["Earning"]] = relationship(back_populates="payment", uselist=False)
+    refund_account: Mapped[Optional["PatientRefundAccount"]] = relationship(back_populates="payment", uselist=False)
 
 
 class Earning(Base):
@@ -651,6 +677,55 @@ class ProfessionalBankAccount(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     professional: Mapped["Professional"] = relationship(back_populates="bank_account")
+
+
+class PatientRefundAccount(Base):
+    """
+    A dónde transferirle a un paciente un reembolso puntual — Fase 1
+    semi-automática, mismo motivo que ProfessionalBankAccount: el banco no
+    expone ningún servicio de reversa/transferencia saliente (ver
+    app/services/bank_qr.py), así que esto solo alimenta lo que un admin
+    necesita para transferir A MANO y confirmar después
+    (ver app/services/refund_payout.py).
+
+    A diferencia de la cuenta del profesional (un perfil estable, una
+    cuenta por profesional), acá se pide el dato POR CADA reembolso
+    (payment_id es único, 1:1 con Payment) — un paciente reembolsado una
+    sola vez no necesita "guardar" una cuenta permanente, y así también
+    evitamos mandar plata por error a una cuenta vieja si cambió de banco
+    o de número entre un reembolso y el siguiente.
+
+    method decide qué grupo de campos aplica: BANK usa los mismos campos que
+    ProfessionalBankAccount (cifrados); MOBILE_WALLET es la opción más
+    accesible para alguien sin cuenta bancaria formal — billetera móvil
+    (Tigo Money) o QR persona-a-persona de su banco, identificado por
+    número de celular.
+    """
+    __tablename__ = "patient_refund_accounts"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    payment_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("payments.id", ondelete="CASCADE"), unique=True
+    )
+    method: Mapped[RefundMethod] = mapped_column(SAEnum(RefundMethod), nullable=False)
+    # ── Campos si method == BANK (mismo criterio de cifrado que ProfessionalBankAccount) ──
+    bank_name: Mapped[Optional[str]] = mapped_column(String(150))
+    account_type: Mapped[Optional[BankAccountType]] = mapped_column(SAEnum(BankAccountType))
+    account_number_encrypted: Mapped[Optional[str]] = mapped_column(Text)
+    account_holder_ci_encrypted: Mapped[Optional[str]] = mapped_column(Text)
+    account_number_last4: Mapped[Optional[str]] = mapped_column(String(4))
+    account_holder_name: Mapped[Optional[str]] = mapped_column(String(200))
+    # ── Campos si method == MOBILE_WALLET ──
+    wallet_provider: Mapped[Optional[str]] = mapped_column(String(100))
+    phone_number: Mapped[Optional[str]] = mapped_column(String(20))
+    # El paciente aceptó explícitamente que los datos son su
+    # responsabilidad — sin esto no se guarda (ver validación en
+    # PatientRefundAccountRequest), mismo criterio que el profesional.
+    responsibility_acknowledged_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
+
+    payment: Mapped["Payment"] = relationship(back_populates="refund_account")
 
 
 class PayoutBatchStatus(str, enum.Enum):

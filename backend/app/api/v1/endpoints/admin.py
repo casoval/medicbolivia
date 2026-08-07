@@ -40,10 +40,10 @@ from app.schemas.schemas import (
     ProfessionalMembershipCreateRequest, ProfessionalMembershipUpdateRequest,
     ProfessionalMembershipRenewRequest, BroadcastCreateRequest,
     DoctorLeadCreateRequest, DoctorLeadUpdateRequest, DoctorLeadInviteRequest,
-    PayoutBatchCreateRequest, PayoutBatchConfirmRequest,
+    PayoutBatchCreateRequest, PayoutBatchConfirmRequest, RefundPayoutConfirmRequest,
 )
 from fastapi.responses import Response
-from app.services.payment import process_refund
+from app.services.payment import mark_payment_refunded
 from app.services.commission import get_professional_commission_summary
 from app.services.broadcast import send_broadcast, count_recipients
 from app.models.models import BroadcastMessage, BroadcastAudience
@@ -904,11 +904,13 @@ async def refund_payment(
         if data.amount > payment.amount:
             raise HTTPException(status_code=400, detail="El monto a reembolsar no puede ser mayor al monto original del pago")
 
-    refund_status = PaymentStatus.REFUNDED_FULL if data.refund_type == "FULL" else PaymentStatus.REFUNDED_PARTIAL
-    payment.status = refund_status
-    payment.refunded_at = utcnow_naive()
-    payment.refund_note = data.reason
-    payment.refunded_amount = payment.amount if data.refund_type == "FULL" else data.amount
+    # mark_payment_refunded solo registra la decisión (foto contable) y le
+    # pide al paciente a dónde transferirle — la transferencia real la
+    # confirma un admin después con POST /refunds/{id}/confirm, ver
+    # app/services/refund_payout.py (Fase 1 semi-automática, no hay
+    # integración bancaria de transferencias salientes).
+    await mark_payment_refunded(db, payment, data.refund_type, data.reason, data.amount)
+    refund_status = payment.status
 
     log = AuditLog(
         user_id=current_user.id,
@@ -921,7 +923,11 @@ async def refund_payment(
     await db.commit()
 
     logger.info(f"Reembolso {data.refund_type}: pago {payment_id} por admin {current_user.id}")
-    return {"payment_id": payment_id, "status": refund_status, "message": "Reembolso procesado"}
+    return {
+        "payment_id": payment_id,
+        "status": refund_status,
+        "message": "Reembolso aprobado. Se le pidió al paciente a dónde transferirle el dinero.",
+    }
 
 # ── GET /api/v1/admin/payments/disputed ─────────────
 # Cola de pagos congelados por reclamo del paciente, con la evidencia
@@ -1006,9 +1012,7 @@ async def resolve_dispute(
         result_status = PaymentStatus.RELEASED_TO_PROFESSIONAL
 
     elif data.resolution == "REFUND_FULL":
-        payment.status = PaymentStatus.REFUNDED_FULL
-        payment.refunded_at = utcnow_naive()
-        payment.refunded_amount = payment.amount
+        await mark_payment_refunded(db, payment, "FULL", data.note)
         result_status = PaymentStatus.REFUNDED_FULL
 
     else:  # REFUND_PARTIAL
@@ -1016,9 +1020,7 @@ async def resolve_dispute(
             raise HTTPException(status_code=400, detail="Debes indicar el monto a reembolsar")
         if data.amount > payment.amount:
             raise HTTPException(status_code=400, detail="El monto a reembolsar no puede ser mayor al monto original del pago")
-        payment.status = PaymentStatus.REFUNDED_PARTIAL
-        payment.refunded_at = utcnow_naive()
-        payment.refunded_amount = data.amount
+        await mark_payment_refunded(db, payment, "PARTIAL", data.note, data.amount)
         result_status = PaymentStatus.REFUNDED_PARTIAL
 
     payment.resolution_note = data.note
@@ -2654,6 +2656,69 @@ async def cancel_payout_batch_endpoint(
 
     await db.commit()
     return {"message": "Lote cancelado. Las ganancias vuelven a estar pendientes.", "id": batch.id}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# REEMBOLSOS A PACIENTES (Fase 1 semi-automática) — espejo de los
+# payouts a profesionales de arriba.
+# ═══════════════════════════════════════════════════════════════════
+# El banco (Banco Ganadero, ver app/services/bank_qr.py) solo expone
+# servicios de COBRO, no de reversa. El flujo acá es:
+#   1. GET  /refunds/pending          → ver qué reembolsos aprobados faltan pagar
+#   2. POST /refunds/{id}/confirm     → confirmar que ya se transfirió A MANO
+#      (dispara la notificación al paciente)
+# A diferencia de los payouts, acá no hay lotes/CSV: cada reembolso tiene
+# su propio destino y el volumen es esporádico. Ver
+# app/services/refund_payout.py para toda la lógica.
+
+@router.get("/refunds/pending", summary="Reembolsos aprobados pendientes de transferir")
+async def list_pending_refunds(
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.refund_payout import get_pending_refunds_summary
+
+    summary = await get_pending_refunds_summary(db)
+
+    def _fmt(items):
+        return [
+            {
+                **{k: v for k, v in i.items() if k not in ("amount", "refunded_at")},
+                "amount": float(i["amount"]),
+                "refunded_at": i["refunded_at"].isoformat() if i["refunded_at"] else None,
+            }
+            for i in items
+        ]
+
+    return {
+        "ready_to_pay": _fmt(summary["ready_to_pay"]),
+        "awaiting_account": _fmt(summary["awaiting_account"]),
+        "ready_to_pay_total": float(summary["ready_to_pay_total"]),
+        "awaiting_account_total": float(summary["awaiting_account_total"]),
+    }
+
+
+@router.post("/refunds/{payment_id}/confirm", summary="Confirmar que ya se transfirió un reembolso")
+async def confirm_refund_payout_endpoint(
+    payment_id: str,
+    data: RefundPayoutConfirmRequest,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.refund_payout import confirm_refund_paid_out
+
+    result = await db.execute(select(Payment).where(Payment.id == payment_id))
+    payment = result.scalar_one_or_none()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+
+    try:
+        await confirm_refund_paid_out(db, payment, current_user.id, data.reference_note)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    await db.commit()
+    return {"message": "Reembolso confirmado. Se avisó al paciente.", "payment_id": payment_id}
 
 
 # ── Cuenta bancaria de un profesional puntual (vista + verificación) ──

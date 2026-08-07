@@ -28,7 +28,7 @@ from app.schemas.schemas import (
     DisputeCreateRequest, ProfessionalScheduleRequest, ProfessionalRescheduleRequest, RecordDirectPaymentRequest,
     SetConsultationModalityRequest,
 )
-from app.services.payment import calculate_amounts, compute_professional_scheduled_qr_deadline
+from app.services.payment import calculate_amounts, compute_professional_scheduled_qr_deadline, mark_payment_refunded
 from app.services import bank_qr
 from app.services.commission import resolve_commission_percent
 from app.services.patient_links import has_effective_link, professional_has_active_membership
@@ -116,9 +116,10 @@ async def auto_cancel_professional_timeout_with_refund(consultation_id: str, db_
         )
         payment = pay_result.scalar_one_or_none()
         if payment:
-            payment.status = PaymentStatus.REFUNDED_FULL
-            payment.refunded_at = utcnow_naive()
-            payment.refund_note = "Devolución automática: el profesional no respondió a tiempo."
+            await mark_payment_refunded(
+                db, payment, "FULL",
+                "Devolución automática: el profesional no respondió a tiempo.",
+            )
 
         # Notificar al paciente
         patient_result = await db.execute(select(Patient).where(Patient.id == consultation.patient_id))
@@ -1308,9 +1309,10 @@ async def cancel_consultation(
         )
         confirmed_payment = confirmed_result.scalar_one_or_none()
         if confirmed_payment:
-            confirmed_payment.status = PaymentStatus.REFUNDED_FULL
-            confirmed_payment.refunded_at = utcnow_naive()
-            confirmed_payment.refund_note = "Devolución automática: el paciente canceló antes de que el profesional confirmara la cita."
+            await mark_payment_refunded(
+                db, confirmed_payment, "FULL",
+                "Devolución automática: el paciente canceló antes de que el profesional confirmara la cita.",
+            )
             consultation.outcome_note = "CANCELLED_BY_PATIENT_WITH_REFUND"
         else:
             consultation.outcome_note = "CANCELLED_BY_PATIENT"
@@ -2517,9 +2519,10 @@ async def cancel_scheduled_with_refund(
     )
     payment = payment_result.scalar_one_or_none()
     if payment:
-        payment.status = PaymentStatus.REFUNDED_FULL
-        payment.refunded_at = utcnow_naive()
-        payment.refund_note = f"Cancelada por el paciente con aviso de al menos {CANCEL_NOTICE_HOURS}h — devolución completa."
+        await mark_payment_refunded(
+            db, payment, "FULL",
+            f"Cancelada por el paciente con aviso de al menos {CANCEL_NOTICE_HOURS}h — devolución completa.",
+        )
 
     await db.commit()
     logger.info(f"Cita agendada cancelada con devolución (aviso ≥24h): {consultation_id}")
@@ -2761,9 +2764,10 @@ async def report_professional_no_show(
     )
     payment = payment_result.scalar_one_or_none()
     if payment:
-        payment.status = PaymentStatus.REFUNDED_FULL
-        payment.refunded_at = utcnow_naive()
-        payment.refund_note = "El profesional no se presentó a la cita — devolución completa al paciente."
+        await mark_payment_refunded(
+            db, payment, "FULL",
+            "El profesional no se presentó a la cita — devolución completa al paciente.",
+        )
 
     await db.commit()
     logger.info(f"Profesional no asistió: consulta {consultation_id} — dinero devuelto al paciente")
@@ -2835,10 +2839,10 @@ async def cancel_by_professional(
     elif payment:
         consultation.status = ConsultationStatus.REFUNDED
         consultation.outcome_note = "PROFESSIONAL_CANCELLED_WITH_REFUND"
-        payment.status = PaymentStatus.REFUNDED_FULL
-        payment.refunded_at = utcnow_naive()
-        payment.refunded_amount = payment.amount
-        payment.refund_note = "El profesional canceló la cita por un percance — devolución completa al paciente."
+        await mark_payment_refunded(
+            db, payment, "FULL",
+            "El profesional canceló la cita por un percance — devolución completa al paciente.",
+        )
     else:
         consultation.status = ConsultationStatus.CANCELLED
         consultation.outcome_note = "PROFESSIONAL_CANCELLED_NO_CHARGE"
@@ -2962,11 +2966,10 @@ async def cancel_no_video_immediate(
     consultation.status = ConsultationStatus.CANCELLED
     consultation.outcome_note = "PATIENT_CANCELLED_NO_VIDEO_IMMEDIATE"
 
-    payment.status = PaymentStatus.REFUNDED_FULL
-    payment.refunded_at = utcnow_naive()
-    payment.refund_note = (
+    await mark_payment_refunded(
+        db, payment, "FULL",
         f"El profesional no inició la videollamada en {VIDEO_START_GRACE_MINUTES_IMMEDIATE} min — "
-        "cancelación solicitada por el paciente, devolución completa."
+        "cancelación solicitada por el paciente, devolución completa.",
     )
 
     if consultation.professional_id:
@@ -3059,11 +3062,10 @@ async def cancel_no_video_scheduled(
     )
     payment = payment_result.scalar_one_or_none()
     if payment:
-        payment.status = PaymentStatus.REFUNDED_FULL
-        payment.refunded_at = utcnow_naive()
-        payment.refund_note = (
+        await mark_payment_refunded(
+            db, payment, "FULL",
             f"El profesional no inició la videollamada en {VIDEO_START_GRACE_MINUTES_SCHEDULED} min "
-            "tras la hora programada — cancelación solicitada por el paciente, devolución completa."
+            "tras la hora programada — cancelación solicitada por el paciente, devolución completa.",
         )
 
     if consultation.professional_id:

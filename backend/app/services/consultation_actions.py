@@ -12,7 +12,6 @@ devolución si corresponde) — así los dos canales no pueden divergir con el
 tiempo.
 """
 from datetime import timedelta
-from app.core.timezone import utcnow_naive
 from typing import Optional
 
 from fastapi import BackgroundTasks
@@ -26,6 +25,7 @@ from app.models.models import (
     Payment, PaymentStatus, Notification,
 )
 from app.services.notify import push_notification_ws
+from app.services.payment import mark_payment_refunded
 
 
 class ConsultationActionError(Exception):
@@ -199,9 +199,10 @@ async def reject_consultation_core(
         )
         payment = pay_result.scalar_one_or_none()
         if payment:
-            payment.status = PaymentStatus.REFUNDED_FULL
-            payment.refunded_at = utcnow_naive()
-            payment.refund_note = "Devolución automática: el profesional no pudo atender la cita."
+            await mark_payment_refunded(
+                db, payment, "FULL",
+                "Devolución automática: el profesional no pudo atender la cita.",
+            )
 
         patient_result_r = await db.execute(select(Patient).where(Patient.id == consultation.patient_id))
         patient_r = patient_result_r.scalar_one_or_none()
