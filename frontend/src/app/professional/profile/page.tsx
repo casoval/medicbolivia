@@ -27,6 +27,20 @@ const DOCUMENTS = [
   { type: 'SELFIE_WITH_CI',     label: 'Selfie sosteniendo tu CI',         hint: 'Tu cara y la CI deben ser legibles' },
 ]
 
+// Pasos que de verdad habilitan la cuenta — debe coincidir 1 a 1 con el set
+// `required` de PATCH /admin/documents/{id}/review en el backend (ver
+// admin.py). SPECIALTY_CERT queda afuera a propósito: es opcional. El
+// `anchor` apunta al id de la tarjeta donde el profesional puede resolver
+// cada paso, para el indicador de progreso de arriba de todo.
+const REQUIRED_STEPS: { type: string; label: string; anchor: string }[] = [
+  { type: 'CI_FRONT',           label: 'Cédula de identidad (anverso)',    anchor: 'section-documentos' },
+  { type: 'CI_BACK',            label: 'Cédula de identidad (reverso)',    anchor: 'section-documentos' },
+  { type: 'PROFESSIONAL_TITLE', label: 'Título en Provisión Nacional',     anchor: 'section-documentos' },
+  { type: 'HEALTH_MINISTRY',    label: 'Matrícula Profesional (Min. de Salud)', anchor: 'section-documentos' },
+  { type: 'SELFIE_WITH_CI',     label: 'Selfie sosteniendo tu CI',         anchor: 'section-documentos' },
+  { type: 'SIGNATURE',          label: 'Firma para recetas médicas',       anchor: 'section-recetas-seguridad' },
+]
+
 // Idiomas más comunes en Bolivia, para elegir con un toque en vez de
 // escribirlos a mano (evita errores de tipeo/espaciado en las comas que
 // antes rompían el separado por comas del input de texto libre).
@@ -274,6 +288,11 @@ export default function ProfilePage() {
     department?: string; gender?: string; specialty?: string; sub_specialties?: string[]
     email?: string; phone?: string; cmb_matricula?: string; sedes_number?: string
   } | null>(null)
+  // Status de habilitación del profesional ('PENDING' | 'APPROVED' | 'REJECTED'),
+  // usado únicamente para el indicador de progreso de arriba de todo — ver
+  // REQUIRED_STEPS más abajo. No confundir con DocRecord.status, que es el
+  // estado de cada documento individual.
+  const [professionalStatus, setProfessionalStatus] = useState<string | null>(null)
 
   // Estado real de los documentos guardado en el backend (aprobado/rechazado/pendiente)
   const { data: myDocs = [], refetch: refetchDocs } = useQuery({
@@ -352,6 +371,20 @@ export default function ProfilePage() {
     return myDocs.find((d) => d.doc_type === type)
   }
 
+  // Resumen de los 6 pasos obligatorios (ver REQUIRED_STEPS), para el
+  // indicador de arriba de todo. 'missing' = nunca lo subió; el resto
+  // refleja 1 a 1 el status del ProfessionalDoc correspondiente.
+  const stepStatuses = REQUIRED_STEPS.map((step) => {
+    const record = docRecordOf(step.type)
+    const status: 'missing' | 'PENDING' | 'APPROVED' | 'REJECTED' = record ? record.status : 'missing'
+    return { ...step, status, reviewNote: record?.review_note ?? null }
+  })
+  const pendingSteps = stepStatuses.filter((s) => s.status !== 'APPROVED')
+
+  function scrollToSection(anchor: string) {
+    document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   // Foto de perfil
   const [photoPreview, setPhotoPreview]     = useState<string | null>(null)
   const [photoFile, setPhotoFile]           = useState<File | null>(null)
@@ -401,6 +434,7 @@ export default function ProfilePage() {
       ) setSamePriceAll(true)
       if (data.commission) setCommission(data.commission)
       setRegistrationData(data)
+      if (data.status) setProfessionalStatus(data.status)
     }).catch(() => {/* silencioso — el perfil puede estar vacío */})
   }, [])
 
@@ -649,6 +683,47 @@ export default function ProfilePage() {
           <NotificationsBell role="PROFESSIONAL" />
         </div>
 
+        {/* Indicador de progreso de habilitación — arriba de todo, para que
+            el profesional vea de un vistazo qué le falta sin tener que leer
+            cada tarjeta. Solo aparece mientras no esté APPROVED; una vez
+            aprobado, se cae en el sino y el aviso deja de renderizarse. */}
+        {professionalStatus && professionalStatus !== 'APPROVED' && pendingSteps.length > 0 && (
+          <div className="mb-4 rounded-lg border border-[#F2D49A] bg-[#FEF3E0] px-4 py-3">
+            <p className="text-sm font-semibold text-[#854F0B] mb-2">
+              {t('Te faltan {n} de {total} pasos para activar tu cuenta y poder emitir recetas/órdenes de laboratorio')
+                .replace('{n}', String(pendingSteps.length))
+                .replace('{total}', String(REQUIRED_STEPS.length))}
+            </p>
+            <ul className="space-y-1">
+              {pendingSteps.map((step) => (
+                <li key={step.type} className="flex items-center justify-between gap-3 text-xs">
+                  <span className="text-[#854F0B]">
+                    {step.status === 'missing' && '○ '}
+                    {step.status === 'PENDING' && '⏳ '}
+                    {step.status === 'REJECTED' && '✕ '}
+                    {step.label}
+                    {step.status === 'PENDING' && <span className="text-[#B08A3E]"> — {t('en revisión')}</span>}
+                    {step.status === 'REJECTED' && (
+                      <span className="text-[#C0392B]"> — {t('rechazado')}{step.reviewNote ? `: ${step.reviewNote}` : ''}</span>
+                    )}
+                  </span>
+                  <button
+                    onClick={() => scrollToSection(step.anchor)}
+                    className="shrink-0 text-[11px] font-medium text-[#854F0B] underline underline-offset-2 hover:text-[#6B3E0A]"
+                  >
+                    {step.status === 'missing' ? t('Completar →') : t('Ver →')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {professionalStatus === 'APPROVED' && (
+          <div className="mb-4 rounded-lg border border-[#BFE6D4] bg-[#E1F5EE] px-4 py-2.5 text-xs font-medium text-[#1D9E75]">
+            {t('✓ Tu cuenta está activa y verificada — puedes atender pacientes y emitir recetas y órdenes de laboratorio.')}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
           {/* Datos de registro — solo lectura, así el profesional recuerda qué colocó */}
@@ -721,7 +796,7 @@ export default function ProfilePage() {
           )}
 
           {/* Documentos de verificación */}
-          <div className="card">
+          <div className="card" id="section-documentos">
             <SectionTitle>{t('Documentos de verificación')}</SectionTitle>
             <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-3">
               <p className="text-xs text-[#185FA5]">
@@ -860,7 +935,7 @@ export default function ProfilePage() {
               laboratorio (ver create_prescription / create_lab_order). Por
               eso se agrupan en su propia sección, separados de los campos
               puramente opcionales. */}
-          <div className="card">
+          <div className="card" id="section-recetas-seguridad">
             <SectionTitle>{t('Datos para recetas y seguridad')}</SectionTitle>
             <p className="text-xs text-[#475569] mb-4">
               {t('A diferencia de los datos del perfil público, estos dos son obligatorios: sin la Matrícula profesional y la Firma aprobadas por un administrador, no vas a poder emitir recetas ni órdenes de laboratorio. Son la base de la validez legal de cada documento y protegen tanto al paciente como a ti — evitan que alguien emita recetas a tu nombre sin estar habilitado.')}
@@ -1339,9 +1414,6 @@ export default function ProfilePage() {
           <div className="card">
             <SectionTitle>{t('Datos bancarios para pago')}</SectionTitle>
             <p className="text-xs text-[#475569] mb-3">
-              {t('Acá se te transfiere el % que te corresponde de cada consulta cobrada por QR. Todavía no está automatizado con el banco: un administrador revisa tu cuenta y hace la transferencia manualmente, así que puede demorar unos días.')}
-            </p>
-            <p className="text-xs text-[#475569] mb-3">
               {t('Es opcional. Si prefieres no registrar una cuenta bancaria, no hay problema — coordina con el equipo de MedicBolivia otra forma de pago.')}
             </p>
 
@@ -1495,7 +1567,7 @@ export default function ProfilePage() {
           <div className="card">
             <SectionTitle>Membresía</SectionTitle>
             <p className="text-xs text-[#475569] mb-3">
-              La habilita o deshabilita el administrador manualmente. Con membresía activa no pagas comisión por tus consultas y puedes agendar directamente a los pacientes de "Mis pacientes", sin límite de horario.
+              Con membresía activa no pagas comisión por tus consultas y puedes agendar directamente a los pacientes de "Mis pacientes", sin límite de horario.
             </p>
 
             {membership?.active && membership.current ? (
