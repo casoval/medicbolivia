@@ -380,18 +380,17 @@ export default function ProfessionalDashboard() {
   const hasReceta = (id: string) => prescriptionsByConsultation[id] === true
   const hasHistoria = (id: string) => notesByConsultation[id] === true
 
-  const availMutation = useMutation({
-    mutationFn: (mode: AvailabilityMode) => professionalsAPI.updateAvailability({ availability: mode }),
-    onSuccess: (_, mode) => {
-      qc.setQueryData(['professional-me'], (old: any) => ({ ...old, availability: mode }))
-    },
-    onError: (err) => setAvailError(getErrorMessage(err)),
-  })
-
-  const autoMutation = useMutation({
-    mutationFn: (auto: boolean) => professionalsAPI.updateAvailability({ auto_availability: auto }),
-    onSuccess: (_, auto) => {
-      qc.setQueryData(['professional-me'], (old: any) => ({ ...old, auto_availability: auto }))
+  // Antes eran 2 mutaciones separadas (auto y manual), lo que obligaba a
+  // desactivar "Automático" en un click aparte antes de poder elegir
+  // "Disponible ahora" / "No disponible" — el backend siempre soportó
+  // mandar los dos campos juntos en un solo PATCH (ver AvailabilityUpdateRequest
+  // en schemas.py), así que se unifica en una sola mutación que cambia de
+  // modo de un solo click, sin importar en qué modo se esté parado.
+  const setModeMutation = useMutation({
+    mutationFn: (data: { availability?: AvailabilityMode; auto_availability?: boolean }) =>
+      professionalsAPI.updateAvailability(data),
+    onSuccess: (_, data) => {
+      qc.setQueryData(['professional-me'], (old: any) => ({ ...old, ...data }))
       qc.invalidateQueries({ queryKey: ['professional-me'] })
     },
     onError: (err) => setAvailError(getErrorMessage(err)),
@@ -532,9 +531,9 @@ export default function ProfessionalDashboard() {
             </div>
             <div className="flex gap-2 items-center">
               <button
-                onClick={() => autoMutation.mutate(!autoAvailability)}
-                disabled={autoMutation.isPending}
-                className={`text-xs py-1.5 px-3 rounded-lg border transition-colors ${
+                onClick={() => setModeMutation.mutate({ auto_availability: !autoAvailability })}
+                disabled={setModeMutation.isPending}
+                className={`text-xs py-1.5 px-3 rounded-lg border transition-colors disabled:opacity-40 ${
                   autoAvailability
                     ? 'bg-[#E6F1FB] border-[#185FA5] text-[#185FA5] font-medium'
                     : 'bg-white border-[#DDE1EE] text-[#475569]'
@@ -543,21 +542,41 @@ export default function ProfessionalDashboard() {
                 {autoAvailability ? '✓ Automático' : 'Automático'}
               </button>
               <button
-                onClick={() => availMutation.mutate('ONLINE_NOW')}
-                disabled={availMutation.isPending || autoAvailability}
+                onClick={() => setModeMutation.mutate({ auto_availability: false, availability: 'ONLINE_NOW' })}
+                disabled={setModeMutation.isPending}
                 className={`text-xs py-1.5 px-3 btn-primary disabled:opacity-40 ${currentAvailability === 'ONLINE_NOW' && !autoAvailability ? 'ring-2 ring-offset-1 ring-[#185FA5]' : 'opacity-60'}`}
               >
-                {currentAvailability === 'ONLINE_NOW' ? '✓ Disponible ahora' : 'Disponible ahora'}
+                {currentAvailability === 'ONLINE_NOW' && !autoAvailability ? '✓ Disponible ahora' : 'Disponible ahora'}
               </button>
               <button
-                onClick={() => availMutation.mutate('OFFLINE')}
-                disabled={availMutation.isPending || autoAvailability}
+                onClick={() => setModeMutation.mutate({ auto_availability: false, availability: 'OFFLINE' })}
+                disabled={setModeMutation.isPending}
                 className={`text-xs py-1.5 px-3 btn-secondary disabled:opacity-40 ${currentAvailability === 'OFFLINE' && !autoAvailability ? 'ring-2 ring-offset-1 ring-[#A0A8BF]' : 'opacity-60'}`}
               >
-                {currentAvailability === 'OFFLINE' ? '✓ No disponible' : 'No disponible'}
+                {currentAvailability === 'OFFLINE' && !autoAvailability ? '✓ No disponible' : 'No disponible'}
               </button>
             </div>
           </div>
+
+          {/* Qué hace cada botón — siempre visible (no solo la primera vez),
+              porque es la palanca que decide si te llegan pacientes o no.
+              El modo activo se resalta para reforzar "esto es lo que está
+              pasando ahora mismo". */}
+          <div className="mt-3 pt-3 border-t border-[#EEF1F8] space-y-1.5">
+            <p className={`text-xs flex gap-1.5 ${autoAvailability ? 'text-[#185FA5] font-medium' : 'text-[#64748B]'}`}>
+              <span>{autoAvailability ? '●' : '○'}</span>
+              <span><span className="font-medium">{t('Automático:')}</span> {t('el sistema te muestra disponible o no según los bloques de horario que configuraste en "Horarios" — no tienes que acordarte de activarlo ni desactivarlo cada día.')}</span>
+            </p>
+            <p className={`text-xs flex gap-1.5 ${!autoAvailability && currentAvailability === 'ONLINE_NOW' ? 'text-[#185FA5] font-medium' : 'text-[#64748B]'}`}>
+              <span>{!autoAvailability && currentAvailability === 'ONLINE_NOW' ? '●' : '○'}</span>
+              <span><span className="font-medium">{t('Disponible ahora:')}</span> {t('recibes pacientes ya mismo, sin importar tu horario configurado — útil si quieres atender fuera de tu horario habitual. Se mantiene así hasta que elijas otro modo.')}</span>
+            </p>
+            <p className={`text-xs flex gap-1.5 ${!autoAvailability && currentAvailability === 'OFFLINE' ? 'text-[#185FA5] font-medium' : 'text-[#64748B]'}`}>
+              <span>{!autoAvailability && currentAvailability === 'OFFLINE' ? '●' : '○'}</span>
+              <span><span className="font-medium">{t('No disponible:')}</span> {t('no te llega ningún paciente nuevo, sin importar tu horario configurado — útil si necesitas pausar por completo aunque tengas horario activo (viaje, descanso, etc.).')}</span>
+            </p>
+          </div>
+
           {autoAvailability && (
             <p className="text-xs text-[#64748B] mt-2">
               {t('Define tus bloques en')} <a href="/professional/schedule" className="text-[#185FA5] hover:underline">{t('Horarios')}</a> {t('para que el modo automático funcione bien.')}
