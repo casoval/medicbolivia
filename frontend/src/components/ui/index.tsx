@@ -153,6 +153,17 @@ export function StatusBadge({ status, channel, createdByRole }: { status: string
   if (status === 'PAYMENT_CONFIRMED' && createdByRole === 'PROFESSIONAL') {
     return <span className="badge-blue">Cita confirmada</span>
   }
+  // ONLINE_NOW lleva un puntito pulsante — mismo patrón (color, tamaño,
+  // animación) que ya se usa para "En línea" en las páginas de ayuda y en
+  // el dashboard de admin, así queda consistente en toda la app.
+  if (status === 'ONLINE_NOW') {
+    return (
+      <span className="badge-green inline-flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#0F6E56] animate-pulse-dot" />
+        En línea
+      </span>
+    )
+  }
   const cfg = map[status] || { cls: 'badge-gray', label: status }
   return <span className={cfg.cls}>{cfg.label}</span>
 }
