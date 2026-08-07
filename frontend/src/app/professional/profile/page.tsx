@@ -720,9 +720,317 @@ export default function ProfilePage() {
             </div>
           )}
 
+          {/* Documentos de verificación */}
+          <div className="card">
+            <SectionTitle>{t('Documentos de verificación')}</SectionTitle>
+            <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-3">
+              <p className="text-xs text-[#185FA5]">
+                {t('La revisión toma entre 24 y 72 horas hábiles. Te avisaremos por SMS cuando tu perfil sea aprobado.')}
+              </p>
+            </div>
+            <div className="space-y-2.5">
+              {DOCUMENTS.map(({ type, label, hint }) => {
+                const localStatus = docStatuses[type] || 'idle'
+                const record = docRecordOf(type)
+                // El estado local de "subiendo ahora mismo" siempre gana visualmente.
+                // Si no se está subiendo nada, se muestra el estado real guardado en el backend.
+                const serverStatus = record?.status // 'PENDING' | 'APPROVED' | 'REJECTED' | undefined
+                const isUploading = localStatus === 'uploading'
+                const isLocalError = localStatus === 'error'
+
+                return (
+                  <div key={type} className={`rounded-xl border p-3 transition-colors ${
+                    isLocalError                    ? 'bg-[#FCEBEB] border-[#F09595]' :
+                    isUploading                     ? 'bg-[#E6F1FB] border-[#85B7EB]' :
+                    serverStatus === 'APPROVED'      ? 'bg-[#E1F5EE] border-[#1D9E75]' :
+                    serverStatus === 'REJECTED'      ? 'bg-[#FCEBEB] border-[#F09595]' :
+                    serverStatus === 'PENDING'       ? 'bg-[#FEF3E0] border-[#F2D49A]' :
+                    'bg-white border-[#DDE1EE]'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium">{label}</p>
+                        <p className="text-xs text-[#475569] mt-0.5">{hint}</p>
+                        {docErrors[type] && (
+                          <p className="text-xs text-[#A32D2D] mt-1">{docErrors[type]}</p>
+                        )}
+                        {!isUploading && !isLocalError && serverStatus === 'REJECTED' && record?.review_note && (
+                          <p className="text-xs text-[#A32D2D] mt-1.5 bg-white/60 rounded px-2 py-1">
+                            <span className="font-medium">{t('Motivo:')}</span> {record.review_note}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Input oculto — siempre presente para poder reemplazar */}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,application/pdf"
+                        ref={(el) => { fileRefs.current[type] = el }}
+                        onChange={(e) => handleFileChange(type, e)}
+                        className="hidden"
+                      />
+
+                      <div className="flex-shrink-0">
+                        {isUploading ? (
+                          <div className="w-5 h-5 border-2 border-[#185FA5] border-t-transparent rounded-full animate-spin-slow" />
+                        ) : isLocalError ? (
+                          <button
+                            onClick={() => fileRefs.current[type]?.click()}
+                            className="btn-secondary text-xs py-1 px-2.5"
+                          >
+                            {t('Reintentar')}
+                          </button>
+                        ) : serverStatus === 'APPROVED' ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="badge-green">{t('✓ Aprobado')}</span>
+                            {record?.url && (
+                              <button
+                                onClick={() => setViewingDoc({ label, url: record.url! })}
+                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                                title="Ver el documento que subiste"
+                              >
+                                {t('Ver')}
+                              </button>
+                            )}
+                          </div>
+                        ) : serverStatus === 'REJECTED' ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="badge-red">{t('✕ Rechazado')}</span>
+                            {record?.url && (
+                              <button
+                                onClick={() => setViewingDoc({ label, url: record.url! })}
+                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                                title="Ver el documento que subiste"
+                              >
+                                {t('Ver')}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => fileRefs.current[type]?.click()}
+                              className="flex items-center gap-1 text-xs text-white bg-[#185FA5] hover:bg-[#0C447C] transition-colors py-1 px-2 rounded"
+                              title="Subir un documento corregido"
+                            >
+                              <IconRefresh />
+                              {t('Volver a subir')}
+                            </button>
+                          </div>
+                        ) : serverStatus === 'PENDING' ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-[#FEF3E0] text-[#854F0B] border-[#F2D49A]">
+                              {t('En revisión')}
+                            </span>
+                            {record?.url && (
+                              <button
+                                onClick={() => setViewingDoc({ label, url: record.url! })}
+                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                                title="Ver el documento que subiste"
+                              >
+                                {t('Ver')}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => fileRefs.current[type]?.click()}
+                              className="flex items-center gap-1 text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                              title="Subir un documento diferente"
+                            >
+                              <IconRefresh />
+                              {t('Reemplazar')}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => fileRefs.current[type]?.click()}
+                            className="btn-secondary text-xs py-1 px-2.5"
+                          >
+                            {t('Subir')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Datos para recetas y seguridad — Matrícula profesional + Firma.
+              A diferencia del resto del "Datos del perfil público", estos dos
+              SÍ son inhabilitantes: sin ambos verificados y aprobados por un
+              admin, el backend bloquea la emisión de recetas y órdenes de
+              laboratorio (ver create_prescription / create_lab_order). Por
+              eso se agrupan en su propia sección, separados de los campos
+              puramente opcionales. */}
+          <div className="card">
+            <SectionTitle>{t('Datos para recetas y seguridad')}</SectionTitle>
+            <p className="text-xs text-[#475569] mb-4">
+              {t('A diferencia de los datos del perfil público, estos dos son obligatorios: sin la Matrícula profesional y la Firma aprobadas por un administrador, no vas a poder emitir recetas ni órdenes de laboratorio. Son la base de la validez legal de cada documento y protegen tanto al paciente como a ti — evitan que alguien emita recetas a tu nombre sin estar habilitado.')}
+            </p>
+            {profileSuccess && <div className="mb-3"><Alert type="success" message={profileSuccess} /></div>}
+            {profileError   && <div className="mb-3"><Alert type="error"   message={profileError} /></div>}
+
+            <div className="pb-4 mb-4 border-b border-[#DDE1EE]">
+              <p className="text-xs font-semibold text-[#1A1F2E] mb-2">{t('Matrícula profesional')}</p>
+              <div>
+                <label className="block text-xs font-medium text-[#475569] mb-1">
+                  {t('Matrícula profesional (Ministerio de Salud)')}
+                  <VerifyBadge hasValue={licenseNumber.trim() !== ''} verified={verification.professional_license_verified} t={t} />
+                </label>
+                <input
+                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] disabled:bg-[#F5F6FA] disabled:text-[#64748B]"
+                  placeholder={t('Número de tu matrícula del Ministerio de Salud')}
+                  value={licenseNumber}
+                  disabled={licenseLocked}
+                  onChange={(e) => setLicenseNumber(e.target.value)}
+                />
+                <p className="text-xs text-[#64748B] mt-1">
+                  {licenseLocked
+                    ? t('Ya quedó registrada y no se puede modificar — es un dato que no cambia. Si necesitas corregirla, contacta a soporte.')
+                    : t('Se verifica contra el documento que subas en "Documentos de verificación" — si la dejas vacía, o mientras no esté verificada, el paciente no la verá. Una vez guardada, no se podrá volver a editar.')}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-[#1A1F2E] mb-2">{t('Firma para recetas médicas')}</p>
+            <p className="text-xs text-[#475569] mb-3">
+              {t('Se estampa en el PDF imprimible de tus recetas, para las farmacias que todavía piden papel. La autenticidad real de cada receta siempre la da el código QR, no esta imagen.')}
+            </p>
+            {signatureError && <div className="mb-3"><Alert type="error" message={signatureError} /></div>}
+
+            {signatureUrl && (() => {
+              const sigRecord = docRecordOf('SIGNATURE')
+              const sigStatus = sigRecord?.status
+              return (
+                <div className={`mb-3 rounded-lg px-3 py-2 text-xs ${
+                  sigStatus === 'APPROVED' ? 'bg-[#E1F5EE] text-[#1D9E75]' :
+                  sigStatus === 'REJECTED' ? 'bg-[#FCEBEB] text-[#C0392B]' :
+                  'bg-[#FEF3E0] text-[#8A6D1F]'
+                }`}>
+                  {sigStatus === 'APPROVED' && t('✓ Firma verificada por un administrador. Ya podés emitir recetas y órdenes de laboratorio.')}
+                  {sigStatus === 'REJECTED' && (
+                    <>
+                      {t('✕ Firma rechazada.')}{sigRecord?.review_note && <> <span className="font-medium">{t('Motivo:')}</span> {sigRecord.review_note}</>}{' '}
+                      {t('Subí una nueva para poder emitir recetas y órdenes de laboratorio.')}
+                    </>
+                  )}
+                  {(!sigStatus || sigStatus === 'PENDING') && t('⏳ Firma en revisión (24-72h hábiles). No podés emitir recetas ni órdenes de laboratorio hasta que un administrador la apruebe.')}
+                </div>
+              )
+            })()}
+
+            {/* Input de foto oculto — vive fuera de los bloques condicionales
+                para que la ref no se pierda al cambiar de modo */}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              ref={signaturePhotoRef}
+              onChange={handleSignaturePhotoChange}
+              className="hidden"
+            />
+
+            {signatureMode === 'view' && (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-full max-w-xs h-28 rounded-xl border-2 border-dashed border-[#DDE1EE] bg-[#F5F6FA] flex items-center justify-center overflow-hidden">
+                  {signatureUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={signatureUrl} alt={t('Firma')} className="max-h-full max-w-full object-contain p-2" />
+                  ) : (
+                    <p className="text-xs text-[#A0A8BF] px-4 text-center">{t('Todavía no cargaste tu firma')}</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setSignatureMode('choose')} className="btn-primary text-xs py-1.5 px-3">
+                    {signatureUrl ? t('Cambiar firma') : t('Agregar firma')}
+                  </button>
+                  {signatureUrl && (
+                    <button onClick={removeSignature} disabled={signatureSaving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
+                      {t('Quitar')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {signatureMode === 'choose' && (
+              <div className="flex flex-col sm:flex-row gap-3 items-stretch">
+                <button
+                  onClick={() => setSignatureMode('draw')}
+                  className="flex-1 border-2 border-[#DDE1EE] rounded-xl p-4 text-center hover:border-[#185FA5] transition-colors"
+                >
+                  <p className="text-2xl mb-1">✏️</p>
+                  <p className="text-sm font-semibold text-[#1A1F2E]">{t('Dibujar firma')}</p>
+                  <p className="text-xs text-[#64748B] mt-1">{t('Con el dedo o el mouse')}</p>
+                </button>
+                <button
+                  onClick={() => signaturePhotoRef.current?.click()}
+                  className="flex-1 border-2 border-[#DDE1EE] rounded-xl p-4 text-center hover:border-[#185FA5] transition-colors"
+                >
+                  <p className="text-2xl mb-1">📷</p>
+                  <p className="text-sm font-semibold text-[#1A1F2E]">{t('Subir foto de mi firma')}</p>
+                  <p className="text-xs text-[#64748B] mt-1">{t('Firmá en papel y fotografiá')}</p>
+                </button>
+                <button
+                  onClick={() => setSignatureMode('view')}
+                  className="text-xs text-[#64748B] underline self-center sm:self-auto"
+                >
+                  {t('Cancelar')}
+                </button>
+              </div>
+            )}
+
+            {signatureMode === 'draw' && (
+              <SignaturePad
+                saving={signatureSaving}
+                onSave={saveSignatureFromCanvas}
+                onCancel={() => setSignatureMode('view')}
+              />
+            )}
+
+            {signatureMode === 'photo' && (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-full max-w-xs h-28 rounded-xl border-2 border-[#DDE1EE] bg-[#F5F6FA] flex items-center justify-center overflow-hidden">
+                  {signaturePhotoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={signaturePhotoPreview} alt={t('Vista previa')} className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <p className="text-xs text-[#A0A8BF]">{t('Selecciona una foto')}</p>
+                  )}
+                </div>
+                <p className="text-xs text-[#64748B] text-center max-w-xs">
+                  {t('Firmá con tinta oscura sobre una hoja blanca, con buena luz. Le quitamos el fondo automáticamente.')}
+                </p>
+                <div className="flex gap-2 flex-wrap justify-center">
+                  <button onClick={() => signaturePhotoRef.current?.click()} disabled={signatureSaving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
+                    {t('Elegir otra foto')}
+                  </button>
+                  <button onClick={saveSignatureFromPhoto} disabled={!signaturePhotoFile || signatureSaving} className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50">
+                    {signatureSaving ? t('Guardando...') : t('Guardar firma')}
+                  </button>
+                  <button
+                    onClick={() => { setSignatureMode('view'); setSignaturePhotoFile(null); setSignaturePhotoPreview(null); setSignatureError('') }}
+                    disabled={signatureSaving}
+                    className="text-xs text-[#64748B] underline self-center"
+                  >
+                    {t('Cancelar')}
+                  </button>
+                </div>
+              </div>
+            )}
+            </div>
+
+            <div className="pt-4 mt-1 border-t border-[#DDE1EE]">
+              <button onClick={saveProfile} className="btn-primary text-xs py-1.5 px-3">
+                {t('Guardar cambios')}
+              </button>
+            </div>
+          </div>
+
           {/* Perfil público */}
           <div className="card">
             <SectionTitle>{t('Datos del perfil público')}</SectionTitle>
+            <p className="text-xs text-[#475569] mb-3">
+              {t('Estos datos son opcionales y no afectan tu capacidad de atender pacientes ni de emitir recetas — solo suman credibilidad frente al paciente una vez verificados por un admin.')}
+            </p>
             {profileSuccess && <div className="mb-3"><Alert type="success" message={profileSuccess} /></div>}
             {profileError   && <div className="mb-3"><Alert type="error"   message={profileError} /></div>}
 
@@ -874,7 +1182,7 @@ export default function ProfilePage() {
                   onChange={(e) => setYears(e.target.value)}
                 />
                 <p className="text-xs text-[#64748B] mt-1">
-                  {t('Si lo dejas vacío, o mientras no esté verificado, el paciente no lo verá. Este dato sí lo puedes actualizar cuando quieras — cada cambio pasa de nuevo por revisión.')}
+                  {t('Si lo dejas vacío, o mientras no esté verificado, el paciente no lo verá. Lo puedes actualizar cuando quieras — cada cambio vuelve a pasar por revisión.')}
                 </p>
                 {years.trim() !== '' && verification.years_experience_verified && (
                   <label className="flex items-center gap-2 mt-2 text-xs text-[#475569]">
@@ -903,7 +1211,7 @@ export default function ProfilePage() {
                 <p className="text-xs text-[#64748B] mt-1">
                   {universityLocked
                     ? t('Ya quedó registrada y no se puede modificar — es un dato que no cambia. Si necesitas corregirla, contacta a soporte.')
-                    : t('Opcional. Se verifica contra tu Título en Provisión Nacional — si la dejas vacía, o mientras no esté verificada, el paciente no la verá. Una vez guardada, no se podrá volver a editar.')}
+                    : t('Se verifica contra tu Título en Provisión Nacional — si la dejas vacía, o mientras no esté verificada, el paciente no la verá. Una vez guardada, no se podrá volver a editar.')}
                 </p>
                 {university.trim() !== '' && verification.university_verified && (
                   <label className="flex items-center gap-2 mt-2 text-xs text-[#475569]">
@@ -917,158 +1225,10 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-[#475569] mb-1">
-                  {t('Matrícula profesional (Ministerio de Salud)')}
-                  <VerifyBadge hasValue={licenseNumber.trim() !== ''} verified={verification.professional_license_verified} t={t} />
-                </label>
-                <input
-                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] disabled:bg-[#F5F6FA] disabled:text-[#64748B]"
-                  placeholder={t('Número de tu matrícula del Ministerio de Salud')}
-                  value={licenseNumber}
-                  disabled={licenseLocked}
-                  onChange={(e) => setLicenseNumber(e.target.value)}
-                />
-                <p className="text-xs text-[#64748B] mt-1">
-                  {licenseLocked
-                    ? t('Ya quedó registrada y no se puede modificar — es un dato que no cambia. Si necesitas corregirla, contacta a soporte.')
-                    : t('Se verifica contra el documento que subas en "Documentos de verificación" — si la dejas vacía, o mientras no esté verificada, el paciente no la verá. Una vez guardada, no se podrá volver a editar.')}
-                </p>
-              </div>
-
               <button onClick={saveProfile} className="btn-primary text-xs py-1.5 px-3">
                 {t('Guardar cambios')}
               </button>
             </div>
-          </div>
-
-          {/* Firma para recetas médicas imprimibles */}
-          <div className="card">
-            <SectionTitle>{t('Firma para recetas médicas')}</SectionTitle>
-            <p className="text-xs text-[#475569] mb-3">
-              {t('Se estampa en el PDF imprimible de tus recetas, para las farmacias que todavía piden papel. La autenticidad real de cada receta siempre la da el código QR, no esta imagen.')}
-            </p>
-            {signatureError && <div className="mb-3"><Alert type="error" message={signatureError} /></div>}
-
-            {signatureUrl && (() => {
-              const sigRecord = docRecordOf('SIGNATURE')
-              const sigStatus = sigRecord?.status
-              return (
-                <div className={`mb-3 rounded-lg px-3 py-2 text-xs ${
-                  sigStatus === 'APPROVED' ? 'bg-[#E1F5EE] text-[#1D9E75]' :
-                  sigStatus === 'REJECTED' ? 'bg-[#FCEBEB] text-[#C0392B]' :
-                  'bg-[#FEF3E0] text-[#8A6D1F]'
-                }`}>
-                  {sigStatus === 'APPROVED' && t('✓ Firma verificada por un administrador. Ya podés emitir recetas y órdenes de laboratorio.')}
-                  {sigStatus === 'REJECTED' && (
-                    <>
-                      {t('✕ Firma rechazada.')}{sigRecord?.review_note && <> <span className="font-medium">{t('Motivo:')}</span> {sigRecord.review_note}</>}{' '}
-                      {t('Subí una nueva para poder emitir recetas y órdenes de laboratorio.')}
-                    </>
-                  )}
-                  {(!sigStatus || sigStatus === 'PENDING') && t('⏳ Firma en revisión (24-72h hábiles). No podés emitir recetas ni órdenes de laboratorio hasta que un administrador la apruebe.')}
-                </div>
-              )
-            })()}
-
-            {/* Input de foto oculto — vive fuera de los bloques condicionales
-                para que la ref no se pierda al cambiar de modo */}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              ref={signaturePhotoRef}
-              onChange={handleSignaturePhotoChange}
-              className="hidden"
-            />
-
-            {signatureMode === 'view' && (
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-full max-w-xs h-28 rounded-xl border-2 border-dashed border-[#DDE1EE] bg-[#F5F6FA] flex items-center justify-center overflow-hidden">
-                  {signatureUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={signatureUrl} alt={t('Firma')} className="max-h-full max-w-full object-contain p-2" />
-                  ) : (
-                    <p className="text-xs text-[#A0A8BF] px-4 text-center">{t('Todavía no cargaste tu firma')}</p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setSignatureMode('choose')} className="btn-primary text-xs py-1.5 px-3">
-                    {signatureUrl ? t('Cambiar firma') : t('Agregar firma')}
-                  </button>
-                  {signatureUrl && (
-                    <button onClick={removeSignature} disabled={signatureSaving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
-                      {t('Quitar')}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {signatureMode === 'choose' && (
-              <div className="flex flex-col sm:flex-row gap-3 items-stretch">
-                <button
-                  onClick={() => setSignatureMode('draw')}
-                  className="flex-1 border-2 border-[#DDE1EE] rounded-xl p-4 text-center hover:border-[#185FA5] transition-colors"
-                >
-                  <p className="text-2xl mb-1">✏️</p>
-                  <p className="text-sm font-semibold text-[#1A1F2E]">{t('Dibujar firma')}</p>
-                  <p className="text-xs text-[#64748B] mt-1">{t('Con el dedo o el mouse')}</p>
-                </button>
-                <button
-                  onClick={() => signaturePhotoRef.current?.click()}
-                  className="flex-1 border-2 border-[#DDE1EE] rounded-xl p-4 text-center hover:border-[#185FA5] transition-colors"
-                >
-                  <p className="text-2xl mb-1">📷</p>
-                  <p className="text-sm font-semibold text-[#1A1F2E]">{t('Subir foto de mi firma')}</p>
-                  <p className="text-xs text-[#64748B] mt-1">{t('Firmá en papel y fotografiá')}</p>
-                </button>
-                <button
-                  onClick={() => setSignatureMode('view')}
-                  className="text-xs text-[#64748B] underline self-center sm:self-auto"
-                >
-                  {t('Cancelar')}
-                </button>
-              </div>
-            )}
-
-            {signatureMode === 'draw' && (
-              <SignaturePad
-                saving={signatureSaving}
-                onSave={saveSignatureFromCanvas}
-                onCancel={() => setSignatureMode('view')}
-              />
-            )}
-
-            {signatureMode === 'photo' && (
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-full max-w-xs h-28 rounded-xl border-2 border-[#DDE1EE] bg-[#F5F6FA] flex items-center justify-center overflow-hidden">
-                  {signaturePhotoPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={signaturePhotoPreview} alt={t('Vista previa')} className="max-h-full max-w-full object-contain" />
-                  ) : (
-                    <p className="text-xs text-[#A0A8BF]">{t('Selecciona una foto')}</p>
-                  )}
-                </div>
-                <p className="text-xs text-[#64748B] text-center max-w-xs">
-                  {t('Firmá con tinta oscura sobre una hoja blanca, con buena luz. Le quitamos el fondo automáticamente.')}
-                </p>
-                <div className="flex gap-2 flex-wrap justify-center">
-                  <button onClick={() => signaturePhotoRef.current?.click()} disabled={signatureSaving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
-                    {t('Elegir otra foto')}
-                  </button>
-                  <button onClick={saveSignatureFromPhoto} disabled={!signaturePhotoFile || signatureSaving} className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50">
-                    {signatureSaving ? t('Guardando...') : t('Guardar firma')}
-                  </button>
-                  <button
-                    onClick={() => { setSignatureMode('view'); setSignaturePhotoFile(null); setSignaturePhotoPreview(null); setSignatureError('') }}
-                    disabled={signatureSaving}
-                    className="text-xs text-[#64748B] underline self-center"
-                  >
-                    {t('Cancelar')}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Precios de consulta */}
@@ -1328,139 +1488,6 @@ export default function ProfilePage() {
               >
                 {saveBankMutation.isPending ? t('Guardando...') : t('Guardar cuenta bancaria')}
               </button>
-            </div>
-          </div>
-
-          {/* Documentos de verificación */}
-          <div className="card">
-            <SectionTitle>{t('Documentos de verificación')}</SectionTitle>
-            <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-3">
-              <p className="text-xs text-[#185FA5]">
-                {t('La revisión toma entre 24 y 72 horas hábiles. Te avisaremos por SMS cuando tu perfil sea aprobado.')}
-              </p>
-            </div>
-            <div className="space-y-2.5">
-              {DOCUMENTS.map(({ type, label, hint }) => {
-                const localStatus = docStatuses[type] || 'idle'
-                const record = docRecordOf(type)
-                // El estado local de "subiendo ahora mismo" siempre gana visualmente.
-                // Si no se está subiendo nada, se muestra el estado real guardado en el backend.
-                const serverStatus = record?.status // 'PENDING' | 'APPROVED' | 'REJECTED' | undefined
-                const isUploading = localStatus === 'uploading'
-                const isLocalError = localStatus === 'error'
-
-                return (
-                  <div key={type} className={`rounded-xl border p-3 transition-colors ${
-                    isLocalError                    ? 'bg-[#FCEBEB] border-[#F09595]' :
-                    isUploading                     ? 'bg-[#E6F1FB] border-[#85B7EB]' :
-                    serverStatus === 'APPROVED'      ? 'bg-[#E1F5EE] border-[#1D9E75]' :
-                    serverStatus === 'REJECTED'      ? 'bg-[#FCEBEB] border-[#F09595]' :
-                    serverStatus === 'PENDING'       ? 'bg-[#FEF3E0] border-[#F2D49A]' :
-                    'bg-white border-[#DDE1EE]'
-                  }`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium">{label}</p>
-                        <p className="text-xs text-[#475569] mt-0.5">{hint}</p>
-                        {docErrors[type] && (
-                          <p className="text-xs text-[#A32D2D] mt-1">{docErrors[type]}</p>
-                        )}
-                        {!isUploading && !isLocalError && serverStatus === 'REJECTED' && record?.review_note && (
-                          <p className="text-xs text-[#A32D2D] mt-1.5 bg-white/60 rounded px-2 py-1">
-                            <span className="font-medium">{t('Motivo:')}</span> {record.review_note}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Input oculto — siempre presente para poder reemplazar */}
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,application/pdf"
-                        ref={(el) => { fileRefs.current[type] = el }}
-                        onChange={(e) => handleFileChange(type, e)}
-                        className="hidden"
-                      />
-
-                      <div className="flex-shrink-0">
-                        {isUploading ? (
-                          <div className="w-5 h-5 border-2 border-[#185FA5] border-t-transparent rounded-full animate-spin-slow" />
-                        ) : isLocalError ? (
-                          <button
-                            onClick={() => fileRefs.current[type]?.click()}
-                            className="btn-secondary text-xs py-1 px-2.5"
-                          >
-                            {t('Reintentar')}
-                          </button>
-                        ) : serverStatus === 'APPROVED' ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="badge-green">{t('✓ Aprobado')}</span>
-                            {record?.url && (
-                              <button
-                                onClick={() => setViewingDoc({ label, url: record.url! })}
-                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
-                                title="Ver el documento que subiste"
-                              >
-                                {t('Ver')}
-                              </button>
-                            )}
-                          </div>
-                        ) : serverStatus === 'REJECTED' ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="badge-red">{t('✕ Rechazado')}</span>
-                            {record?.url && (
-                              <button
-                                onClick={() => setViewingDoc({ label, url: record.url! })}
-                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
-                                title="Ver el documento que subiste"
-                              >
-                                {t('Ver')}
-                              </button>
-                            )}
-                            <button
-                              onClick={() => fileRefs.current[type]?.click()}
-                              className="flex items-center gap-1 text-xs text-white bg-[#185FA5] hover:bg-[#0C447C] transition-colors py-1 px-2 rounded"
-                              title="Subir un documento corregido"
-                            >
-                              <IconRefresh />
-                              {t('Volver a subir')}
-                            </button>
-                          </div>
-                        ) : serverStatus === 'PENDING' ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-[#FEF3E0] text-[#854F0B] border-[#F2D49A]">
-                              {t('En revisión')}
-                            </span>
-                            {record?.url && (
-                              <button
-                                onClick={() => setViewingDoc({ label, url: record.url! })}
-                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
-                                title="Ver el documento que subiste"
-                              >
-                                {t('Ver')}
-                              </button>
-                            )}
-                            <button
-                              onClick={() => fileRefs.current[type]?.click()}
-                              className="flex items-center gap-1 text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
-                              title="Subir un documento diferente"
-                            >
-                              <IconRefresh />
-                              {t('Reemplazar')}
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => fileRefs.current[type]?.click()}
-                            className="btn-secondary text-xs py-1 px-2.5"
-                          >
-                            {t('Subir')}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
             </div>
           </div>
 
