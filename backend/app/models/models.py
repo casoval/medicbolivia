@@ -244,6 +244,7 @@ class Patient(Base):
     consultations: Mapped[List["Consultation"]] = relationship(back_populates="patient")
     ratings: Mapped[List["Rating"]] = relationship(back_populates="patient")
     payments: Mapped[List["Payment"]] = relationship(back_populates="patient")
+    refund_account: Mapped[Optional["PatientRefundAccount"]] = relationship(back_populates="patient", uselist=False)
 
 
 class Professional(Base):
@@ -602,7 +603,6 @@ class Payment(Base):
     consultation: Mapped["Consultation"] = relationship(back_populates="payment")
     patient: Mapped["Patient"] = relationship(back_populates="payments")
     earning: Mapped[Optional["Earning"]] = relationship(back_populates="payment", uselist=False)
-    refund_account: Mapped[Optional["PatientRefundAccount"]] = relationship(back_populates="payment", uselist=False)
 
 
 class Earning(Base):
@@ -681,22 +681,22 @@ class ProfessionalBankAccount(Base):
 
 class PatientRefundAccount(Base):
     """
-    A dónde transferirle a un paciente un reembolso puntual — Fase 1
-    semi-automática, mismo motivo que ProfessionalBankAccount: el banco no
+    A dónde transferirle a un paciente sus reembolsos — Fase 1
+    semi-automática, espejo exacto de ProfessionalBankAccount: el banco no
     expone ningún servicio de reversa/transferencia saliente (ver
     app/services/bank_qr.py), así que esto solo alimenta lo que un admin
     necesita para transferir A MANO y confirmar después
     (ver app/services/refund_payout.py).
 
-    A diferencia de la cuenta del profesional (un perfil estable, una
-    cuenta por profesional), acá se pide el dato POR CADA reembolso
-    (payment_id es único, 1:1 con Payment) — un paciente reembolsado una
-    sola vez no necesita "guardar" una cuenta permanente, y así también
-    evitamos mandar plata por error a una cuenta vieja si cambió de banco
-    o de número entre un reembolso y el siguiente.
+    Perfil permanente (una cuenta por paciente, igual que el
+    profesional — unique=True) que el paciente carga de antemano en su
+    Perfil, para no tener que completarlo cada vez que le aprueban un
+    reembolso. Igual que con el profesional, cada edición vuelve
+    verified=False: un admin la revisa de nuevo antes de que el próximo
+    reembolso entre en la cola de "listos para pagar".
 
-    method decide qué grupo de campos aplica: BANK usa los mismos campos que
-    ProfessionalBankAccount (cifrados); MOBILE_WALLET es la opción más
+    method decide qué grupo de campos aplica: BANK usa los mismos campos
+    cifrados que ProfessionalBankAccount; MOBILE_WALLET es la opción más
     accesible para alguien sin cuenta bancaria formal — billetera móvil
     (Tigo Money) o QR persona-a-persona de su banco, identificado por
     número de celular.
@@ -704,8 +704,8 @@ class PatientRefundAccount(Base):
     __tablename__ = "patient_refund_accounts"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
-    payment_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("payments.id", ondelete="CASCADE"), unique=True
+    patient_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("patients.id", ondelete="CASCADE"), unique=True
     )
     method: Mapped[RefundMethod] = mapped_column(SAEnum(RefundMethod), nullable=False)
     # ── Campos si method == BANK (mismo criterio de cifrado que ProfessionalBankAccount) ──
@@ -718,6 +718,9 @@ class PatientRefundAccount(Base):
     # ── Campos si method == MOBILE_WALLET ──
     wallet_provider: Mapped[Optional[str]] = mapped_column(String(100))
     phone_number: Mapped[Optional[str]] = mapped_column(String(20))
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    verified_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
     # El paciente aceptó explícitamente que los datos son su
     # responsabilidad — sin esto no se guarda (ver validación en
     # PatientRefundAccountRequest), mismo criterio que el profesional.
@@ -725,7 +728,7 @@ class PatientRefundAccount(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
-    payment: Mapped["Payment"] = relationship(back_populates="refund_account")
+    patient: Mapped["Patient"] = relationship(back_populates="refund_account")
 
 
 class PayoutBatchStatus(str, enum.Enum):

@@ -508,18 +508,20 @@ async def mark_all_notifications_read(
 
 
 # ─────────────────────────────────────────────────────
-# REEMBOLSOS (Fase 1 semi-automática) — a dónde transferirle un
-# reembolso puntual. Ver app/services/refund_payout.py para el flujo
-# completo (espejo de la cuenta bancaria que carga el profesional).
+# REEMBOLSOS (Fase 1 semi-automática) — cuenta PERMANENTE para recibir
+# reembolsos, espejo exacto de la cuenta bancaria del profesional
+# (ver GET/PUT /professionals/me/bank-account). El paciente la carga una
+# sola vez en su Perfil; a partir de ahí, cualquier reembolso futuro
+# entra directo a la cola de "listos para pagar" del admin en cuanto un
+# admin la verifica — sin tener que completar nada de nuevo cada vez.
+# Ver app/services/refund_payout.py para el flujo completo.
 # ─────────────────────────────────────────────────────
 
-# ── GET /api/v1/patients/me/refunds ──────────────────
-# Reembolsos aprobados (por un admin o automáticamente al cancelar una
-# cita) que todavía no se transfirieron de verdad — para que el paciente
-# sepa a cuáles les falta cargar el destino y a cuáles ya se los cargó y
-# está esperando la transferencia.
-@router.get("/me/refunds", summary="Mis reembolsos aprobados pendientes de cobrar")
-async def get_my_pending_refunds(
+# ── GET /api/v1/patients/me/refund-account ───────────
+# Nunca devuelve el número completo, solo los últimos 4 dígitos para
+# mostrar "****1234" en pantalla (mismo criterio que el profesional).
+@router.get("/me/refund-account", summary="Mi cuenta para recibir reembolsos")
+async def get_my_refund_account(
     current_user: User = Depends(get_current_patient),
     db: AsyncSession = Depends(get_db)
 ):
@@ -531,45 +533,33 @@ async def get_my_pending_refunds(
         raise HTTPException(status_code=404, detail="Perfil de paciente no encontrado")
 
     result = await db.execute(
-        select(Payment, PatientRefundAccount, Consultation, Professional)
-        .join(PatientRefundAccount, PatientRefundAccount.payment_id == Payment.id, isouter=True)
-        .join(Consultation, Payment.consultation_id == Consultation.id, isouter=True)
-        .join(Professional, Consultation.professional_id == Professional.id, isouter=True)
-        .where(
-            Payment.patient_id == patient.id,
-            Payment.status.in_([PaymentStatus.REFUNDED_FULL, PaymentStatus.REFUNDED_PARTIAL]),
-            Payment.refund_paid_out_at.is_(None),
-        )
-        .order_by(Payment.refunded_at.desc())
+        select(PatientRefundAccount).where(PatientRefundAccount.patient_id == patient.id)
     )
-    rows = result.all()
+    account = result.scalar_one_or_none()
+    if not account:
+        return None
 
-    return [
-        {
-            "payment_id": p.id,
-            "consultation_id": p.consultation_id,
-            "amount": float(p.refunded_amount) if p.refunded_amount is not None else float(p.amount),
-            "refunded_at": p.refunded_at.isoformat() if p.refunded_at else None,
-            "refund_note": p.refund_note,
-            "specialty": c.specialty if c else None,
-            "professional_first_name": prof.first_name if prof else None,
-            "professional_last_name": prof.last_name if prof else None,
-            # needs_account = True → todavía no cargó a dónde transferirle.
-            "needs_account": account is None,
-            "account_method": account.method if account else None,
-        }
-        for p, account, c, prof in rows
-    ]
+    return {
+        "method": account.method,
+        "bank_name": account.bank_name,
+        "account_type": account.account_type,
+        "account_number_masked": f"****{account.account_number_last4}" if account.account_number_last4 else None,
+        "account_holder_name": account.account_holder_name,
+        "wallet_provider": account.wallet_provider,
+        "phone_number": account.phone_number,
+        "verified": account.verified,
+        "verified_at": account.verified_at.isoformat() if account.verified_at else None,
+        "updated_at": account.updated_at.isoformat() if account.updated_at else None,
+    }
 
 
-# ── PUT /api/v1/patients/me/refunds/{payment_id}/account ─
-# Carga (o reemplaza) a dónde transferirle un reembolso puntual. Solo
-# aplica a un pago propio, ya aprobado y todavía no pagado — no es un
-# perfil permanente como la cuenta del profesional: cada reembolso puede
-# ir a un destino distinto.
-@router.put("/me/refunds/{payment_id}/account", summary="Indicar a dónde transferirme este reembolso")
-async def submit_refund_account(
-    payment_id: str,
+# ── PUT /api/v1/patients/me/refund-account ───────────
+# Alta o edición (siempre reemplaza — una sola cuenta activa por
+# paciente, igual que el profesional). Cada guardado vuelve
+# verified=False: un admin tiene que revisarla de nuevo antes de que el
+# próximo reembolso entre en la cola de "listos para pagar".
+@router.put("/me/refund-account", summary="Registrar o actualizar mi cuenta para recibir reembolsos")
+async def upsert_my_refund_account(
     data: PatientRefundAccountRequest,
     current_user: User = Depends(get_current_patient),
     db: AsyncSession = Depends(get_db)
@@ -582,29 +572,20 @@ async def submit_refund_account(
     if not patient:
         raise HTTPException(status_code=404, detail="Perfil de paciente no encontrado")
 
-    payment_result = await db.execute(
-        select(Payment).where(Payment.id == payment_id, Payment.patient_id == patient.id)
+    result = await db.execute(
+        select(PatientRefundAccount).where(PatientRefundAccount.patient_id == patient.id)
     )
-    payment = payment_result.scalar_one_or_none()
-    if not payment:
-        raise HTTPException(status_code=404, detail="Pago no encontrado")
-
-    if payment.status not in (PaymentStatus.REFUNDED_FULL, PaymentStatus.REFUNDED_PARTIAL):
-        raise HTTPException(status_code=400, detail="Este pago no tiene un reembolso aprobado esperando datos")
-    if payment.refund_paid_out_at is not None:
-        raise HTTPException(status_code=400, detail="Este reembolso ya fue transferido, no se puede cambiar el destino")
-
-    account_result = await db.execute(
-        select(PatientRefundAccount).where(PatientRefundAccount.payment_id == payment.id)
-    )
-    account = account_result.scalar_one_or_none()
+    account = result.scalar_one_or_none()
     is_new = account is None
     if account is None:
-        account = PatientRefundAccount(payment_id=payment.id)
+        account = PatientRefundAccount(patient_id=patient.id)
         db.add(account)
 
     account.method = RefundMethod(data.method)
     account.responsibility_acknowledged_at = utcnow_naive()
+    account.verified = False
+    account.verified_at = None
+    account.verified_by = None
 
     if data.method == "BANK":
         account.bank_name = data.bank_name.strip()
@@ -629,11 +610,57 @@ async def submit_refund_account(
 
     db.add(AuditLog(
         user_id=current_user.id,
-        action="REFUND_ACCOUNT_SUBMITTED" if is_new else "REFUND_ACCOUNT_UPDATED",
+        action="REFUND_ACCOUNT_CREATED" if is_new else "REFUND_ACCOUNT_UPDATED",
         entity_type="PatientRefundAccount",
         entity_id=account.id,
-        metadata_={"payment_id": payment.id, "method": data.method},
+        metadata_={"method": data.method},
     ))
 
     await db.commit()
-    return {"message": "Datos guardados. El equipo procesará tu reembolso a la brevedad.", "payment_id": payment.id}
+    return {
+        "message": "Cuenta guardada. Un administrador la revisará antes de procesar tu próximo reembolso.",
+        "verified": False,
+    }
+
+
+# ── GET /api/v1/patients/me/refunds ──────────────────
+# Reembolsos aprobados (por un admin o automáticamente al cancelar una
+# cita) que todavía no se transfirieron de verdad — solo informativo,
+# para que el paciente vea el estado; ya no hace falta que actúe sobre
+# cada uno si tiene su cuenta de reembolso cargada y verificada.
+@router.get("/me/refunds", summary="Mis reembolsos aprobados pendientes de cobrar")
+async def get_my_pending_refunds(
+    current_user: User = Depends(get_current_patient),
+    db: AsyncSession = Depends(get_db)
+):
+    patient_result = await db.execute(select(Patient).where(Patient.user_id == current_user.id))
+    patient = patient_result.scalar_one_or_none()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Perfil de paciente no encontrado")
+
+    result = await db.execute(
+        select(Payment, Consultation, Professional)
+        .join(Consultation, Payment.consultation_id == Consultation.id, isouter=True)
+        .join(Professional, Consultation.professional_id == Professional.id, isouter=True)
+        .where(
+            Payment.patient_id == patient.id,
+            Payment.status.in_([PaymentStatus.REFUNDED_FULL, PaymentStatus.REFUNDED_PARTIAL]),
+            Payment.refund_paid_out_at.is_(None),
+        )
+        .order_by(Payment.refunded_at.desc())
+    )
+    rows = result.all()
+
+    return [
+        {
+            "payment_id": p.id,
+            "consultation_id": p.consultation_id,
+            "amount": float(p.refunded_amount) if p.refunded_amount is not None else float(p.amount),
+            "refunded_at": p.refunded_at.isoformat() if p.refunded_at else None,
+            "refund_note": p.refund_note,
+            "specialty": c.specialty if c else None,
+            "professional_first_name": prof.first_name if prof else None,
+            "professional_last_name": prof.last_name if prof else None,
+        }
+        for p, c, prof in rows
+    ]

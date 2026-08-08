@@ -5,15 +5,15 @@
 // (Banco Ganadero) solo expone servicios de COBRO, no de reversa, así
 // que la plata sigue en la cuenta de la plataforma hasta transferirla
 // A MANO. El flujo acá es:
-//   1. Un admin (o una cancelación automática) aprueba un reembolso →
-//      aparece en "Esperando datos del paciente" hasta que el paciente
-//      indica a dónde transferirle.
-//   2. Cuando el paciente carga sus datos, pasa a "Listos para pagar".
+//   1. El paciente carga su cuenta de reembolso (permanente) en su Perfil.
+//   2. Un admin la verifica acá (o desde este mismo panel) — recién ahí
+//      sus reembolsos aprobados pasan a "Listos para pagar".
 //   3. El admin transfiere A MANO (banca en línea, QR persona-a-persona,
 //      billetera móvil) y confirma acá — recién ahí se avisa al paciente.
 // A diferencia de los payouts a profesionales, acá no hay lotes/CSV: cada
-// reembolso tiene su propio destino y el volumen es esporádico, así que
-// se resuelve uno por uno. Ver app/services/refund_payout.py en el backend.
+// reembolso se confirma individualmente (el volumen es esporádico), pero
+// comparte el mismo criterio de "cuenta verificada" antes de poder pagar.
+// Ver app/services/refund_payout.py en el backend.
 
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
@@ -32,12 +32,90 @@ function fmtFecha(iso?: string | null): string {
   })
 }
 
+// Ver + verificar la cuenta de reembolso de un paciente puntual — espejo
+// exacto de BankAccountModal en admin/payouts/page.tsx.
+function PatientRefundAccountModal({
+  patientId, patientName, onClose, onVerified,
+}: {
+  patientId: string
+  patientName: string
+  onClose: () => void
+  onVerified: () => void
+}) {
+  const { t } = useLanguage()
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['admin-patient-refund-account', patientId],
+    queryFn: () => adminAPI.getPatientRefundAccount(patientId),
+  })
+
+  const verifyMutation = useMutation({
+    mutationFn: () => adminAPI.verifyPatientRefundAccount(patientId),
+    onSuccess: () => {
+      onVerified()
+      onClose()
+    },
+  })
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold">{patientName}</p>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#141820] text-xl">✕</button>
+        </div>
+
+        {isLoading && <LoadingScreen text="Cargando cuenta..." />}
+        {error && <Alert type="error" message={getErrorMessage(error)} />}
+
+        {data && (
+          <div className="space-y-2 text-sm">
+            {data.method === 'BANK' ? (
+              <>
+                <div><span className="text-[#64748B]">{t('Banco')}: </span><span className="font-medium">{data.bank_name}</span></div>
+                <div>
+                  <span className="text-[#64748B]">{t('Tipo de cuenta')}: </span>
+                  <span className="font-medium">{data.account_type === 'AHORRO' ? t('Ahorro') : t('Corriente')}</span>
+                </div>
+                <div><span className="text-[#64748B]">{t('Número de cuenta')}: </span><span className="font-mono font-medium">{data.account_number}</span></div>
+                <div><span className="text-[#64748B]">{t('Titular')}: </span><span className="font-medium">{data.account_holder_name}</span></div>
+                <div><span className="text-[#64748B]">{t('CI del titular')}: </span><span className="font-medium">{data.account_holder_ci}</span></div>
+              </>
+            ) : (
+              <>
+                <div><span className="text-[#64748B]">{t('Proveedor')}: </span><span className="font-medium">{data.wallet_provider}</span></div>
+                <div><span className="text-[#64748B]">{t('Número de celular')}: </span><span className="font-mono font-medium">{data.phone_number}</span></div>
+              </>
+            )}
+            <p className="text-xs text-[#94A0B8] pt-2">
+              {t('Aceptó la responsabilidad por estos datos el')} {fmtFecha(data.responsibility_acknowledged_at)}.
+            </p>
+
+            {!data.verified && (
+              <button
+                onClick={() => verifyMutation.mutate()}
+                disabled={verifyMutation.isPending}
+                className="btn-primary text-xs py-1.5 px-3 mt-2"
+              >
+                {verifyMutation.isPending ? t('Verificando...') : t('Marcar como verificada')}
+              </button>
+            )}
+            {verifyMutation.isError && (
+              <div className="mt-2"><Alert type="error" message={getErrorMessage(verifyMutation.error)} /></div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminRefundsPage() {
   const { t } = useLanguage()
   const [success, setSuccess] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [confirmingPayment, setConfirmingPayment] = useState<RefundPendingItem | null>(null)
   const [referenceNote, setReferenceNote] = useState('')
+  const [viewingPatient, setViewingPatient] = useState<{ id: string; name: string } | null>(null)
 
   const { data: pending, isLoading, refetch } = useQuery({
     queryKey: ['admin-refunds-pending'],
@@ -67,7 +145,7 @@ export default function AdminRefundsPage() {
         <div className="mb-4">
           <h1 className="text-base font-semibold">{t('Reembolsos a pacientes')}</h1>
           <p className="text-xs text-[#475569] mt-0.5">
-            {t('Fase 1 (semi-automática): igual que con los profesionales, el banco no expone transferencias salientes. Cuando un paciente indica a dónde transferirle, aparece acá; transfieres a mano y confirmas para avisarle.')}
+            {t('Fase 1 (semi-automática): igual que con los profesionales, el banco no expone transferencias salientes. El paciente carga su cuenta en su Perfil; en cuanto la verificas, sus reembolsos aprobados quedan listos para pagar.')}
           </p>
         </div>
 
@@ -119,10 +197,7 @@ export default function AdminRefundsPage() {
               {awaitingAccount.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-[#B45309] mb-2">
-                    {t('Esperando datos del paciente')} · Bs. {pending?.awaiting_account_total.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-[#64748B] mb-2">
-                    {t('Ya se le avisó al paciente que indique a dónde transferirle. En cuanto lo haga, pasa a "Listos para pagar".')}
+                    {t('Esperando cuenta')} · Bs. {pending?.awaiting_account_total.toFixed(2)}
                   </p>
                   <div className="space-y-1.5">
                     {awaitingAccount.map((r) => (
@@ -130,11 +205,24 @@ export default function AdminRefundsPage() {
                         <div>
                           <p className="font-medium text-[#141820]">{r.patient_name}</p>
                           <p className="text-[#854F0B]">
-                            {t('aprobado el')} {fmtFecha(r.refunded_at)}
+                            {r.has_refund_account
+                              ? t('cargó su cuenta, falta verificarla')
+                              : t('todavía no registró una cuenta de reembolso')}
+                            {' · '}{t('aprobado el')} {fmtFecha(r.refunded_at)}
                           </p>
                           {r.refund_note && <p className="text-[#854F0B]/70 italic mt-0.5">{r.refund_note}</p>}
                         </div>
-                        <p className="font-semibold text-[#854F0B] whitespace-nowrap">Bs. {r.amount.toFixed(2)}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-[#854F0B] whitespace-nowrap">Bs. {r.amount.toFixed(2)}</p>
+                          {r.has_refund_account && (
+                            <button
+                              onClick={() => setViewingPatient({ id: r.patient_id, name: r.patient_name })}
+                              className="btn-secondary text-xs py-1 px-2 whitespace-nowrap"
+                            >
+                              {t('Ver cuenta')}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -177,6 +265,15 @@ export default function AdminRefundsPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {viewingPatient && (
+          <PatientRefundAccountModal
+            patientId={viewingPatient.id}
+            patientName={viewingPatient.name}
+            onClose={() => setViewingPatient(null)}
+            onVerified={() => { setSuccess(t('Cuenta verificada.')); refetch() }}
+          />
         )}
       </div>
     </DashboardLayout>

@@ -13,6 +13,7 @@ import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { LoadingScreen, Alert, SectionTitle } from '@/components/ui'
 import { patientsAPI, getErrorMessage } from '@/lib/api'
 import { NotificationsBell } from '@/components/shared/NotificationsBell'
+import { RefundAccountSection } from '@/components/patient/RefundAccountSection'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconCamera = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -293,6 +294,11 @@ export default function PatientProfilePage() {
           <p className="text-xs text-[#64748B] mt-3">
             {t('Para corregir tu CI, fecha de nacimiento u otro dato de registro, escribe a soporte.')}
           </p>
+        </div>
+
+        {/* Cuenta para reembolsos */}
+        <div className="mb-4">
+          <RefundAccountSection />
         </div>
 
         {/* Datos médicos */}

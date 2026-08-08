@@ -694,8 +694,9 @@ export interface ProfessionalBankAccountFull {
   updated_at: string | null
 }
 
-// ── Reembolsos a pacientes (Fase 1 semi-automática, espejo de los
-// payouts a profesionales — ver app/services/refund_payout.py) ──
+// ── Reembolsos a pacientes (Fase 1 semi-automática, cuenta PERMANENTE
+// por paciente — espejo de la cuenta bancaria del profesional. Ver
+// app/services/refund_payout.py) ──
 export interface PatientRefundItem {
   payment_id: string
   consultation_id: string
@@ -705,9 +706,6 @@ export interface PatientRefundItem {
   specialty: string | null
   professional_first_name: string | null
   professional_last_name: string | null
-  // true = todavía no indicó a dónde transferirle este reembolso puntual.
-  needs_account: boolean
-  account_method: 'BANK' | 'MOBILE_WALLET' | null
 }
 
 export interface PatientRefundAccountRequest {
@@ -723,6 +721,36 @@ export interface PatientRefundAccountRequest {
   responsibility_acknowledged: boolean
 }
 
+// Cuenta de reembolso propia del paciente (vista enmascarada — GET /patients/me/refund-account)
+export interface PatientRefundAccountFull {
+  method: 'BANK' | 'MOBILE_WALLET'
+  bank_name: string | null
+  account_type: string | null
+  account_number_masked: string | null
+  account_holder_name: string | null
+  wallet_provider: string | null
+  phone_number: string | null
+  verified: boolean
+  verified_at: string | null
+  updated_at: string | null
+}
+
+// Cuenta de reembolso de un paciente, vista completa por un admin
+// (GET /admin/patients/{id}/refund-account, número sin enmascarar)
+export interface AdminPatientRefundAccountFull {
+  method: 'BANK' | 'MOBILE_WALLET'
+  bank_name: string | null
+  account_type: string | null
+  account_number: string | null
+  account_holder_name: string | null
+  account_holder_ci: string | null
+  wallet_provider: string | null
+  phone_number: string | null
+  verified: boolean
+  responsibility_acknowledged_at: string
+  updated_at: string | null
+}
+
 // ── Reembolsos pendientes de pagar (admin) ──
 export interface RefundPendingItem {
   payment_id: string
@@ -732,6 +760,7 @@ export interface RefundPendingItem {
   amount: number
   refunded_at: string | null
   refund_note: string | null
+  has_refund_account: boolean
   method?: 'BANK' | 'MOBILE_WALLET'
   destination?: string
   account_holder_name?: string | null
@@ -743,6 +772,7 @@ export interface RefundPendingResponse {
   ready_to_pay_total: number
   awaiting_account_total: number
 }
+
 
 export const patientsAPI = {
   getMyProfile: () =>
@@ -766,14 +796,18 @@ export const patientsAPI = {
     api.get<PatientPaymentsResponse>('/patients/me/payments', { params }).then(r => r.data),
 
   // Reembolsos aprobados (por un admin o automáticamente al cancelar
-  // una cita) que todavía no se transfirieron de verdad.
+  // una cita) que todavía no se transfirieron de verdad — solo
+  // informativo, ver getMyRefundAccount para la cuenta permanente.
   getMyRefunds: () =>
     api.get<PatientRefundItem[]>('/patients/me/refunds').then(r => r.data),
 
-  // A dónde transferirme ESTE reembolso puntual (no es un perfil
-  // permanente — cada reembolso puede ir a un destino distinto).
-  submitRefundAccount: (paymentId: string, data: PatientRefundAccountRequest) =>
-    api.put<{ message: string; payment_id: string }>(`/patients/me/refunds/${paymentId}/account`, data).then(r => r.data),
+  // Cuenta PERMANENTE para recibir reembolsos (se carga una sola vez en
+  // el Perfil, igual que la cuenta bancaria del profesional).
+  getMyRefundAccount: () =>
+    api.get<PatientRefundAccountFull | null>('/patients/me/refund-account').then(r => r.data),
+
+  updateMyRefundAccount: (data: PatientRefundAccountRequest) =>
+    api.put<{ message: string; verified: boolean }>('/patients/me/refund-account', data).then(r => r.data),
 }
 
 // ── Notificaciones (campanita) — comunes a paciente y profesional ────
@@ -1563,6 +1597,12 @@ export const adminAPI = {
     api.post<{ message: string; payment_id: string }>(
       `/admin/refunds/${paymentId}/confirm`, { reference_note: referenceNote ?? null }
     ).then(r => r.data),
+
+  getPatientRefundAccount: (patientId: string) =>
+    api.get<AdminPatientRefundAccountFull>(`/admin/patients/${patientId}/refund-account`).then(r => r.data),
+
+  verifyPatientRefundAccount: (patientId: string) =>
+    api.post<{ message: string }>(`/admin/patients/${patientId}/refund-account/verify`).then(r => r.data),
 }
 
 export const maintenanceAPI = {

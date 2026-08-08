@@ -33,7 +33,7 @@ from app.models.models import (
     CommissionPeriod, CommissionScope, ProfessionalMembership,
     ChatBlock, ProfessionalPatientVisibility, ChatConversation, AdminAccessLog, PaymentChannel,
     DoctorLead, DoctorLeadStatus, DoctorLeadSource, WhatsAppMessage,
-    ProfessionalBankAccount, PayoutBatch, PayoutBatchStatus,
+    ProfessionalBankAccount, PayoutBatch, PayoutBatchStatus, PatientRefundAccount,
 )
 from app.schemas.schemas import (
     DocReviewRequest, RefundRequest, DisputeResolveRequest,
@@ -2719,6 +2719,71 @@ async def confirm_refund_payout_endpoint(
 
     await db.commit()
     return {"message": "Reembolso confirmado. Se avisó al paciente.", "payment_id": payment_id}
+
+
+# ── Cuenta de reembolso de un paciente puntual (vista + verificación) ──
+# Espejo exacto de /professionals/{id}/bank-account.
+
+@router.get("/patients/{patient_id}/refund-account", summary="Ver la cuenta de reembolso de un paciente (número completo)")
+async def get_patient_refund_account(
+    patient_id: str,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.core.crypto import decrypt_value
+
+    result = await db.execute(
+        select(PatientRefundAccount).where(PatientRefundAccount.patient_id == patient_id)
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Este paciente no registró una cuenta de reembolso")
+
+    # Cada vez que un admin ve el número completo queda trazado en
+    # auditoría — es un dato sensible, no algo para mirar "de paso".
+    db.add(AuditLog(
+        user_id=current_user.id, action="REFUND_ACCOUNT_VIEWED",
+        entity_type="PatientRefundAccount", entity_id=account.id,
+    ))
+    await db.commit()
+
+    return {
+        "method": account.method,
+        "bank_name": account.bank_name,
+        "account_type": account.account_type,
+        "account_number": decrypt_value(account.account_number_encrypted) if account.account_number_encrypted else None,
+        "account_holder_name": account.account_holder_name,
+        "account_holder_ci": decrypt_value(account.account_holder_ci_encrypted) if account.account_holder_ci_encrypted else None,
+        "wallet_provider": account.wallet_provider,
+        "phone_number": account.phone_number,
+        "verified": account.verified,
+        "responsibility_acknowledged_at": account.responsibility_acknowledged_at.isoformat(),
+        "updated_at": account.updated_at.isoformat() if account.updated_at else None,
+    }
+
+
+@router.post("/patients/{patient_id}/refund-account/verify", summary="Marcar la cuenta de reembolso de un paciente como verificada")
+async def verify_patient_refund_account(
+    patient_id: str,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(PatientRefundAccount).where(PatientRefundAccount.patient_id == patient_id)
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Este paciente no registró una cuenta de reembolso")
+
+    account.verified = True
+    account.verified_at = utcnow_naive()
+    account.verified_by = current_user.id
+    db.add(AuditLog(
+        user_id=current_user.id, action="REFUND_ACCOUNT_VERIFIED",
+        entity_type="PatientRefundAccount", entity_id=account.id,
+    ))
+    await db.commit()
+    return {"message": "Cuenta verificada. Sus reembolsos ya pueden pagarse."}
 
 
 # ── Cuenta bancaria de un profesional puntual (vista + verificación) ──
