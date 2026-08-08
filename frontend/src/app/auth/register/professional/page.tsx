@@ -9,6 +9,7 @@ import { useAuthStore } from '@/lib/store'
 import { PhoneInput } from '@/components/ui/PhoneInput'
 import { PhoneVerification } from '@/components/ui/PhoneVerification'
 import { SpanishBirthDatePicker } from '@/components/ui/SpanishDateTimePicker'
+import { PasswordInput } from '@/components/ui'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const NOT_LISTED = '__NOT_LISTED__'
@@ -462,11 +463,11 @@ export default function RegisterProfessionalPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-[#475569] mb-1">{t('Contraseña')} <span className="text-[#E24B4A]">*</span></label>
-                <input name="password" type="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder={t('Mínimo 8 caracteres')} value={form.password} onChange={handleChange} required minLength={8} />
+                <PasswordInput name="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder={t('Mínimo 8 caracteres')} value={form.password} onChange={handleChange} required minLength={8} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#475569] mb-1">{t('Confirmar')} <span className="text-[#E24B4A]">*</span></label>
-                <input name="confirm_password" type="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder={t('Repetir')} value={form.confirm_password} onChange={handleChange} required />
+                <PasswordInput name="confirm_password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder={t('Repetir')} value={form.confirm_password} onChange={handleChange} required />
               </div>
             </div>
 

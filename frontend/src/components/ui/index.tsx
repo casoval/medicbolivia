@@ -1,7 +1,8 @@
 // src/components/ui/index.tsx
 // Componentes UI reutilizables en toda la aplicación
 
-import { ReactNode } from 'react'
+import { ReactNode, useState, InputHTMLAttributes } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 
 // ── Spinner ───────────────────────────────────────────
 export function Spinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
@@ -210,6 +211,34 @@ export function DividerRow({ children }: { children: ReactNode }) {
   return (
     <div className="py-3 border-b border-[#DDE1EE] last:border-0 flex items-center gap-3">
       {children}
+    </div>
+  )
+}
+
+// ── Password input (con botón para mostrar/ocultar) ───
+interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
+  inputClassName?: string
+}
+
+export function PasswordInput({ inputClassName, className, ...props }: PasswordInputProps) {
+  const [visible, setVisible] = useState(false)
+
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        type={visible ? 'text' : 'password'}
+        className={`${inputClassName ?? className ?? 'input'} pr-10`}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        tabIndex={-1}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#475569] transition-colors p-1"
+        aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+      >
+        {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PATIENT_NAV as NAV } from '@/lib/nav'
 import { Alert } from '@/components/ui'
+import { Download, Share2, Loader2 } from 'lucide-react'
 import { consultationsAPI, professionalsAPI, getErrorMessage } from '@/lib/api'
 import type { Payment, ConsultationStatus, Consultation } from '@/types'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
@@ -736,6 +737,8 @@ export default function WaitingRoomPage() {
   const [loadingStatus, setLoadingStatus] = useState(true)
   const [simulatingPayment, setSimulatingPayment] = useState(false)
   const [error, setError] = useState('')
+  const [savingQR, setSavingQR] = useState(false)
+  const [shareCapable, setShareCapable] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
   const [reschedulingOpen, setReschedulingOpen] = useState(false)
   const [newDateTime, setNewDateTime] = useState('')
@@ -769,6 +772,12 @@ export default function WaitingRoomPage() {
   const isDev = process.env.NEXT_PUBLIC_SIMULATE_PAYMENT === 'true'
 
   useEffect(() => { initPage() }, [])
+
+  // Detecta si el navegador soporta el panel nativo de compartir con
+  // archivos (típico en celulares) para decidir el texto/ícono del botón.
+  useEffect(() => {
+    setShareCapable(typeof navigator !== 'undefined' && typeof (navigator as any).share === 'function')
+  }, [])
 
   async function initPage() {
     setLoadingStatus(true)
@@ -874,6 +883,51 @@ export default function WaitingRoomPage() {
       setError(getErrorMessage(err))
     } finally {
       setLoadingQR(false)
+    }
+  }
+
+  // Descarga o comparte la imagen del QR: en celular abre el panel nativo
+  // para compartir/guardar en la galería (Web Share API con archivos); en
+  // computadoras, cuando ese panel no existe, cae en una descarga normal.
+  async function saveOrShareQR() {
+    if (!payment?.qr_image_url) return
+    setSavingQR(true)
+    setError('')
+    try {
+      const response = await fetch(payment.qr_image_url)
+      const blob = await response.blob()
+      const fileName = `qr-pago-medicbolivia-${resolvedId || 'consulta'}.png`
+      const file = new File([blob], fileName, { type: blob.type || 'image/png' })
+
+      const canShareFile =
+        typeof navigator !== 'undefined' &&
+        typeof (navigator as any).canShare === 'function' &&
+        (navigator as any).canShare({ files: [file] })
+
+      if (canShareFile) {
+        await (navigator as any).share({
+          files: [file],
+          title: 'QR de pago MedicBolivia',
+          text: 'Escaneá este código QR desde tu app bancaria o billetera para pagar la consulta.',
+        })
+      } else {
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+      }
+    } catch (err) {
+      // Si el usuario cancela el panel de compartir, el navegador lanza
+      // AbortError — no es un error real, no mostramos nada.
+      if ((err as { name?: string })?.name !== 'AbortError') {
+        setError('No se pudo guardar el QR. Podés intentar con una captura de pantalla.')
+      }
+    } finally {
+      setSavingQR(false)
     }
   }
 
@@ -1229,10 +1283,28 @@ export default function WaitingRoomPage() {
                 {qrExpired && (
                   <p className="text-xs text-[#A32D2D] mt-2">{t('El tiempo de pago expiró. La consulta fue cancelada automáticamente.')}</p>
                 )}
-                <div className="flex flex-wrap gap-1.5 justify-center mt-3">
-                  {['BNB', 'Banco Unión', 'Banco Sol', 'Tigo Money', 'Banco Fie'].map((b) => (
-                    <span key={b} className="text-xs border border-[#DDE1EE] px-2 py-0.5 rounded-full text-[#475569]">{b}</span>
-                  ))}
+                <div className="flex flex-col items-center gap-2 mt-3">
+                  <button
+                    onClick={saveOrShareQR}
+                    disabled={savingQR}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#185FA5] border border-[#185FA5] px-3 py-1.5 rounded-full hover:bg-[#E6F1FB] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingQR ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : shareCapable ? (
+                      <Share2 size={14} />
+                    ) : (
+                      <Download size={14} />
+                    )}
+                    {savingQR
+                      ? t('Guardando...')
+                      : shareCapable
+                        ? t('Compartir o guardar QR')
+                        : t('Descargar QR')}
+                  </button>
+                  <p className="text-xs text-[#64748B] max-w-[260px]">
+                    {t('Podés pagar este QR desde la app de cualquier banco o billetera digital que use pagos QR — no hace falta que sea del mismo banco.')}
+                  </p>
                 </div>
                 {/* Botón cancelar — solo visible si el QR no expiró todavía */}
                 {!qrExpired && (

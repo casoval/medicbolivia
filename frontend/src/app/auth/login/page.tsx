@@ -9,6 +9,7 @@ import Image from 'next/image'
 import { useAuthStore } from '@/lib/store'
 import { getErrorMessage } from '@/lib/api'
 import { PhoneInput } from '@/components/ui/PhoneInput'
+import { PasswordInput } from '@/components/ui'
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
@@ -273,8 +274,7 @@ export default function LoginPage() {
                     {t('¿Olvidaste tu contraseña?')}
                   </Link>
                 </div>
-                <input
-                  type="password"
+                <PasswordInput
                   autoComplete="current-password"
                   className="input"
                   placeholder="••••••••"

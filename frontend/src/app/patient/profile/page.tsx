@@ -296,11 +296,6 @@ export default function PatientProfilePage() {
           </p>
         </div>
 
-        {/* Cuenta para reembolsos */}
-        <div className="mb-4">
-          <RefundAccountSection />
-        </div>
-
         {/* Datos médicos */}
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-[#141820]">{t('Mis datos médicos')}</h2>
@@ -340,6 +335,11 @@ export default function PatientProfilePage() {
             items={medications}
             onChange={update(setMedications)}
           />
+        </div>
+
+        {/* Cuenta para reembolsos */}
+        <div className="mt-4 mb-4">
+          <RefundAccountSection />
         </div>
 
         <div className="mt-5 flex justify-end">

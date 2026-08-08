@@ -11,6 +11,7 @@ import { useAuthStore } from '@/lib/store'
 import { PhoneInput } from '@/components/ui/PhoneInput'
 import { PhoneVerification } from '@/components/ui/PhoneVerification'
 import { SpanishBirthDatePicker } from '@/components/ui/SpanishDateTimePicker'
+import { PasswordInput } from '@/components/ui'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const DEPARTMENTS = [
@@ -176,11 +177,11 @@ export default function RegisterPatientPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">{t('Contraseña')} <span className="text-[#E24B4A]">*</span></label>
-                <input name="password" type="password" autoComplete="new-password" className="input" placeholder={t('Mínimo 8 caracteres')} value={form.password} onChange={handleChange} required minLength={8} />
+                <PasswordInput name="password" autoComplete="new-password" className="input" placeholder={t('Mínimo 8 caracteres')} value={form.password} onChange={handleChange} required minLength={8} />
               </div>
               <div>
                 <label className="label">{t('Confirmar contraseña')} <span className="text-[#E24B4A]">*</span></label>
-                <input name="confirm_password" type="password" autoComplete="new-password" className="input" placeholder={t('Repetir contraseña')} value={form.confirm_password} onChange={handleChange} required />
+                <PasswordInput name="confirm_password" autoComplete="new-password" className="input" placeholder={t('Repetir contraseña')} value={form.confirm_password} onChange={handleChange} required />
               </div>
             </div>
 
