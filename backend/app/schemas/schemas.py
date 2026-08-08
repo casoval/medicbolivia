@@ -339,68 +339,36 @@ class PayoutBatchConfirmRequest(BaseModel):
 
 class PatientRefundAccountRequest(BaseModel):
     """
-    A dónde transferirle un reembolso puntual a un paciente. method
-    decide qué grupo de campos es obligatorio — a diferencia del
-    profesional, acá se da la opción de billetera móvil / QR
-    interpersonal porque no todo paciente tiene cuenta bancaria formal.
+    A dónde transferirle sus reembolsos a un paciente. Solo cuenta
+    bancaria — a diferencia del profesional no se ofrece billetera móvil
+    en v1; si el paciente no tiene cuenta bancaria, el equipo
+    administrativo lo contacta para coordinar otra forma de pago (ver el
+    aviso que dispara request_refund_account en app/services/refund_payout.py).
     """
-    method: Literal["BANK", "MOBILE_WALLET"]
-
-    # Requeridos si method == BANK
-    bank_name: Optional[str] = Field(None, min_length=2, max_length=150)
-    account_type: Optional[Literal["AHORRO", "CORRIENTE"]] = None
-    account_number: Optional[str] = Field(None, min_length=4, max_length=30)
-    account_number_confirm: Optional[str] = Field(None, min_length=4, max_length=30)
-    account_holder_name: Optional[str] = Field(None, min_length=3, max_length=200)
-    account_holder_ci: Optional[str] = Field(None, min_length=5, max_length=20)
-
-    # Requeridos si method == MOBILE_WALLET
-    wallet_provider: Optional[str] = Field(None, min_length=2, max_length=100)
-    phone_number: Optional[str] = Field(None, min_length=7, max_length=20)
+    bank_name: str = Field(..., min_length=2, max_length=150)
+    account_type: Literal["AHORRO", "CORRIENTE"]
+    account_number: str = Field(..., min_length=4, max_length=30)
+    account_number_confirm: str = Field(..., min_length=4, max_length=30)
+    account_holder_name: str = Field(..., min_length=3, max_length=200)
+    account_holder_ci: str = Field(..., min_length=5, max_length=20)
 
     # Igual que el profesional: sin esto no se guarda nada.
     responsibility_acknowledged: bool
 
     @field_validator("account_number", "account_number_confirm")
     @classmethod
-    def digits_only(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
+    def digits_only(cls, v: str) -> str:
         cleaned = v.strip().replace(" ", "").replace("-", "")
         if not cleaned.isdigit():
             raise ValueError("El número de cuenta solo debe contener dígitos")
         return cleaned
 
-    @field_validator("phone_number")
-    @classmethod
-    def phone_digits_only(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        cleaned = v.strip().replace(" ", "").replace("-", "")
-        if not cleaned.isdigit():
-            raise ValueError("El número de celular solo debe contener dígitos")
-        return cleaned
-
     @model_validator(mode="after")
-    def _check_method_fields(self):
+    def _check_fields(self):
         if not self.responsibility_acknowledged:
             raise ValueError("Debes confirmar que los datos son correctos y aceptar la responsabilidad indicada antes de guardar.")
-
-        if self.method == "BANK":
-            missing = [
-                name for name, val in (
-                    ("bank_name", self.bank_name), ("account_type", self.account_type),
-                    ("account_number", self.account_number), ("account_number_confirm", self.account_number_confirm),
-                    ("account_holder_name", self.account_holder_name), ("account_holder_ci", self.account_holder_ci),
-                ) if not val
-            ]
-            if missing:
-                raise ValueError(f"Faltan datos de la cuenta bancaria: {', '.join(missing)}")
-            if self.account_number != self.account_number_confirm:
-                raise ValueError("El número de cuenta y su confirmación no coinciden. Revisa que estén escritos igual.")
-        else:  # MOBILE_WALLET
-            if not self.wallet_provider or not self.phone_number:
-                raise ValueError("Indica el proveedor de la billetera/QR y el número de celular.")
+        if self.account_number != self.account_number_confirm:
+            raise ValueError("El número de cuenta y su confirmación no coinciden. Revisa que estén escritos igual.")
         return self
 
 

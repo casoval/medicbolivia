@@ -2748,14 +2748,11 @@ async def get_patient_refund_account(
     await db.commit()
 
     return {
-        "method": account.method,
         "bank_name": account.bank_name,
         "account_type": account.account_type,
         "account_number": decrypt_value(account.account_number_encrypted) if account.account_number_encrypted else None,
         "account_holder_name": account.account_holder_name,
         "account_holder_ci": decrypt_value(account.account_holder_ci_encrypted) if account.account_holder_ci_encrypted else None,
-        "wallet_provider": account.wallet_provider,
-        "phone_number": account.phone_number,
         "verified": account.verified,
         "responsibility_acknowledged_at": account.responsibility_acknowledged_at.isoformat(),
         "updated_at": account.updated_at.isoformat() if account.updated_at else None,

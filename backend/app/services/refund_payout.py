@@ -36,7 +36,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.timezone import utcnow_naive
 from app.models.models import (
-    Payment, PaymentStatus, Patient, RefundMethod,
+    Payment, PaymentStatus, Patient,
     User, UserRole, AuditLog,
 )
 from app.services.notify import notify_user
@@ -69,9 +69,10 @@ async def request_refund_account(db: AsyncSession, payment: Payment) -> None:
             db, user_id=patient.user_id,
             title="💸 Reembolso aprobado — falta tu cuenta para pagarte",
             body=(
-                f"Tu reembolso de Bs. {amount:.2f} fue aprobado. Registra a dónde "
-                "transferirte (cuenta bancaria o billetera móvil/QR) en tu Perfil "
-                "para que el equipo pueda procesarlo."
+                f"Tu reembolso de Bs. {amount:.2f} fue aprobado. Registra tu cuenta "
+                "bancaria en tu Perfil para que el equipo pueda transferírtelo. Si no "
+                "tienes una cuenta bancaria, el equipo administrativo se pondrá en "
+                "contacto contigo para coordinar otra forma de pago."
             ),
             type_="REFUND_PENDING_ACCOUNT_INFO",
             entity_type="Payment", entity_id=payment.id,
@@ -141,13 +142,9 @@ async def get_pending_refunds_summary(db: AsyncSession) -> dict:
             "has_refund_account": account is not None,
         }
         if verified:
-            if account.method == RefundMethod.BANK:
-                destination = f"{account.bank_name} ****{account.account_number_last4}"
-            else:
-                destination = f"{account.wallet_provider} · {account.phone_number}"
+            destination = f"{account.bank_name} ****{account.account_number_last4}"
             ready_to_pay.append({
                 **item,
-                "method": account.method,
                 "destination": destination,
                 "account_holder_name": account.account_holder_name,
             })
@@ -191,11 +188,10 @@ async def confirm_refund_paid_out(
     if patient:
         amount = payment.refunded_amount if payment.refunded_amount is not None else payment.amount
         account = patient.refund_account
-        destination_label = ""
-        if account and account.method == RefundMethod.BANK:
-            destination_label = f" a tu cuenta {account.bank_name} terminada en ****{account.account_number_last4}"
-        elif account:
-            destination_label = f" a tu {account.wallet_provider} ({account.phone_number})"
+        destination_label = (
+            f" a tu cuenta {account.bank_name} terminada en ****{account.account_number_last4}"
+            if account else ""
+        )
         await notify_user(
             db, user_id=patient.user_id,
             title="✅ Reembolso transferido",

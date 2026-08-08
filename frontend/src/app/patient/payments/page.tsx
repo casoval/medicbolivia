@@ -167,7 +167,7 @@ export default function PatientPaymentsPage() {
                 💸 {pendingRefunds!.length === 1 ? t('Tienes un reembolso aprobado') : `${t('Tienes')} ${pendingRefunds!.length} ${t('reembolsos aprobados')}`}
               </p>
               <p className="text-xs text-[#8A6116]/80 mt-0.5">
-                {t('Registra a dónde transferirte el dinero en tu Perfil para que el equipo pueda pagarte.')}
+                {t('Registra tu cuenta bancaria en tu Perfil para que el equipo pueda pagarte. Si no tienes cuenta bancaria, el equipo administrativo se pondrá en contacto contigo.')}
               </p>
             </div>
             <Link href="/patient/profile" className="text-xs font-medium rounded-lg bg-[#185FA5] text-white px-3 py-1.5 whitespace-nowrap">

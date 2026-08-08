@@ -709,27 +709,21 @@ export interface PatientRefundItem {
 }
 
 export interface PatientRefundAccountRequest {
-  method: 'BANK' | 'MOBILE_WALLET'
-  bank_name?: string
-  account_type?: 'AHORRO' | 'CORRIENTE'
-  account_number?: string
-  account_number_confirm?: string
-  account_holder_name?: string
-  account_holder_ci?: string
-  wallet_provider?: string
-  phone_number?: string
+  bank_name: string
+  account_type: 'AHORRO' | 'CORRIENTE'
+  account_number: string
+  account_number_confirm: string
+  account_holder_name: string
+  account_holder_ci: string
   responsibility_acknowledged: boolean
 }
 
 // Cuenta de reembolso propia del paciente (vista enmascarada — GET /patients/me/refund-account)
 export interface PatientRefundAccountFull {
-  method: 'BANK' | 'MOBILE_WALLET'
   bank_name: string | null
   account_type: string | null
   account_number_masked: string | null
   account_holder_name: string | null
-  wallet_provider: string | null
-  phone_number: string | null
   verified: boolean
   verified_at: string | null
   updated_at: string | null
@@ -738,14 +732,11 @@ export interface PatientRefundAccountFull {
 // Cuenta de reembolso de un paciente, vista completa por un admin
 // (GET /admin/patients/{id}/refund-account, número sin enmascarar)
 export interface AdminPatientRefundAccountFull {
-  method: 'BANK' | 'MOBILE_WALLET'
   bank_name: string | null
   account_type: string | null
   account_number: string | null
   account_holder_name: string | null
   account_holder_ci: string | null
-  wallet_provider: string | null
-  phone_number: string | null
   verified: boolean
   responsibility_acknowledged_at: string
   updated_at: string | null
@@ -761,7 +752,6 @@ export interface RefundPendingItem {
   refunded_at: string | null
   refund_note: string | null
   has_refund_account: boolean
-  method?: 'BANK' | 'MOBILE_WALLET'
   destination?: string
   account_holder_name?: string | null
 }

@@ -540,13 +540,10 @@ async def get_my_refund_account(
         return None
 
     return {
-        "method": account.method,
         "bank_name": account.bank_name,
         "account_type": account.account_type,
         "account_number_masked": f"****{account.account_number_last4}" if account.account_number_last4 else None,
         "account_holder_name": account.account_holder_name,
-        "wallet_provider": account.wallet_provider,
-        "phone_number": account.phone_number,
         "verified": account.verified,
         "verified_at": account.verified_at.isoformat() if account.verified_at else None,
         "updated_at": account.updated_at.isoformat() if account.updated_at else None,
@@ -581,30 +578,18 @@ async def upsert_my_refund_account(
         account = PatientRefundAccount(patient_id=patient.id)
         db.add(account)
 
-    account.method = RefundMethod(data.method)
+    account.method = RefundMethod.BANK
     account.responsibility_acknowledged_at = utcnow_naive()
     account.verified = False
     account.verified_at = None
     account.verified_by = None
 
-    if data.method == "BANK":
-        account.bank_name = data.bank_name.strip()
-        account.account_type = data.account_type
-        account.account_number_encrypted = encrypt_value(data.account_number)
-        account.account_number_last4 = data.account_number[-4:]
-        account.account_holder_name = data.account_holder_name.strip()
-        account.account_holder_ci_encrypted = encrypt_value(data.account_holder_ci)
-        account.wallet_provider = None
-        account.phone_number = None
-    else:
-        account.wallet_provider = data.wallet_provider.strip()
-        account.phone_number = data.phone_number
-        account.bank_name = None
-        account.account_type = None
-        account.account_number_encrypted = None
-        account.account_number_last4 = None
-        account.account_holder_name = None
-        account.account_holder_ci_encrypted = None
+    account.bank_name = data.bank_name.strip()
+    account.account_type = data.account_type
+    account.account_number_encrypted = encrypt_value(data.account_number)
+    account.account_number_last4 = data.account_number[-4:]
+    account.account_holder_name = data.account_holder_name.strip()
+    account.account_holder_ci_encrypted = encrypt_value(data.account_holder_ci)
 
     await db.flush()
 
@@ -613,7 +598,7 @@ async def upsert_my_refund_account(
         action="REFUND_ACCOUNT_CREATED" if is_new else "REFUND_ACCOUNT_UPDATED",
         entity_type="PatientRefundAccount",
         entity_id=account.id,
-        metadata_={"method": data.method},
+        metadata_={"bank_name": account.bank_name, "account_number_last4": account.account_number_last4},
     ))
 
     await db.commit()

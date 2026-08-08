@@ -69,23 +69,14 @@ function PatientRefundAccountModal({
 
         {data && (
           <div className="space-y-2 text-sm">
-            {data.method === 'BANK' ? (
-              <>
-                <div><span className="text-[#64748B]">{t('Banco')}: </span><span className="font-medium">{data.bank_name}</span></div>
-                <div>
-                  <span className="text-[#64748B]">{t('Tipo de cuenta')}: </span>
-                  <span className="font-medium">{data.account_type === 'AHORRO' ? t('Ahorro') : t('Corriente')}</span>
-                </div>
-                <div><span className="text-[#64748B]">{t('Número de cuenta')}: </span><span className="font-mono font-medium">{data.account_number}</span></div>
-                <div><span className="text-[#64748B]">{t('Titular')}: </span><span className="font-medium">{data.account_holder_name}</span></div>
-                <div><span className="text-[#64748B]">{t('CI del titular')}: </span><span className="font-medium">{data.account_holder_ci}</span></div>
-              </>
-            ) : (
-              <>
-                <div><span className="text-[#64748B]">{t('Proveedor')}: </span><span className="font-medium">{data.wallet_provider}</span></div>
-                <div><span className="text-[#64748B]">{t('Número de celular')}: </span><span className="font-mono font-medium">{data.phone_number}</span></div>
-              </>
-            )}
+            <div><span className="text-[#64748B]">{t('Banco')}: </span><span className="font-medium">{data.bank_name}</span></div>
+            <div>
+              <span className="text-[#64748B]">{t('Tipo de cuenta')}: </span>
+              <span className="font-medium">{data.account_type === 'AHORRO' ? t('Ahorro') : t('Corriente')}</span>
+            </div>
+            <div><span className="text-[#64748B]">{t('Número de cuenta')}: </span><span className="font-mono font-medium">{data.account_number}</span></div>
+            <div><span className="text-[#64748B]">{t('Titular')}: </span><span className="font-medium">{data.account_holder_name}</span></div>
+            <div><span className="text-[#64748B]">{t('CI del titular')}: </span><span className="font-medium">{data.account_holder_ci}</span></div>
             <p className="text-xs text-[#94A0B8] pt-2">
               {t('Aceptó la responsabilidad por estos datos el')} {fmtFecha(data.responsibility_acknowledged_at)}.
             </p>
@@ -199,6 +190,9 @@ export default function AdminRefundsPage() {
                   <p className="text-xs font-semibold text-[#B45309] mb-2">
                     {t('Esperando cuenta')} · Bs. {pending?.awaiting_account_total.toFixed(2)}
                   </p>
+                  <p className="text-xs text-[#64748B] mb-2">
+                    {t('Si un paciente no tiene cuenta bancaria, contáctalo para coordinar otra forma de pago — no queda ningún aviso automático adicional más allá del que ya recibió.')}
+                  </p>
                   <div className="space-y-1.5">
                     {awaitingAccount.map((r) => (
                       <div key={r.payment_id} className="flex items-center justify-between text-xs px-3 py-2 rounded-lg bg-[#FAEEDA]">
@@ -207,7 +201,7 @@ export default function AdminRefundsPage() {
                           <p className="text-[#854F0B]">
                             {r.has_refund_account
                               ? t('cargó su cuenta, falta verificarla')
-                              : t('todavía no registró una cuenta de reembolso')}
+                              : t('todavía no registró una cuenta bancaria')}
                             {' · '}{t('aprobado el')} {fmtFecha(r.refunded_at)}
                           </p>
                           {r.refund_note && <p className="text-[#854F0B]/70 italic mt-0.5">{r.refund_note}</p>}
