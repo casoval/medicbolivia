@@ -103,6 +103,55 @@ const STATUS_TABS: { key: string; label: string }[] = [
   { key: 'DISPUTED',                  label: 'En disputa' },
 ]
 
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pendiente',
+  CONFIRMED: 'En garantía',
+  RELEASED_TO_PROFESSIONAL: 'Recibido',
+  REFUNDED_FULL: 'Reembolsado completo',
+  REFUNDED_PARTIAL: 'Reembolsado parcial',
+  DISPUTED: 'En disputa',
+  CANCELLED_NO_CHARGE: 'Cancelado, sin cobro',
+}
+
+// Arma y descarga un CSV con el detalle visible en pantalla (respeta el
+// filtro de estado activo), para que el profesional pueda llevar su
+// propio control en Excel o entregarlo a su contador sin tener que
+// copiar los datos a mano.
+function exportEarningsCSV(items: ProfessionalEarningItem[], statusFilterLabel: string) {
+  const headers = [
+    'Fecha de pago', 'Paciente', 'Tipo de consulta', 'Modalidad',
+    'Canal de cobro', 'Estado', 'Monto (Bs)', 'Comisión plataforma (Bs)', 'Neto para ti (Bs)',
+  ]
+  const escapeCsv = (v: string) => `"${v.replace(/"/g, '""')}"`
+  const rows = items.map((p) => {
+    const patientName = p.patient_first_name
+      ? `${p.patient_first_name} ${p.patient_last_name || ''}`.trim()
+      : 'Paciente'
+    return [
+      fmtFechaHora(p.paid_at || p.created_at),
+      patientName,
+      CONSULTATION_TYPE_LABELS[p.consultation_type || ''] || p.consultation_type || '—',
+      p.modality === 'IN_PERSON' ? 'Presencial' : 'Videollamada',
+      p.payment_channel === 'CASH' ? 'Cobro directo' : 'QR plataforma',
+      STATUS_LABELS[p.status] || p.status,
+      p.amount.toFixed(2),
+      p.platform_fee.toFixed(2),
+      p.professional_net.toFixed(2),
+    ].map(escapeCsv).join(',')
+  })
+  const csv = '\uFEFF' + [headers.map(escapeCsv).join(','), ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  const today = new Date().toISOString().slice(0, 10)
+  link.href = url
+  link.download = `mis-pagos-medicbolivia-${statusFilterLabel}-${today}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
 
 export default function ProfessionalEarningsPage() {
   const { t } = useLanguage()
@@ -236,9 +285,19 @@ export default function ProfessionalEarningsPage() {
             </div>
 
             <div className="card">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <SectionTitle>{t('Detalle de pagos recibidos')}</SectionTitle>
-                {isFetching && <span className="text-[10px] text-[#64748B]">{t('Actualizando...')}</span>}
+                <div className="flex items-center gap-2">
+                  {isFetching && <span className="text-[10px] text-[#64748B]">{t('Actualizando...')}</span>}
+                  {items.length > 0 && (
+                    <button
+                      onClick={() => exportEarningsCSV(items, statusFilter || 'todos')}
+                      className="text-xs font-medium text-[#185FA5] border border-[#185FA5] px-3 py-1.5 rounded-full hover:bg-[#E6F1FB] transition-colors"
+                    >
+                      {t('Exportar CSV')}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {items.length === 0 ? (

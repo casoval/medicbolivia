@@ -138,6 +138,16 @@ class ResetPasswordRequest(BaseModel):
             raise ValueError(str(e))
 
 
+class ChangePasswordRequest(BaseModel):
+    """Cambio de contraseña estando logueado (a diferencia del reseteo por
+    WhatsApp): el usuario ya está autenticado por cookie/JWT, así que en
+    vez de un código OTP pedimos la contraseña actual para confirmar que
+    es realmente el dueño de la cuenta quien la está cambiando (por si
+    dejó la sesión abierta en un dispositivo compartido)."""
+    current_password: str
+    new_password: str = Field(..., min_length=8, description="Mínimo 8 caracteres")
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

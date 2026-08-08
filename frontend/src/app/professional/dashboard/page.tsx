@@ -1,7 +1,7 @@
 'use client'
 // src/app/professional/dashboard/page.tsx
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -349,6 +349,95 @@ export default function ProfessionalDashboard() {
     refetchInterval: 5000,
   })
 
+  // ── Aviso de paciente nuevo (sonido + parpadeo de pestaña) ──────────
+  // El dashboard hace polling cada 5s, pero si el profesional tiene la
+  // pestaña de fondo (revisando una receta, en otra app) no se entera de
+  // que llegó alguien hasta que vuelve a mirar. Esto avisa aunque no esté
+  // mirando la pantalla en ese momento.
+  const seenIncomingIdsRef = useRef<Set<string> | null>(null) // null = todavía no se cargó la primera vez
+  const titleFlashRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const originalTitleRef = useRef<string>('')
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>('default')
+
+  useEffect(() => {
+    setNotifPermission(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
+  }, [])
+
+  function stopTitleFlash() {
+    if (titleFlashRef.current) {
+      clearInterval(titleFlashRef.current)
+      titleFlashRef.current = null
+    }
+    if (originalTitleRef.current && typeof document !== 'undefined') {
+      document.title = originalTitleRef.current
+    }
+  }
+
+  function playNewPatientBeep() {
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = 880
+      gain.gain.setValueAtTime(0.15, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.6)
+    } catch {
+      // Autoplay bloqueado por el navegador u otro error de audio — no es
+      // crítico, el parpadeo del título sigue funcionando igual.
+    }
+  }
+
+  useEffect(() => {
+    const incomingNow: any[] = consultations.filter((c: any) => c.status === 'WAITING_PROFESSIONAL')
+    const currentIds = new Set(incomingNow.map((c: any) => c.id))
+
+    if (seenIncomingIdsRef.current === null) {
+      // Primera carga de la página: solo registramos lo que ya había
+      // esperando, sin sonar por algo que no es nuevo.
+      seenIncomingIdsRef.current = currentIds
+      return
+    }
+
+    const hasNew = incomingNow.some((c: any) => !seenIncomingIdsRef.current!.has(c.id))
+    if (hasNew) {
+      playNewPatientBeep()
+      if (typeof document !== 'undefined') {
+        if (!originalTitleRef.current) originalTitleRef.current = document.title
+        if (titleFlashRef.current) clearInterval(titleFlashRef.current)
+        let flashOn = false
+        titleFlashRef.current = setInterval(() => {
+          document.title = flashOn ? originalTitleRef.current : '🔔 Nuevo paciente esperando'
+          flashOn = !flashOn
+        }, 1000)
+      }
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('Nuevo paciente esperando', {
+          body: 'Un paciente está esperando que aceptes su consulta.',
+        })
+      }
+    }
+
+    if (currentIds.size === 0) stopTitleFlash()
+    seenIncomingIdsRef.current = currentIds
+  }, [consultations])
+
+  // El parpadeo se corta apenas el profesional vuelve a mirar la pestaña.
+  useEffect(() => {
+    const onFocus = () => stopTitleFlash()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      stopTitleFlash()
+    }
+  }, [])
+
   const recentCompleted = consultations.slice(0, 5).filter((c: any) => c.status === 'COMPLETED')
 
   const { data: prescriptionsByConsultation = {} } = useQuery({
@@ -518,6 +607,29 @@ export default function ProfessionalDashboard() {
           </p>
         </div>
 
+        {/* Activar notificaciones del navegador — opcional, refuerza el
+            sonido/parpadeo cuando el profesional ni siquiera tiene la
+            pestaña abierta. Solo se muestra si el navegador lo soporta y
+            todavía no se le preguntó. */}
+        {notifPermission === 'default' && (
+          <div className="mb-4 p-3 rounded-lg border bg-[#E6F1FB] border-[#85B7EB] text-[#0C447C] text-xs flex items-center justify-between gap-3">
+            <span>{t('Activa las notificaciones del navegador para enterarte al instante cuando llegue un paciente nuevo, incluso si no tienes esta pestaña abierta.')}</span>
+            <button
+              onClick={async () => {
+                try {
+                  const perm = await Notification.requestPermission()
+                  setNotifPermission(perm)
+                } catch {
+                  setNotifPermission('unsupported')
+                }
+              }}
+              className="whitespace-nowrap font-semibold underline shrink-0"
+            >
+              {t('Activar')}
+            </button>
+          </div>
+        )}
+
         {/* Disponibilidad */}
         <div className="card mb-5">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -584,6 +696,16 @@ export default function ProfessionalDashboard() {
           )}
           {availError && <div className="mt-2"><Alert type="error" message={availError} /></div>}
         </div>
+
+        {/* Recordatorio persistente en modo "No disponible" — el toggle de
+            arriba se puede perder de vista al hacer scroll, y es fácil
+            olvidarse de que se dejó activado (por ejemplo tras un viaje o
+            descanso), perdiendo pacientes sin darse cuenta. */}
+        {!autoAvailability && currentAvailability === 'OFFLINE' && (
+          <div className="mb-4 p-3 rounded-lg border bg-[#F5F6FA] border-[#A0A8BF] text-[#475569] text-xs flex items-center justify-between gap-3">
+            <span>⏸️ {t('Estás en modo "No disponible": no te está llegando ningún paciente nuevo ahora mismo.')}</span>
+          </div>
+        )}
 
         {/* Métricas rápidas */}
         <div className="grid grid-cols-4 gap-3 mb-5">

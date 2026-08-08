@@ -374,6 +374,11 @@ export const passwordResetAPI = {
 
   reset: (phone: string, code: string, new_password: string) =>
     api.post<{ message: string }>('/auth/password/reset', { phone, code, new_password }),
+
+  // Cambio de contraseña estando logueado (perfil) — distinto del flujo
+  // de arriba, que es para cuando el usuario perdió el acceso.
+  change: (current_password: string, new_password: string) =>
+    api.post<{ message: string }>('/auth/password/change', { current_password, new_password }),
 }
 
 export const professionalsAPI = {

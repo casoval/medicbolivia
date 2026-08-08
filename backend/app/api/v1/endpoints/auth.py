@@ -27,7 +27,7 @@ from app.schemas.schemas import (
     PatientRegisterRequest, ProfessionalRegisterRequest,
     LoginRequest, TokenResponse, UserResponse,
     OTPSendRequest, OTPVerifyRequest,
-    ForgotPasswordRequest, ResetPasswordRequest
+    ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest
 )
 from app.services.whatsapp import send_whatsapp_otp
 
@@ -456,6 +456,36 @@ async def login(
 )
 async def get_me(current_user: User = Depends(get_current_user)):
     return UserResponse.model_validate(current_user)
+
+
+# ── POST /api/v1/auth/password/change ────────────────
+@router.post(
+    "/password/change",
+    status_code=status.HTTP_200_OK,
+    summary="Cambiar contraseña estando logueado"
+)
+async def change_password(
+    data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not verify_password(data.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual no es correcta"
+        )
+
+    if verify_password(data.new_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña nueva debe ser distinta de la actual"
+        )
+
+    current_user.password_hash = hash_password(data.new_password)
+    await db.commit()
+
+    logger.info(f"Password cambiada desde el perfil (usuario logueado): {current_user.id}")
+    return {"message": "Contraseña actualizada correctamente"}
 
 
 # ── POST /api/v1/auth/logout ─────────────────────────
