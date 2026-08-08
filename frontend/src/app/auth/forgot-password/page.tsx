@@ -17,6 +17,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { passwordResetAPI, getErrorMessage } from '@/lib/api'
 import { PhoneInput } from '@/components/ui/PhoneInput'
+import { PasswordInput } from '@/components/ui'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 export default function ForgotPasswordPage() {
@@ -189,8 +190,7 @@ export default function ForgotPasswordPage() {
 
                 <div>
                   <label className="label">{t('Contraseña nueva')}</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="new-password"
                     className="input"
                     placeholder={t('Mínimo 8 caracteres')}
@@ -203,8 +203,7 @@ export default function ForgotPasswordPage() {
 
                 <div>
                   <label className="label">{t('Confirmar contraseña nueva')}</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="new-password"
                     className="input"
                     placeholder={t('Repetir contraseña')}
