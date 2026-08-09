@@ -94,8 +94,24 @@ export default function AdminDashboard() {
                 <StatCard label="Pacientes registrados" value={stats.patients} color="#141820" />
                 <StatCard label="Profesionales activos" value={stats.professionals_active} color="#185FA5" />
                 <StatCard label="Consultas este mes" value={stats.monthly_consultations} color="#0F6E56" />
-                <StatCard label="Ingresos del mes" value={`Bs. ${Math.round(stats.monthly_revenue).toLocaleString()}`} color="#854F0B" />
-                <StatCard label="Comisión plataforma" value={`Bs. ${Math.round(stats.platform_fee_month).toLocaleString()}`} color="#854F0B" />
+                <StatCard label="Volumen transaccionado (GMV)" value={`Bs. ${Math.round(stats.monthly_revenue).toLocaleString()}`} color="#854F0B" />
+                <StatCard label="Comisión real cobrada" value={`Bs. ${Math.round(stats.platform_fee_month).toLocaleString()}`} color="#854F0B" />
+              </div>
+            </div>
+
+            {/* ── Ingresos reales de la plataforma ─────── */}
+            {/* Antes solo existía "Comisión plataforma" calculada como un
+                15% fijo sobre el GMV — no reflejaba la cascada real de
+                comisiones (promos, individuales, membresías) ni el
+                ingreso por cuotas de membresía, que no pasa por
+                Payment/Consultation. Estas dos tarjetas separan las dos
+                fuentes de ingreso reales de la plataforma. */}
+            <div className="mb-4">
+              <SectionTitle>{t('Ingreso real de la plataforma (este mes)')}</SectionTitle>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <StatCard label="Por comisiones" value={`Bs. ${Math.round(stats.platform_fee_month).toLocaleString()}`} color="#0F6E56" />
+                <StatCard label="Por cuotas de membresía" value={`Bs. ${Math.round(stats.membership_revenue_month ?? 0).toLocaleString()}`} color="#7F77DD" />
+                <StatCard label="Total" value={`Bs. ${Math.round(stats.total_platform_revenue_month ?? stats.platform_fee_month).toLocaleString()}`} color="#854F0B" />
               </div>
             </div>
 

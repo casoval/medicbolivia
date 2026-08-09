@@ -30,7 +30,7 @@ from app.models.models import (
     ProfessionalDoc, AuditLog, AgentLog, Notification, PlatformSettings,
     ProfessionalStatus, ConsultationStatus, ConsultationType, PaymentStatus, DocStatus, UserStatus,
     Rating, ClinicalNote, ProfessionalPenaltyReset, Earning, Prescription,
-    CommissionPeriod, CommissionScope, ProfessionalMembership,
+    CommissionPeriod, CommissionScope, ProfessionalMembership, MembershipPayment,
     ChatBlock, ProfessionalPatientVisibility, ChatConversation, AdminAccessLog, PaymentChannel,
     DoctorLead, DoctorLeadStatus, DoctorLeadSource, WhatsAppMessage,
     ProfessionalBankAccount, PayoutBatch, PayoutBatchStatus, PatientRefundAccount,
@@ -38,7 +38,7 @@ from app.models.models import (
 from app.schemas.schemas import (
     DocReviewRequest, RefundRequest, DisputeResolveRequest,
     ProfessionalMembershipCreateRequest, ProfessionalMembershipUpdateRequest,
-    ProfessionalMembershipRenewRequest, BroadcastCreateRequest,
+    ProfessionalMembershipRenewRequest, MembershipPaymentCreateRequest, BroadcastCreateRequest,
     DoctorLeadCreateRequest, DoctorLeadUpdateRequest, DoctorLeadInviteRequest,
     PayoutBatchCreateRequest, PayoutBatchConfirmRequest, RefundPayoutConfirmRequest,
 )
@@ -200,6 +200,36 @@ async def get_stats(
         )
     )).scalar_one()
 
+    # Comisión real cobrada este mes: se suma Payment.platform_fee ya
+    # calculado y congelado por cada transacción (ver services/payment.py
+    # calculate_amounts), NUNCA un % fijo sobre el total. La comisión no
+    # es un solo número — varía por consulta según qué nivel de la
+    # cascada aplicaba en ese momento (comisión por defecto, promoción
+    # global, promoción individual, o 0% por membresía activa). Sumar
+    # platform_fee ya resuelve todo eso automáticamente, sin tener que
+    # replicar la cascada acá.
+    monthly_platform_fee = (await db.execute(
+        select(func.coalesce(func.sum(Payment.platform_fee), 0)).where(
+            and_(
+                Payment.created_at >= month_start,
+                Payment.status.in_([PaymentStatus.CONFIRMED, PaymentStatus.RELEASED_TO_PROFESSIONAL])
+            )
+        )
+    )).scalar_one()
+
+    # Ingreso por cuotas de membresía cobradas este mes (fuera del cobro
+    # de comisiones). No sale de Payment/Consultation — es dinero que el
+    # admin registra a mano en MembershipPayment cuando da de alta o
+    # renueva una membresía (ver admin/memberships). Sin esto, esta
+    # línea de ingresos queda invisible: un profesional con membresía
+    # activa paga 0% de comisión, así que su actividad no aporta nada a
+    # monthly_platform_fee aunque sí le esté pagando a la plataforma.
+    monthly_membership_revenue = (await db.execute(
+        select(func.coalesce(func.sum(MembershipPayment.fee_amount), 0)).where(
+            MembershipPayment.paid_at >= month_start
+        )
+    )).scalar_one()
+
     # Consultas activas ahora mismo
     active_now = (await db.execute(
         select(func.count(Consultation.id)).where(
@@ -265,7 +295,14 @@ async def get_stats(
         "professionals_pending": pending_professionals,
         "monthly_consultations": monthly_consultations,
         "monthly_revenue":       float(monthly_revenue),
-        "platform_fee_month":    float(monthly_revenue) * 0.15,
+        # Antes: float(monthly_revenue) * 0.15 (porcentaje fijo hardcodeado,
+        # ignoraba la comisión real aplicada por consulta). Ahora: suma real
+        # de Payment.platform_fee, que ya refleja la cascada completa
+        # (comisión por defecto / promoción global / individual / 0% por
+        # membresía) porque cada Payment guarda su propio % ya congelado.
+        "platform_fee_month":    float(monthly_platform_fee),
+        "membership_revenue_month": float(monthly_membership_revenue),
+        "total_platform_revenue_month": float(monthly_platform_fee) + float(monthly_membership_revenue),
         "active_now":            active_now,
         "waiting_payment":       waiting_payment,
         "waiting_professional":  waiting_professional,
@@ -1728,6 +1765,89 @@ def _membership_to_dict(m: ProfessionalMembership) -> dict:
     }
 
 
+def _membership_payment_to_dict(p: MembershipPayment) -> dict:
+    return {
+        "id": p.id,
+        "membership_id": p.membership_id,
+        "professional_id": p.professional_id,
+        "fee_amount": float(p.fee_amount),
+        "currency": p.currency,
+        "payment_reference": p.payment_reference,
+        "months_covered": p.months_covered,
+        "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+        "recorded_by_admin_id": p.recorded_by_admin_id,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+    }
+
+
+# ── GET /api/v1/admin/memberships/{id}/payments ──────
+@router.get("/memberships/{membership_id}/payments", summary="Historial de cobros de una membresía")
+async def list_membership_payments(
+    membership_id: str,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    membership = (await db.execute(
+        select(ProfessionalMembership).where(ProfessionalMembership.id == membership_id)
+    )).scalar_one_or_none()
+    if not membership:
+        raise HTTPException(status_code=404, detail="Membresía no encontrada")
+
+    rows = (await db.execute(
+        select(MembershipPayment)
+        .where(MembershipPayment.membership_id == membership_id)
+        .order_by(MembershipPayment.paid_at.desc())
+    )).scalars().all()
+    return [_membership_payment_to_dict(p) for p in rows]
+
+
+# ── POST /api/v1/admin/memberships/{id}/payments ─────
+# Para cargar el cobro DESPUÉS de dar de alta o renovar la membresía
+# (ej. el admin activó la membresía primero y coordinó el pago un par de
+# días después). No mueve starts_at/ends_at — solo registra el monto.
+@router.post("/memberships/{membership_id}/payments", summary="Registrar un cobro de membresía por separado")
+async def create_membership_payment(
+    membership_id: str,
+    data: MembershipPaymentCreateRequest,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    membership = (await db.execute(
+        select(ProfessionalMembership).where(ProfessionalMembership.id == membership_id)
+    )).scalar_one_or_none()
+    if not membership:
+        raise HTTPException(status_code=404, detail="Membresía no encontrada")
+
+    payment = MembershipPayment(
+        membership_id=membership_id,
+        professional_id=membership.professional_id,
+        fee_amount=data.fee_amount,
+        currency=data.currency,
+        payment_reference=data.payment_reference,
+        months_covered=data.months_covered,
+        paid_at=data.paid_at or utcnow_naive(),
+        recorded_by_admin_id=current_user.id,
+    )
+    db.add(payment)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="MEMBERSHIP_PAYMENT_RECORDED",
+        entity_type="MembershipPayment",
+        entity_id=payment.id,
+        metadata_={
+            "membership_id": membership_id,
+            "professional_id": membership.professional_id,
+            "fee_amount": str(data.fee_amount),
+            "currency": data.currency,
+        },
+    ))
+
+    await db.commit()
+    await db.refresh(payment)
+    return _membership_payment_to_dict(payment)
+
+
 @router.get("/memberships", summary="Listar registros de membresía (por profesional o todos)")
 async def list_memberships(
     professional_id: Optional[str] = Query(None),
@@ -1772,6 +1892,25 @@ async def create_membership(
         enabled_by_admin_id=current_user.id,
     )
     db.add(membership)
+    await db.flush()  # necesitamos membership.id para el MembershipPayment
+
+    # Si el admin ya cargó el monto cobrado, se registra como un cobro
+    # estructurado (ver MembershipPayment) — no reemplaza a `note`, la
+    # complementa. Si todavía no coordinó el cobro, se puede cargar
+    # después con PUT /memberships/{id}/payments (o dejarlo sin registrar).
+    payment = None
+    if data.fee_amount is not None:
+        payment = MembershipPayment(
+            membership_id=membership.id,
+            professional_id=data.professional_id,
+            fee_amount=data.fee_amount,
+            currency=data.currency,
+            payment_reference=data.payment_reference,
+            months_covered=data.months,
+            paid_at=utcnow_naive(),
+            recorded_by_admin_id=current_user.id,
+        )
+        db.add(payment)
 
     db.add(AuditLog(
         user_id=current_user.id,
@@ -1784,13 +1923,17 @@ async def create_membership(
             "months": data.months,
             "starts_at": starts_at.isoformat(),
             "ends_at": ends_at.isoformat(),
+            "fee_amount": str(data.fee_amount) if data.fee_amount is not None else None,
+            "currency": data.currency,
         },
     ))
 
     await db.commit()
     await db.refresh(membership)
     logger.info(f"Membresía habilitada por admin {current_user.id} para profesional {data.professional_id} ({data.period_label}, {data.months} mes(es))")
-    return _membership_to_dict(membership)
+    result = _membership_to_dict(membership)
+    result["last_payment"] = _membership_payment_to_dict(payment) if payment else None
+    return result
 
 
 @router.post("/memberships/{membership_id}/renew", summary="Renovar membresía (solo si sigue vigente)")
@@ -1829,6 +1972,25 @@ async def renew_membership(
     if data.note:
         membership.note = data.note
 
+    # Cada renovación es un cobro NUEVO — se crea una fila de
+    # MembershipPayment aparte, nunca se pisa la de la renovación
+    # anterior (esa es justo la razón por la que existe esta tabla en
+    # vez de guardar un solo fee_amount en ProfessionalMembership: acá
+    # la misma fila de membresía se estira varias veces en el tiempo).
+    payment = None
+    if data.fee_amount is not None:
+        payment = MembershipPayment(
+            membership_id=membership.id,
+            professional_id=membership.professional_id,
+            fee_amount=data.fee_amount,
+            currency=data.currency,
+            payment_reference=data.payment_reference,
+            months_covered=data.months,
+            paid_at=utcnow_naive(),
+            recorded_by_admin_id=current_user.id,
+        )
+        db.add(payment)
+
     db.add(AuditLog(
         user_id=current_user.id,
         action="MEMBERSHIP_RENEWED",
@@ -1839,13 +2001,17 @@ async def renew_membership(
             "months": data.months,
             "old_ends_at": old_ends_at.isoformat() if old_ends_at else None,
             "new_ends_at": new_ends_at.isoformat(),
+            "fee_amount": str(data.fee_amount) if data.fee_amount is not None else None,
+            "currency": data.currency,
         },
     ))
 
     await db.commit()
     await db.refresh(membership)
     logger.info(f"Membresía {membership_id} renovada por admin {current_user.id}: +{data.months} mes(es) -> {new_ends_at.isoformat()}")
-    return _membership_to_dict(membership)
+    result = _membership_to_dict(membership)
+    result["last_payment"] = _membership_payment_to_dict(payment) if payment else None
+    return result
 
 
 @router.put("/memberships/{membership_id}", summary="Editar/deshabilitar un registro de membresía")

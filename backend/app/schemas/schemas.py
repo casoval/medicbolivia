@@ -670,6 +670,15 @@ class ProfessionalMembershipCreateRequest(BaseModel):
     # starts_at + months meses calendario (15 jul + 1 mes = 15 ago).
     months: int = Field(default=1, ge=1)
     note: Optional[str] = None
+    # Monto que el profesional pagó por esta membresía (cobrado por
+    # fuera de la plataforma). Opcional a propósito: el admin puede dar
+    # de alta la membresía primero y cargar el monto después si todavía
+    # no coordinó el cobro. Si se manda, se crea un MembershipPayment —
+    # sin esto, la membresía queda activa pero no aporta a
+    # monthly_membership_revenue en admin/stats.
+    fee_amount: Optional[Decimal] = Field(None, ge=0)
+    currency: str = Field(default="BOB", max_length=3)
+    payment_reference: Optional[str] = Field(None, max_length=100)
 
 
 class ProfessionalMembershipRenewRequest(BaseModel):
@@ -678,6 +687,12 @@ class ProfessionalMembershipRenewRequest(BaseModel):
     # se renueva — hay que crear una membresía nueva desde cero.
     months: int = Field(default=1, ge=1)
     note: Optional[str] = None
+    # Mismo criterio que en la creación: opcional, genera un
+    # MembershipPayment nuevo (no pisa el de la renovación anterior) si
+    # se manda un monto.
+    fee_amount: Optional[Decimal] = Field(None, ge=0)
+    currency: str = Field(default="BOB", max_length=3)
+    payment_reference: Optional[str] = Field(None, max_length=100)
 
 
 class ProfessionalMembershipUpdateRequest(BaseModel):
@@ -689,6 +704,19 @@ class ProfessionalMembershipUpdateRequest(BaseModel):
     @classmethod
     def _normalize_tz2(cls, v: Optional[datetime]) -> Optional[datetime]:
         return _to_bolivia_naive(v)
+
+
+class MembershipPaymentCreateRequest(BaseModel):
+    """Para registrar el cobro de una membresía por separado, cuando no
+    se cargó junto con el alta/renovación (ver POST
+    /admin/memberships/{id}/payments)."""
+    fee_amount: Decimal = Field(..., ge=0)
+    currency: str = Field(default="BOB", max_length=3)
+    payment_reference: Optional[str] = Field(None, max_length=100)
+    months_covered: int = Field(default=1, ge=1)
+    # Si no se manda, se usa "ahora". Permite cargar el cobro con la
+    # fecha real en que se recibió, si el admin lo registra días después.
+    paid_at: Optional[datetime] = None
 
 
 class PaymentWebhookRequest(BaseModel):

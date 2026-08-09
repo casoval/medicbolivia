@@ -215,18 +215,56 @@ export interface ProfessionalMembershipCreate {
   // backend como starts_at + months meses calendario — ya no se manda.
   months: number
   note?: string
+  // Monto cobrado por esta membresía (opcional). Si se manda, el
+  // backend crea un MembershipPayment y ese ingreso aparece en
+  // admin/stats → membership_revenue_month. Si se omite, la membresía
+  // queda activa pero sin ingreso registrado todavía.
+  fee_amount?: number
+  currency?: string
+  payment_reference?: string
 }
 
 export interface ProfessionalMembershipRenew {
   // Mínimo 1 mes. El backend rechaza esto si la membresía ya venció.
   months: number
   note?: string
+  // Mismo criterio que en la creación: cada renovación con fee_amount
+  // genera un MembershipPayment nuevo, nunca pisa el anterior.
+  fee_amount?: number
+  currency?: string
+  payment_reference?: string
 }
 
 export interface ProfessionalMembershipUpdate {
   active?: boolean
   ends_at?: string | null
   note?: string
+}
+
+// ── Cobros de membresía (ledger) ──────────────────────────────────────
+// Una fila por cada alta o renovación con monto cargado. Existe aparte
+// de ProfessionalMembership porque esa tabla es el estado de VIGENCIA
+// (una sola fila que se estira al renovar) — sin esto no había forma de
+// saber cuánto se cobró en cada renovación individual.
+export interface MembershipPayment {
+  id: string
+  membership_id: string
+  professional_id: string
+  fee_amount: number
+  currency: string
+  payment_reference: string | null
+  months_covered: number
+  paid_at: string
+  recorded_by_admin_id: string | null
+  created_at: string
+}
+
+export interface MembershipPaymentCreate {
+  fee_amount: number
+  currency?: string
+  payment_reference?: string
+  months_covered?: number
+  paid_at?: string
 }
 
 // ── Disputas de pago ──────────────────────────────────
@@ -1481,6 +1519,18 @@ export const adminAPI = {
 
   updateMembership: (id: string, data: ProfessionalMembershipUpdate) =>
     api.put<ProfessionalMembership>(`/admin/memberships/${id}`, data).then(r => r.data),
+
+  // Historial de cobros de una membresía (una fila por alta/renovación
+  // con monto cargado). Útil para ver, por ejemplo, cuánto pagó el
+  // profesional en total a lo largo del tiempo, no solo el último monto.
+  listMembershipPayments: (membershipId: string) =>
+    api.get<MembershipPayment[]>(`/admin/memberships/${membershipId}/payments`).then(r => r.data),
+
+  // Para cargar el cobro DESPUÉS de dar de alta o renovar (ej. el admin
+  // activó la membresía primero y coordinó el pago un par de días
+  // después). No mueve starts_at/ends_at, solo registra el monto.
+  createMembershipPayment: (membershipId: string, data: MembershipPaymentCreate) =>
+    api.post<MembershipPayment>(`/admin/memberships/${membershipId}/payments`, data).then(r => r.data),
 
   // Cola de pagos congelados por reclamo del paciente, pendientes de que
   // un admin decida si se liberan al profesional o se reembolsan.

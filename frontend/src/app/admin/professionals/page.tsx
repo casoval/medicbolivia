@@ -701,8 +701,17 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
   const [startMode, setStartMode] = useState<'today' | 'custom'>('today')
   const [customStart, setCustomStart] = useState('')
   const [months, setMonths] = useState(1)
+  // Monto cobrado por esta membresía — opcional. Si se carga, queda
+  // registrado como MembershipPayment y aparece en el dashboard admin
+  // como ingreso real ("Por cuotas de membresía"). Si se deja vacío, la
+  // membresía se activa igual pero sin ingreso registrado todavía (se
+  // puede cargar después desde el historial de cobros).
+  const [feeAmount, setFeeAmount] = useState('')
+  const [paymentReference, setPaymentReference] = useState('')
 
   const [renewMonths, setRenewMonths] = useState(1)
+  const [renewFeeAmount, setRenewFeeAmount] = useState('')
+  const [renewPaymentReference, setRenewPaymentReference] = useState('')
 
   function load() {
     setLoading(true)
@@ -736,8 +745,11 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
         starts_at: startMode === 'custom' ? `${customStart}T00:00:00` : undefined,
         months,
         note: note || undefined,
+        fee_amount: feeAmount ? parseFloat(feeAmount) : undefined,
+        payment_reference: paymentReference.trim() || undefined,
       })
       setPeriodLabel(''); setNote(''); setCustomStart(''); setStartMode('today'); setMonths(1)
+      setFeeAmount(''); setPaymentReference('')
       load()
     } catch (err) {
       setError(getErrorMessage(err))
@@ -756,8 +768,14 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
     try {
       // El backend rechaza esto si la membresía ya venció: en ese caso
       // hay que dar de alta una nueva (no se puede "revivir" una vencida).
-      await adminAPI.renewMembership(id, { months: renewMonths })
-      setRenewMonths(1)
+      // fee_amount acá SIEMPRE crea un MembershipPayment nuevo — nunca
+      // pisa el de la renovación anterior (son cobros distintos).
+      await adminAPI.renewMembership(id, {
+        months: renewMonths,
+        fee_amount: renewFeeAmount ? parseFloat(renewFeeAmount) : undefined,
+        payment_reference: renewPaymentReference.trim() || undefined,
+      })
+      setRenewMonths(1); setRenewFeeAmount(''); setRenewPaymentReference('')
       load()
     } catch (err) {
       setError(getErrorMessage(err))
@@ -807,18 +825,35 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
                   ? `Sigue vigente hasta el ${fmtDate(current.ends_at)} — puedes renovarla desde ya (se suma a esa fecha) o deshabilitarla antes de tiempo.`
                   : 'No tiene fecha de vencimiento (indefinida) — puedes deshabilitarla cuando corresponda.'}
               </p>
-              <div className="flex items-end gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs text-[#475569] mb-1">Meses a renovar</label>
                   <input type="number" min={1} step={1} value={renewMonths}
                     onChange={(e) => setRenewMonths(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-24 px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
                 </div>
-                <button onClick={() => renewMembership(current.id)} disabled={renewing}
-                  className="btn-primary text-xs py-1.5 px-3 disabled:opacity-60">
-                  {renewing ? 'Renovando…' : `Renovar ${renewMonths} mes${renewMonths > 1 ? 'es' : ''}`}
-                </button>
+                <div>
+                  <label className="block text-xs text-[#475569] mb-1">Monto cobrado (Bs., opcional)</label>
+                  <input type="number" min={0} step="0.01" value={renewFeeAmount}
+                    onChange={(e) => setRenewFeeAmount(e.target.value)}
+                    placeholder="Ej. 150"
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-[#475569] mb-1">Referencia de pago (opcional)</label>
+                  <input value={renewPaymentReference} onChange={(e) => setRenewPaymentReference(e.target.value)}
+                    placeholder="Ej. QR personal ref. 123"
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
               </div>
+              <p className="text-[10px] text-[#64748B]">
+                Si cargas el monto, queda registrado como ingreso de esta renovación — sin pisar el de renovaciones
+                anteriores. Puedes dejarlo vacío y cargarlo después si todavía no coordinaste el cobro.
+              </p>
+              <button onClick={() => renewMembership(current.id)} disabled={renewing}
+                className="btn-primary text-xs py-1.5 px-3 disabled:opacity-60">
+                {renewing ? 'Renovando…' : `Renovar ${renewMonths} mes${renewMonths > 1 ? 'es' : ''}`}
+              </button>
               <button onClick={() => disableMembership(current.id)}
                 className="text-xs text-[#A32D2D] hover:underline">
                 Deshabilitar membresía ahora
@@ -862,13 +897,30 @@ function ProfessionalMembershipSection({ professionalId }: { professionalId: str
                     <SpanishDatePicker value={customStart} onChange={setCustomStart} />
                   )}
                 </div>
+                <div>
+                  <label className="block text-xs text-[#475569] mb-1">Monto cobrado (Bs., opcional)</label>
+                  <input type="number" min={0} step="0.01" value={feeAmount}
+                    onChange={(e) => setFeeAmount(e.target.value)}
+                    placeholder="Ej. 150"
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#475569] mb-1">Referencia de pago (opcional)</label>
+                  <input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)}
+                    placeholder="Ej. QR personal ref. 123"
+                    className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
+                </div>
                 <div className="col-span-2">
                   <label className="block text-xs text-[#475569] mb-1">Nota (opcional)</label>
                   <input value={note} onChange={(e) => setNote(e.target.value)}
-                    placeholder="Ej. Pago recibido por QR personal, ref. 123"
+                    placeholder="Cualquier otra referencia libre"
                     className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm" />
                 </div>
               </div>
+              <p className="text-[10px] text-[#64748B]">
+                Si cargas el monto, queda registrado como ingreso real de la plataforma (aparece en el dashboard).
+                Puedes dejarlo vacío y cargarlo después desde el historial de cobros si todavía no coordinaste el pago.
+              </p>
               <button onClick={enableMembership} disabled={creating}
                 className="btn-primary text-xs py-1.5 px-3 disabled:opacity-60">
                 {creating ? 'Guardando…' : 'Habilitar membresía'}

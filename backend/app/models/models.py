@@ -1121,6 +1121,61 @@ class ProfessionalMembership(Base):
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=utcnow_naive, default=utcnow_naive)
 
     professional: Mapped["Professional"] = relationship()
+    payments: Mapped[List["MembershipPayment"]] = relationship(
+        back_populates="membership", order_by="MembershipPayment.paid_at.desc()"
+    )
+
+
+class MembershipPayment(Base):
+    """
+    Registro de cada cobro de la cuota de membresía (alta inicial o cada
+    renovación) — ver ProfessionalMembership.
+
+    Existe como tabla aparte porque ProfessionalMembership es el estado de
+    VIGENCIA (una sola fila que se estira al renovar — ver
+    admin.renew_membership, que solo mueve ends_at hacia adelante), no el
+    historial de COBROS. Sin esta tabla, la segunda renovación de un
+    profesional pisaría cualquier monto que se hubiera guardado en la
+    fila de membresía y sería imposible responder "¿cuánto entró por
+    membresías este mes?" — que es justo para lo que se usa (ver
+    admin.get_stats → monthly_membership_revenue).
+
+    El cobro en sí sigue siendo 100% manual y por fuera de la plataforma
+    (QR personal del profesional, transferencia bancaria, efectivo,
+    etc.) — no hay integración de cobro automático acá, igual que ya
+    pasaba con ProfessionalMembership.note antes de esta tabla. Esta fila
+    es solo el registro estructurado que el admin carga a mano al dar de
+    alta o renovar, para que el monto quede consultable en vez de
+    perdido en un texto libre.
+    """
+    __tablename__ = "membership_payments"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    membership_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("professional_memberships.id", ondelete="CASCADE"), nullable=False
+    )
+    professional_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("professionals.id", ondelete="CASCADE"), nullable=False
+    )
+    fee_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="BOB")
+    # Texto libre para la referencia del cobro (nro. de transacción QR,
+    # últimos dígitos, etc.) — no se valida formato, es solo para que el
+    # admin pueda rastrear el cobro real si hace falta.
+    payment_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Cuántos meses cubre ESTE pago puntual (coincide con `months` que
+    # mandó el admin en el alta o la renovación que generó esta fila).
+    months_covered: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Cuándo se registró el cobro (no confundir con created_at: paid_at
+    # es el dato de negocio que se usa para agrupar "ingreso del mes",
+    # editable en teoría si el admin carga el pago días después de
+    # recibirlo; created_at es el timestamp técnico de la fila).
+    paid_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+    recorded_by_admin_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+
+    membership: Mapped["ProfessionalMembership"] = relationship(back_populates="payments")
+    professional: Mapped["Professional"] = relationship()
 
 
 class PatientProfessionalLink(Base):
