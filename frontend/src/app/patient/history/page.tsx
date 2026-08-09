@@ -16,6 +16,7 @@ import { getLicenseInfo } from '@/lib/professionalLicense'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
 import { CreatorBadge } from '@/components/shared/CreatorBadge'
 import { PaymentBadge } from '@/components/shared/ConsultationBadges'
+import { AddToCalendarButton } from '@/components/shared/AddToCalendarButton'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconClose  = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -749,6 +750,20 @@ export default function HistoryPage() {
                                 ? 'El profesional propone otro horario — debes responder'
                                 : 'Propusiste otro horario — esperando respuesta'}
                             </p>
+                          )}
+                          {isScheduled && c.scheduled_at && (c.status === 'PAYMENT_CONFIRMED' || c.status === 'WAITING_PROFESSIONAL') && !hasProposalPending && (
+                            <div className="mt-1.5">
+                              <AddToCalendarButton
+                                event={{
+                                  uid: c.id,
+                                  title: `Consulta con ${doctorName || 'tu médico'} — MedicBolivia`,
+                                  description: c.specialty ? `Especialidad: ${c.specialty}` : 'Consulta agendada en MedicBolivia.',
+                                  location: c.modality === 'IN_PERSON' ? 'Consulta presencial' : 'Videollamada por MedicBolivia',
+                                  startsAt: new Date(c.scheduled_at),
+                                  durationMinutes: 30,
+                                }}
+                              />
+                            </div>
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1">

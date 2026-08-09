@@ -18,6 +18,7 @@ import { CreatorBadge } from '@/components/shared/CreatorBadge'
 import { PaymentBadge } from '@/components/shared/ConsultationBadges'
 import { SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
+import { AddToCalendarButton } from '@/components/shared/AddToCalendarButton'
 import { ProfessionalScheduleModal } from '@/components/professional/ProfessionalScheduleModal'
 import { groupByPatient, hasEffectiveLink, linkForSchedule } from '@/lib/patientGrouping'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
@@ -251,13 +252,28 @@ export default function ProfessionalAppointmentsPage() {
                               {c.specialty ? `${c.specialty} · ` : ''}Bs. {parseFloat(c.amount).toFixed(2)}
                             </p>
                             {scheduledAt && (
-                              <p className="text-xs text-[#185FA5] font-medium mt-0.5">
-                                🗓 {scheduledAt.toLocaleString('es-BO', {
-                                  weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
-                                })}
-                              </p>
-                            )}
-                          </div>
+                              <>
+                                <p className="text-xs text-[#185FA5] font-medium mt-0.5">
+                                  🗓 {scheduledAt.toLocaleString('es-BO', {
+                                    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                                  })}
+                                </p>
+                                {(c.status === 'PAYMENT_CONFIRMED' || c.status === 'WAITING_PROFESSIONAL') && (
+                                  <div className="mt-1">
+                                    <AddToCalendarButton
+                                      event={{
+                                        uid: c.id,
+                                        title: `Consulta con ${patientNameOf(c) || 'paciente'} — MedicBolivia`,
+                                        description: c.chief_complaint ? `Motivo: ${c.chief_complaint}` : 'Consulta agendada en MedicBolivia.',
+                                        location: c.modality === 'IN_PERSON' ? (c.address || 'Consulta presencial') : 'Videollamada por MedicBolivia',
+                                        startsAt: scheduledAt,
+                                        durationMinutes: 30,
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                              </>
+                            )}                          </div>
                           <div className="flex flex-col items-end gap-1">
                             <StatusBadge status={c.status} createdByRole={c.created_by_role} />
                             <CreatorBadge createdByRole={c.created_by_role} viewerRole="PROFESSIONAL" />

@@ -24,9 +24,15 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
   // con el mismo code="chat_unavailable" (ver endpoints/chat.py). El
   // frontend jamás debe intentar adivinar cuál fue.
   const [chatUnavailable, setChatUnavailable] = useState(false)
+  // true mientras el OTRO participante está tipeando ahora mismo. Se
+  // apaga solo si no llega un nuevo ping de "typing" en 3s (el backend
+  // nunca manda un evento explícito de "dejó de escribir").
+  const [otherTyping, setOtherTyping] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const shouldReconnect = useRef(true)
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastTypingSentRef = useRef(0)
 
   const seedMessages = useCallback((history: ChatMessage[], pageSize: number) => {
     setMessages(history)
@@ -81,6 +87,21 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
           })
         } else if (data.type === 'error') {
           if (data.code === 'chat_unavailable') setChatUnavailable(true)
+        } else if (data.type === 'typing') {
+          if (data.user_id === currentUserId) return // eco de mi propio ping, ignorar
+          setOtherTyping(true)
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+          typingTimeoutRef.current = setTimeout(() => setOtherTyping(false), 3000)
+        } else if (data.type === 'read') {
+          if (data.reader_id === currentUserId) return // soy yo mismo marcando como leído, no me interesa
+          // Mis mensajes (los que YO mandé) pasan a "visto".
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.sender_id === currentUserId && !m.read_at
+                ? { ...m, read_at: data.read_at }
+                : m
+            )
+          )
         }
       }
 
@@ -104,6 +125,7 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
     return () => {
       shouldReconnect.current = false
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
       wsRef.current?.close()
     }
   }, [conversationId, currentUserId])
@@ -112,6 +134,17 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ content }))
     }
+  }, [])
+
+  // Throttle a 1 ping cada 2s como mucho — no hace falta mandar uno por
+  // cada tecla, el receptor igual muestra "escribiendo..." por 3s desde
+  // el último ping recibido.
+  const sendTyping = useCallback(() => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return
+    const now = Date.now()
+    if (now - lastTypingSentRef.current < 2000) return
+    lastTypingSentRef.current = now
+    wsRef.current.send(JSON.stringify({ type: 'typing' }))
   }, [])
 
   const addLocalMessage = useCallback((msg: ChatMessage) => {
@@ -124,5 +157,5 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
     setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
   }, [])
 
-  return { messages, hasMore, connected, chatUnavailable, sendMessage, seedMessages, prependOlderMessages, addLocalMessage }
+  return { messages, hasMore, connected, chatUnavailable, otherTyping, sendMessage, sendTyping, seedMessages, prependOlderMessages, addLocalMessage }
 }

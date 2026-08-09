@@ -23,6 +23,32 @@ const IconDownload = () => <svg width="18" height="18" viewBox="0 0 24 24" fill=
 const IconClose = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
 const IconExpand = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
 
+// ── Ticks de leído (estilo WhatsApp: un check = enviado, dos = visto) ──
+function ReadTicks({ read }: { read: boolean }) {
+  return (
+    <svg width="14" height="10" viewBox="0 0 16 11" fill="none" aria-label={read ? 'Visto' : 'Enviado'}>
+      <path d="M1 5.5L4.5 9L11 1.5" stroke={read ? '#53BDEB' : '#9CA3AF'} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5.5 5.5L9 9L15.5 1.5" stroke={read ? '#53BDEB' : '#9CA3AF'} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+// ── "Escribiendo..." — tres puntitos animados, misma burbuja que un mensaje ──
+function TypingDots() {
+  return (
+    <span className="flex items-center gap-1" aria-label="Escribiendo...">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="w-1.5 h-1.5 rounded-full bg-[#9CA3AF] animate-bounce"
+          style={{ animationDelay: `${i * 0.15}s` }}
+        />
+      ))}
+    </span>
+  )
+}
+
+
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 const MAX_MB = 10
 
@@ -72,14 +98,36 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
   })
 
   const {
-    messages, hasMore, connected, chatUnavailable,
-    sendMessage, seedMessages, prependOlderMessages, addLocalMessage,
+    messages, hasMore, connected, chatUnavailable, otherTyping,
+    sendMessage, sendTyping, seedMessages, prependOlderMessages, addLocalMessage,
   } = useChatSocket(conversation.id, currentUserId)
 
   useEffect(() => {
     didInitialScroll.current = false
     if (history) seedMessages(history, CHAT_PAGE_SIZE)
   }, [history, seedMessages, conversation.id])
+
+  // Marca como leídos los mensajes del otro participante apenas aparecen
+  // en pantalla — tanto al abrir la conversación (historial inicial)
+  // como cuando llega uno nuevo en vivo mientras el chat sigue abierto.
+  // No hace falta filtrar "en foco": este efecto solo corre mientras
+  // ChatWindow está montado, o sea la conversación activa en pantalla.
+  const lastMarkedForRef = useRef<string | null>(null)
+  useEffect(() => {
+    const unreadFromOther = messages.filter((m) => m.sender_id !== currentUserId && !m.read_at)
+    if (unreadFromOther.length === 0) return
+    // Evita repetir la llamada mientras el último mensaje sin leer sigue
+    // siendo el mismo (el servidor ya lo marcó, solo que acá en memoria
+    // no lo actualizamos porque no se renderiza ningún tick para
+    // mensajes recibidos — solo para los que YO mando).
+    const marker = unreadFromOther[unreadFromOther.length - 1].id
+    if (lastMarkedForRef.current === marker) return
+    lastMarkedForRef.current = marker
+    chatAPI.markRead(conversation.id).catch(() => {
+      // No es crítico — en el peor caso el otro participante ve el
+      // mensaje como "no leído" un rato más de lo real, sin romper nada.
+    })
+  }, [messages, conversation.id, currentUserId])
 
   // Salto inicial al último mensaje: sin animación y antes del paint,
   // para que el chat "abra" ya mostrando lo más reciente (no un scroll
@@ -391,10 +439,20 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
                     <p className="whitespace-pre-wrap break-words">{m.content}</p>
                   )}
                 </div>
-                <p className="text-[11px] text-[#9CA3AF] mt-1 px-1">{fmtHora(m.created_at)}</p>
+                <p className="text-[11px] text-[#9CA3AF] mt-1 px-1 flex items-center gap-1">
+                  {fmtHora(m.created_at)}
+                  {own && <ReadTicks read={!!m.read_at} />}
+                </p>
               </div>
               )
             })}
+            {otherTyping && (
+              <div className="flex flex-col items-start">
+                <div className="bg-white border border-[#E5E7EB] rounded-2xl rounded-bl-md px-3 py-2.5">
+                  <TypingDots />
+                </div>
+              </div>
+            )}
           </>
         )}
         <div ref={bottomRef} />
@@ -422,7 +480,7 @@ export function ChatWindow({ conversation, currentUserId, backHref }: ChatWindow
           </button>
           <input
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); sendTyping() }}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder={connected ? 'Escribe un mensaje' : 'Conectando...'}
             disabled={!connected}

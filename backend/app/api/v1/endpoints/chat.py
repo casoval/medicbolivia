@@ -145,6 +145,48 @@ async def get_messages(
     return [await _build_message_response(m) for m in messages]
 
 
+@router.post("/conversations/{conversation_id}/read", status_code=status.HTTP_200_OK)
+async def mark_read(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Marca como leídos todos los mensajes que el OTRO participante me
+    mandó y que yo todavía no había visto. El frontend llama esto al
+    abrir la conversación y cuando llegan mensajes nuevos con la pestaña
+    en foco. Avisa por WebSocket al otro participante para que sus
+    burbujas pasen a "✓✓ Visto" sin tener que recargar."""
+    conv = await get_conversation_for_user(db, conversation_id, current_user.id)
+    if not conv:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversación no encontrada")
+
+    other_id = other_participant_id(conv, current_user.id)
+    now = utcnow_naive()
+
+    result = await db.execute(
+        select(ChatMessage).where(
+            ChatMessage.conversation_id == conversation_id,
+            ChatMessage.sender_id == other_id,
+            ChatMessage.read_at.is_(None),
+        )
+    )
+    unread = result.scalars().all()
+    if not unread:
+        return {"marked": 0}
+
+    for msg in unread:
+        msg.read_at = now
+    await db.commit()
+
+    await chat_manager.broadcast(conversation_id, {
+        "type": "read",
+        "reader_id": current_user.id,
+        "read_at": now.isoformat() + "Z",
+    })
+
+    return {"marked": len(unread)}
+
+
 # ─────────────────────────────────────────────────────
 # REST — adjuntos (sube el archivo Y crea el mensaje en un solo paso,
 # a diferencia del patrón de "URL prefirmada" que se usa para fotos de
@@ -447,6 +489,18 @@ async def chat_websocket(
     try:
         while True:
             data = await websocket.receive_json()
+
+            # Ping de "escribiendo..." — no se persiste en la base, solo se
+            # reenvía en vivo al otro participante. No pasa por el rate
+            # limit de mensajes (ese es para spam de mensajes reales); el
+            # propio frontend ya lo manda como mucho cada 2s mientras se
+            # escribe, así que el volumen es bajo de por sí.
+            if data.get("type") == "typing":
+                await chat_manager.broadcast(conversation_id, {
+                    "type": "typing",
+                    "user_id": current_user.id,
+                })
+                continue
 
             if not await _chat_ws_rate_limit_ok(current_user.id):
                 await websocket.send_json({"type": "error", "code": "rate_limited"})

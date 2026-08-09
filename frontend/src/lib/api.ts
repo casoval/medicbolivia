@@ -1683,6 +1683,12 @@ export const chatAPI = {
       params: before ? { before, limit: CHAT_PAGE_SIZE } : { limit: CHAT_PAGE_SIZE },
     }).then(r => r.data),
 
+  // Marca como leídos todos los mensajes que el otro participante me
+  // mandó. El backend avisa por WebSocket al otro participante para que
+  // sus burbujas pasen a "✓✓ Visto" en vivo.
+  markRead: (conversationId: string) =>
+    api.post<{ marked: number }>(`/chat/conversations/${conversationId}/read`).then(r => r.data),
+
   sendAttachment: (conversationId: string, file: File) => {
     const form = new FormData()
     form.append('file', file)

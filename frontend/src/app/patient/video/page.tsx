@@ -11,11 +11,50 @@ import {
   LocalVideoTrack,
   RemoteTrack,
   VideoPresets,
+  ConnectionQuality,
 } from 'livekit-client'
 import { consultationsAPI, ratingsAPI } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface ChatMsg { from: 'me' | 'them'; text: string; time: string }
+
+// ── Ícono de señal — refleja ConnectionQuality de LiveKit ────────────
+function SignalIcon({ quality }: { quality: ConnectionQuality | null }) {
+  const level =
+    quality === ConnectionQuality.Excellent ? 3 :
+    quality === ConnectionQuality.Good ? 2 :
+    quality === ConnectionQuality.Poor ? 1 :
+    quality === ConnectionQuality.Lost ? 0 :
+    -1 // desconocida todavía (recién conectando)
+
+  const color =
+    level === 3 ? '#3FCE9E' :
+    level === 2 ? '#F5C563' :
+    level >= 0 ? '#F09595' :
+    'rgba(255,255,255,0.3)'
+
+  const label =
+    level === 3 ? 'Conexión excelente' :
+    level === 2 ? 'Conexión regular' :
+    level === 1 ? 'Conexión débil' :
+    level === 0 ? 'Sin conexión' :
+    'Midiendo conexión...'
+
+  return (
+    <span className="flex items-end gap-[1.5px] h-3" title={label} aria-label={label}>
+      {[0, 1, 2].map((bar) => (
+        <span
+          key={bar}
+          className="w-[3px] rounded-sm"
+          style={{
+            height: `${4 + bar * 3}px`,
+            backgroundColor: level > bar || (level === -1 && bar === 0) ? color : 'rgba(255,255,255,0.2)',
+          }}
+        />
+      ))}
+    </span>
+  )
+}
 
 // ── StarPicker inline (no depende de /ui para evitar imports en video) ──
 function StarPickerInline({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -61,6 +100,10 @@ export default function PatientVideoPage() {
   const [unread, setUnread]             = useState(0)
   const [inputText, setInputText]       = useState('')
   const [controlsVisible, setControlsVisible] = useState(true)
+
+  // ── Calidad de conexión / reconexión ──────────────────────────────
+  const [isReconnecting, setIsReconnecting] = useState(false)
+  const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality | null>(null)
 
   // Post-consulta: modal de calificación
   const [showRatingModal, setShowRatingModal] = useState(false)
@@ -130,6 +173,11 @@ export default function PatientVideoPage() {
           setStatus('ended')
           // Mostrar modal de calificación al terminar
           setTimeout(() => setShowRatingModal(true), 800)
+        })
+        room.on(RoomEvent.Reconnecting, () => setIsReconnecting(true))
+        room.on(RoomEvent.Reconnected, () => setIsReconnecting(false))
+        room.on(RoomEvent.ConnectionQualityChanged, (quality: ConnectionQuality, participant) => {
+          if (participant.isLocal) setConnectionQuality(quality)
         })
         room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
           if (track.kind === Track.Kind.Video && remoteVideoRef.current) track.attach(remoteVideoRef.current)
@@ -406,9 +454,23 @@ export default function PatientVideoPage() {
           </div>
         )}
 
+        {/* Banner de reconexión */}
+        {isReconnecting && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-sm">
+            <div className="w-10 h-10 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+            <p className="text-white text-sm font-medium">{t('Reconectando...')}</p>
+            <p className="text-white/50 text-xs max-w-[220px] text-center">
+              {t('Se cortó la conexión un momento. Estamos intentando reconectar automáticamente, esperá unos segundos.')}
+            </p>
+          </div>
+        )}
+
         {/* Timer */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white text-xs px-4 py-1.5 rounded-full font-mono z-10 pointer-events-none">
-          {status === 'connecting' ? '⏳ Conectando' : `🔴 ${fmt(duration)}`}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur-sm text-white text-xs px-4 py-1.5 rounded-full font-mono z-10 pointer-events-none">
+          <span>{status === 'connecting' ? '⏳ Conectando' : `🔴 ${fmt(duration)}`}</span>
+          {(status === 'connected' || status === 'doctor_joined') && (
+            <SignalIcon quality={connectionQuality} />
+          )}
         </div>
 
         {/* Miniatura local */}

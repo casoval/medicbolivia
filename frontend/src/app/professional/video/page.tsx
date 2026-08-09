@@ -11,6 +11,7 @@ import {
   LocalVideoTrack,
   RemoteTrack,
   VideoPresets,
+  ConnectionQuality,
 } from 'livekit-client'
 import { consultationsAPI, prescriptionsAPI, clinicalNotesAPI, getErrorMessage } from '@/lib/api'
 import type { Medication } from '@/types'
@@ -20,7 +21,56 @@ interface ChatMsg { from: 'me' | 'them'; text: string; time: string }
 
 const EMPTY_MED: Medication = { name: '', presentation: '', dosage: '', frequency: '', duration: '', notes: '' }
 
+// ── Ícono de señal — refleja ConnectionQuality de LiveKit ────────────
+// Se usa tanto en la pantalla del profesional como en la del paciente.
+function SignalIcon({ quality }: { quality: ConnectionQuality | null }) {
+  const level =
+    quality === ConnectionQuality.Excellent ? 3 :
+    quality === ConnectionQuality.Good ? 2 :
+    quality === ConnectionQuality.Poor ? 1 :
+    quality === ConnectionQuality.Lost ? 0 :
+    -1 // desconocida todavía (recién conectando)
+
+  const color =
+    level === 3 ? '#3FCE9E' :
+    level === 2 ? '#F5C563' :
+    level >= 0 ? '#F09595' :
+    'rgba(255,255,255,0.3)'
+
+  const label =
+    level === 3 ? 'Conexión excelente' :
+    level === 2 ? 'Conexión regular' :
+    level === 1 ? 'Conexión débil' :
+    level === 0 ? 'Sin conexión' :
+    'Midiendo conexión...'
+
+  return (
+    <span className="flex items-end gap-[1.5px] h-3" title={label} aria-label={label}>
+      {[0, 1, 2].map((bar) => (
+        <span
+          key={bar}
+          className="w-[3px] rounded-sm"
+          style={{
+            height: `${4 + bar * 3}px`,
+            backgroundColor: level > bar || (level === -1 && bar === 0) ? color : 'rgba(255,255,255,0.2)',
+          }}
+        />
+      ))}
+    </span>
+  )
+}
+
 // ── Panel lateral: emitir receta SIN salir de la videollamada ──────────
+// Mientras el médico escribe, se guarda un borrador SOLO en este
+// navegador (localStorage) — nunca al servidor, así que nunca crea un
+// documento firmado a medias. Es solo para no perder lo escrito si se
+// cierra la pestaña o se corta la conexión antes de llegar a "Emitir y
+// firmar". El botón de firmar sigue siendo la única acción que de verdad
+// emite la receta.
+function draftKey(consultationId: string) {
+  return `mb_rx_draft_${consultationId}`
+}
+
 function PrescriptionPanel({ consultationId, onClose }: { consultationId: string; onClose: () => void }) {
   const { t } = useLanguage()
   const [medications, setMedications] = useState<Medication[]>([{ ...EMPTY_MED }])
@@ -28,11 +78,52 @@ function PrescriptionPanel({ consultationId, onClose }: { consultationId: string
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
+  const [draftRestored, setDraftRestored] = useState(false)
+  const draftLoadedRef = useRef(false)
+
+  // Al abrir el panel, si había un borrador de ESTA consulta guardado
+  // localmente (por ej. se cerró la pestaña sin firmar), lo recuperamos.
+  useEffect(() => {
+    if (draftLoadedRef.current) return
+    draftLoadedRef.current = true
+    try {
+      const raw = window.localStorage.getItem(draftKey(consultationId))
+      if (raw) {
+        const draft = JSON.parse(raw)
+        const hasContent = draft.medications?.some((m: Medication) => m.name || m.dosage || m.frequency) || draft.instructions
+        if (hasContent) {
+          setMedications(draft.medications?.length ? draft.medications : [{ ...EMPTY_MED }])
+          setInstructions(draft.instructions || '')
+          setDraftRestored(true)
+        }
+      }
+    } catch {
+      // localStorage no disponible o dato corrupto — seguimos sin borrador, no es crítico.
+    }
+  }, [consultationId])
+
+  // Guarda el borrador local automáticamente en cada cambio (silencioso,
+  // sin botón — es solo una copia de este dispositivo, no tiene el riesgo
+  // de "enviar algo a medias" porque nunca sale del navegador).
+  useEffect(() => {
+    const hasContent = medications.some(m => m.name || m.dosage || m.frequency) || instructions
+    try {
+      if (hasContent) {
+        window.localStorage.setItem(draftKey(consultationId), JSON.stringify({ medications, instructions }))
+      } else {
+        window.localStorage.removeItem(draftKey(consultationId))
+      }
+    } catch {
+      // Si localStorage falla (modo incógnito con storage bloqueado, etc.)
+      // simplemente no hay borrador local — no afecta poder emitir la receta.
+    }
+  }, [consultationId, medications, instructions])
 
   function addMed() { setMedications(p => [...p, { ...EMPTY_MED }]) }
   function removeMed(i: number) { setMedications(p => p.filter((_, idx) => idx !== i)) }
   function updateMed(i: number, field: keyof Medication, value: string) {
     setMedications(p => p.map((m, idx) => idx === i ? { ...m, [field]: value } : m))
+    setDraftRestored(false)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -48,6 +139,8 @@ function PrescriptionPanel({ consultationId, onClose }: { consultationId: string
       setSuccess('Receta emitida y firmada. El paciente ya puede verla.')
       setMedications([{ ...EMPTY_MED }])
       setInstructions('')
+      // Ya quedó firmada en el servidor — el borrador local ya no sirve.
+      try { window.localStorage.removeItem(draftKey(consultationId)) } catch {}
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -64,6 +157,11 @@ function PrescriptionPanel({ consultationId, onClose }: { consultationId: string
       <form onSubmit={handleSubmit} className="p-4 space-y-3">
         {success && <p className="text-xs bg-[#0F6E56]/20 text-[#3FCE9E] rounded-lg px-3 py-2">{success}</p>}
         {error && <p className="text-xs bg-[#A32D2D]/20 text-[#F09595] rounded-lg px-3 py-2">{error}</p>}
+        {draftRestored && !success && (
+          <p className="text-xs bg-[#185FA5]/20 text-[#7CB4E8] rounded-lg px-3 py-2">
+            {t('📝 Recuperamos un borrador que habías dejado a medias en este dispositivo.')}
+          </p>
+        )}
 
         {medications.map((med, i) => (
           <div key={i} className="bg-white/5 rounded-xl p-3 space-y-2">
@@ -113,7 +211,7 @@ function PrescriptionPanel({ consultationId, onClose }: { consultationId: string
           placeholder={t('Indicaciones adicionales...')}
           rows={3}
           value={instructions}
-          onChange={e => setInstructions(e.target.value)}
+          onChange={e => { setInstructions(e.target.value); setDraftRestored(false) }}
         />
 
         <button
@@ -123,12 +221,18 @@ function PrescriptionPanel({ consultationId, onClose }: { consultationId: string
         >
           {saving ? 'Emitiendo...' : 'Emitir y firmar receta'}
         </button>
+        <p className="text-[10px] text-white/30">
+          {t('Mientras escribes, guardamos un borrador solo en este dispositivo por si se corta la conexión. Nada queda firmado hasta que tocas "Emitir y firmar receta".')}
+        </p>
       </form>
     </div>
   )
 }
 
-// ── Panel lateral: historia clínica con autosave, SIN salir de la llamada ──
+// ── Panel lateral: emitir historia clínica SIN salir de la llamada ──
+// Guardado manual (botón "Guardar"), no automático — así el médico
+// decide cuándo su nota ya está lista para quedar registrada, en vez de
+// ir mandando fragmentos a medias cada vez que deja de tipear un segundo.
 function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string; onClose: () => void }) {
   const { t } = useLanguage()
   const [noteId, setNoteId] = useState<string | null>(null)
@@ -138,11 +242,11 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
   const [plan, setPlan] = useState('')
   const [isVisibleToPatient, setIsVisibleToPatient] = useState(true)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [dirty, setDirty] = useState(false)
   const loadedRef = useRef(false)
 
   // Cargar nota existente si ya se había creado antes (ej. el médico cerró
-  // y reabrió el panel durante la misma llamada).
+  // y reabrió el panel durante la misma llamada, o ya había guardado algo).
   useEffect(() => {
     if (loadedRef.current) return
     loadedRef.current = true
@@ -159,39 +263,56 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
       .catch(() => {}) // 404 esperado si todavía no existe
   }, [consultationId])
 
-  // Autosave con debounce de 1.5s tras dejar de escribir
+  // Aviso del navegador si intenta cerrar/recargar la pestaña con cambios
+  // sin guardar — como ya no hay autoguardado, esto es lo que evita
+  // perder la nota por accidente.
   useEffect(() => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (!dirty) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [dirty])
+
+  async function handleSave() {
     if (!subjective && !objective && !assessment && !plan) return
-
-    saveTimerRef.current = setTimeout(async () => {
-      setSaveState('saving')
-      try {
-        if (noteId) {
-          await clinicalNotesAPI.update(noteId, { subjective, objective, assessment, plan, is_visible_to_patient: isVisibleToPatient })
-        } else {
-          const res = await clinicalNotesAPI.create({
-            consultation_id: consultationId, subjective, objective, assessment, plan, is_visible_to_patient: isVisibleToPatient,
-          })
-          setNoteId(res.data.id)
-        }
-        setSaveState('saved')
-      } catch {
-        setSaveState('error')
+    setSaveState('saving')
+    try {
+      if (noteId) {
+        await clinicalNotesAPI.update(noteId, { subjective, objective, assessment, plan, is_visible_to_patient: isVisibleToPatient })
+      } else {
+        const res = await clinicalNotesAPI.create({
+          consultation_id: consultationId, subjective, objective, assessment, plan, is_visible_to_patient: isVisibleToPatient,
+        })
+        setNoteId(res.data.id)
       }
-    }, 1500)
+      setSaveState('saved')
+      setDirty(false)
+    } catch {
+      setSaveState('error')
+    }
+  }
 
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [subjective, objective, assessment, plan, isVisibleToPatient])
+  function updateField(setter: (v: string) => void) {
+    return (v: string) => {
+      setter(v)
+      setDirty(true)
+      if (saveState === 'saved' || saveState === 'error') setSaveState('idle')
+    }
+  }
 
-  const saveLabel = saveState === 'saving' ? 'Guardando...' : saveState === 'saved' ? '✓ Guardado' : saveState === 'error' ? 'Error al guardar' : ''
+  const saveLabel = saveState === 'saving' ? 'Guardando...' : saveState === 'saved' ? '✓ Guardado' : saveState === 'error' ? 'Error al guardar' : dirty ? 'Cambios sin guardar' : ''
 
   return (
     <div className="w-80 bg-[#161B22] border-l border-white/10 flex flex-col flex-shrink-0 z-30 overflow-y-auto">
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 sticky top-0 bg-[#161B22]">
         <div>
           <p className="text-white text-sm font-semibold">{t('📋 Historia clínica')}</p>
-          {saveLabel && <p className="text-[10px] text-white/40 mt-0.5">{saveLabel}</p>}
+          {saveLabel && (
+            <p className={`text-[10px] mt-0.5 ${dirty && saveState !== 'saving' ? 'text-[#F5C563]' : 'text-white/40'}`}>{saveLabel}</p>
+          )}
         </div>
         <button onClick={onClose} className="text-white/50 hover:text-white text-lg leading-none">✕</button>
       </div>
@@ -202,7 +323,7 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
             className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
             rows={2}
             value={subjective}
-            onChange={e => setSubjective(e.target.value)}
+            onChange={e => updateField(setSubjective)(e.target.value)}
           />
         </div>
         <div>
@@ -211,7 +332,7 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
             className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
             rows={2}
             value={objective}
-            onChange={e => setObjective(e.target.value)}
+            onChange={e => updateField(setObjective)(e.target.value)}
           />
         </div>
         <div>
@@ -220,7 +341,7 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
             className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
             rows={2}
             value={assessment}
-            onChange={e => setAssessment(e.target.value)}
+            onChange={e => updateField(setAssessment)(e.target.value)}
           />
         </div>
         <div>
@@ -229,7 +350,7 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
             className="w-full bg-white/10 text-white text-xs px-2.5 py-2 rounded-lg outline-none placeholder:text-white/30"
             rows={2}
             value={plan}
-            onChange={e => setPlan(e.target.value)}
+            onChange={e => updateField(setPlan)(e.target.value)}
           />
         </div>
 
@@ -237,13 +358,21 @@ function ClinicalNotePanel({ consultationId, onClose }: { consultationId: string
           <input
             type="checkbox"
             checked={isVisibleToPatient}
-            onChange={e => setIsVisibleToPatient(e.target.checked)}
+            onChange={e => { setIsVisibleToPatient(e.target.checked); setDirty(true) }}
             className="mt-0.5"
           />
           {t('Visible para el paciente en su historial (desmárcalo si es una nota interna)')}
         </label>
+
+        <button
+          onClick={handleSave}
+          disabled={saveState === 'saving' || (!dirty && !!noteId)}
+          className="w-full py-2 bg-[#185FA5] hover:bg-[#0C447C] disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-colors"
+        >
+          {saveState === 'saving' ? t('Guardando...') : t('Guardar')}
+        </button>
         <p className="text-[10px] text-white/30">
-          {t('Se guarda automáticamente mientras escribes. El paciente decide después si la comparte con otros médicos.')}
+          {t('No se guarda solo — acordate de tocar "Guardar" antes de cerrar este panel o salir de la llamada.')}
         </p>
       </div>
     </div>
@@ -279,6 +408,14 @@ export default function ProfessionalVideoPage() {
   const [showEndConfirm, setShowEndConfirm] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [sidePanel, setSidePanel] = useState<'none' | 'rx' | 'note'>('none')
+
+  // ── Calidad de conexión / reconexión ──────────────────────────────
+  // Bolivia tiene redes de datos y wifi bastante inestables — sin esto,
+  // si a alguno de los dos se le corta un instante la conexión, el video
+  // simplemente se congela sin ninguna explicación y no saben si esperar
+  // o directamente cortar y reagendar.
+  const [isReconnecting, setIsReconnecting] = useState(false)
+  const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality | null>(null)
 
   // Mostrar controles y reiniciar temporizador de ocultamiento
   const showControls = useCallback(() => {
@@ -335,6 +472,14 @@ export default function ProfessionalVideoPage() {
     room.on(RoomEvent.ParticipantConnected, () => setStatus('patient_joined'))
     room.on(RoomEvent.ParticipantDisconnected, () => setStatus('connected'))
     room.on(RoomEvent.Disconnected, () => setStatus('ended'))
+    room.on(RoomEvent.Reconnecting, () => setIsReconnecting(true))
+    room.on(RoomEvent.Reconnected, () => setIsReconnecting(false))
+    room.on(RoomEvent.ConnectionQualityChanged, (quality: ConnectionQuality, participant) => {
+      // Solo nos interesa la calidad del participante local (la nuestra) —
+      // la del paciente no la podemos mejorar desde acá, y mostrar las dos
+      // solo agrega ruido visual.
+      if (participant.isLocal) setConnectionQuality(quality)
+    })
     room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
       if (track.kind === Track.Kind.Video && remoteVideoRef.current) track.attach(remoteVideoRef.current)
       if (track.kind === Track.Kind.Audio && remoteAudioRef.current) track.attach(remoteAudioRef.current)
@@ -582,9 +727,25 @@ export default function ProfessionalVideoPage() {
           </div>
         )}
 
+        {/* Banner de reconexión — se superpone al video mientras LiveKit
+            reintenta la conexión, para que quede claro que hay que
+            esperar en vez de pensar que la llamada se congeló sola. */}
+        {isReconnecting && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-sm">
+            <div className="w-10 h-10 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+            <p className="text-white text-sm font-medium">{t('Reconectando...')}</p>
+            <p className="text-white/50 text-xs max-w-[220px] text-center">
+              {t('Se cortó la conexión un momento. Estamos intentando reconectar automáticamente, esperá unos segundos.')}
+            </p>
+          </div>
+        )}
+
         {/* Timer — siempre visible arriba */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white text-xs px-4 py-1.5 rounded-full font-mono z-10 pointer-events-none">
-          {status === 'connecting' ? '⏳ Conectando' : `🔴 ${fmt(duration)}`}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur-sm text-white text-xs px-4 py-1.5 rounded-full font-mono z-10 pointer-events-none">
+          <span>{status === 'connecting' ? '⏳ Conectando' : `🔴 ${fmt(duration)}`}</span>
+          {(status === 'connected' || status === 'patient_joined') && (
+            <SignalIcon quality={connectionQuality} />
+          )}
         </div>
 
         {/* Video local — miniatura, siempre visible */}
