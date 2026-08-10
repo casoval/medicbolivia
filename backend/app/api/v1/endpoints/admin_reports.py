@@ -340,11 +340,28 @@ async def professionals_ranking(
             func.count(Consultation.id).label('total_consultations'),
             func.sum(case((Consultation.status == ConsultationStatus.COMPLETED, 1), else_=0)).label('completed'),
             func.sum(case((Consultation.outcome_note == 'PROFESSIONAL_NO_SHOW', 1), else_=0)).label('no_shows'),
-            func.coalesce(func.sum(Consultation.amount), 0).label('revenue_generated'),
         )
         .where(base_filter)
         .group_by(Consultation.professional_id)
     )).all()
+
+    # revenue_generated aparte y SOLO de consultas con Payment confirmado
+    # — Consultation.amount es el precio COTIZADO al crear la consulta,
+    # existe aunque después se cancele o nunca se cobre. Sumarlo directo
+    # (como se hacía antes acá) contaba como "ingreso" el monto de
+    # consultas canceladas que jamás se pagaron. Mismo criterio que ya
+    # se usa en revenue-trend/revenue-by-specialty: Payment es la única
+    # fuente de verdad de si hubo cobro real.
+    revenue_rows = (await db.execute(
+        select(
+            Consultation.professional_id,
+            func.coalesce(func.sum(Payment.amount), 0).label('revenue_generated'),
+        )
+        .join(Payment, Payment.consultation_id == Consultation.id)
+        .where(base_filter, Payment.status.in_(_PAID_STATUSES))
+        .group_by(Consultation.professional_id)
+    )).all()
+    revenue_by_prof = {r.professional_id: float(r.revenue_generated) for r in revenue_rows}
 
     prof_ids = [r.professional_id for r in rows]
     profs = {}
@@ -366,7 +383,7 @@ async def professionals_ranking(
             "specialty": p.specialty,
             "total_consultations": r.total_consultations,
             "completed_consultations": int(r.completed),
-            "revenue_generated": float(r.revenue_generated),
+            "revenue_generated": revenue_by_prof.get(r.professional_id, 0.0),
             "no_show_rate": no_show_rate,
             # Rating cacheado en Professional (histórico, no del rango
             # elegido — no hay forma barata de recalcularlo solo para el
