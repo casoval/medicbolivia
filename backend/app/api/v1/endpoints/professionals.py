@@ -268,12 +268,23 @@ async def _notify_admins_new_review(
 ) -> None:
     """Avisa a TODOS los admins que hay algo nuevo esperando revisión —
     documento subido/reemplazado, firma nueva, matrícula/universidad
-    ingresadas por primera vez, etc. Se usa `send_whatsapp=True` (el
-    default de notify_user) a propósito: el panel de admin todavía no
-    tiene campanita de notificaciones (solo paciente y profesional la
-    tienen, ver notifBase() en frontend/src/lib/api.ts), así que sin
-    WhatsApp esta notificación quedaría escrita en la tabla `notifications`
-    pero invisible en la práctica — nadie la vería nunca."""
+    ingresadas por primera vez, etc.
+
+    IMPORTANTE — send_whatsapp=False a propósito: el admin gestiona la
+    plataforma desde el panel, no debería depender de su WhatsApp
+    personal para enterarse de que hay algo por revisar. Hasta jul-2026
+    esto mandaba WhatsApp como parche porque el panel de admin no tenía
+    campanita de notificaciones (solo paciente y profesional la tienen,
+    ver notifBase() en frontend/src/lib/api.ts) — sin eso, la fila en
+    `notifications` quedaba invisible en la práctica.
+
+    Con el WhatsApp apagado, ESTA notificación vuelve a quedar invisible
+    hasta que se construya el endpoint + campanita de admin (mismo patrón
+    que /patients/me/notifications y /professionals/me/notifications).
+    Es una decisión consciente y temporal: se prioriza no depender de
+    WhatsApp para la operación diaria del admin, a costa de este hueco
+    hasta que esa tarea se resuelva. Ver seguimiento del gap de
+    notificaciones de admin."""
     admins_result = await db.execute(select(User).where(User.role == UserRole.ADMIN))
     for admin in admins_result.scalars().all():
         await notify_user(
@@ -283,6 +294,7 @@ async def _notify_admins_new_review(
             type_=type_,
             entity_type="Professional",
             entity_id=professional.id,
+            send_whatsapp=False,
         )
 
 

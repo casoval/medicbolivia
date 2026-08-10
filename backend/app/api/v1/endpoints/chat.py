@@ -262,6 +262,11 @@ async def send_attachment(
         body=f"{other_name} te envió un archivo adjunto",
         type_="CHAT_MESSAGE",
         entity_type="ChatConversation", entity_id=conversation_id,
+        # Solo in-app — mismo criterio que el mensaje de texto (ver WS
+        # de más abajo): el badge de no leído + el recordatorio de las
+        # 20:00 ya cubren este caso, sin gastar cupo de WhatsApp por
+        # cada adjunto individual.
+        send_whatsapp=False,
     )
 
     return response
@@ -549,6 +554,12 @@ async def chat_websocket(
                     body=f"{other_name}: {content[:100]}",
                     type_="CHAT_MESSAGE",
                     entity_type="ChatConversation", entity_id=conversation_id,
+                    # Solo in-app: el chat ya tiene su propio badge de no
+                    # leído y el recordatorio de las 20:00 (catálogo de
+                    # sistema) cubre el caso de que el mensaje se le pase.
+                    # Un WhatsApp por cada mensaje individual es ruido
+                    # innecesario en conversaciones activas.
+                    send_whatsapp=False,
                 )
                 await notif_db.commit()
 

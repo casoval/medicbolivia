@@ -76,6 +76,9 @@ async def request_refund_account(db: AsyncSession, payment: Payment) -> None:
             ),
             type_="REFUND_PENDING_ACCOUNT_INFO",
             entity_type="Payment", entity_id=payment.id,
+            # Solo in-app: no es urgente por minutos, el paciente lo ve
+            # la próxima vez que entra a la app.
+            send_whatsapp=False,
         )
     elif not account.verified:
         admins_result = await db.execute(select(User).where(User.role == UserRole.ADMIN))
@@ -198,4 +201,9 @@ async def confirm_refund_paid_out(
             body=f"Tu reembolso de Bs. {amount:.2f} fue transferido{destination_label}. Revisa el detalle en Mis Pagos.",
             type_="REFUND_PAID_OUT",
             entity_type="Payment", entity_id=payment.id,
+            # Solo in-app — mismo criterio que el aviso de "reembolso
+            # aprobado" de arriba. Además esta función puede recorrer
+            # varios pagos de un mismo lote sin escalonar el envío; sacarla
+            # de WhatsApp evita ese riesgo de ráfaga de raíz.
+            send_whatsapp=False,
         )

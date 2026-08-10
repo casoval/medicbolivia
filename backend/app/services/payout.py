@@ -233,6 +233,13 @@ async def confirm_payout_batch(
             body=f"Tu pago de Bs. {total:.2f} fue transferido{bank_label}. Revisa el detalle en Mis Ganancias.",
             type_="PAYOUT_CONFIRMED",
             entity_type="PayoutBatch", entity_id=batch.id,
+            # Solo in-app: es informativo, no urgente por minutos — el
+            # profesional lo revisa en Mis Ganancias cuando entra. Además
+            # este bucle manda un WhatsApp por profesional del lote SIN
+            # escalonar (ver notify_admins_new_review para el criterio de
+            # riesgo de bloqueo por ráfaga) — sacarla de WhatsApp evita
+            # ese riesgo de raíz en vez de tener que espaciar el envío.
+            send_whatsapp=False,
         )
 
 
@@ -280,6 +287,11 @@ async def notify_professionals_without_bank_account(db: AsyncSession, blocked: l
                 f"coordinar otra forma de pago de Bs. {item['total_amount']:.2f}."
             ),
             type_="PAYOUT_BLOCKED_NO_ACCOUNT",
+            # Solo in-app: es una gestión administrativa de días, no de
+            # minutos — el equipo se contacta directamente con el
+            # profesional para coordinar, el WhatsApp automático no
+            # aporta urgencia real acá.
+            send_whatsapp=False,
         )
 
     admins_result = await db.execute(select(User).where(User.role == UserRole.ADMIN))
