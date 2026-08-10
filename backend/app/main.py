@@ -10,6 +10,7 @@ import sys
 
 from app.core.config import settings
 from app.api.v1.endpoints import auth, professionals, patients, consultations, agent, admin
+from app.api.v1.endpoints import admin_reports
 from app.api.v1.endpoints import prescriptions, lab_orders, ratings, specialties, clinical_notes, faq
 from app.api.v1.endpoints import whatsapp, contact, chat, notifications_ws
 from app.api.v1.endpoints import bank_qr_inbound
@@ -132,6 +133,7 @@ app.include_router(patients.router,      prefix=f"{PREFIX}/patients",       tags
 app.include_router(consultations.router, prefix=f"{PREFIX}/consultations",  tags=["Consultas"])
 app.include_router(agent.router,         prefix=f"{PREFIX}/agent",          tags=["Agente IA"])
 app.include_router(admin.router,         prefix=f"{PREFIX}/admin",          tags=["Administración"])
+app.include_router(admin_reports.router, prefix=f"{PREFIX}/admin/reports",  tags=["Reportes Admin"])
 app.include_router(prescriptions.router, prefix=f"{PREFIX}/prescriptions",  tags=["Recetas"])
 app.include_router(lab_orders.router,    prefix=f"{PREFIX}/lab-orders",     tags=["Órdenes de laboratorio"])
 app.include_router(clinical_notes.router, prefix=f"{PREFIX}/clinical-notes", tags=["Historia Clínica"])

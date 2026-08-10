@@ -20,7 +20,7 @@
 import {
   IconHome, IconSearch, IconBot, IconClock, IconFile, IconRx, IconNote,
   IconGrid, IconUsers, IconCal, IconStar, IconUser,
-  IconPatients, IconCard, IconLog, IconCog, IconTag, IconChat, IconHelp, IconSend, IconRefund,
+  IconPatients, IconCard, IconLog, IconCog, IconTag, IconChat, IconHelp, IconSend, IconRefund, IconChart,
 } from '@/components/nav-icons'
 
 export interface NavItem {
@@ -235,6 +235,12 @@ export const ADMIN_NAV: NavItem[] = [
     href: '/admin/dashboard',
     icon: <IconGrid />,
     description: 'Métricas generales de la plataforma',
+  },
+  {
+    label: 'Reportes',
+    href: '/admin/reports',
+    icon: <IconChart />,
+    description: 'Tendencias, embudo de conversión, retención y ranking de profesionales',
   },
   {
     label: 'Profesionales',

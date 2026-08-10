@@ -1784,6 +1784,108 @@ export const patientBlockAPI = {
     api.delete(`/professionals/patients/${patientId}/block`),
 }
 
+// ── Reportes de negocio (/admin/reports/*) ─────────────────────────
+// Separado de adminAPI a propósito, igual que en el backend (ver
+// admin_reports.py): admin/stats es "¿cómo estamos AHORA?" (un
+// snapshot), esto es tendencia y desglose por rango de fechas.
+export interface RevenueTrendPoint {
+  month: string  // "YYYY-MM"
+  gmv: number
+  platform_fee: number
+  membership_revenue: number
+  total_platform_revenue: number
+  consultations_count: number
+  avg_ticket: number
+  effective_commission_pct: number
+}
+
+export interface RevenueBySpecialty {
+  specialty: string
+  gmv: number
+  platform_fee: number
+  consultations_count: number
+  avg_ticket: number
+  pct_of_total_gmv: number
+}
+
+export interface ConversionFunnel {
+  date_from: string
+  date_to: string
+  total_created: number
+  reached_payment: number
+  completed: number
+  cancelled: number
+  pct_reached_payment: number
+  pct_completed: number
+  pct_cancelled: number
+  by_status: Record<string, number>
+  outcome_note_breakdown: { outcome_note: string; count: number }[]
+}
+
+export interface RetentionReport {
+  patients: {
+    total_with_completed_consultation: number
+    recurring_2plus: number
+    pct_recurring: number
+    avg_days_between_first_and_last_for_recurring: number
+  }
+  professionals: {
+    total_active: number
+    with_at_least_one_completed_patient: number
+    with_repeat_patient: number
+    pct_with_repeat_patient: number
+  }
+}
+
+export interface ProfessionalRankingItem {
+  professional_id: string
+  name: string
+  specialty: string
+  total_consultations: number
+  completed_consultations: number
+  revenue_generated: number
+  no_show_rate: number
+  average_rating: number | null
+  total_ratings: number
+}
+
+export interface AgentConversionReport {
+  date_from: string
+  date_to: string
+  users_with_agent_session: number
+  of_those_who_paid: number
+  pct_conversion_approx: number
+  note: string
+}
+
+export const adminReportsAPI = {
+  revenueTrend: (months = 6) =>
+    api.get<RevenueTrendPoint[]>('/admin/reports/revenue-trend', { params: { months } }).then(r => r.data),
+
+  revenueBySpecialty: (dateFrom?: string, dateTo?: string) =>
+    api.get<RevenueBySpecialty[]>('/admin/reports/revenue-by-specialty', {
+      params: { date_from: dateFrom, date_to: dateTo },
+    }).then(r => r.data),
+
+  funnel: (dateFrom?: string, dateTo?: string) =>
+    api.get<ConversionFunnel>('/admin/reports/funnel', {
+      params: { date_from: dateFrom, date_to: dateTo },
+    }).then(r => r.data),
+
+  retention: () =>
+    api.get<RetentionReport>('/admin/reports/retention').then(r => r.data),
+
+  professionalsRanking: (dateFrom?: string, dateTo?: string, orderBy: 'revenue' | 'consultations' | 'rating' | 'no_show_rate' = 'revenue', limit = 20) =>
+    api.get<ProfessionalRankingItem[]>('/admin/reports/professionals-ranking', {
+      params: { date_from: dateFrom, date_to: dateTo, order_by: orderBy, limit },
+    }).then(r => r.data),
+
+  agentConversion: (dateFrom?: string, dateTo?: string) =>
+    api.get<AgentConversionReport>('/admin/reports/agent-conversion', {
+      params: { date_from: dateFrom, date_to: dateTo },
+    }).then(r => r.data),
+}
+
 // Arma la URL del WebSocket del chat a partir de BASE_URL (http→ws,
 // https→wss). El JWT ya NO viaja por query param: el navegador manda
 // solo la cookie httpOnly en el handshake del WebSocket (es una request
