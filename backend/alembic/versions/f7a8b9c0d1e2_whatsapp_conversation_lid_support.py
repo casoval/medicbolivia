@@ -15,8 +15,8 @@ WhatsApp cuando no hay número real resoluble, marcado con
 is_resolved_phone=False, para no perder el mensaje — igual se le puede
 responder (WhatsApp permite enviar directo a ese JID).
 
-Revision ID: d4e5f6a7b8c9
-Revises: c3d4e5f6a7b8
+Revision ID: f7a8b9c0d1e2
+Revises: e6f7a8b9c0d1
 Create Date: 2026-08-11
 """
 from typing import Sequence, Union
@@ -24,8 +24,8 @@ from typing import Sequence, Union
 from alembic import op
 
 
-revision: str = 'd4e5f6a7b8c9'
-down_revision: Union[str, Sequence[str], None] = 'c3d4e5f6a7b8'
+revision: str = 'f7a8b9c0d1e2'
+down_revision: Union[str, Sequence[str], None] = 'e6f7a8b9c0d1'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
