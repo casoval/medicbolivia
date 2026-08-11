@@ -20,6 +20,7 @@ from app.models.models import (
 from app.schemas.schemas import PrescriptionCreateRequest, PrescriptionResponse, PrescriptionVoidRequest
 from app.services.prescription_pdf import generate_prescription_pdf
 from app.services.storage import upload_prescription_pdf_to_r2, get_presigned_url
+from app.services.notify import notify_user
 
 router = APIRouter()
 
@@ -182,6 +183,19 @@ async def create_prescription(
 
     logger.info(f"Receta emitida: {prescription.id} | profesional: {professional.id} | paciente: {patient.id}")
 
+    # Avisar al paciente — antes esto no existía: solo se enteraba si
+    # entraba manualmente a revisar sus recetas. Solo in-app: no se debe
+    # enviar WhatsApp para esto.
+    await notify_user(
+        db, user_id=patient.user_id,
+        title="Nueva receta médica",
+        body=f"Dr. {professional.first_name} {professional.last_name} te emitió una receta. Revisa el detalle en Mis Recetas.",
+        type_="PRESCRIPTION_ISSUED",
+        entity_type="Prescription", entity_id=prescription.id,
+        send_whatsapp=False,
+    )
+    await db.commit()
+
     # PDF imprimible para las farmacias que todavía piden papel — best
     # effort: si algo falla acá (R2 caído, firma no descargable, etc.) la
     # receta YA quedó emitida y es válida por su hash+QR de todos modos,
@@ -248,6 +262,29 @@ async def void_prescription(
     prescription.status = PrescriptionStatus.VOIDED.value
     prescription.voided_at = utcnow_naive()
     prescription.void_reason = data.reason
+
+    # Avisar al paciente que la receta que tenía ya no es válida. Solo
+    # in-app, sin WhatsApp.
+    if prescription.consultation_id:
+        cons_result = await db.execute(
+            select(Consultation).where(Consultation.id == prescription.consultation_id)
+        )
+        void_consultation = cons_result.scalar_one_or_none()
+        if void_consultation:
+            patient_result = await db.execute(
+                select(Patient).where(Patient.id == void_consultation.patient_id)
+            )
+            void_patient = patient_result.scalar_one_or_none()
+            if void_patient:
+                await notify_user(
+                    db, user_id=void_patient.user_id,
+                    title="Receta anulada",
+                    body=f"Tu receta emitida por Dr. {professional.first_name} {professional.last_name} fue anulada. Motivo: {data.reason}.",
+                    type_="PRESCRIPTION_VOIDED",
+                    entity_type="Prescription", entity_id=prescription.id,
+                    send_whatsapp=False,
+                )
+
     await db.commit()
     await db.refresh(prescription)
 

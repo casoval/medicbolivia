@@ -30,13 +30,13 @@ export function FloatingNotificationBell() {
   const { t } = useLanguage()
   const { user } = useAuthStore()
   const role = user?.role
-  const enabled = role === 'PATIENT' || role === 'PROFESSIONAL'
+  const enabled = role === 'PATIENT' || role === 'PROFESSIONAL' || role === 'ADMIN'
   const queryClient = useQueryClient()
   const router = useRouter()
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications', role],
-    queryFn: () => notificationsAPI.getMine(role as 'PATIENT' | 'PROFESSIONAL'),
+    queryFn: () => notificationsAPI.getMine(role as 'PATIENT' | 'PROFESSIONAL' | 'ADMIN'),
     enabled,
     refetchInterval: 20000,
   })
@@ -78,7 +78,7 @@ export function FloatingNotificationBell() {
   async function markAllRead() {
     if (!role || unread.length === 0) return
     try {
-      await notificationsAPI.markAllRead(role as 'PATIENT' | 'PROFESSIONAL')
+      await notificationsAPI.markAllRead(role as 'PATIENT' | 'PROFESSIONAL' | 'ADMIN')
       queryClient.invalidateQueries({ queryKey: ['notifications', role] })
     } catch {
       // no crítico si falla
@@ -203,7 +203,11 @@ export function FloatingNotificationBell() {
                 <button
                   onClick={() => {
                     setOpen(false)
-                    router.push(role === 'PATIENT' ? '/patient/profile' : '/professional/profile')
+                    router.push(
+                      role === 'PATIENT' ? '/patient/profile'
+                      : role === 'PROFESSIONAL' ? '/professional/profile'
+                      : '/admin/dashboard'
+                    )
                   }}
                   className="w-full text-center text-xs text-[#0F6E56] font-medium py-1.5 hover:underline"
                 >

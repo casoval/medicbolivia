@@ -23,6 +23,7 @@ from app.models.models import (
 from app.schemas.schemas import LabOrderCreateRequest, LabOrderResponse, LabOrderVoidRequest
 from app.services.lab_order_pdf import generate_lab_order_pdf
 from app.services.storage import upload_lab_order_pdf_to_r2, get_presigned_url
+from app.services.notify import notify_user
 
 router = APIRouter()
 
@@ -191,6 +192,18 @@ async def create_lab_order(
 
     logger.info(f"Orden de laboratorio emitida: {lab_order.id} | profesional: {professional.id} | paciente: {patient.id}")
 
+    # Avisar al paciente — mismo criterio que prescriptions.py::create_prescription.
+    # Solo in-app, sin WhatsApp.
+    await notify_user(
+        db, user_id=patient.user_id,
+        title="Nueva orden de laboratorio",
+        body=f"Dr. {professional.first_name} {professional.last_name} te emitió una orden de laboratorio. Revisa el detalle en Mis Órdenes.",
+        type_="LAB_ORDER_ISSUED",
+        entity_type="LabOrder", entity_id=lab_order.id,
+        send_whatsapp=False,
+    )
+    await db.commit()
+
     # PDF imprimible para el laboratorio/centro de imagenología — best
     # effort, mismo criterio que prescriptions.py::create_prescription: si
     # esto falla la orden YA quedó emitida y es válida por su hash+QR de
@@ -260,6 +273,29 @@ async def void_lab_order(
     lab_order.status = PrescriptionStatus.VOIDED.value
     lab_order.voided_at = utcnow_naive()
     lab_order.void_reason = data.reason
+
+    # Avisar al paciente que la orden que tenía ya no es válida. Solo
+    # in-app, sin WhatsApp.
+    if lab_order.consultation_id:
+        cons_result = await db.execute(
+            select(Consultation).where(Consultation.id == lab_order.consultation_id)
+        )
+        void_consultation = cons_result.scalar_one_or_none()
+        if void_consultation:
+            patient_result = await db.execute(
+                select(Patient).where(Patient.id == void_consultation.patient_id)
+            )
+            void_patient = patient_result.scalar_one_or_none()
+            if void_patient:
+                await notify_user(
+                    db, user_id=void_patient.user_id,
+                    title="Orden de laboratorio anulada",
+                    body=f"Tu orden de laboratorio emitida por Dr. {professional.first_name} {professional.last_name} fue anulada. Motivo: {data.reason}.",
+                    type_="LAB_ORDER_VOIDED",
+                    entity_type="LabOrder", entity_id=lab_order.id,
+                    send_whatsapp=False,
+                )
+
     await db.commit()
     await db.refresh(lab_order)
 

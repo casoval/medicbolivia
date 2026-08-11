@@ -30,6 +30,7 @@ from loguru import logger
 
 from app.db.database import get_db
 from app.core.dependencies import get_current_professional, get_current_admin
+from app.services.notify import notify_user
 from app.models.models import (
     User, Professional, ProfessionalStatus,
     Specialty, SubSpecialty,
@@ -470,18 +471,21 @@ async def review_proposal(
                 professional.status = ProfessionalStatus.APPROVED
 
             type_label = "especialidad" if proposal.type == ProposalType.SPECIALTY else "subespecialidad"
-            db.add(Notification(
-                user_id=professional.user_id,
+            await notify_user(
+                db, user_id=professional.user_id,
                 title=f"Propuesta de {type_label} rechazada",
                 body=(
                     f"Tu propuesta '{proposal.proposed_name}' fue rechazada. "
                     f"Motivo: {data.admin_note or 'sin especificar'}. "
                     "Puedes elegir una especialidad del catálogo o enviar una nueva propuesta."
                 ),
-                type="SPECIALTY_PROPOSAL_REJECTED",
+                type_="SPECIALTY_PROPOSAL_REJECTED",
                 entity_type="SpecialtyProposal",
                 entity_id=proposal.id,
-            ))
+                # Solo in-app: caso poco frecuente y de menor urgencia, el
+                # profesional lo revisa la próxima vez que entra a la app.
+                send_whatsapp=False,
+            )
 
         await db.commit()
         await db.refresh(proposal)
@@ -557,18 +561,20 @@ async def review_proposal(
         extra_note = ""
         if proposal.type == ProposalType.SPECIALTY:
             extra_note = " Tu perfil ya está visible nuevamente para los pacientes."
-        db.add(Notification(
-            user_id=professional.user_id,
+        await notify_user(
+            db, user_id=professional.user_id,
             title=f"Propuesta de {type_label} aprobada",
             body=(
                 f"Tu propuesta '{proposal.proposed_name}' fue aprobada"
                 + (f" como '{final_name}'" if final_name != proposal.proposed_name else "")
                 + f".{extra_note}"
             ),
-            type="SPECIALTY_PROPOSAL_APPROVED",
+            type_="SPECIALTY_PROPOSAL_APPROVED",
             entity_type="SpecialtyProposal",
             entity_id=proposal.id,
-        ))
+            # Solo in-app, mismo criterio que el rechazo de arriba.
+            send_whatsapp=False,
+        )
 
     await db.commit()
     await db.refresh(proposal)

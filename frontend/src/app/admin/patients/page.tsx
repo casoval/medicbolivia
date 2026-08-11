@@ -35,6 +35,8 @@ interface Patient {
   created_at: string
   total_consultations?: number
   status?: string
+  // Aviso en la tarjeta: algo de este paciente requiere revisión del admin
+  pending_review?: { refund_account_unverified: boolean; chat_report: boolean }
 }
 
 // Modal de detalle del paciente
@@ -131,6 +133,24 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
               {saveWarnings.map((w, i) => (
                 <p key={i} className="text-xs text-[#854F0B]">⚠ {w}</p>
               ))}
+            </div>
+          )}
+
+          {(local.pending_review?.refund_account_unverified || local.pending_review?.chat_report) && (
+            <div className="bg-[#FCEBEB] border border-[#F3B8B7] rounded-xl p-3 space-y-1.5">
+              <p className="text-xs font-semibold text-[#B3261E]">🔎 Pendiente de revisar</p>
+              {local.pending_review?.refund_account_unverified && (
+                <p className="text-xs text-[#8A1F1A]">
+                  Tiene un reembolso aprobado esperando pago y su cuenta de reembolso todavía no fue verificada —
+                  {' '}<a href="/admin/refunds" className="underline font-medium">ver en Reembolsos</a>.
+                </p>
+              )}
+              {local.pending_review?.chat_report && (
+                <p className="text-xs text-[#8A1F1A]">
+                  Tiene un reporte de chat sin revisar —
+                  {' '}<a href="/admin/chat-reports" className="underline font-medium">ver en Reportes de chat</a>.
+                </p>
+              )}
             </div>
           )}
 
@@ -477,6 +497,13 @@ export default function AdminPatientsPage() {
                 const age = p.birth_date
                   ? Math.floor((Date.now() - new Date(p.birth_date).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
                   : null
+                const pendingRefund = !!p.pending_review?.refund_account_unverified
+                const pendingChatReport = !!p.pending_review?.chat_report
+                const hasPendingReview = pendingRefund || pendingChatReport
+                const pendingReasons = [
+                  pendingRefund && 'cuenta de reembolso sin verificar',
+                  pendingChatReport && 'reporte de chat sin revisar',
+                ].filter(Boolean).join(' · ')
 
                 return (
                   <div
@@ -485,7 +512,17 @@ export default function AdminPatientsPage() {
                     onClick={() => setSelected(p)}
                   >
                     {/* Avatar */}
-                    <PatientAvatar firstName={p.first_name} lastName={p.last_name} photoUrl={p.photo_url} />
+                    <div className="relative flex-shrink-0">
+                      <PatientAvatar firstName={p.first_name} lastName={p.last_name} photoUrl={p.photo_url} />
+                      {hasPendingReview && (
+                        <span
+                          className="absolute -top-1 -right-1 bg-[#E24B4A] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white"
+                          title={`Pendiente de revisar: ${pendingReasons}`}
+                        >
+                          !
+                        </span>
+                      )}
+                    </div>
 
                     {/* Info principal */}
                     <div className="flex-1 min-w-0">
@@ -507,6 +544,14 @@ export default function AdminPatientsPage() {
                       {p.chronic_conditions && p.chronic_conditions.length > 0 && (
                         <span className="badge-amber text-[10px]" title="Condición crónica">
                           {t('🏥 Crónico')}
+                        </span>
+                      )}
+                      {hasPendingReview && (
+                        <span
+                          className="text-[10px] px-2 py-1 rounded-full border font-medium bg-[#FCEBEB] text-[#E24B4A] border-[#F3B8B7] flex-shrink-0 whitespace-nowrap"
+                          title={pendingReasons}
+                        >
+                          🔎 Por revisar
                         </span>
                       )}
                     </div>

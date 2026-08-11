@@ -32,6 +32,7 @@ from app.models.models import (
     AgentConfig,
 )
 from app.tasks.whatsapp_tasks import send_whatsapp_message
+from app.services.notify import push_notification_ws
 
 # Espaciado aleatorio entre un envío de WhatsApp y el siguiente dentro de
 # un mismo broadcast. Rango amplio a propósito (no un número redondo fijo
@@ -182,6 +183,15 @@ async def send_broadcast(
                 type="ADMIN_BROADCAST",
                 entity_type="BroadcastMessage", entity_id=broadcast.id,
             ))
+            # Push por WebSocket (antes solo quedaba la fila en la tabla,
+            # visible recién con el poll de respaldo de 60s). No se usa
+            # notify_user() acá a propósito: el envío por WhatsApp de este
+            # broadcast ya tiene su propio escalonado con countdown más
+            # abajo — pasar por notify_user duplicaría el WhatsApp.
+            await push_notification_ws(
+                user.id, "ADMIN_BROADCAST", title, body,
+                "BroadcastMessage", broadcast.id,
+            )
 
             role = user.role.value if hasattr(user.role, "value") else str(user.role)
             if send_whatsapp and user.phone and config and _channel_enabled_for_role(config, role):

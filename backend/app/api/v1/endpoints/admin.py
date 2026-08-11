@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.db.database import get_db
 from app.core.dependencies import get_current_admin
+from app.services.notify import notify_user
 from app.core.maintenance import is_maintenance_active, set_platform_flags
 from decimal import Decimal
 
@@ -159,6 +160,83 @@ def _settings_to_dict(s: PlatformSettings) -> dict:
         "chat_attachments_enabled_professional":  s.chat_attachments_enabled_professional,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
+
+
+# ── GET /api/v1/admin/me/notifications ───────────────
+# Espejo exacto de /patients/me/notifications y /professionals/me/notifications
+# (ver docstring de _notify_admins_new_review en professionals.py para el
+# contexto de por qué esto no existía). Cierra el hueco: hasta ahora las
+# notificaciones a admin se guardaban en la tabla `notifications` y se
+# publicaban por WebSocket, pero no había ningún endpoint que las expusiera
+# ni ninguna UI que las mostrara.
+@router.get("/me/notifications", summary="Mis notificaciones (campanita)")
+async def get_my_admin_notifications(
+    unread_only: bool = Query(False),
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    conditions = [Notification.user_id == current_user.id]
+    if unread_only:
+        conditions.append(Notification.read_at.is_(None))
+
+    result = await db.execute(
+        select(Notification)
+        .where(and_(*conditions))
+        .order_by(Notification.created_at.desc())
+        .limit(50)
+    )
+    notifications = result.scalars().all()
+    return [
+        {
+            "id":          n.id,
+            "title":       n.title,
+            "body":        n.body,
+            "type":        n.type,
+            "entity_type": n.entity_type,
+            "entity_id":   n.entity_id,
+            "read":        n.read_at is not None,
+            "created_at":  n.created_at.isoformat(),
+        }
+        for n in notifications
+    ]
+
+
+# ── PATCH /api/v1/admin/me/notifications/{id}/read ───
+@router.patch("/me/notifications/{notification_id}/read", summary="Marcar notificación como leída")
+async def mark_admin_notification_read(
+    notification_id: str,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Notification).where(
+            and_(Notification.id == notification_id, Notification.user_id == current_user.id)
+        )
+    )
+    notif = result.scalar_one_or_none()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notificación no encontrada")
+
+    notif.read_at = utcnow_naive()
+    await db.commit()
+    return {"message": "Notificación marcada como leída"}
+
+
+# ── PATCH /api/v1/admin/me/notifications/read-all ────
+@router.patch("/me/notifications/read-all", summary="Marcar todas mis notificaciones como leídas")
+async def mark_all_admin_notifications_read(
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Notification).where(
+            and_(Notification.user_id == current_user.id, Notification.read_at.is_(None))
+        )
+    )
+    for n in result.scalars().all():
+        n.read_at = utcnow_naive()
+    await db.commit()
+    return {"message": "Notificaciones marcadas como leídas"}
 
 
 # ── GET /api/v1/admin/stats ──────────────────────────
@@ -769,36 +847,44 @@ async def review_document(
             professional_approved_now = True
             logger.info(f"Profesional aprobado automáticamente: {professional.id}")
 
-    # Notificación in-app al profesional
+    # Notificación in-app al profesional — antes usaba Notification()
+    # crudo (solo persistía la fila, sin WS ni endpoint que la marcara
+    # como "en vivo"). notify_user() con send_whatsapp=False cubre
+    # persistencia + push por WebSocket en un solo paso; se mantiene sin
+    # WhatsApp porque el profesional ya está mirando el panel de
+    # documentos cuando esto ocurre.
     if professional:
         if data.status == DocStatus.APPROVED:
-            db.add(Notification(
-                user_id=professional.user_id,
+            await notify_user(
+                db, user_id=professional.user_id,
                 title="Documento aprobado",
                 body=f"Tu {doc_label} fue aprobado.",
-                type="DOC_APPROVED",
+                type_="DOC_APPROVED",
                 entity_type="ProfessionalDoc",
                 entity_id=doc_id,
-            ))
+                send_whatsapp=False,
+            )
         elif data.status == DocStatus.REJECTED:
-            db.add(Notification(
-                user_id=professional.user_id,
+            await notify_user(
+                db, user_id=professional.user_id,
                 title="Documento rechazado",
                 body=f"Tu {doc_label} fue rechazado. Motivo: {data.review_note or 'sin especificar'}.",
-                type="DOC_REJECTED",
+                type_="DOC_REJECTED",
                 entity_type="ProfessionalDoc",
                 entity_id=doc_id,
-            ))
+                send_whatsapp=False,
+            )
 
         if professional_approved_now:
-            db.add(Notification(
-                user_id=professional.user_id,
+            await notify_user(
+                db, user_id=professional.user_id,
                 title="¡Perfil verificado!",
                 body="Todos tus documentos fueron aprobados. Ya podés activar tu disponibilidad y recibir pacientes.",
-                type="PROFESSIONAL_APPROVED",
+                type_="PROFESSIONAL_APPROVED",
                 entity_type="Professional",
                 entity_id=professional.id,
-            ))
+                send_whatsapp=False,
+            )
 
     # Auditoría
     log = AuditLog(
@@ -1165,6 +1251,61 @@ async def list_patients(
     )
     cons_counts: dict[str, int] = {pid: count for pid, count in cons_counts_result.all()}
 
+    # ── "Pendiente de revisar" — mismo espíritu que doc_counts en el
+    # listado de profesionales (ver GET /admin/professionals), pero acá no
+    # hay un solo contador sino dos motivos distintos que pueden coincidir
+    # en el mismo paciente. Ambos en consultas agregadas, sin N+1.
+
+    # 1) Reembolso aprobado, sin transferir, y sin cuenta verificada para
+    # poder pagarlo — mismo filtro que refund_payout.py::_pending_refunds,
+    # cruzado con si la cuenta ya está verificada.
+    refund_rows = await db.execute(
+        select(Payment.patient_id, PatientRefundAccount.verified)
+        .outerjoin(PatientRefundAccount, PatientRefundAccount.patient_id == Payment.patient_id)
+        .where(
+            Payment.status.in_([PaymentStatus.REFUNDED_FULL, PaymentStatus.REFUNDED_PARTIAL]),
+            Payment.refund_paid_out_at.is_(None),
+        )
+    )
+    patients_awaiting_refund_account: set[str] = {
+        pid for pid, verified in refund_rows.all() if not verified
+    }
+
+    # 2) Reportes de chat sin revisar donde el paciente está involucrado
+    # (ChatBlock usa user_id en blocker_id/blocked_id; ProfessionalPatientVisibility
+    # ya usa patient_id directo).
+    reported_user_ids: set[str] = set()
+    chat_block_rows = await db.execute(
+        select(ChatBlock.blocker_id, ChatBlock.blocked_id).where(
+            ChatBlock.is_reported.is_(True), ChatBlock.admin_reviewed_at.is_(None)
+        )
+    )
+    for blocker_id, blocked_id in chat_block_rows.all():
+        reported_user_ids.add(blocker_id)
+        if blocked_id:
+            reported_user_ids.add(blocked_id)
+
+    patients_with_chat_report: set[str] = set()
+    if reported_user_ids:
+        patient_ids_result = await db.execute(
+            select(PatientModel.id).where(PatientModel.user_id.in_(reported_user_ids))
+        )
+        patients_with_chat_report = {pid for (pid,) in patient_ids_result.all()}
+
+    visibility_rows = await db.execute(
+        select(ProfessionalPatientVisibility.patient_id).where(
+            ProfessionalPatientVisibility.is_reported.is_(True),
+            ProfessionalPatientVisibility.admin_reviewed_at.is_(None),
+        )
+    )
+    patients_with_chat_report |= {pid for (pid,) in visibility_rows.all()}
+
+    def pending_review_for(patient_id: str) -> dict:
+        return {
+            "refund_account_unverified": patient_id in patients_awaiting_refund_account,
+            "chat_report": patient_id in patients_with_chat_report,
+        }
+
     patients_list = []
     for patient, user in rows:
         total_cons = cons_counts.get(patient.id, 0)
@@ -1187,6 +1328,9 @@ async def list_patients(
             "status":              user.status.value,
             "created_at":          patient.created_at.isoformat(),
             "total_consultations": total_cons,
+            # Aviso en la tarjeta: para que el admin sepa de un vistazo
+            # que hay algo de este paciente que requiere su atención.
+            "pending_review":      pending_review_for(patient.id),
         })
 
     return patients_list

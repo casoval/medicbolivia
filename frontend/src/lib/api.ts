@@ -859,16 +859,18 @@ export interface NotificationItem {
   created_at: string
 }
 
-function notifBase(role: 'PATIENT' | 'PROFESSIONAL') {
-  return role === 'PATIENT' ? '/patients' : '/professionals'
+function notifBase(role: 'PATIENT' | 'PROFESSIONAL' | 'ADMIN') {
+  if (role === 'PATIENT') return '/patients'
+  if (role === 'PROFESSIONAL') return '/professionals'
+  return '/admin'
 }
 
 export const notificationsAPI = {
-  getMine: (role: 'PATIENT' | 'PROFESSIONAL') =>
+  getMine: (role: 'PATIENT' | 'PROFESSIONAL' | 'ADMIN') =>
     api.get<NotificationItem[]>(`${notifBase(role)}/me/notifications`).then(r => r.data),
-  markAllRead: (role: 'PATIENT' | 'PROFESSIONAL') =>
+  markAllRead: (role: 'PATIENT' | 'PROFESSIONAL' | 'ADMIN') =>
     api.patch(`${notifBase(role)}/me/notifications/read-all`),
-  markRead: (role: 'PATIENT' | 'PROFESSIONAL', notificationId: string) =>
+  markRead: (role: 'PATIENT' | 'PROFESSIONAL' | 'ADMIN', notificationId: string) =>
     api.patch(`${notifBase(role)}/me/notifications/${notificationId}/read`),
 }
 
