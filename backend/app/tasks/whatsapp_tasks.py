@@ -42,11 +42,27 @@ class _TransientSendError(Exception):
     """
 
 
+# Contactos con privacidad de número activada en WhatsApp (@lid) no tienen
+# un teléfono real resoluble — ver docstring de WhatsAppConversation en
+# app/models/models.py. Para esos casos, `phone` en realidad contiene el
+# JID crudo que mandó WhatsApp (ej. "157445045391462@lid" o
+# "59172345678@c.us" ya resuelto pero de un origen no boliviano). Se
+# reconoce por el "@": ningún valor que pase por normalize_bo_phone()
+# normalmente lo tiene. Cuando aplica, NO se normaliza (fallaría) — se
+# manda tal cual a whatsapp-service, que ya sabe usar un JID completo
+# directo (ver toWhatsAppChatId en whatsapp-service/src/index.js).
+def _is_raw_whatsapp_jid(value: str) -> bool:
+    return "@" in (value or "")
+
+
 async def _get_or_create_conversation(db, phone: str, audience: str, user_id: Optional[str]) -> WhatsAppConversation:
     result = await db.execute(select(WhatsAppConversation).where(WhatsAppConversation.phone == phone))
     conversation = result.scalar_one_or_none()
     if conversation is None:
-        conversation = WhatsAppConversation(phone=phone, audience=audience, user_id=user_id)
+        conversation = WhatsAppConversation(
+            phone=phone, audience=audience, user_id=user_id,
+            is_resolved_phone=not _is_raw_whatsapp_jid(phone),
+        )
         db.add(conversation)
         await db.flush()
     return conversation
@@ -88,15 +104,21 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
     # de entrada (whatsapp.py::receive_inbound_message), sin importar si
     # `phone` venía de un User registrado antes o después del fix de
     # normalización (ver app/core/phone.py).
-    try:
-        phone = normalize_bo_phone(phone)
-    except InvalidPhoneError as exc:
-        # Error permanente: el número nunca se va a volver válido solo,
-        # no tiene sentido reintentar.
-        logger.error(f"Teléfono inválido, no se puede enviar WhatsApp: {exc}")
-        await _log_message(phone, message, audience, user_id, related_entity_type, related_entity_id, sent_by,
-                            status="FAILED", error_detail=str(exc))
-        return
+    #
+    # Excepción: si `phone` es en realidad un JID crudo de WhatsApp (caso
+    # @lid — contacto sin número real resoluble, ver _is_raw_whatsapp_jid),
+    # NO se normaliza — normalize_bo_phone() lo rechazaría siempre. Se
+    # manda tal cual, whatsapp-service ya sabe usarlo directo.
+    if not _is_raw_whatsapp_jid(phone):
+        try:
+            phone = normalize_bo_phone(phone)
+        except InvalidPhoneError as exc:
+            # Error permanente: el número nunca se va a volver válido solo,
+            # no tiene sentido reintentar.
+            logger.error(f"Teléfono inválido, no se puede enviar WhatsApp: {exc}")
+            await _log_message(phone, message, audience, user_id, related_entity_type, related_entity_id, sent_by,
+                                status="FAILED", error_detail=str(exc))
+            return
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -198,14 +220,16 @@ async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: st
     adjuntó — no se guarda el PDF en sí en la base de datos, solo queda
     en el chat real de WhatsApp.
     """
-    try:
-        phone = normalize_bo_phone(phone)
-    except InvalidPhoneError as exc:
-        logger.error(f"Teléfono inválido, no se puede enviar documento WhatsApp: {exc}")
-        await _log_message(phone, f"[PDF: {filename}] {caption}", audience, user_id,
-                            related_entity_type, related_entity_id, sent_by,
-                            status="FAILED", error_detail=str(exc))
-        return
+    # Ver comentario equivalente en _send_and_log sobre _is_raw_whatsapp_jid.
+    if not _is_raw_whatsapp_jid(phone):
+        try:
+            phone = normalize_bo_phone(phone)
+        except InvalidPhoneError as exc:
+            logger.error(f"Teléfono inválido, no se puede enviar documento WhatsApp: {exc}")
+            await _log_message(phone, f"[PDF: {filename}] {caption}", audience, user_id,
+                                related_entity_type, related_entity_id, sent_by,
+                                status="FAILED", error_detail=str(exc))
+            return
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:

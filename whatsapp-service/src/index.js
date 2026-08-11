@@ -94,7 +94,15 @@ function requireInternalSecret(req, res, next) {
 }
 
 // ── Normalización de números (igual criterio que el backend Python) ──
+// Si `phone` ya viene como un JID completo (caso @lid — el backend lo
+// guarda tal cual en WhatsAppConversation.phone cuando no hay número real
+// resoluble, ver app/models/models.py), se manda directo: WhatsApp permite
+// enviar a ese JID sin necesitar el número humano detrás. Si es un número
+// normal, se arma el chat id como siempre.
 function toWhatsAppChatId(phone) {
+  if (/@(c\.us|lid|g\.us)$/.test(phone)) {
+    return phone
+  }
   let clean = phone.trim().replace(/[^\d]/g, '')
   if (clean.length === 8) clean = `591${clean}`   // números bolivianos sin código de país
   return `${clean}@c.us`
@@ -123,6 +131,19 @@ function toWhatsAppChatId(phone) {
 // 14-15+ dígitos que se han visto en la práctica.
 const MAX_PLAUSIBLE_PHONE_DIGITS = 13
 
+// Incidente real (ago-2026): además del caso de arriba, hay contactos con
+// la privacidad de número activada en WhatsApp para los que NI SIQUIERA
+// getContact() devuelve un número real — la propia librería entrega de
+// vuelta el mismo ID interno largo (contact.number === rawDigits). Antes
+// esto se trataba igual que "no se pudo resolver" y se descartaba el
+// mensaje sin más: en producción se confirmaron decenas de mensajes de
+// pacientes/profesionales/público perdidos así a lo largo de más de una
+// semana, sin ningún error visible más que el 422 en los logs de este
+// servicio. Ahora resolvePhoneFromMessage() ya NO decide si el mensaje se
+// descarta — siempre devuelve el mejor teléfono que pudo resolver (o null
+// si no hay ninguno), y quien llama (client.on('message')) manda ADEMÁS
+// el JID crudo (msg.from) como respaldo, para que el backend pueda seguir
+// la conversación aunque no exista un número real detrás.
 async function resolvePhoneFromMessage(msg) {
   const rawDigits = msg.from.replace('@c.us', '').replace('@lid', '')
   const looksLikeInternalId = msg.from.includes('@lid') || rawDigits.length > MAX_PLAUSIBLE_PHONE_DIGITS
@@ -132,11 +153,19 @@ async function resolvePhoneFromMessage(msg) {
   }
   try {
     const contact = await msg.getContact()
-    if (contact?.number) return contact.number
-    logger.warn(`No se pudo resolver un número real para el ID interno: ${msg.from}`)
+    // contact.number a veces es el mismo ID interno reenviado tal cual
+    // (contacto con privacidad de número activada) — eso NO es un
+    // teléfono real, así que no lo devolvemos como si lo fuera.
+    if (contact?.number && contact.number.length <= MAX_PLAUSIBLE_PHONE_DIGITS) {
+      return contact.number
+    }
+    logger.warn(
+      `No se pudo resolver un número real para el ID interno: ${msg.from} ` +
+      `(contacto con privacidad de número activada probablemente) — se usará el JID crudo como respaldo`
+    )
     return null
   } catch (err) {
-    logger.warn(`Error resolviendo ID interno ${msg.from}: ${err.message}`)
+    logger.warn(`Error resolviendo ID interno ${msg.from}: ${err.message} — se usará el JID crudo como respaldo`)
     return null
   }
 }
@@ -227,20 +256,24 @@ function connectToWhatsApp() {
       const text = (msg.body || '').trim()
       if (!text) return
 
+      // `phone` puede venir null (contacto con privacidad de número
+      // activada, o error resolviendo) — ya NO se descarta el mensaje por
+      // eso: se manda igual el JID crudo (msg.from) como respaldo, y el
+      // backend decide qué hacer (ver receive_inbound_message en
+      // whatsapp.py). Antes esto se perdía en silencio — ver comentario
+      // en resolvePhoneFromMessage.
       const phone = await resolvePhoneFromMessage(msg)
       if (!phone) {
-        logger.warn(
-          `Mensaje entrante descartado: no se pudo resolver un número de teléfono real ` +
-          `(from=${msg.from}). WhatsApp asigna IDs internos (@lid, o IDs largos bajo @c.us) ` +
-          `que a veces no traen el número real vinculado — ver whatsapp-service/README.md.`
+        logger.info(
+          `Mensaje entrante sin número real resoluble (from=${msg.from}) — se reenvía con el ` +
+          `JID crudo como respaldo, el backend lo maneja como contacto @lid.`
         )
-        return
       }
 
       const contact = await msg.getContact().catch(() => null)
       const contactName = contact?.pushname || contact?.name || null
 
-      await forwardInboundToBackend(phone, text, contactName)
+      await forwardInboundToBackend(phone, msg.from, text, contactName)
     } catch (err) {
       logger.error(`Error procesando mensaje entrante: ${err.message}`)
     }
@@ -255,18 +288,21 @@ function connectToWhatsApp() {
   })
 
 }
-async function forwardInboundToBackend(phone, message, contactName) {
+// `phone` puede ser null (ver resolvePhoneFromMessage) — `whatsappId` es
+// el JID crudo (msg.from) y SIEMPRE viene presente, es el respaldo que
+// usa el backend cuando no hay un número real resoluble (caso @lid).
+async function forwardInboundToBackend(phone, whatsappId, message, contactName) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS)
   try {
     const resp = await fetch(`${BACKEND_URL}/api/v1/whatsapp/webhook/inbound`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_SECRET },
-      body: JSON.stringify({ phone, message, contact_name: contactName }),
+      body: JSON.stringify({ phone, whatsapp_id: whatsappId, message, contact_name: contactName }),
       signal: controller.signal,
     })
     if (!resp.ok) {
-      logger.error(`Backend respondió ${resp.status} al reenviar mensaje entrante de ${phone}`)
+      logger.error(`Backend respondió ${resp.status} al reenviar mensaje entrante de ${phone || whatsappId}`)
     }
   } catch (err) {
     if (err.name === 'AbortError') {

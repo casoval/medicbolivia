@@ -298,8 +298,16 @@ async def _resolve_platform_names(db: AsyncSession, user_ids: List[str]) -> dict
 
 
 def _display_name(platform_name: Optional[str], contact_name: Optional[str], phone: str) -> str:
-    """Prioridad: nombre registrado en la plataforma > nombre de WhatsApp > número."""
-    return platform_name or contact_name or phone
+    """Prioridad: nombre registrado en la plataforma > nombre de WhatsApp > número.
+    Si no hay ninguno de los dos y `phone` es en realidad un JID crudo (@lid,
+    contacto con privacidad de número activada — ver WhatsAppConversation.
+    is_resolved_phone), mostrar el ID interno tal cual sería confuso para el
+    admin en el inbox, así que se usa un texto genérico en su lugar."""
+    if platform_name or contact_name:
+        return platform_name or contact_name
+    if "@" in phone:
+        return "Contacto con número oculto (WhatsApp)"
+    return phone
 
 
 @router.get("/conversations", summary="Listar conversaciones de WhatsApp (inbox)")
@@ -469,7 +477,12 @@ async def update_agent_config(data: AgentConfigIn, db: AsyncSession = Depends(ge
 # ═══════════════════════════════════════════════════════
 
 class InboundMessagePayload(BaseModel):
-    phone: str
+    phone: Optional[str] = None
+    # JID crudo de WhatsApp (msg.from), ej. "157445045391462@lid" o
+    # "59172345678@c.us" — siempre presente. Se usa como respaldo cuando
+    # `phone` no resuelve a un número boliviano real (caso @lid, ver
+    # docstring de WhatsAppConversation en app/models/models.py).
+    whatsapp_id: Optional[str] = None
     message: str
     contact_name: Optional[str] = None
 
@@ -514,35 +527,59 @@ async def receive_inbound_message(
     # defensivo por si en algún momento se llama a este webhook desde
     # otro origen (pruebas manuales, otro proveedor, etc.).
     #
-    # Si ni siquiera es un número boliviano plausible (ej. un JID interno
-    # tipo "@lid" de 15 dígitos que se coló sin resolver), rechazamos acá
-    # en vez de guardarlo: guardar basura como "número de conversación"
-    # rompe después el envío de la respuesta del bot (no hay a quién
-    # mandarle el WhatsApp) y ensucia el inbox con conversaciones fantasma.
+    # CASO @lid — WhatsApp oculta el número real de contactos con
+    # privacidad activada; en ese caso payload.phone puede venir vacío o
+    # con un ID interno de 14-15 dígitos que normalize_bo_phone() rechaza
+    # correctamente (no es un número boliviano). Antes esto se cortaba acá
+    # con un 422 y el mensaje se perdía sin más (ver incidente ago-2026:
+    # decenas de mensajes de pacientes/profesionales/público nunca
+    # generaron respuesta). Ahora, si no hay número real pero SÍ tenemos
+    # el JID crudo (whatsapp_id, siempre presente porque WhatsApp lo
+    # entrega para cualquier mensaje), lo usamos como identificador de la
+    # conversación en su lugar — no es un teléfono real (is_resolved=False,
+    # no se linkea a ningún User, no se muestra como número en la UI), pero
+    # SÍ se le puede seguir respondiendo: WhatsApp permite enviar
+    # directo a ese JID sin necesitar el número humano detrás.
+    is_resolved = True
     try:
-        phone = normalize_bo_phone(payload.phone)
+        phone = normalize_bo_phone(payload.phone) if payload.phone else ""
+        if not phone:
+            raise InvalidPhoneError("teléfono vacío")
     except InvalidPhoneError as exc:
-        logger.warning(
-            f"Webhook inbound rechazado: teléfono no válido '{payload.phone}' — {exc}"
+        if not payload.whatsapp_id:
+            logger.warning(
+                f"Webhook inbound rechazado: sin teléfono válido ni whatsapp_id de respaldo "
+                f"('{payload.phone}') — {exc}"
+            )
+            raise HTTPException(status_code=422, detail="Teléfono no reconocido como número boliviano válido")
+        logger.info(
+            f"Teléfono no resuelto ('{payload.phone}'), usando JID crudo como identificador: "
+            f"{payload.whatsapp_id}"
         )
-        raise HTTPException(status_code=422, detail="Teléfono no reconocido como número boliviano válido")
+        phone = payload.whatsapp_id
+        is_resolved = False
 
-    # Clasificar el número: ¿es un User registrado? ¿de qué rol?
+    # Clasificar el número: ¿es un User registrado? ¿de qué rol? Solo
+    # tiene sentido buscar coincidencia si `phone` es un número real — un
+    # JID crudo (@lid) nunca va a matchear con User.phone.
     # Ver app/core/phone.py: desde que existe el normalizador, todo User
     # nuevo se guarda en formato canónico "591XXXXXXXX". Igual dejamos el
     # fallback al formato local (8 dígitos) para no perder el link con
     # cuentas registradas ANTES de este fix — correr el script de
     # backfill (scripts/normalize_existing_phones.py) elimina la
     # necesidad de este fallback.
-    local_format = phone[3:] if phone.startswith("591") and len(phone) == 11 else phone
-    user_result = await db.execute(select(User).where(User.phone.in_([phone, local_format])))
-    user = user_result.scalar_one_or_none()
+    user = None
+    if is_resolved:
+        local_format = phone[3:] if phone.startswith("591") and len(phone) == 11 else phone
+        user_result = await db.execute(select(User).where(User.phone.in_([phone, local_format])))
+        user = user_result.scalar_one_or_none()
     audience = user.role.value if user else WhatsAppAudience.PUBLIC.value
 
     conv_result = await db.execute(select(WhatsAppConversation).where(WhatsAppConversation.phone == phone))
     conversation = conv_result.scalar_one_or_none()
     if conversation is None:
         conversation = WhatsAppConversation(
+            is_resolved_phone=is_resolved,
             phone=phone, audience=audience,
             user_id=user.id if user else None,
             contact_name=payload.contact_name,

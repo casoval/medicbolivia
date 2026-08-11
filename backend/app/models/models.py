@@ -1267,11 +1267,33 @@ class WhatsAppConversation(Base):
     Una fila por número de contacto (WhatsApp no tiene "hilos", el contacto
     ES el hilo). Si el número coincide con un User existente, se linkea;
     si no, queda como PUBLIC con user_id nulo (lead / consulta general).
+
+    CASO @lid (identificador privado de WhatsApp) — desde ago-2026 WhatsApp
+    empezó a ocultar el número real de ciertos contactos (privacidad de
+    número activada), asignando un ID interno tipo "157445045391462@lid".
+    whatsapp-service intenta resolver el número real vía getContact(), pero
+    para estos contactos NO siempre existe un número real disponible —
+    devuelve el mismo ID interno. Antes, normalize_bo_phone() rechazaba
+    ese valor con 422 y el mensaje se perdía sin más (ver incidente
+    ago-2026: decenas de mensajes de pacientes/profesionales/público nunca
+    llegaron a generar respuesta). Ahora, cuando no hay un número boliviano
+    válido, `phone` guarda el JID crudo tal cual lo manda WhatsApp
+    ("<id>@lid" o "<id>@c.us") y `is_resolved_phone=False` marca que NO es
+    un número real: no se puede linkear a un User, ni mostrar como
+    teléfono normal, pero SÍ se le puede seguir respondiendo (WhatsApp
+    permite enviar directo a ese JID sin necesitar el número humano).
     """
     __tablename__ = "whatsapp_conversations"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
-    phone: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
+    # Ancho a 40 (antes 20): un JID crudo tipo "157445045391462@lid" no
+    # entra en 20 caracteres — ver docstring de arriba sobre el caso @lid.
+    phone: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
+    # True = `phone` es un número boliviano real y dialeable (caso normal).
+    # False = `phone` es en realidad un JID crudo de WhatsApp sin resolver
+    # (caso @lid) — usado para no perder el mensaje, pero no confundirlo
+    # con un teléfono real en ningún otro lado (UI, recordatorios, etc.).
+    is_resolved_phone: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     user_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     audience: Mapped[str] = mapped_column(String(20), nullable=False, default=WhatsAppAudience.PUBLIC.value)
     contact_name: Mapped[Optional[str]] = mapped_column(String(150))
