@@ -57,6 +57,13 @@ async def notifications_websocket(
     auth_token = websocket.cookies.get(AUTH_COOKIE_NAME) or token
     user_id = await _authenticate_ws(auth_token)
     if not user_id:
+        # accept() primero: si cerramos sin aceptar, uvicorn rechaza el
+        # handshake a nivel HTTP (403) y el code=4001 nunca llega al
+        # navegador — el cliente ve un cierre genérico, cree que fue un
+        # corte de red y reintenta cada 3s para siempre (ver
+        # useNotificationSocket.ts). Aceptando primero, el close sí viaja
+        # como frame WS real con su código, y el cliente corta el retry.
+        await websocket.accept()
         await websocket.close(code=4001, reason="Token inválido o expirado")
         return
 

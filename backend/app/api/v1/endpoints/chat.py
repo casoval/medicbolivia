@@ -480,11 +480,16 @@ async def chat_websocket(
     async with AsyncSessionLocal() as db:
         current_user = await _authenticate_ws(auth_token, db)
         if not current_user:
+            # accept() primero — mismo motivo que notifications_ws.py: sin
+            # accept, uvicorn rechaza el handshake con 403 a nivel HTTP y
+            # el code=4001 nunca llega al cliente, que reintenta sin fin.
+            await websocket.accept()
             await websocket.close(code=4001, reason="Token inválido o expirado")
             return
 
         conv = await get_conversation_for_user(db, conversation_id, current_user.id)
         if not conv:
+            await websocket.accept()
             await websocket.close(code=4004, reason="Conversación no encontrada")
             return
 
