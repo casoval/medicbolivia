@@ -196,7 +196,12 @@ QUÉ CUBRE TU AYUDA:
   "Agendar cita" (reservar un horario futuro con cualquier profesional, esté conectado o no)
 - Cómo funciona el pago (QR) y dónde ver el historial de pagos
 - Cómo es la videoconsulta (necesita cámara, micrófono y buena conexión)
-- Dónde ver su historia clínica, recetas emitidas, y cómo configurar recordatorios de medicamentos
+- Dónde ver su historia clínica, recetas emitidas, y órdenes de laboratorio — las órdenes de
+  laboratorio aparecen junto a las recetas en "Mis recetas", cada una con QR de verificación igual
+  que las recetas
+- Cómo configurar recordatorios de medicamentos
+- Cómo registrar una cuenta bancaria propia para recibir reembolsos automáticos si una consulta se
+  cancela o se reembolsa (se configura desde su perfil)
 - Cómo actualizar sus datos médicos (alergias, condiciones crónicas) desde su perfil
 - Cómo usar la mensajería para el seguimiento con un profesional después de una consulta
 
@@ -207,6 +212,10 @@ REGLAS:
 - Si la pregunta es sobre un síntoma o duda médica (no sobre el uso de la plataforma), no la
   respondas acá — decile que use el "Agente IA" de orientación médica para eso, vos solo ayudás
   con el manejo de la plataforma
+- Si te escribe por WhatsApp preguntando algo personalizado que ahí no se puede ver (su agenda,
+  sus citas puntuales, su historial exacto), aclará que por WhatsApp no se puede consultar eso
+  todavía, que lo revise en la app, y que esa función llegará en futuras versiones de la
+  plataforma — nunca inventes un dato que no tenés
 - Si no sabés algo con certeza (precios exactos, plazos, políticas), decilo con honestidad y
   sugerí contactar soporte — nunca inventes"""
 
@@ -220,11 +229,18 @@ necesite, desde el botón "Ayuda" del menú.
 QUÉ CUBRE TU AYUDA:
 - Estado y requisitos de verificación de documentos (CI, título, SEDES, matrícula CMB) y cuánto
   demora (24-72 horas hábiles)
-- Cómo configurar precios, horarios de disponibilidad, y la diferencia entre marcarse "en línea"
-  manualmente y que el sistema lo haga automático según su horario configurado
+- Configurar su firma (dibujada o foto) en el perfil — es obligatoria para poder emitir recetas y
+  órdenes de laboratorio firmadas; si le preguntan por qué no puede emitir una receta, este suele
+  ser el motivo
+- Cómo configurar precios y horarios de disponibilidad. Hay 3 modos, no 2: "Disponible ahora"
+  (manual, fuera de su horario configurado), "Modo automático" (el sistema lo marca en línea solo
+  según el horario que configuró), y "No disponible" (manual, pausa la recepción de pacientes
+  nuevos). Si dice que no le está llegando ningún paciente, revisá primero en cuál de los 3 modos
+  está
 - Diferencia entre consultas inmediatas (paciente conectado ahora) y citas agendadas (con horario
   futuro, no requiere estar en línea en ese momento)
-- Cómo registrar notas clínicas y emitir recetas durante o después de una consulta
+- Cómo registrar notas clínicas y emitir recetas y órdenes de laboratorio durante o después de una
+  consulta (recordá: ambas requieren tener la firma configurada)
 - Cómo funcionan sus ganancias y cuándo se liberan los pagos
 - Cómo proponer una especialidad o subespecialidad que no esté en el catálogo actual
 
@@ -232,6 +248,10 @@ REGLAS:
 - Respuestas breves, concretas, en español boliviano profesional pero cercano
 - Si más abajo tenés FAQ_CONTEXT, priorizá esa información (respuestas oficiales del equipo) por
   sobre tu conocimiento general
+- Si te escribe por WhatsApp preguntando algo personalizado que ahí no se puede ver (su agenda,
+  qué pacientes tiene hoy, sus consultas puntuales), aclará que por WhatsApp no se puede consultar
+  eso todavía, que lo revise en su panel de la app, y que esa función llegará en futuras versiones
+  de la plataforma — nunca inventes un dato que no tenés
 - Si no sabés algo con certeza (montos exactos, plazos, políticas de pago), decilo con honestidad
   y sugerí contactar soporte — nunca inventes"""
 
@@ -412,6 +432,24 @@ def _parse_escalation_tag(reply: str) -> tuple[str, Optional[str]]:
     return clean, reason
 
 
+# Saludo puro (ej. "hola", "buenas tardes!", "hey") — sin ninguna otra
+# palabra ni pregunta. Deliberadamente estricto: cualquier mensaje que no
+# matchee completo se trata como normal y SÍ carga FAQ_CONTEXT, preferimos
+# gastar de más en un caso dudoso antes que dejar a alguien sin la
+# información que pidió. Evita pagar el bloque completo de FAQ (varios
+# cientos de tokens) en el turno más frecuente y de menor valor: el
+# saludo inicial que casi todo el mundo manda antes de preguntar algo.
+_BARE_GREETING_RE = re.compile(
+    r'^(hola+|holis|ola+|buen[oa]s?( d[ií]as?| tardes?| noches?)?|'
+    r'qu[eé] tal|c[oó]mo est[aá]s?|hey+|hi|saludos)[\s!¡.,]*$',
+    re.IGNORECASE,
+)
+
+
+def _is_bare_greeting(message: str) -> bool:
+    return bool(_BARE_GREETING_RE.match(message.strip()))
+
+
 async def run_whatsapp_agent(
     conversation_id: str,
     message: str,
@@ -444,7 +482,7 @@ async def run_whatsapp_agent(
         contacto = f"Nombre: {contact_name}\n{contacto}"
     system += f"\n\nCONTACTO:\n{contacto}"
 
-    if db:
+    if db and not _is_bare_greeting(message):
         faq_audience = audience if audience in ("PATIENT", "PROFESSIONAL") else "GENERAL"
         faq_text = await _load_faq_context(db, faq_audience)
         if faq_text:

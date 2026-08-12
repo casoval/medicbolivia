@@ -36,12 +36,23 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             0,
         ),
         (
-            "¿Cómo funciona una consulta en la plataforma?",
-            "Te registrás como paciente, contás tus síntomas a Medi (nuestro asistente de "
-            "orientación), y el sistema te sugiere la especialidad y te muestra profesionales "
-            "disponibles. Elegís uno, pagás la consulta con QR, y en el horario acordado se "
-            "conectan por videollamada dentro de la plataforma — no hace falta instalar nada.",
+            "¿Qué puedo hacer en MedicBolivia y qué tiene de gratis?",
+            "Registrarte es 100% gratis — solo pagás cuando efectivamente hacés una consulta. "
+            "Una vez adentro tenés: orientación por síntomas con Medi (nuestro agente de IA), "
+            "videoconsulta con profesionales verificados, pago seguro por QR, recetas digitales y "
+            "órdenes de laboratorio verificables por QR, tu historia clínica y panel personal con "
+            "notificaciones, chat directo con tu profesional dentro de la plataforma, recordatorios "
+            "automáticos por WhatsApp (citas, pagos, recetas), y un agente de ayuda dentro de la "
+            "app para cualquier duda de uso.",
             1,
+        ),
+        (
+            "¿Cómo funciona una consulta en la plataforma?",
+            "Te registrás como paciente, contás tus síntomas a Medi, y el sistema te sugiere la "
+            "especialidad y te muestra profesionales disponibles. Elegís uno, pagás con QR, y en "
+            "el horario acordado se conectan por videollamada dentro de la plataforma — no hace "
+            "falta instalar nada.",
+            2,
         ),
         (
             "¿Qué es Medi, el asistente de orientación con IA?",
@@ -49,21 +60,21 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             "orientarte hacia la especialidad médica más adecuada. No reemplaza a un profesional "
             "de salud ni da diagnósticos: es un primer paso para ayudarte a elegir con quién "
             "consultar. El diagnóstico y tratamiento siempre lo define el profesional humano.",
-            2,
+            3,
         ),
         (
             "¿Los profesionales de la plataforma están verificados?",
             "Sí. Cada profesional pasa por un proceso de verificación de identidad y matrícula "
             "profesional (Colegio Médico de Bolivia u organismo equivalente según su profesión) "
             "antes de poder atender en la plataforma.",
-            3,
+            4,
         ),
         (
             "¿Cómo se paga la consulta?",
             "El pago se hace con código QR, un método ampliamente usado en Bolivia. El pago se "
             "retiene de forma segura hasta que la consulta se realiza correctamente, y luego se "
             "libera al profesional.",
-            4,
+            5,
         ),
         (
             "¿Mis datos médicos están seguros?",
@@ -71,14 +82,14 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             "paciente y el profesional que lo atiende pueden ver su historia clínica y sus "
             "recetas. Las recetas digitales además llevan una firma con hash único para evitar "
             "falsificaciones, verificable en la sección \"Verificar receta\".",
-            5,
+            6,
         ),
         (
             "¿Puedo usar MedicBolivia desde cualquier parte de Bolivia?",
             "Sí, la plataforma funciona en todo el país siempre que tengas conexión a internet. "
             "Es especialmente útil para quienes viven lejos de un centro médico o de la "
             "especialidad que necesitan.",
-            6,
+            7,
         ),
         (
             "¿Qué hago si tengo una emergencia médica?",
@@ -86,17 +97,15 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             "(dolor de pecho intenso, dificultad para respirar, sangrado grave, pérdida de "
             "conciencia, etc.), acudí de inmediato a una sala de emergencias o llamá a los "
             "servicios de emergencia de tu ciudad.",
-            7,
+            8,
         ),
         (
             "¿Qué tan confiable es MedicBolivia?",
             "Somos una plataforma nueva, así que todavía no tenemos un historial largo de "
             "calificaciones para mostrar — pero cada profesional pasa por un proceso real de "
             "verificación de identidad y matrícula antes de poder atender, y tus datos médicos y "
-            "pagos están protegidos con cifrado. Además, somos la única plataforma en Bolivia que "
-            "ofrece orientación médica con agentes de inteligencia artificial por voz y por chat, "
-            "más recordatorios automáticos de medicación y seguimiento por WhatsApp.",
-            8,
+            "pagos están protegidos con cifrado.",
+            9,
         ),
     ],
 
@@ -132,30 +141,45 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             3,
         ),
         (
+            "¿Puedo pedir órdenes de laboratorio?",
+            "Sí. Si el profesional determina que necesitás estudios de laboratorio, te emite una "
+            "orden digital firmada que aparece junto a tus recetas en \"Mis recetas\", con su "
+            "propio código QR de verificación — cualquier laboratorio puede escanearla para "
+            "confirmar que es auténtica.",
+            4,
+        ),
+        (
             "¿Puedo pedir un reembolso?",
             "Sí, en los casos que correspondan (por ejemplo, si el profesional no se conecta o la "
             "consulta no puede realizarse por un problema de la plataforma). Podés iniciar una "
             "disputa desde el detalle de la consulta y un administrador la revisa.",
-            4,
+            5,
+        ),
+        (
+            "¿Cómo recibo mi reembolso si me corresponde uno?",
+            "Registrando una cuenta bancaria propia desde tu perfil. Cuando un reembolso se "
+            "aprueba, se transfiere automáticamente a esa cuenta — por eso conviene tenerla "
+            "cargada de antemano, así el reembolso no queda pendiente esperando ese dato.",
+            6,
         ),
         (
             "¿Necesito una cámara y buena conexión a internet?",
             "Sí, la videoconsulta requiere cámara, micrófono y una conexión estable a internet. "
             "Recomendamos usar wifi en lugar de datos móviles cuando sea posible, para evitar "
             "cortes durante la consulta.",
-            5,
+            7,
         ),
         (
             "¿Puedo calificar al profesional después de la consulta?",
             "Sí, al finalizar la consulta podés dejar una calificación y un comentario. Esto ayuda "
             "a otros pacientes a elegir con más información.",
-            6,
+            8,
         ),
         (
             "¿Dónde veo mi historial de consultas y recetas?",
             "En tu panel de paciente, en la sección de Historia clínica, tenés acceso a todas tus "
-            "consultas pasadas, notas clínicas y recetas emitidas.",
-            7,
+            "consultas pasadas, notas clínicas, recetas y órdenes de laboratorio emitidas.",
+            9,
         ),
     ],
 
@@ -195,37 +219,58 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             "Sí. Al finalizar una consulta podés emitir una receta digital firmada, que el "
             "paciente recibe al instante con un código QR de verificación único. Una receta "
             "firmada no se puede editar — si es necesario corregirla, se anula y se emite una "
-            "nueva.",
+            "nueva. Lo mismo aplica para órdenes de laboratorio.",
             4,
+        ),
+        (
+            "¿Por qué no puedo emitir una receta o una orden de laboratorio?",
+            "El motivo más común es que todavía no configuraste tu firma en el perfil (dibujada o "
+            "una foto de tu firma). Es un requisito obligatorio antes de poder emitir cualquier "
+            "documento firmado, así que si te aparece un error al intentar emitir, revisá primero "
+            "eso.",
+            5,
         ),
         (
             "¿Cómo se ven mis calificaciones?",
             "Los pacientes pueden calificar y comentar cada consulta finalizada. Tu calificación "
             "promedio es visible en tu perfil público, así que mantener una buena atención ayuda "
             "a que más pacientes te elijan.",
-            5,
+            6,
         ),
         (
             "¿Puedo definir mis propios horarios y tarifas?",
-            "Sí, cada profesional configura su propia disponibilidad y el precio de su consulta "
-            "desde su panel.",
-            6,
+            "Sí. El precio lo configurás vos, y para la disponibilidad tenés 3 modos: \"Disponible "
+            "ahora\" (te marcás en línea manualmente, fuera de tu horario configurado), \"Modo "
+            "automático\" (el sistema te marca en línea solo según el horario que configuraste), "
+            "y \"No disponible\" (pausás manualmente la recepción de pacientes nuevos). Si no te "
+            "está llegando ningún paciente, revisá en cuál de los 3 modos estás.",
+            7,
         ),
         (
             "¿Qué pasa si un paciente disputa un pago?",
             "Si un paciente reporta un problema con una consulta, el pago queda en estado de "
             "disputa hasta que el equipo de administración la revisa y resuelve — liberando el "
             "pago, reembolsándolo total o parcialmente, según corresponda.",
-            7,
+            8,
         ),
     ],
 }
 
 
 async def seed_faqs() -> None:
+    """
+    Upsert por (question, audience): si la pregunta no existe, la crea. Si
+    ya existe pero el texto de la respuesta o el orden cambiaron acá en
+    FAQS_SEED, actualiza esa fila en vez de dejarla como estaba (antes era
+    insert-only y un cambio de texto en este archivo nunca se reflejaba en
+    producción sin editarlo a mano desde /admin/faq). Si alguien ya editó
+    manualmente una FAQ desde el admin y no querés que este script la
+    pise, sacá esa entrada de FAQS_SEED.
+    """
     async with AsyncSessionLocal() as db:
         created = 0
-        skipped = 0
+        updated = 0
+        unchanged = 0
 
         for audience, items in FAQS_SEED.items():
             for question, answer, order in items:
@@ -233,24 +278,30 @@ async def seed_faqs() -> None:
                     select(FAQ).where(FAQ.question == question, FAQ.audience == audience.value)
                 )
                 existing = result.scalar_one_or_none()
-                if existing:
-                    skipped += 1
+
+                if not existing:
+                    db.add(FAQ(
+                        question=question,
+                        answer=answer,
+                        audience=audience.value,
+                        display_order=order,
+                        is_active=True,
+                    ))
+                    created += 1
                     continue
 
-                db.add(FAQ(
-                    question=question,
-                    answer=answer,
-                    audience=audience.value,
-                    display_order=order,
-                    is_active=True,
-                ))
-                created += 1
+                if existing.answer != answer or existing.display_order != order:
+                    existing.answer = answer
+                    existing.display_order = order
+                    updated += 1
+                else:
+                    unchanged += 1
 
         await db.commit()
         total = sum(len(v) for v in FAQS_SEED.values())
-        print(f"✅ Seed de FAQ completo: {created} preguntas nuevas, {skipped} ya existían.")
+        print(f"✅ Seed de FAQ completo: {created} nuevas, {updated} actualizadas, {unchanged} sin cambios.")
         print(f"   (Total en FAQS_SEED: {total} preguntas)")
-        print("   Quedaron creadas como VISIBLES en la landing pública (is_active=True).")
+        print("   Quedaron creadas/actualizadas como VISIBLES en la landing pública (is_active=True).")
         print("   Si algún dato no coincide con la realidad del negocio, editalo desde /admin/faq.")
 
 
