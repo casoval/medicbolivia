@@ -19,13 +19,17 @@ const IconRefresh = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="
 // other_label (el texto que se muestra) para no confundirlo con un banco real.
 const OTHER_BANK_VALUE = '__OTHER__'
 
-const DOCUMENTS = [
+// `optional: true` marca los documentos que NO son necesarios para que el
+// backend apruebe al profesional (ver REQUIRED_STEPS más abajo, que debe
+// coincidir 1 a 1 con REQUIRED_DOC_TYPES en professional_approval.py). Por
+// defecto un documento es obligatorio si no se especifica la propiedad.
+const DOCUMENTS: { type: string; label: string; hint: string; optional?: boolean }[] = [
   { type: 'CI_FRONT',           label: 'Cédula de identidad — anverso',    hint: 'Foto clara, todos los datos legibles' },
   { type: 'CI_BACK',            label: 'Cédula de identidad — reverso',    hint: 'Sin reflejos ni bordes cortados' },
   { type: 'PROFESSIONAL_TITLE', label: 'Título en Provisión Nacional',     hint: 'Título universitario habilitante para ejercer' },
   { type: 'HEALTH_MINISTRY',    label: 'Matrícula Profesional emitida por el Ministerio de Salud', hint: 'Matrícula vigente del Ministerio de Salud de Bolivia' },
   { type: 'SPECIALTY_CERT',     label: 'Respaldo de Especialidad',        hint: 'Certificado, diploma o título que respalde tu especialidad' },
-  { type: 'SUBSPECIALTY_CERT',  label: 'Respaldo de Subespecialidad',     hint: 'Certificado, diploma o título que respalde tu subespecialidad (solo si agregaste una)' },
+  { type: 'SUBSPECIALTY_CERT',  label: 'Respaldo de Subespecialidad',     hint: 'Certificado, diploma o título que respalde tu subespecialidad (solo si agregaste una)', optional: true },
   { type: 'SELFIE_WITH_CI',     label: 'Selfie sosteniendo tu CI',         hint: 'Tu cara y la CI deben ser legibles' },
 ]
 
@@ -915,7 +919,10 @@ export default function ProfilePage() {
               quedar visible para pacientes hasta que se confirme (ver
               check_and_approve_professional en el backend). */}
           <div className="card" id="section-especialidad">
-            <SectionTitle>{t('Especialidad')}</SectionTitle>
+            <SectionTitle>{t('Especialidad y datos para recetas')}</SectionTitle>
+            <p className="text-xs text-[#475569] -mt-2 mb-4">
+              {t('Tu especialidad y los datos que habilitan la emisión de recetas y órdenes de laboratorio. Todo lo de esta sección necesita aprobación de un administrador.')}
+            </p>
 
             {specialtyError && <div className="mb-3"><Alert type="error" message={specialtyError} /></div>}
             {specialtySuccess && <div className="mb-3"><Alert type="success" message={specialtySuccess} /></div>}
@@ -1049,149 +1056,8 @@ export default function ProfilePage() {
                 )}
               </div>
             )}
-          </div>
 
-          {/* Documentos de verificación */}
-          <div className="card" id="section-documentos">
-            <SectionTitle>{t('Documentos de verificación')}</SectionTitle>
-            <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-3">
-              <p className="text-xs text-[#185FA5]">
-                {t('La revisión toma entre 24 y 72 horas hábiles. Te avisaremos por SMS cuando tu perfil sea aprobado.')}
-              </p>
-            </div>
-            <div className="space-y-2.5">
-              {DOCUMENTS.map(({ type, label, hint }) => {
-                const localStatus = docStatuses[type] || 'idle'
-                const record = docRecordOf(type)
-                // El estado local de "subiendo ahora mismo" siempre gana visualmente.
-                // Si no se está subiendo nada, se muestra el estado real guardado en el backend.
-                const serverStatus = record?.status // 'PENDING' | 'APPROVED' | 'REJECTED' | undefined
-                const isUploading = localStatus === 'uploading'
-                const isLocalError = localStatus === 'error'
-
-                return (
-                  <div key={type} className={`rounded-xl border p-3 transition-colors ${
-                    isLocalError                    ? 'bg-[#FCEBEB] border-[#F09595]' :
-                    isUploading                     ? 'bg-[#E6F1FB] border-[#85B7EB]' :
-                    serverStatus === 'APPROVED'      ? 'bg-[#E1F5EE] border-[#1D9E75]' :
-                    serverStatus === 'REJECTED'      ? 'bg-[#FCEBEB] border-[#F09595]' :
-                    serverStatus === 'PENDING'       ? 'bg-[#FEF3E0] border-[#F2D49A]' :
-                    'bg-white border-[#DDE1EE]'
-                  }`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium">{label}</p>
-                        <p className="text-xs text-[#475569] mt-0.5">{hint}</p>
-                        {docErrors[type] && (
-                          <p className="text-xs text-[#A32D2D] mt-1">{docErrors[type]}</p>
-                        )}
-                        {!isUploading && !isLocalError && serverStatus === 'REJECTED' && record?.review_note && (
-                          <p className="text-xs text-[#A32D2D] mt-1.5 bg-white/60 rounded px-2 py-1">
-                            <span className="font-medium">{t('Motivo:')}</span> {record.review_note}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Input oculto — siempre presente para poder reemplazar */}
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,application/pdf"
-                        ref={(el) => { fileRefs.current[type] = el }}
-                        onChange={(e) => handleFileChange(type, e)}
-                        className="hidden"
-                      />
-
-                      <div className="flex-shrink-0">
-                        {isUploading ? (
-                          <div className="w-5 h-5 border-2 border-[#185FA5] border-t-transparent rounded-full animate-spin-slow" />
-                        ) : isLocalError ? (
-                          <button
-                            onClick={() => fileRefs.current[type]?.click()}
-                            className="btn-secondary text-xs py-1 px-2.5"
-                          >
-                            {t('Reintentar')}
-                          </button>
-                        ) : serverStatus === 'APPROVED' ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="badge-green">{t('✓ Aprobado')}</span>
-                            {record?.url && (
-                              <button
-                                onClick={() => setViewingDoc({ label, url: record.url! })}
-                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
-                                title="Ver el documento que subiste"
-                              >
-                                {t('Ver')}
-                              </button>
-                            )}
-                          </div>
-                        ) : serverStatus === 'REJECTED' ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="badge-red">{t('✕ Rechazado')}</span>
-                            {record?.url && (
-                              <button
-                                onClick={() => setViewingDoc({ label, url: record.url! })}
-                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
-                                title="Ver el documento que subiste"
-                              >
-                                {t('Ver')}
-                              </button>
-                            )}
-                            <button
-                              onClick={() => fileRefs.current[type]?.click()}
-                              className="flex items-center gap-1 text-xs text-white bg-[#185FA5] hover:bg-[#0C447C] transition-colors py-1 px-2 rounded"
-                              title="Subir un documento corregido"
-                            >
-                              <IconRefresh />
-                              {t('Volver a subir')}
-                            </button>
-                          </div>
-                        ) : serverStatus === 'PENDING' ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-[#FEF3E0] text-[#854F0B] border-[#F2D49A]">
-                              {t('En revisión')}
-                            </span>
-                            {record?.url && (
-                              <button
-                                onClick={() => setViewingDoc({ label, url: record.url! })}
-                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
-                                title="Ver el documento que subiste"
-                              >
-                                {t('Ver')}
-                              </button>
-                            )}
-                            <button
-                              onClick={() => fileRefs.current[type]?.click()}
-                              className="flex items-center gap-1 text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
-                              title="Subir un documento diferente"
-                            >
-                              <IconRefresh />
-                              {t('Reemplazar')}
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => fileRefs.current[type]?.click()}
-                            className="btn-secondary text-xs py-1 px-2.5"
-                          >
-                            {t('Subir')}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Datos para recetas y seguridad — Matrícula profesional + Firma.
-              A diferencia del resto del "Datos del perfil público", estos dos
-              SÍ son inhabilitantes: sin ambos verificados y aprobados por un
-              admin, el backend bloquea la emisión de recetas y órdenes de
-              laboratorio (ver create_prescription / create_lab_order). Por
-              eso se agrupan en su propia sección, separados de los campos
-              puramente opcionales. */}
-          <div className="card" id="section-recetas-seguridad">
+            <div className="border-t border-[#DDE1EE] my-5 pt-5" id="section-recetas-seguridad">
             <SectionTitle>{t('Datos para recetas y seguridad')}</SectionTitle>
             <p className="text-xs text-[#475569] mb-4">
               {t('A diferencia de los datos del perfil público, estos dos son obligatorios: sin la Matrícula profesional y la Firma aprobadas por un administrador, no vas a poder emitir recetas ni órdenes de laboratorio. Son la base de la validez legal de cada documento y protegen tanto al paciente como a ti — evitan que alguien emita recetas a tu nombre sin estar habilitado.')}
@@ -1354,7 +1220,151 @@ export default function ProfilePage() {
                 {t('Guardar cambios')}
               </button>
             </div>
+            </div>
           </div>
+
+          {/* Documentos de verificación */}
+          <div className="card" id="section-documentos">
+            <SectionTitle>{t('Documentos de verificación')}</SectionTitle>
+            <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-3">
+              <p className="text-xs text-[#185FA5]">
+                {t('La revisión toma entre 24 y 72 horas hábiles. Te avisaremos por SMS cuando tu perfil sea aprobado.')}
+              </p>
+            </div>
+            <div className="space-y-2.5">
+              {DOCUMENTS.map(({ type, label, hint, optional }) => {
+                const localStatus = docStatuses[type] || 'idle'
+                const record = docRecordOf(type)
+                // El estado local de "subiendo ahora mismo" siempre gana visualmente.
+                // Si no se está subiendo nada, se muestra el estado real guardado en el backend.
+                const serverStatus = record?.status // 'PENDING' | 'APPROVED' | 'REJECTED' | undefined
+                const isUploading = localStatus === 'uploading'
+                const isLocalError = localStatus === 'error'
+
+                return (
+                  <div key={type} className={`rounded-xl border p-3 transition-colors ${
+                    isLocalError                    ? 'bg-[#FCEBEB] border-[#F09595]' :
+                    isUploading                     ? 'bg-[#E6F1FB] border-[#85B7EB]' :
+                    serverStatus === 'APPROVED'      ? 'bg-[#E1F5EE] border-[#1D9E75]' :
+                    serverStatus === 'REJECTED'      ? 'bg-[#FCEBEB] border-[#F09595]' :
+                    serverStatus === 'PENDING'       ? 'bg-[#FEF3E0] border-[#F2D49A]' :
+                    'bg-white border-[#DDE1EE]'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-xs font-medium">{label}</p>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide ${
+                            optional
+                              ? 'bg-[#F1F3F9] text-[#64748B]'
+                              : 'bg-[#FCEBEB] text-[#A32D2D]'
+                          }`}>
+                            {optional ? t('Opcional') : t('Obligatorio')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#475569] mt-0.5">{hint}</p>
+                        {docErrors[type] && (
+                          <p className="text-xs text-[#A32D2D] mt-1">{docErrors[type]}</p>
+                        )}
+                        {!isUploading && !isLocalError && serverStatus === 'REJECTED' && record?.review_note && (
+                          <p className="text-xs text-[#A32D2D] mt-1.5 bg-white/60 rounded px-2 py-1">
+                            <span className="font-medium">{t('Motivo:')}</span> {record.review_note}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Input oculto — siempre presente para poder reemplazar */}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,application/pdf"
+                        ref={(el) => { fileRefs.current[type] = el }}
+                        onChange={(e) => handleFileChange(type, e)}
+                        className="hidden"
+                      />
+
+                      <div className="flex-shrink-0">
+                        {isUploading ? (
+                          <div className="w-5 h-5 border-2 border-[#185FA5] border-t-transparent rounded-full animate-spin-slow" />
+                        ) : isLocalError ? (
+                          <button
+                            onClick={() => fileRefs.current[type]?.click()}
+                            className="btn-secondary text-xs py-1 px-2.5"
+                          >
+                            {t('Reintentar')}
+                          </button>
+                        ) : serverStatus === 'APPROVED' ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="badge-green">{t('✓ Aprobado')}</span>
+                            {record?.url && (
+                              <button
+                                onClick={() => setViewingDoc({ label, url: record.url! })}
+                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                                title="Ver el documento que subiste"
+                              >
+                                {t('Ver')}
+                              </button>
+                            )}
+                          </div>
+                        ) : serverStatus === 'REJECTED' ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="badge-red">{t('✕ Rechazado')}</span>
+                            {record?.url && (
+                              <button
+                                onClick={() => setViewingDoc({ label, url: record.url! })}
+                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                                title="Ver el documento que subiste"
+                              >
+                                {t('Ver')}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => fileRefs.current[type]?.click()}
+                              className="flex items-center gap-1 text-xs text-white bg-[#185FA5] hover:bg-[#0C447C] transition-colors py-1 px-2 rounded"
+                              title="Subir un documento corregido"
+                            >
+                              <IconRefresh />
+                              {t('Volver a subir')}
+                            </button>
+                          </div>
+                        ) : serverStatus === 'PENDING' ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-[#FEF3E0] text-[#854F0B] border-[#F2D49A]">
+                              {t('En revisión')}
+                            </span>
+                            {record?.url && (
+                              <button
+                                onClick={() => setViewingDoc({ label, url: record.url! })}
+                                className="text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                                title="Ver el documento que subiste"
+                              >
+                                {t('Ver')}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => fileRefs.current[type]?.click()}
+                              className="flex items-center gap-1 text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                              title="Subir un documento diferente"
+                            >
+                              <IconRefresh />
+                              {t('Reemplazar')}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => fileRefs.current[type]?.click()}
+                            className="btn-secondary text-xs py-1 px-2.5"
+                          >
+                            {t('Subir')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
 
           {/* Perfil público */}
           <div className="card">

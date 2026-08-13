@@ -1317,8 +1317,6 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                 <div><p className="text-xs text-[#64748B]">{t('Ciudad / Departamento')}</p><p className="text-sm font-medium">{local.department || 'No especificado'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Genero')}</p><p className="text-sm font-medium">{local.gender || 'No especificado'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Idiomas')}</p><p className="text-sm font-medium">{local.languages?.join(', ') || 'Espanol'}</p></div>
-                <div><p className="text-xs text-[#64748B]">{t('Matrícula CMB')}</p><p className="text-sm font-medium">{local.cmb_matricula || 'No especificada'}</p></div>
-                <div><p className="text-xs text-[#64748B]">{t('Registro SEDES')}</p><p className="text-sm font-medium">{local.sedes_number || 'No especificado'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Registrado el')}</p><p className="text-sm font-medium">{new Date(local.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Estado de cuenta')}</p><p className="text-sm font-medium">{local.user_status === 'ACTIVE' ? 'Activa' : local.user_status === 'SUSPENDED' ? 'Suspendida' : (local.user_status || 'No disponible')}</p></div>
               </div>
@@ -1461,17 +1459,32 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                     <input value={form.languages} onChange={(e) => setForm({ ...form, languages: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
-                  <div>
-                    <label className="block text-xs text-[#475569] mb-1">{t('Matrícula CMB')}</label>
-                    <input value={form.cmb_matricula} onChange={(e) => setForm({ ...form, cmb_matricula: e.target.value })}
-                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-[#475569] mb-1">{t('Registro SEDES')}</label>
-                    <input value={form.sedes_number} onChange={(e) => setForm({ ...form, sedes_number: e.target.value })}
-                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
-                  </div>
                 </div>
+
+                {/* Matrícula CMB y Registro SEDES: campos heredados, sin
+                    documento ni flujo de verificación asociado — no
+                    reflejan datos reales del profesional. Se mantienen
+                    solo porque prescription_pdf.py y lab_order_pdf.py los
+                    usan como respaldo impreso para médicos antiguos. Por
+                    eso quedan fuera de la vista/edición normal del perfil
+                    y aparte, marcados como "uso interno". */}
+                <details className="mt-3">
+                  <summary className="text-xs text-[#94A3B8] cursor-pointer select-none">
+                    {t('Campos heredados (uso interno en PDFs impresos, no verificados)')}
+                  </summary>
+                  <div className="grid grid-cols-2 gap-3 mt-2">
+                    <div>
+                      <label className="block text-xs text-[#475569] mb-1">{t('Matrícula CMB')}</label>
+                      <input value={form.cmb_matricula} onChange={(e) => setForm({ ...form, cmb_matricula: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#475569] mb-1">{t('Registro SEDES')}</label>
+                      <input value={form.sedes_number} onChange={(e) => setForm({ ...form, sedes_number: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
+                    </div>
+                  </div>
+                </details>
 
                 {/* Especialidad, subespecialidad, universidad, años de
                     experiencia y matrícula profesional NO están en este
