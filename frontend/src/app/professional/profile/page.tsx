@@ -945,7 +945,7 @@ export default function ProfilePage() {
 
             <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-4 space-y-1.5">
               <p className="text-xs text-[#185FA5]">
-                {t('💡 ¿Eres médico general? Esa opción está dentro del selector de "Especialidad" — no es un campo aparte. La subespecialidad es opcional y solo se habilita después de que tu especialidad quede aprobada.')}
+                {t('💡 ¿Eres médico general? Esa opción está dentro del selector de "Especialidad" — no es un campo aparte. La subespecialidad es opcional.')}
               </p>
               <p className="text-xs text-[#185FA5]">
                 {t('💡 Si tu especialidad o subespecialidad no aparecen en la lista, elige la opción "No está en la lista" y escríbela manualmente — un administrador la revisará igual.')}
