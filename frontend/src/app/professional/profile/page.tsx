@@ -2040,9 +2040,10 @@ export default function ProfilePage() {
           </div>
           )}
 
-          {/* Membresía */}
+          {/* Membresía — va a ancho completo: es la 3ra tarjeta de esta
+              pestaña (impar), así no deja un hueco vacío al costado. */}
           {activeTab === 'pagos' && (
-          <div className="card">
+          <div className="card lg:col-span-2">
             <SectionTitle>Membresía</SectionTitle>
             <p className="text-xs text-[#475569] mb-3">
               Con membresía activa no pagas comisión por tus consultas y puedes agendar directamente a los pacientes de "Mis pacientes", sin límite de horario.
@@ -2099,7 +2100,7 @@ export default function ProfilePage() {
 
           {/* Cambiar contraseña */}
           {activeTab === 'cuenta' && (
-          <div className="card">
+          <div className="card lg:col-span-2">
             <ChangePasswordSection />
           </div>
           )}
