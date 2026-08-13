@@ -522,9 +522,74 @@ export default function ProfilePage() {
   })
   const pendingSteps = stepStatuses.filter((s) => s.status !== 'APPROVED')
 
-  function scrollToSection(anchor: string) {
-    document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // ── Pestañas de la página + wizard de primeros pasos ──────────────
+  // La página se divide en 4 pestañas para que el profesional nunca vea
+  // todo junto de golpe. Dentro de "Verificación", mientras la cuenta no
+  // esté APPROVED, se muestra además un mini-wizard de 2 pasos (Especialidad
+  // → Documentos) en vez de las dos tarjetas apiladas, para guiar al
+  // profesional nuevo paso a paso. `verifShowAll` es la vía de escape para
+  // quien ya conoce la página y quiere ver/editar todo de una vez (por
+  // ejemplo, tras un rechazo, para saltar directo al documento a corregir).
+  type TabKey = 'verificacion' | 'perfil' | 'pagos' | 'cuenta'
+  const [activeTab, setActiveTab] = useState<TabKey>('verificacion')
+  const [verifStep, setVerifStep] = useState<0 | 1>(0)
+  const [verifShowAll, setVerifShowAll] = useState(false)
+  const verifStepInitialized = useRef(false)
+
+  const isApproved = professionalStatus === 'APPROVED'
+  const wizardActive = activeTab === 'verificacion' && !isApproved && !verifShowAll
+
+  // Anchor → a qué pestaña (y, si es "verificación", a qué paso del
+  // wizard) pertenece cada sección — usado por el indicador de progreso
+  // de arriba y por scrollToSection.
+  function tabForAnchor(anchor: string): { tab: TabKey; step: 0 | 1 } {
+    if (anchor === 'section-documentos') return { tab: 'verificacion', step: 1 }
+    if (anchor === 'section-especialidad' || anchor === 'section-recetas-seguridad') return { tab: 'verificacion', step: 0 }
+    return { tab: 'verificacion', step: 0 }
   }
+
+  // Al cargar los datos reales del backend, si el profesional es nuevo
+  // arrancamos el wizard en el primer paso que todavía tenga algo
+  // pendiente, en vez de forzar siempre el paso 1.
+  useEffect(() => {
+    if (verifStepInitialized.current) return
+    if (pendingSteps.length === 0) return
+    verifStepInitialized.current = true
+    const firstPending = pendingSteps[0]
+    setVerifStep(tabForAnchor(firstPending.anchor).step)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSteps.length])
+
+  // Pestaña inicial: si ya está aprobado, no tiene sentido abrir en
+  // "Verificación" (no le queda nada pendiente ahí) — abrimos en "Perfil
+  // público". Si todavía no está aprobado, "Verificación" es lo primero
+  // que necesita resolver.
+  const initialTabSet = useRef(false)
+  useEffect(() => {
+    if (initialTabSet.current) return
+    if (professionalStatus === null) return
+    initialTabSet.current = true
+    setActiveTab(professionalStatus === 'APPROVED' ? 'perfil' : 'verificacion')
+  }, [professionalStatus])
+
+  function scrollToSection(anchor: string) {
+    const { tab, step } = tabForAnchor(anchor)
+    setActiveTab(tab)
+    if (tab === 'verificacion') {
+      setVerifShowAll(true)
+      setVerifStep(step)
+    }
+    setTimeout(() => {
+      document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 60)
+  }
+
+  const TABS: { key: TabKey; label: string; badge?: number }[] = [
+    { key: 'verificacion', label: t('Verificación'), badge: pendingSteps.length > 0 ? pendingSteps.length : undefined },
+    { key: 'perfil', label: t('Perfil público') },
+    { key: 'pagos', label: t('Precios y pagos') },
+    { key: 'cuenta', label: t('Cuenta') },
+  ]
 
   // Foto de perfil
   const [photoPreview, setPhotoPreview]     = useState<string | null>(null)
@@ -872,10 +937,36 @@ export default function ProfilePage() {
           </div>
         )}
 
+        {/* Barra de pestañas — separa la página en 4 bloques claros para
+            que el profesional nunca vea todo de golpe. El badge en
+            "Verificación" muestra cuántos pasos obligatorios le faltan. */}
+        <div className="flex gap-1 mb-4 border-b border-[#DDE1EE] overflow-x-auto">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`relative flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                activeTab === tab.key
+                  ? 'border-[#0F6E56] text-[#0F6E56]'
+                  : 'border-transparent text-[#64748B] hover:text-[#141820]'
+              }`}
+            >
+              {tab.label}
+              {!!tab.badge && (
+                <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-[#E24B4A] text-white text-[10px] font-semibold">
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
-          {/* Datos de registro — solo lectura, así el profesional recuerda qué colocó */}
-          {registrationData && (
+          {/* Datos de registro — solo lectura, así el profesional recuerda qué colocó.
+              Vive en la pestaña "Cuenta": es información de identidad, no algo que
+              se complete o suba durante la verificación. */}
+          {activeTab === 'cuenta' && registrationData && (
             <div className="card lg:col-span-2">
               <SectionTitle>{t('Datos de registro')}</SectionTitle>
               <p className="text-xs text-[#475569] mb-3">
@@ -931,13 +1022,68 @@ export default function ProfilePage() {
             </div>
           )}
 
+          {/* Cabecera del wizard de Verificación — pasos, punteo de
+              progreso y botones Siguiente/Atrás. Solo aparece mientras la
+              cuenta no esté aprobada y el profesional no haya elegido ver
+              todo de una vez. */}
+          {activeTab === 'verificacion' && !isApproved && (
+            <div className="card lg:col-span-2 !py-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  {(['0', '1'] as const).map((s, i) => {
+                    const idx = i as 0 | 1
+                    const labels = [t('1. Especialidad y recetas'), t('2. Documentos')]
+                    const active = verifShowAll ? false : verifStep === idx
+                    const stepDone = idx === 0
+                      ? stepStatuses.filter(st => st.anchor !== 'section-documentos').every(st => st.status === 'APPROVED')
+                      : stepStatuses.filter(st => st.anchor === 'section-documentos').every(st => st.status === 'APPROVED')
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => { setVerifShowAll(false); setVerifStep(idx) }}
+                        className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-full border transition-colors ${
+                          active
+                            ? 'bg-[#0F6E56] text-white border-[#0F6E56]'
+                            : stepDone
+                              ? 'bg-[#E1F5EE] text-[#0F6E56] border-[#BFE6D4]'
+                              : 'bg-white text-[#475569] border-[#DDE1EE]'
+                        }`}
+                      >
+                        {stepDone && !active && '✓ '}{labels[idx]}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center gap-2">
+                  {!verifShowAll && verifStep === 1 && (
+                    <button onClick={() => setVerifStep(0)} className="text-xs text-[#64748B] underline underline-offset-2">
+                      {t('← Atrás')}
+                    </button>
+                  )}
+                  {!verifShowAll && verifStep === 0 && (
+                    <button onClick={() => setVerifStep(1)} className="text-xs font-medium text-[#0F6E56] underline underline-offset-2">
+                      {t('Siguiente →')}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setVerifShowAll((v) => !v)}
+                    className="text-xs text-[#64748B] underline underline-offset-2"
+                  >
+                    {verifShowAll ? t('Ver un paso a la vez') : t('Ver todo en esta pestaña')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Especialidad / subespecialidad — obligatoria/opcional, con su
               propio flujo de confirmación de admin (ver saveSpecialty y
               saveSubSpecialty más arriba). Antes esto se cargaba en el
               registro sin control de nadie; ahora vive acá y bloquea
               quedar visible para pacientes hasta que se confirme (ver
               check_and_approve_professional en el backend). */}
-          <div className="card" id="section-especialidad">
+          {activeTab === 'verificacion' && (!wizardActive || verifStep === 0) && (
+          <div className="card lg:col-span-2" id="section-especialidad">
             <SectionTitle>{t('Especialidad y datos para recetas')}</SectionTitle>
             <p className="text-xs text-[#475569] -mt-2 mb-4">
               {t('Tu especialidad y los datos que habilitan la emisión de recetas y órdenes de laboratorio. Todo lo de esta sección necesita aprobación de un administrador.')}
@@ -1258,9 +1404,11 @@ export default function ProfilePage() {
             </div>
             </div>
           </div>
+          )}
 
           {/* Documentos de verificación */}
-          <div className="card" id="section-documentos">
+          {activeTab === 'verificacion' && (!wizardActive || verifStep === 1) && (
+          <div className="card lg:col-span-2" id="section-documentos">
             <SectionTitle>{t('Documentos de verificación')}</SectionTitle>
             <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-3">
               <p className="text-xs text-[#185FA5]">
@@ -1411,10 +1559,11 @@ export default function ProfilePage() {
               })}
             </div>
           </div>
-
+          )}
 
           {/* Perfil público */}
-          <div className="card">
+          {activeTab === 'perfil' && (
+          <div className="card lg:col-span-2">
             <SectionTitle>{t('Datos del perfil público')}</SectionTitle>
             <p className="text-xs text-[#475569] mb-3">
               {t('En esta sección la mayoría de los campos son opcionales y no afectan tu capacidad de atender pacientes ni de emitir recetas — pero los marcados como "recomendado" ayudan a que el paciente tenga más confianza en ti antes de elegirte. El único obligatorio acá es "Idiomas de atención".')}
@@ -1628,8 +1777,10 @@ export default function ProfilePage() {
               </button>
             </div>
           </div>
+          )}
 
           {/* Precios de consulta */}
+          {activeTab === 'pagos' && (
           <div className="card">
             <SectionTitle>{t('Precios de consulta')}</SectionTitle>
             <p className="text-xs text-[#475569] mb-3">
@@ -1732,8 +1883,10 @@ export default function ProfilePage() {
               </button>
             </div>
           </div>
+          )}
 
           {/* Datos bancarios para pago */}
+          {activeTab === 'pagos' && (
           <div className="card">
             <SectionTitle>{t('Datos bancarios para pago')}</SectionTitle>
             <p className="text-xs text-[#475569] mb-3">
@@ -1885,8 +2038,10 @@ export default function ProfilePage() {
               </button>
             </div>
           </div>
+          )}
 
           {/* Membresía */}
+          {activeTab === 'pagos' && (
           <div className="card">
             <SectionTitle>Membresía</SectionTitle>
             <p className="text-xs text-[#475569] mb-3">
@@ -1940,11 +2095,14 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Cambiar contraseña */}
+          {activeTab === 'cuenta' && (
           <div className="card">
             <ChangePasswordSection />
           </div>
+          )}
 
         </div>
       </div>
