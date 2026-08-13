@@ -693,11 +693,7 @@ function AI24_7Section() {
             <p className="text-xs font-medium text-[#141820]">Medi · WhatsApp</p>
           </div>
           <div className="bg-white rounded-xl rounded-tl-none px-3 py-2.5 text-xs text-[#141820] mb-2 max-w-[85%]">
-            Hola Carla 👋 te recuerdo tu cita con la Dra. Rojas hoy a las 10:00.
-            ¿Confirmás que vas a poder conectarte?
-          </div>
-          <div className="bg-[#DCF8C6] rounded-xl rounded-tr-none px-3 py-2.5 text-xs text-[#141820] ml-auto max-w-[70%] text-right">
-            Sí, ahí estaré
+            Hola Carla 👋 te recuerdo tu cita con la Dra. Rojas hoy a las 10:00. ¡Te esperamos!
           </div>
         </Reveal>
 
@@ -719,7 +715,7 @@ function AI24_7Section() {
             <div>
               <p className="text-sm font-medium text-[#141820] mb-1">{t('Recordatorios automáticos por WhatsApp')}</p>
               <p className="text-xs text-[#475569]">
-                {t('Una vez agendada la cita, el agente te escribe por WhatsApp antes de la hora para recordártela y confirmar que vas a asistir — así ni el paciente ni el profesional pierden tiempo con citas a las que nadie se conecta.')}
+                {t('Una vez agendada la cita, el agente te escribe por WhatsApp antes de la hora para recordártela — así ni el paciente ni el profesional se olvidan ni pierden tiempo con citas a las que nadie se conecta.')}
               </p>
             </div>
           </div>
