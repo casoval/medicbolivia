@@ -51,7 +51,7 @@ export function PublicHeader() {
             Iniciar sesión
           </Link>
           <Link
-            href="/auth/register/patient"
+            href="/auth/register"
             className="bg-[#11A15A] text-white text-xs sm:text-sm font-medium px-2.5 sm:px-4 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap"
           >
             Registrarme
