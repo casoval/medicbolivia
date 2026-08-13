@@ -56,7 +56,7 @@ def upgrade() -> None:
     # Las especialidades ya cargadas se consideran ya aprobadas de hecho
     # (venían operando sin objeción) — así ningún profesional activo hoy
     # queda bloqueado de golpe por este cambio.
-    op.execute("UPDATE professionals SET specialty_status = 'APPROVED' WHERE specialty IS NOT NULL")
+    op.execute("UPDATE professionals SET specialty_status = 'APPROVED'::docstatus WHERE specialty IS NOT NULL")
 
     # ── 3. sub_specialties (array) → sub_specialty (string singular) ──
     op.add_column("professionals", sa.Column("sub_specialty", sa.String(100), nullable=True))
@@ -66,7 +66,7 @@ def upgrade() -> None:
         "sub_specialty_status", postgresql.ENUM("PENDING", "APPROVED", "REJECTED", name="docstatus", create_type=False),
         nullable=True,
     ))
-    op.execute("UPDATE professionals SET sub_specialty_status = 'APPROVED' WHERE sub_specialty IS NOT NULL")
+    op.execute("UPDATE professionals SET sub_specialty_status = 'APPROVED'::docstatus WHERE sub_specialty IS NOT NULL")
     op.add_column("professionals", sa.Column("sub_specialty_review_note", sa.Text(), nullable=True))
     op.drop_column("professionals", "sub_specialties")
 
@@ -78,7 +78,7 @@ def upgrade() -> None:
             nullable=False, server_default="PENDING",
         ))
         op.execute(
-            f"UPDATE professionals SET {base}_status = CASE WHEN {base}_verified THEN 'APPROVED' ELSE 'PENDING' END"
+            f"UPDATE professionals SET {base}_status = CASE WHEN {base}_verified THEN 'APPROVED'::docstatus ELSE 'PENDING'::docstatus END"
         )
         op.add_column("professionals", sa.Column(f"{base}_review_note", sa.Text(), nullable=True))
         op.drop_column("professionals", f"{base}_verified")
@@ -87,7 +87,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     for base in ("university", "years_experience", "professional_license"):
         op.add_column("professionals", sa.Column(f"{base}_verified", sa.Boolean(), nullable=False, server_default="false"))
-        op.execute(f"UPDATE professionals SET {base}_verified = ({base}_status = 'APPROVED')")
+        op.execute(f"UPDATE professionals SET {base}_verified = ({base}_status = 'APPROVED'::docstatus)")
         op.drop_column("professionals", f"{base}_review_note")
         op.drop_column("professionals", f"{base}_status")
 
