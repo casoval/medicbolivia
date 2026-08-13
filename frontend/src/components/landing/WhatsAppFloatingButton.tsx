@@ -42,39 +42,39 @@ export function WhatsAppFloatingButton() {
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 transition-all duration-500 ${
+      className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 transition-all duration-500 ${
         entered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
       }`}
     >
       {/* Burbuja tipo chat, con colita apuntando al botón */}
       <div className="hidden sm:block relative animate-fade-up">
-        <div className="bg-white rounded-2xl rounded-br-sm px-4 py-2.5 shadow-[0_8px_24px_rgba(20,24,32,0.12)] border border-[#EAEDF3] text-sm font-medium text-[#141820] whitespace-nowrap">
+        <div className="bg-white rounded-xl rounded-br-sm px-3 py-1.5 shadow-[0_6px_16px_rgba(20,24,32,0.10)] border border-[#EAEDF3] text-xs font-medium text-[#141820] whitespace-nowrap">
           {t('¿Tenés dudas? Escribinos por WhatsApp')}
         </div>
-        <span className="absolute -bottom-1.5 right-6 w-3 h-3 bg-white border-b border-r border-[#EAEDF3] rotate-45" />
+        <span className="absolute -bottom-1 right-4 w-2.5 h-2.5 bg-white border-b border-r border-[#EAEDF3] rotate-45" />
       </div>
 
       <div className="relative flex items-center shrink-0">
         {/* Anillo de pulso sutil detrás del botón para llamar la atención */}
-        <span className="absolute inset-0 rounded-full bg-[#25D366] opacity-60 animate-ping [animation-duration:2.5s]" />
+        <span className="absolute inset-0 rounded-full bg-[#25D366] opacity-40 animate-ping [animation-duration:2.5s]" />
 
         <a
           href={href}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={t('Chatear por WhatsApp')}
-          className="relative w-16 h-16 rounded-full bg-gradient-to-br from-[#2FE076] to-[#1DA851] flex items-center justify-center shadow-[0_10px_28px_rgba(29,168,81,0.45)] hover:scale-110 hover:shadow-[0_12px_32px_rgba(29,168,81,0.55)] active:scale-95 transition-all duration-300"
+          className="relative w-11 h-11 rounded-full bg-gradient-to-br from-[#2FE076] to-[#1DA851] flex items-center justify-center shadow-[0_6px_16px_rgba(29,168,81,0.4)] hover:scale-110 hover:shadow-[0_8px_20px_rgba(29,168,81,0.5)] active:scale-95 transition-all duration-300"
         >
-          <WhatsAppIcon className="w-8 h-8 text-white" />
+          <WhatsAppIcon className="w-5 h-5 text-white" />
         </a>
 
         <button
           type="button"
           onClick={() => setVisible(false)}
           aria-label={t('Cerrar')}
-          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-[#DDE1EE] shadow flex items-center justify-center text-[#64748B] hover:text-[#141820] hover:scale-110 transition-all"
+          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white border border-[#DDE1EE] shadow flex items-center justify-center text-[#64748B] hover:text-[#141820] hover:scale-110 transition-all"
         >
-          <X className="w-3 h-3" aria-hidden="true" />
+          <X className="w-2.5 h-2.5" aria-hidden="true" />
         </button>
       </div>
     </div>
