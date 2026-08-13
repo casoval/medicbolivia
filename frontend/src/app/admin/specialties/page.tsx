@@ -17,6 +17,7 @@ interface Proposal {
   parent_specialty_name: string | null
   parent_proposal_id: string | null
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  final_name: string | null
   admin_note: string | null
   created_at: string
   reviewed_at: string | null
@@ -111,68 +112,19 @@ export default function AdminSpecialtiesPage() {
   })
 
   // ── Estado: propuestas ──
+  // Esta pestaña es de SOLO LECTURA — historial de propuestas. Aprobar o
+  // rechazar (con la opción de corregir el nombre) ya se hace desde la
+  // ficha del profesional en Admin → Profesionales (ver SpecialtyReviewRow
+  // en esa página), que es donde el admin ya está revisando el resto de
+  // sus datos y documentos. Tener el mismo Aprobar/Rechazar acá también
+  // era exactamente el duplicado que se pidió sacar.
   const [statusFilter, setStatusFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING')
-  const [reviewing, setReviewing] = useState<Proposal | null>(null)
-  const [finalName, setFinalName] = useState('')
-  const [adminNote, setAdminNote] = useState('')
-  const [actionError, setActionError] = useState('')
 
   const { data: proposals = [], isLoading } = useQuery({
     queryKey: ['admin', 'specialty-proposals', statusFilter],
     queryFn: () => specialtiesAPI.listProposals(statusFilter) as Promise<Proposal[]>,
     refetchInterval: 30000,
   })
-
-  const reviewMutation = useMutation({
-    mutationFn: (vars: { id: string; decision: 'APPROVE' | 'REJECT'; final_name?: string; admin_note?: string }) =>
-      specialtiesAPI.reviewProposal(vars.id, {
-        decision: vars.decision,
-        final_name: vars.final_name || undefined,
-        admin_note: vars.admin_note || undefined,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'specialty-proposals'] })
-      closeModal()
-    },
-    onError: (err) => setActionError(getErrorMessage(err)),
-  })
-
-  function openReview(p: Proposal) {
-    setReviewing(p)
-    setFinalName(p.proposed_name)
-    setAdminNote('')
-    setActionError('')
-  }
-
-  function closeModal() {
-    setReviewing(null)
-    setFinalName('')
-    setAdminNote('')
-    setActionError('')
-  }
-
-  function handleApprove() {
-    if (!reviewing) return
-    setActionError('')
-    reviewMutation.mutate({
-      id: reviewing.id,
-      decision: 'APPROVE',
-      final_name: finalName.trim(),
-      admin_note: adminNote.trim(),
-    })
-  }
-
-  function handleReject() {
-    if (!reviewing) return
-    setActionError('')
-    reviewMutation.mutate({
-      id: reviewing.id,
-      decision: 'REJECT',
-      admin_note: adminNote.trim(),
-    })
-  }
-
-  const blockedByParent = reviewing?.depends_on_pending_specialty === true
 
   return (
     <DashboardLayout navItems={NAV} activeHref="/admin/specialties" role="ADMIN">
@@ -471,6 +423,9 @@ export default function AdminSpecialtiesPage() {
                           )}
                         </p>
                       )}
+                      {p.status === 'APPROVED' && p.final_name && p.final_name !== p.proposed_name && (
+                        <p className="text-xs text-[#0F6E56] mt-0.5">→ aprobada como: {p.final_name}</p>
+                      )}
                       <p className="text-xs text-[#64748B] mt-0.5">
                         {new Date(p.created_at).toLocaleString('es-BO')}
                       </p>
@@ -479,12 +434,9 @@ export default function AdminSpecialtiesPage() {
                       )}
                     </div>
                     {p.status === 'PENDING' ? (
-                      <button
-                        onClick={() => openReview(p)}
-                        className="btn-secondary text-xs py-1.5 px-3 flex-shrink-0"
-                      >
-                        {t('Revisar')}
-                      </button>
+                      <span className="text-xs text-[#64748B] flex-shrink-0 text-right">
+                        {t('Revisar desde el perfil del profesional')}
+                      </span>
                     ) : (
                       <span className={p.status === 'APPROVED' ? 'badge-green' : 'badge-red'}>
                         {p.status === 'APPROVED' ? 'Aprobada' : 'Rechazada'}
@@ -499,87 +451,6 @@ export default function AdminSpecialtiesPage() {
         </div>
         )}
       </div>
-
-      {/* Modal de revisión */}
-      {reviewing && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <TypeBadge type={reviewing.type} />
-            </div>
-            <h3 className="text-base font-semibold mb-1">{reviewing.proposed_name}</h3>
-            {reviewing.type === 'SUB_SPECIALTY' && (
-              <p className="text-xs text-[#475569] mb-3">
-                de {reviewing.parent_specialty_name || reviewing.parent_proposal_name || 'especialidad sin determinar'}
-              </p>
-            )}
-
-            {blockedByParent && (
-              <div className="mb-3">
-                <Alert
-                  type="warning"
-                  message={`Resuelve primero la propuesta de especialidad "${reviewing.parent_proposal_name}" — esta subespecialidad depende de ella.`}
-                />
-              </div>
-            )}
-
-            {actionError && (
-              <div className="mb-3">
-                <Alert type="error" message={actionError} />
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-[#475569] mb-1">
-                  {t('Nombre final (puedes corregirlo)')}
-                </label>
-                <input
-                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
-                  value={finalName}
-                  onChange={(e) => setFinalName(e.target.value)}
-                  disabled={blockedByParent}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#475569] mb-1">
-                  {t('Nota (opcional, visible para el profesional)')}
-                </label>
-                <textarea
-                  className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] resize-none"
-                  rows={2}
-                  value={adminNote}
-                  onChange={(e) => setAdminNote(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={closeModal}
-                className="flex-1 btn-secondary text-sm py-2"
-                disabled={reviewMutation.isPending}
-              >
-                {t('Cancelar')}
-              </button>
-              <button
-                onClick={handleReject}
-                className="flex-1 bg-[#FCEBEB] text-[#A32D2D] hover:bg-[#F9D8D8] rounded-lg text-sm py-2 font-medium transition-colors disabled:opacity-50"
-                disabled={reviewMutation.isPending}
-              >
-                {t('Rechazar')}
-              </button>
-              <button
-                onClick={handleApprove}
-                className="flex-1 bg-[#0F6E56] text-white hover:bg-[#085041] rounded-lg text-sm py-2 font-medium transition-colors disabled:opacity-50"
-                disabled={reviewMutation.isPending || blockedByParent || !finalName.trim()}
-              >
-                {reviewMutation.isPending ? 'Guardando...' : 'Aprobar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </DashboardLayout>
   )
 }

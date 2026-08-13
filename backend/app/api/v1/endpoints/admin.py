@@ -521,6 +521,28 @@ async def list_all_professionals(
     for prof_id, ptype, proposal_id in pending_proposals_result.all():
         pending_proposal_ids.setdefault(prof_id, {})[ptype] = proposal_id
 
+    # Última propuesta APROBADA por profesional+tipo — solo para poder
+    # mostrarle al admin "propuesto como X → aprobado como Y" cuando el
+    # nombre final quedó distinto al que el profesional escribió (ver
+    # final_name en specialties.py::review_proposal). No se usa para
+    # decidir a qué endpoint pegarle (eso sigue siendo solo
+    # pending_proposal_ids) — es puramente informativo.
+    approved_proposals_result = await db.execute(
+        select(
+            SpecialtyProposal.professional_id, SpecialtyProposal.type,
+            SpecialtyProposal.proposed_name, SpecialtyProposal.final_name,
+            SpecialtyProposal.reviewed_at,
+        ).where(SpecialtyProposal.status == ProposalStatus.APPROVED)
+        .order_by(SpecialtyProposal.reviewed_at.asc())
+    )
+    approved_proposed_name: dict[str, dict] = {}
+    for prof_id, ptype, proposed_name, final_name, _reviewed_at in approved_proposals_result.all():
+        # order_by asc + sobreescritura simple: si hubo más de una
+        # propuesta aprobada en el tiempo para el mismo profesional+tipo
+        # (ej. rechazo → nueva propuesta → aprobación), nos quedamos con
+        # la más reciente, que es la que corresponde al valor actual.
+        approved_proposed_name.setdefault(prof_id, {})[ptype] = proposed_name
+
     result_list = [
         {
             "id":                  p.id,
@@ -529,10 +551,12 @@ async def list_all_professionals(
             "specialty_status":    p.specialty_status,
             "specialty_review_note": p.specialty_review_note,
             "specialty_proposal_id": pending_proposal_ids.get(p.id, {}).get(ProposalType.SPECIALTY),
+            "specialty_proposed_name": approved_proposed_name.get(p.id, {}).get(ProposalType.SPECIALTY),
             "sub_specialty":       p.sub_specialty,
             "sub_specialty_status": p.sub_specialty_status,
             "sub_specialty_review_note": p.sub_specialty_review_note,
             "sub_specialty_proposal_id": pending_proposal_ids.get(p.id, {}).get(ProposalType.SUB_SPECIALTY),
+            "sub_specialty_proposed_name": approved_proposed_name.get(p.id, {}).get(ProposalType.SUB_SPECIALTY),
             "status":              p.status,
             "availability":        p.availability,
             "auto_availability":   p.auto_availability,

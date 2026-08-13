@@ -1054,6 +1054,7 @@ class ProposalResponse(BaseModel):
     parent_specialty_id: Optional[str]
     parent_proposal_id: Optional[str]
     status: ProposalStatus
+    final_name: Optional[str] = None
     admin_note: Optional[str]
     created_at: datetime
     reviewed_at: Optional[datetime]

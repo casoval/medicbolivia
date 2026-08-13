@@ -80,6 +80,7 @@ def _serialize_proposal(p: SpecialtyProposal, extra: Optional[dict] = None) -> d
         "parent_specialty_name": p.parent_specialty.name if p.parent_specialty else None,
         "parent_proposal_id": p.parent_proposal_id,
         "status": p.status,
+        "final_name": p.final_name,
         "admin_note": p.admin_note,
         "created_at": p.created_at.isoformat() if p.created_at else None,
         "reviewed_at": p.reviewed_at.isoformat() if p.reviewed_at else None,
@@ -704,6 +705,7 @@ async def review_proposal(
 
     # decision == "APPROVE"
     final_name = (data.final_name or proposal.proposed_name).strip()
+    proposal.final_name = final_name
 
     if proposal.type == ProposalType.SPECIALTY:
         existing = await db.execute(select(Specialty).where(Specialty.name == final_name))

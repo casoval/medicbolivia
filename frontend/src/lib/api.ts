@@ -1386,6 +1386,7 @@ export interface SpecialtyProposal {
   parent_specialty_name: string | null
   parent_proposal_id: string | null
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  final_name: string | null
   admin_note: string | null
   created_at: string
   reviewed_at: string | null

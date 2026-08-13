@@ -176,7 +176,9 @@ interface Professional {
   // universidad/años de experiencia, además *_visible). Acá en el panel
   // admin se ven siempre, junto al motivo de rechazo si corresponde.
   specialty_status?: string; specialty_review_note?: string; specialty_proposal_id?: string | null
+  specialty_proposed_name?: string | null
   sub_specialty_status?: string; sub_specialty_review_note?: string; sub_specialty_proposal_id?: string | null
+  sub_specialty_proposed_name?: string | null
   years_experience_status?: string; years_experience_review_note?: string; years_experience_visible?: boolean
   university?: string; university_status?: string; university_review_note?: string; university_visible?: boolean
   professional_license_number?: string; professional_license_status?: string; professional_license_review_note?: string
@@ -205,18 +207,41 @@ function DocBadge({ status }: { status: string }) {
 // "Nuevo en catálogo" avisa al admin que aprobar esto AGREGA un nombre
 // nuevo al catálogo oficial (viene de una propuesta), a diferencia de
 // una selección directa de algo que ya estaba en la lista.
+//
+// Solo las propuestas nuevas (isProposal) permiten corregir el nombre al
+// aprobar — value acá es directamente professional.specialty (o
+// sub_specialty), que mientras está PENDING coincide con lo que el
+// profesional escribió (ver create_proposal en el backend), así que sirve
+// como valor inicial editable. Una selección de catálogo (isProposal
+// false) no tiene nada que renombrar: ya es un nombre existente.
 function SpecialtyReviewRow({
-  label, value, status, reviewNote, isProposal, pending, onApprove, onReject,
+  label, value, status, reviewNote, isProposal, proposedName, pending, onApprove, onReject,
 }: {
   label: string
   value?: string
   status?: string
   reviewNote?: string
   isProposal: boolean
+  // Nombre original que el profesional escribió cuando esto vino de una
+  // propuesta ya resuelta — solo llega con contenido si status es
+  // APPROVED y viene de la última propuesta aprobada (ver
+  // specialty_proposed_name en admin.py). Si difiere de `value` (que ya
+  // es el nombre final), se muestra la nota "→ aprobada como: {value}".
+  proposedName?: string | null
   pending: boolean
-  onApprove: () => void
+  onApprove: (finalName?: string) => void
   onReject: () => void
 }) {
+  // Solo tiene sentido mientras hay algo que aprobar (no APPROVED todavía)
+  // y es una propuesta nueva — una selección de catálogo no tiene nombre
+  // que corregir. Se re-sincroniza con `value` cada vez que cambia (por
+  // ejemplo, si el profesional reemplaza su propuesta tras un rechazo)
+  // para no quedar con un nombre corregido obsoleto de una propuesta
+  // anterior.
+  const [finalName, setFinalName] = useState(value || '')
+  useEffect(() => { setFinalName(value || '') }, [value])
+  const showRename = isProposal && status !== 'APPROVED'
+
   if (!value) {
     return (
       <div className="bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
@@ -225,10 +250,21 @@ function SpecialtyReviewRow({
       </div>
     )
   }
+
+  function handleApprove() {
+    if (showRename) {
+      const trimmed = finalName.trim()
+      if (!trimmed) return
+      onApprove(trimmed)
+    } else {
+      onApprove()
+    }
+  }
+
   return (
     <div className="bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-xs text-[#64748B]">{label}</p>
             {status && <DocBadge status={status} />}
@@ -243,15 +279,31 @@ function SpecialtyReviewRow({
             )}
           </div>
           <p className="text-sm font-medium truncate">{value}</p>
+          {status === 'APPROVED' && proposedName && proposedName !== value && (
+            <p className="text-[10px] text-[#0F6E56] mt-0.5">→ aprobada como: {value}</p>
+          )}
           {status === 'REJECTED' && reviewNote && (
             <p className="text-[10px] text-[#A32D2D] mt-0.5">{reviewNote}</p>
+          )}
+          {showRename && (
+            <div className="mt-1.5">
+              <label className="text-[10px] text-[#64748B] block mb-0.5">
+                Nombre con el que se aprueba (puedes corregirlo)
+              </label>
+              <input
+                value={finalName}
+                onChange={(e) => setFinalName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleApprove() }}
+                className="w-full px-2 py-1 border border-[#DDE1EE] rounded text-xs focus:outline-none focus:border-[#185FA5]"
+              />
+            </div>
           )}
         </div>
         {status !== 'APPROVED' && (
           <div className="flex gap-1.5 shrink-0">
             <button
-              onClick={onApprove}
-              disabled={pending}
+              onClick={handleApprove}
+              disabled={pending || (showRename && !finalName.trim())}
               className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-2 py-1 rounded-md text-[10px] font-medium disabled:opacity-50"
             >
               Aprobar
@@ -1156,12 +1208,16 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   // dice cuál es cuál (ver admin.py, pending_proposal_ids).
   const [specialtyReviewError, setSpecialtyReviewError] = useState('')
   const reviewSpecialtyMutation = useMutation({
-    mutationFn: (payload: { type: 'SPECIALTY' | 'SUB_SPECIALTY'; decision: 'APPROVE' | 'REJECT'; note?: string }) => {
+    mutationFn: (payload: { type: 'SPECIALTY' | 'SUB_SPECIALTY'; decision: 'APPROVE' | 'REJECT'; note?: string; finalName?: string }) => {
       const proposalId = payload.type === 'SPECIALTY' ? local.specialty_proposal_id : local.sub_specialty_proposal_id
       if (proposalId) {
         return specialtiesAPI.reviewProposal(proposalId, {
           decision: payload.decision,
           admin_note: payload.note,
+          // Solo aplica al aprobar una propuesta nueva — confirmCatalogPick
+          // (rama de abajo) no tiene nada que renombrar, ya es un nombre
+          // existente del catálogo.
+          final_name: payload.finalName,
         })
       }
       return specialtiesAPI.confirmCatalogPick(local.id, {
@@ -1177,13 +1233,13 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
     onError: (err) => setSpecialtyReviewError(getErrorMessage(err)),
   })
 
-  function reviewSpecialty(type: 'SPECIALTY' | 'SUB_SPECIALTY', decision: 'APPROVE' | 'REJECT') {
+  function reviewSpecialty(type: 'SPECIALTY' | 'SUB_SPECIALTY', decision: 'APPROVE' | 'REJECT', finalName?: string) {
     if (decision === 'REJECT') {
       const note = window.prompt(t('Motivo del rechazo (visible para el profesional):')) || ''
       if (!note.trim()) return
       reviewSpecialtyMutation.mutate({ type, decision, note })
     } else {
-      reviewSpecialtyMutation.mutate({ type, decision })
+      reviewSpecialtyMutation.mutate({ type, decision, finalName })
     }
   }
 
@@ -1289,8 +1345,9 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                   status={local.specialty_status}
                   reviewNote={local.specialty_review_note}
                   isProposal={!!local.specialty_proposal_id}
+                  proposedName={local.specialty_proposed_name}
                   pending={reviewSpecialtyMutation.isPending}
-                  onApprove={() => reviewSpecialty('SPECIALTY', 'APPROVE')}
+                  onApprove={(finalName) => reviewSpecialty('SPECIALTY', 'APPROVE', finalName)}
                   onReject={() => reviewSpecialty('SPECIALTY', 'REJECT')}
                 />
 
@@ -1303,8 +1360,9 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                     status={local.sub_specialty_status}
                     reviewNote={local.sub_specialty_review_note}
                     isProposal={!!local.sub_specialty_proposal_id}
+                    proposedName={local.sub_specialty_proposed_name}
                     pending={reviewSpecialtyMutation.isPending}
-                    onApprove={() => reviewSpecialty('SUB_SPECIALTY', 'APPROVE')}
+                    onApprove={(finalName) => reviewSpecialty('SUB_SPECIALTY', 'APPROVE', finalName)}
                     onReject={() => reviewSpecialty('SUB_SPECIALTY', 'REJECT')}
                   />
                 )}

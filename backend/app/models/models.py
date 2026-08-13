@@ -442,6 +442,13 @@ class SpecialtyProposal(Base):
 
     status: Mapped[ProposalStatus] = mapped_column(SAEnum(ProposalStatus), default=ProposalStatus.PENDING)
     admin_note: Mapped[Optional[str]] = mapped_column(Text)
+    # Nombre con el que efectivamente se aprobó, si el admin lo corrigió al
+    # aprobar (ej. profesional propuso "Neurodesarrollo" y el admin lo
+    # aprobó como "Neurodesarrollo Infantojuvenil"). Null mientras está
+    # PENDING o si se rechaza. Antes esto solo quedaba en AuditLog.metadata_
+    # (invisible para el frontend salvo que se fuera a buscar el log a
+    # mano) — se persiste acá para poder mostrarlo directo en la propuesta.
+    final_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     reviewed_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
