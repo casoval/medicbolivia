@@ -16,9 +16,10 @@ import type { FAQ, FAQAudience } from '@/types'
 import { Spinner } from '@/components/ui'
 import { Reveal } from '@/components/ui/Reveal'
 import { ContactSection } from '@/components/landing/ContactSection'
+import { WhatsAppFloatingButton } from '@/components/landing/WhatsAppFloatingButton'
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
-import { MessageCircleHeart, UserCheck, Video, FileCheck2, QrCode, ShieldCheck, BadgeCheck, CalendarCheck2, Clock, Bell, Stethoscope, Mic, Cpu, Mail, Gift, Handshake, Bot, Menu, X } from 'lucide-react'
+import { MessageCircleHeart, UserCheck, Video, FileCheck2, QrCode, ShieldCheck, BadgeCheck, CalendarCheck2, Clock, Bell, Stethoscope, Mic, Cpu, Mail, Phone, Gift, Handshake, Bot, Menu, X } from 'lucide-react'
 
 const TABS: { key: FAQAudience; label: string }[] = [
   { key: 'GENERAL', label: 'General' },
@@ -785,6 +786,9 @@ function LandingFooter() {
           <a href="mailto:info@medicbolivia.com" className="flex items-center gap-1.5 hover:text-[#141820]">
             <Mail className="w-3.5 h-3.5" aria-hidden="true" /> info@medicbolivia.com
           </a>
+          <a href="https://wa.me/59168427797" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-[#141820]">
+            <Phone className="w-3.5 h-3.5" aria-hidden="true" /> +591 68427797
+          </a>
         </div>
         <div className="flex gap-4">
           <Link href="/especialidades" className="hover:text-[#141820]">{t('Especialidades')}</Link>
@@ -813,6 +817,7 @@ function LandingPage() {
       <ContactSection />
       <FAQSection />
       <LandingFooter />
+      <WhatsAppFloatingButton />
     </div>
   )
 }

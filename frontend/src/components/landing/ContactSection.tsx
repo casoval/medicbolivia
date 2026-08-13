@@ -149,6 +149,9 @@ export function ContactSection() {
           {t('¿Tenés dudas, sos profesional de salud, o necesitás soporte? Escribinos y te respondemos a')}{' '}
           <a href="mailto:info@medicbolivia.com" className="text-[#0F6E56] font-medium hover:underline">
             info@medicbolivia.com
+          </a>{' '}{t('o por WhatsApp al')}{' '}
+          <a href="https://wa.me/59168427797" target="_blank" rel="noopener noreferrer" className="text-[#0F6E56] font-medium hover:underline">
+            +591 68427797
           </a>.
         </p>
       </Reveal>
