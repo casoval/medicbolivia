@@ -65,8 +65,13 @@ export interface Professional {
   id: string
   first_name: string
   last_name: string
-  specialty: string
-  sub_specialties: string[]
+  // Nullable: hasta que un admin no confirma la especialidad, el
+  // profesional no puede quedar visible/agendable para pacientes (ver
+  // check_and_approve_professional en el backend) — en la práctica esto
+  // casi nunca llega vacío en el directorio público, pero sí puede
+  // llegar así en vistas de admin/perfil propio mientras está pendiente.
+  specialty?: string
+  sub_specialty?: string
   department?: string
   bio?: string
   languages: string[]

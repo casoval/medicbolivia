@@ -6,7 +6,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
 import { Alert, SectionTitle } from '@/components/ui'
-import { professionalsAPI, api, getErrorMessage } from '@/lib/api'
+import { professionalsAPI, specialtiesAPI, api, getErrorMessage } from '@/lib/api'
 import type { BankAccount, BankAccountUpdateRequest } from '@/lib/api'
 import { NotificationsBell } from '@/components/shared/NotificationsBell'
 import { ChangePasswordSection } from '@/components/shared/ChangePasswordSection'
@@ -24,22 +24,27 @@ const DOCUMENTS = [
   { type: 'CI_BACK',            label: 'Cédula de identidad — reverso',    hint: 'Sin reflejos ni bordes cortados' },
   { type: 'PROFESSIONAL_TITLE', label: 'Título en Provisión Nacional',     hint: 'Título universitario habilitante para ejercer' },
   { type: 'HEALTH_MINISTRY',    label: 'Matrícula Profesional emitida por el Ministerio de Salud', hint: 'Matrícula vigente del Ministerio de Salud de Bolivia' },
-  { type: 'SPECIALTY_CERT',     label: 'Respaldo de Especialidad y/o Subespecialidad', hint: 'Certificado, diploma o título que respalde tu especialidad o subespecialidad' },
+  { type: 'SPECIALTY_CERT',     label: 'Respaldo de Especialidad',        hint: 'Certificado, diploma o título que respalde tu especialidad' },
+  { type: 'SUBSPECIALTY_CERT',  label: 'Respaldo de Subespecialidad',     hint: 'Certificado, diploma o título que respalde tu subespecialidad (solo si agregaste una)' },
   { type: 'SELFIE_WITH_CI',     label: 'Selfie sosteniendo tu CI',         hint: 'Tu cara y la CI deben ser legibles' },
 ]
 
-// Pasos que de verdad habilitan la cuenta — debe coincidir 1 a 1 con el set
-// `required` de PATCH /admin/documents/{id}/review en el backend (ver
-// admin.py). SPECIALTY_CERT queda afuera a propósito: es opcional. El
-// `anchor` apunta al id de la tarjeta donde el profesional puede resolver
-// cada paso, para el indicador de progreso de arriba de todo.
+// Pasos que de verdad habilitan la cuenta — debe coincidir 1 a 1 con
+// REQUIRED_DOC_TYPES + specialty_status/professional_license_status en
+// app/services/professional_approval.py (backend). Especialidad va
+// primero porque, a diferencia de un documento, se completa desde la
+// sección de arriba de esta misma página (section-especialidad), no
+// subiendo un archivo. El `anchor` apunta al id de la tarjeta donde el
+// profesional puede resolver cada paso, para el indicador de progreso.
 const REQUIRED_STEPS: { type: string; label: string; anchor: string }[] = [
+  { type: 'SPECIALTY',          label: 'Especialidad',                     anchor: 'section-especialidad' },
   { type: 'CI_FRONT',           label: 'Cédula de identidad (anverso)',    anchor: 'section-documentos' },
   { type: 'CI_BACK',            label: 'Cédula de identidad (reverso)',    anchor: 'section-documentos' },
   { type: 'PROFESSIONAL_TITLE', label: 'Título en Provisión Nacional',     anchor: 'section-documentos' },
   { type: 'HEALTH_MINISTRY',    label: 'Matrícula Profesional (Min. de Salud)', anchor: 'section-documentos' },
   { type: 'SELFIE_WITH_CI',     label: 'Selfie sosteniendo tu CI',         anchor: 'section-documentos' },
   { type: 'SIGNATURE',          label: 'Firma para recetas médicas',       anchor: 'section-recetas-seguridad' },
+  { type: 'PROFESSIONAL_LICENSE', label: 'Matrícula profesional (número)', anchor: 'section-especialidad' },
 ]
 
 // Idiomas más comunes en Bolivia, para elegir con un toque en vez de
@@ -53,11 +58,22 @@ const COMMON_LANGUAGES = [
 // experiencia, universidad, matrícula profesional): mientras un admin no
 // los apruebe, o si están vacíos, el paciente no los ve — este badge le
 // avisa al profesional en qué estado está cada uno.
-function VerifyBadge({ hasValue, verified, t }: { hasValue: boolean; verified: boolean; t: (s: string) => string }) {
+function VerifyBadge({ hasValue, status, reviewNote, t }: { hasValue: boolean; status: string; reviewNote?: string | null; t: (s: string) => string }) {
   if (!hasValue) return null
-  return verified ? (
-    <span className="ml-2 badge-green align-middle">{t('✓ Verificado')}</span>
-  ) : (
+  if (status === 'APPROVED') {
+    return <span className="ml-2 badge-green align-middle">{t('✓ Verificado')}</span>
+  }
+  if (status === 'REJECTED') {
+    return (
+      <span className="ml-2 inline-flex items-center gap-1">
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-[#FCEBEB] text-[#A32D2D] border-[#F09595] align-middle">
+          {t('Rechazado')}
+        </span>
+        {reviewNote && <span className="text-[10px] text-[#A32D2D]">— {reviewNote}</span>}
+      </span>
+    )
+  }
+  return (
     <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-[#FEF3E0] text-[#854F0B] border-[#F2D49A] align-middle">
       {t('Pendiente de verificación')}
     </span>
@@ -239,16 +255,93 @@ export default function ProfilePage() {
   // esta carga, así que no hace falta guardar un "valor original" aparte.
   const [universityLocked, setUniversityLocked] = useState(false)
   const [licenseLocked, setLicenseLocked] = useState(false)
+
+  // ── Especialidad / subespecialidad ──────────────────────────────
+  // Solo UNA de cada una por profesional. Elegir del catálogo o
+  // proponer una nueva (si no está en la lista) queda PENDING hasta que
+  // un admin lo confirme/apruebe — ver section-especialidad más abajo.
+  const NOT_LISTED = '__NOT_LISTED__'
+  const [specialtyCatalog, setSpecialtyCatalog] = useState<{ id: string; name: string }[]>([])
+  const [subSpecialtyCatalog, setSubSpecialtyCatalog] = useState<{ id: string; name: string }[]>([])
+  const [specialtyChoice, setSpecialtyChoice] = useState('') // id del catálogo o NOT_LISTED
+  const [specialtyProposalText, setSpecialtyProposalText] = useState('')
+  const [subSpecialtyChoice, setSubSpecialtyChoice] = useState('')
+  const [subSpecialtyProposalText, setSubSpecialtyProposalText] = useState('')
+  const [specialtySaving, setSpecialtySaving] = useState(false)
+  const [specialtyError, setSpecialtyError] = useState('')
+  const [specialtySuccess, setSpecialtySuccess] = useState('')
+
+  useEffect(() => {
+    specialtiesAPI.list().then(setSpecialtyCatalog).catch(() => {})
+  }, [])
+
+  // (el useEffect que carga subespecialidades del catálogo se define más
+  // abajo, después de declarar registrationData — ver cerca de esa
+  // declaración)
+
+  async function saveSpecialty() {
+    setSpecialtyError('')
+    setSpecialtySuccess('')
+    if (!specialtyChoice) { setSpecialtyError(t('Elige una especialidad')); return }
+    if (specialtyChoice === NOT_LISTED && !specialtyProposalText.trim()) {
+      setSpecialtyError(t('Escribe el nombre de tu especialidad')); return
+    }
+    setSpecialtySaving(true)
+    try {
+      if (specialtyChoice === NOT_LISTED) {
+        await specialtiesAPI.createProposal({ type: 'SPECIALTY', proposed_name: specialtyProposalText.trim() })
+      } else {
+        await specialtiesAPI.selectFromCatalog({ type: 'SPECIALTY', catalog_id: specialtyChoice })
+      }
+      setSpecialtySuccess(t('Especialidad guardada. Un administrador la confirmará pronto.'))
+      const data = await professionalsAPI.getMyProfile()
+      setRegistrationData(data as any)
+    } catch (err) {
+      setSpecialtyError(getErrorMessage(err))
+    } finally {
+      setSpecialtySaving(false)
+    }
+  }
+
+  async function saveSubSpecialty() {
+    setSpecialtyError('')
+    setSpecialtySuccess('')
+    if (!subSpecialtyChoice) { setSpecialtyError(t('Elige una subespecialidad')); return }
+    if (subSpecialtyChoice === NOT_LISTED && !subSpecialtyProposalText.trim()) {
+      setSpecialtyError(t('Escribe el nombre de tu subespecialidad')); return
+    }
+    setSpecialtySaving(true)
+    try {
+      if (subSpecialtyChoice === NOT_LISTED) {
+        await specialtiesAPI.createProposal({ type: 'SUB_SPECIALTY', proposed_name: subSpecialtyProposalText.trim() })
+      } else {
+        await specialtiesAPI.selectFromCatalog({ type: 'SUB_SPECIALTY', catalog_id: subSpecialtyChoice })
+      }
+      setSpecialtySuccess(t('Subespecialidad guardada. Un administrador la confirmará pronto.'))
+      setSubSpecialtyChoice('')
+      setSubSpecialtyProposalText('')
+      const data = await professionalsAPI.getMyProfile()
+      setRegistrationData(data as any)
+    } catch (err) {
+      setSpecialtyError(getErrorMessage(err))
+    } finally {
+      setSpecialtySaving(false)
+    }
+  }
   // Visibilidad ante el paciente, controlada por el profesional — solo
   // aplica una vez que el dato está verificado (ver checkboxes en el JSX).
   const [yearsVisible, setYearsVisible] = useState(true)
   const [universityVisible, setUniversityVisible] = useState(true)
   // Estado de verificación de los 3 campos de arriba (los llena el admin,
-  // aquí solo se muestran como badge informativo — de solo lectura)
+  // aquí solo se muestran como badge informativo — de solo lectura, con
+  // motivo si fue rechazado)
   const [verification, setVerification] = useState({
-    years_experience_verified: false,
-    university_verified: false,
-    professional_license_verified: false,
+    years_experience_status: 'PENDING',
+    university_status: 'PENDING',
+    professional_license_status: 'PENDING',
+    years_experience_review_note: null as string | null,
+    university_review_note: null as string | null,
+    professional_license_review_note: null as string | null,
   })
   const [priceGeneral, setPriceGeneral]     = useState('')
   const [priceUrgent, setPriceUrgent]       = useState('')
@@ -286,7 +379,8 @@ export default function ProfilePage() {
   // Datos de registro — solo lectura, para que el profesional recuerde qué colocó
   const [registrationData, setRegistrationData] = useState<{
     first_name?: string; last_name?: string; ci?: string; birth_date?: string
-    department?: string; gender?: string; specialty?: string; sub_specialties?: string[]
+    department?: string; gender?: string; specialty?: string; sub_specialty?: string
+    specialty_status?: string; sub_specialty_status?: string
     email?: string; phone?: string; cmb_matricula?: string; sedes_number?: string
   } | null>(null)
   // Status de habilitación del profesional ('PENDING' | 'APPROVED' | 'REJECTED'),
@@ -294,6 +388,18 @@ export default function ProfilePage() {
   // REQUIRED_STEPS más abajo. No confundir con DocRecord.status, que es el
   // estado de cada documento individual.
   const [professionalStatus, setProfessionalStatus] = useState<string | null>(null)
+
+  // Solo se cargan subespecialidades cuando ya hay una especialidad
+  // APROBADA (no tiene sentido elegir subespecialidad de algo que
+  // todavía ni siquiera confirmó un admin).
+  useEffect(() => {
+    if (registrationData?.specialty && registrationData.specialty_status === 'APPROVED') {
+      const catalogEntry = specialtyCatalog.find((s) => s.name === registrationData!.specialty)
+      if (catalogEntry) {
+        specialtiesAPI.listSubSpecialties(catalogEntry.id).then(setSubSpecialtyCatalog).catch(() => setSubSpecialtyCatalog([]))
+      }
+    }
+  }, [registrationData?.specialty, registrationData?.specialty_status, specialtyCatalog])
 
   // Estado real de los documentos guardado en el backend (aprobado/rechazado/pendiente)
   const { data: myDocs = [], refetch: refetchDocs } = useQuery({
@@ -372,10 +478,21 @@ export default function ProfilePage() {
     return myDocs.find((d) => d.doc_type === type)
   }
 
-  // Resumen de los 6 pasos obligatorios (ver REQUIRED_STEPS), para el
-  // indicador de arriba de todo. 'missing' = nunca lo subió; el resto
-  // refleja 1 a 1 el status del ProfessionalDoc correspondiente.
+  // Resumen de los pasos obligatorios (ver REQUIRED_STEPS), para el
+  // indicador de arriba de todo. SPECIALTY y PROFESSIONAL_LICENSE no son
+  // documentos (ProfessionalDoc) — su estado sale de registrationData en
+  // vez de myDocs. 'missing' = nunca lo cargó.
   const stepStatuses = REQUIRED_STEPS.map((step) => {
+    if (step.type === 'SPECIALTY') {
+      const status: 'missing' | 'PENDING' | 'APPROVED' | 'REJECTED' =
+        !registrationData?.specialty ? 'missing' : ((registrationData.specialty_status as any) || 'PENDING')
+      return { ...step, status, reviewNote: null }
+    }
+    if (step.type === 'PROFESSIONAL_LICENSE') {
+      const status: 'missing' | 'PENDING' | 'APPROVED' | 'REJECTED' =
+        !licenseNumber.trim() ? 'missing' : ((verification.professional_license_status as any) || 'PENDING')
+      return { ...step, status, reviewNote: verification.professional_license_review_note }
+    }
     const record = docRecordOf(step.type)
     const status: 'missing' | 'PENDING' | 'APPROVED' | 'REJECTED' = record ? record.status : 'missing'
     return { ...step, status, reviewNote: record?.review_note ?? null }
@@ -414,14 +531,21 @@ export default function ProfilePage() {
         if (parsed.length > 0) setLangs(parsed)
       }
       if (data.years_experience !== undefined && data.years_experience !== null) setYears(String(data.years_experience))
-      if (data.university) { setUniversity(data.university); setUniversityLocked(true) }
-      if (data.professional_license_number) { setLicenseNumber(data.professional_license_number); setLicenseLocked(true) }
+      // university/license se bloquean para autoedición SOLO si ya fueron
+      // aprobados (ver update_profile en el backend) — si están PENDING o
+      // REJECTED, el profesional los sigue viendo editables para poder
+      // corregirlos.
+      if (data.university) { setUniversity(data.university); setUniversityLocked(data.university_status === 'APPROVED') }
+      if (data.professional_license_number) { setLicenseNumber(data.professional_license_number); setLicenseLocked(data.professional_license_status === 'APPROVED') }
       if (data.years_experience_visible !== undefined) setYearsVisible(!!data.years_experience_visible)
       if (data.university_visible !== undefined)       setUniversityVisible(!!data.university_visible)
       setVerification({
-        years_experience_verified: !!data.years_experience_verified,
-        university_verified: !!data.university_verified,
-        professional_license_verified: !!data.professional_license_verified,
+        years_experience_status: data.years_experience_status || 'PENDING',
+        university_status: data.university_status || 'PENDING',
+        professional_license_status: data.professional_license_status || 'PENDING',
+        years_experience_review_note: data.years_experience_review_note ?? null,
+        university_review_note: data.university_review_note ?? null,
+        professional_license_review_note: data.professional_license_review_note ?? null,
       })
       if (data.photo_url)        setPhotoPreview(data.photo_url)
       if (data.signature_url)    setSignatureUrl(data.signature_url)
@@ -761,18 +885,6 @@ export default function ProfilePage() {
                   <p className="text-sm">{registrationData.gender || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#475569]">{t('Especialidad')}</p>
-                  <p className="text-sm">{registrationData.specialty || '—'}</p>
-                </div>
-                <div className="sm:col-span-2 md:col-span-1">
-                  <p className="text-xs font-medium text-[#475569]">{t('Subespecialidades')}</p>
-                  <p className="text-sm">
-                    {registrationData.sub_specialties && registrationData.sub_specialties.length > 0
-                      ? registrationData.sub_specialties.join(', ')
-                      : '—'}
-                  </p>
-                </div>
-                <div>
                   <p className="text-xs font-medium text-[#475569]">{t('Correo electrónico')}</p>
                   <p className="text-sm">{registrationData.email || '—'}</p>
                 </div>
@@ -795,6 +907,149 @@ export default function ProfilePage() {
               </div>
             </div>
           )}
+
+          {/* Especialidad / subespecialidad — obligatoria/opcional, con su
+              propio flujo de confirmación de admin (ver saveSpecialty y
+              saveSubSpecialty más arriba). Antes esto se cargaba en el
+              registro sin control de nadie; ahora vive acá y bloquea
+              quedar visible para pacientes hasta que se confirme (ver
+              check_and_approve_professional en el backend). */}
+          <div className="card" id="section-especialidad">
+            <SectionTitle>{t('Especialidad')}</SectionTitle>
+
+            {specialtyError && <div className="mb-3"><Alert type="error" message={specialtyError} /></div>}
+            {specialtySuccess && <div className="mb-3"><Alert type="success" message={specialtySuccess} /></div>}
+
+            {/* Especialidad — obligatoria */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-sm font-medium">{t('Tu especialidad')} <span className="text-[#E24B4A]">*</span></p>
+                {registrationData?.specialty && (
+                  <VerifyBadge
+                    hasValue={true}
+                    status={registrationData.specialty_status || 'PENDING'}
+                    t={t}
+                  />
+                )}
+              </div>
+
+              {registrationData?.specialty ? (
+                <div className="bg-[#F5F6FA] border border-[#DDE1EE] rounded-lg px-3 py-2.5">
+                  <p className="text-sm font-medium">{registrationData.specialty}</p>
+                  {registrationData.specialty_status === 'REJECTED' && (
+                    <p className="text-xs text-[#A32D2D] mt-1">
+                      {t('Fue rechazada por un administrador. Elige otra especialidad abajo para volver a intentarlo.')}
+                    </p>
+                  )}
+                  {registrationData.specialty_status === 'PENDING' && (
+                    <p className="text-xs text-[#854F0B] mt-1">{t('Pendiente de confirmación de un administrador.')}</p>
+                  )}
+                </div>
+              ) : null}
+
+              {/* El selector se muestra siempre que no hay especialidad
+                  APROBADA — así, si fue rechazada, el profesional puede
+                  elegir otra sin trabas. */}
+              {registrationData?.specialty_status !== 'APPROVED' && (
+                <div className="mt-2 space-y-2">
+                  <select
+                    value={specialtyChoice}
+                    onChange={(e) => setSpecialtyChoice(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm bg-white"
+                  >
+                    <option value="">{t('Selecciona tu especialidad...')}</option>
+                    {specialtyCatalog.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                    <option value={NOT_LISTED}>{t('Mi especialidad no está en la lista')}</option>
+                  </select>
+
+                  {specialtyChoice === NOT_LISTED && (
+                    <input
+                      value={specialtyProposalText}
+                      onChange={(e) => setSpecialtyProposalText(e.target.value)}
+                      placeholder={t('Escribe el nombre de tu especialidad')}
+                      className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm bg-white"
+                    />
+                  )}
+
+                  <button
+                    onClick={saveSpecialty}
+                    disabled={specialtySaving || !specialtyChoice}
+                    className="bg-[#0F6E56] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                  >
+                    {specialtySaving ? t('Guardando...') : t('Guardar especialidad')}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Subespecialidad — opcional, solo se habilita si ya hay
+                especialidad aprobada. Solo se permite UNA. */}
+            {registrationData?.specialty_status === 'APPROVED' && (
+              <div className="pt-3 border-t border-[#DDE1EE]">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-sm font-medium">{t('Subespecialidad (opcional)')}</p>
+                  {registrationData?.sub_specialty && (
+                    <VerifyBadge
+                      hasValue={true}
+                      status={registrationData.sub_specialty_status || 'PENDING'}
+                      t={t}
+                    />
+                  )}
+                </div>
+
+                {registrationData?.sub_specialty ? (
+                  <div className="bg-[#F5F6FA] border border-[#DDE1EE] rounded-lg px-3 py-2.5 mb-2">
+                    <p className="text-sm font-medium">{registrationData.sub_specialty}</p>
+                    {registrationData.sub_specialty_status === 'REJECTED' && (
+                      <p className="text-xs text-[#A32D2D] mt-1">
+                        {t('Fue rechazada por un administrador. Puedes elegir otra abajo.')}
+                      </p>
+                    )}
+                    {registrationData.sub_specialty_status === 'PENDING' && (
+                      <p className="text-xs text-[#854F0B] mt-1">{t('Pendiente de confirmación de un administrador.')}</p>
+                    )}
+                  </div>
+                ) : null}
+
+                {registrationData?.sub_specialty_status !== 'APPROVED' && (
+                  <div className="space-y-2">
+                    <select
+                      value={subSpecialtyChoice}
+                      onChange={(e) => setSubSpecialtyChoice(e.target.value)}
+                      className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm bg-white"
+                    >
+                      <option value="">{t('+ Agregar subespecialidad...')}</option>
+                      {subSpecialtyCatalog.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                      <option value={NOT_LISTED}>{t('Mi subespecialidad no está en la lista')}</option>
+                    </select>
+
+                    {subSpecialtyChoice === NOT_LISTED && (
+                      <input
+                        value={subSpecialtyProposalText}
+                        onChange={(e) => setSubSpecialtyProposalText(e.target.value)}
+                        placeholder={t('Escribe el nombre de tu subespecialidad')}
+                        className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm bg-white"
+                      />
+                    )}
+
+                    {subSpecialtyChoice && (
+                      <button
+                        onClick={saveSubSpecialty}
+                        disabled={specialtySaving}
+                        className="bg-[#0F6E56] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        {specialtySaving ? t('Guardando...') : t('Guardar subespecialidad')}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Documentos de verificación */}
           <div className="card" id="section-documentos">
@@ -949,7 +1204,7 @@ export default function ProfilePage() {
               <div>
                 <label className="block text-xs font-medium text-[#475569] mb-1">
                   {t('Matrícula profesional (Ministerio de Salud)')}
-                  <VerifyBadge hasValue={licenseNumber.trim() !== ''} verified={verification.professional_license_verified} t={t} />
+                  <VerifyBadge hasValue={licenseNumber.trim() !== ''} status={verification.professional_license_status} reviewNote={verification.professional_license_review_note} t={t} />
                 </label>
                 <input
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] disabled:bg-[#F5F6FA] disabled:text-[#64748B]"
@@ -1248,7 +1503,7 @@ export default function ProfilePage() {
               <div>
                 <label className="block text-xs font-medium text-[#475569] mb-1">
                   {t('Años de experiencia')}
-                  <VerifyBadge hasValue={years.trim() !== ''} verified={verification.years_experience_verified} t={t} />
+                  <VerifyBadge hasValue={years.trim() !== ''} status={verification.years_experience_status} reviewNote={verification.years_experience_review_note} t={t} />
                 </label>
                 <input
                   type="number" min={0} max={50}
@@ -1260,7 +1515,7 @@ export default function ProfilePage() {
                 <p className="text-xs text-[#64748B] mt-1">
                   {t('Si lo dejas vacío, o mientras no esté verificado, el paciente no lo verá. Lo puedes actualizar cuando quieras — cada cambio vuelve a pasar por revisión.')}
                 </p>
-                {years.trim() !== '' && verification.years_experience_verified && (
+                {years.trim() !== '' && verification.years_experience_status === 'APPROVED' && (
                   <label className="flex items-center gap-2 mt-2 text-xs text-[#475569]">
                     <input
                       type="checkbox"
@@ -1275,7 +1530,7 @@ export default function ProfilePage() {
               <div>
                 <label className="block text-xs font-medium text-[#475569] mb-1">
                   {t('Universidad')}
-                  <VerifyBadge hasValue={university.trim() !== ''} verified={verification.university_verified} t={t} />
+                  <VerifyBadge hasValue={university.trim() !== ''} status={verification.university_status} reviewNote={verification.university_review_note} t={t} />
                 </label>
                 <input
                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] disabled:bg-[#F5F6FA] disabled:text-[#64748B]"
@@ -1289,7 +1544,7 @@ export default function ProfilePage() {
                     ? t('Ya quedó registrada y no se puede modificar — es un dato que no cambia. Si necesitas corregirla, contacta a soporte.')
                     : t('Se verifica contra tu Título en Provisión Nacional — si la dejas vacía, o mientras no esté verificada, el paciente no la verá. Una vez guardada, no se podrá volver a editar.')}
                 </p>
-                {university.trim() !== '' && verification.university_verified && (
+                {university.trim() !== '' && verification.university_status === 'APPROVED' && (
                   <label className="flex items-center gap-2 mt-2 text-xs text-[#475569]">
                     <input
                       type="checkbox"

@@ -154,16 +154,11 @@ async def _search_professionals(db: AsyncSession, specialty: str) -> dict:
             Professional.status == ProfessionalStatus.APPROVED,
             (
                 func.lower(Professional.specialty).contains(match_name.lower())
-                # .any(match_name) comparaba exacto (case-sensitive) contra el
-                # array — un profesional con la subespecialidad guardada como
-                # "Electrofisiología Cardíaca" nunca matcheaba si el término
-                # venía como "electrofisiología cardíaca". El EXISTS/unnest de
-                # abajo compara en minúsculas, igual que ya se hace arriba
-                # con specialty.
-                | text(
-                    "EXISTS (SELECT 1 FROM unnest(professionals.sub_specialties) s "
-                    "WHERE lower(s) = lower(:match_name))"
-                ).bindparams(match_name=match_name)
+                # sub_specialty ahora es un campo único de texto (ya no un
+                # array — un profesional solo puede tener una
+                # subespecialidad), así que la comparación en minúsculas es
+                # directa, sin necesidad de unnest/EXISTS.
+                | func.lower(Professional.sub_specialty).contains(match_name.lower())
             ),
         )
         result = await db.execute(query)

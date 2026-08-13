@@ -1,10 +1,10 @@
 'use client'
 // src/app/auth/register/professional/page.tsx
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { authAPI, specialtiesAPI, getErrorMessage } from '@/lib/api'
+import { authAPI, getErrorMessage } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { PhoneInput } from '@/components/ui/PhoneInput'
 import { PhoneVerification } from '@/components/ui/PhoneVerification'
@@ -12,21 +12,21 @@ import { SpanishBirthDatePicker } from '@/components/ui/SpanishDateTimePicker'
 import { PasswordInput } from '@/components/ui'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
-const NOT_LISTED = '__NOT_LISTED__'
+// Especialidad, subespecialidad e idiomas de atención se sacaron de este
+// formulario (ago-2026): antes se cargaban acá sin que nadie los
+// confirmara, y de paso quedaban "guardados" desde el minuto uno aunque
+// la propuesta de especialidad todavía no hubiera sido aprobada por un
+// admin. Ahora los tres se completan después, ya con sesión iniciada,
+// desde /professional/onboarding y /professional/profile — donde además
+// especialidad y matrícula bloquean quedar visible para pacientes hasta
+// que un admin las confirme (ver check_and_approve_professional en el
+// backend). Esto también simplifica el registro: menos campos para
+// decidir antes de siquiera tener cuenta.
 
 const DEPARTMENTS = [
   'La Paz', 'Santa Cruz', 'Cochabamba', 'Oruro', 'Potosí',
   'Tarija', 'Beni', 'Pando', 'Chuquisaca'
 ]
-
-const LANGUAGES = [
-  'Español', 'Aymara', 'Quechua', 'Guaraní', 'Inglés', 'Portugués', 'Francés',
-]
-
-interface CatalogItem {
-  id: string
-  name: string
-}
 
 export default function RegisterProfessionalPage() {
   const router = useRouter()
@@ -37,78 +37,15 @@ export default function RegisterProfessionalPage() {
     phone: '', email: '', password: '', confirm_password: '',
     first_name: '', last_name: '', ci: '',
     birth_date: '', department: '', gender: '',
-    specialty: '',
   })
-
-  // Idiomas: chips multi-select + opción de agregar uno que no esté listado
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['Español'])
-  const [languageNotListed, setLanguageNotListed] = useState(false)
-  const [customLanguage, setCustomLanguage] = useState('')
-
-  // Catálogo cargado del backend
-  const [specialties, setSpecialties] = useState<CatalogItem[]>([])
-  const [subSpecialties, setSubSpecialties] = useState<CatalogItem[]>([])
-  const [loadingCatalog, setLoadingCatalog] = useState(true)
-
-  // Propuesta de especialidad nueva (cuando no está en la lista)
-  const [specialtyNotListed, setSpecialtyNotListed] = useState(false)
-  const [specialtyProposal, setSpecialtyProposal] = useState('')
-
-  // Subespecialidad: selección única (lista) del catálogo dependiente
-  const [selectedSubSpecialty, setSelectedSubSpecialty] = useState('')
-  const [subSpecialtyNotListed, setSubSpecialtyNotListed] = useState(false)
-  const [subSpecialtyProposal, setSubSpecialtyProposal] = useState('')
 
   const [error, setError]   = useState('')
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // Carga el catálogo de especialidades al montar
-  useEffect(() => {
-    specialtiesAPI.list()
-      .then(setSpecialties)
-      .catch(() => setError(t('No se pudo cargar el catálogo de especialidades. Recarga la página.')))
-      .finally(() => setLoadingCatalog(false))
-  }, [])
-
-  // Carga subespecialidades cada vez que cambia la especialidad elegida
-  // (solo si es una especialidad real del catálogo, no una propuesta nueva)
-  useEffect(() => {
-    setSelectedSubSpecialty('')
-    setSubSpecialtyNotListed(false)
-    setSubSpecialtyProposal('')
-    setSubSpecialties([])
-
-    if (form.specialty && form.specialty !== NOT_LISTED) {
-      specialtiesAPI.listSubSpecialties(form.specialty)
-        .then(setSubSpecialties)
-        .catch(() => setSubSpecialties([]))
-    }
-  }, [form.specialty])
-
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
   }
-
-  function handleSpecialtyChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const value = e.target.value
-    setSpecialtyNotListed(value === NOT_LISTED)
-    setForm((prev) => ({ ...prev, specialty: value }))
-  }
-
-  function handleSubSpecialtyChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const value = e.target.value
-    setSubSpecialtyNotListed(value === NOT_LISTED)
-    setSelectedSubSpecialty(value === NOT_LISTED ? '' : value)
-  }
-
-  function toggleLanguage(name: string) {
-    setSelectedLanguages((prev) =>
-      prev.includes(name) ? prev.filter((l) => l !== name) : [...prev, name]
-    )
-  }
-
-  const hasNewProposal = specialtyNotListed || subSpecialtyNotListed
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -120,8 +57,6 @@ export default function RegisterProfessionalPage() {
     if (!form.ci.trim()) missing.push(t('Cédula de identidad'))
     if (!form.birth_date) missing.push(t('Fecha de nacimiento'))
     if (!form.department) missing.push(t('Departamento'))
-    if (!form.specialty) missing.push(t('Especialidad'))
-    if (selectedLanguages.length === 0 && !customLanguage.trim()) missing.push(t('Idiomas de atención'))
     if (!form.phone.trim()) missing.push(t('Número de celular'))
     if (!form.password) missing.push(t('Contraseña'))
     if (!form.confirm_password) missing.push(t('Confirmar contraseña'))
@@ -131,31 +66,7 @@ export default function RegisterProfessionalPage() {
     }
 
     if (form.password !== form.confirm_password) { setError(t('Las contraseñas no coinciden')); return }
-
-    if (specialtyNotListed && !specialtyProposal.trim()) {
-      setError(t('Escribe el nombre de tu especialidad')); return
-    }
-    if (subSpecialtyNotListed && !subSpecialtyProposal.trim()) {
-      setError(t('Escribe el nombre de tu subespecialidad')); return
-    }
-
     if (!phoneVerified) { setError(t('Verificá tu número de celular por WhatsApp antes de continuar')); return }
-
-    // Si la especialidad es nueva, se manda el texto propuesto como
-    // specialty del registro — el backend la deja en revisión apenas
-    // se crea la propuesta más abajo. El catálogo guarda el id real,
-    // así que acá distinguimos cuál de los dos mandar.
-    const specialtyToRegister = specialtyNotListed
-      ? specialtyProposal.trim()
-      : specialties.find((s) => s.id === form.specialty)?.name || form.specialty
-
-    // Subespecialidad ya aprobada (nombre, tal como espera el backend
-    // de registro). La propuesta nueva, si hay, se manda aparte después.
-    const subSpecialtyNames = selectedSubSpecialty ? [selectedSubSpecialty] : []
-
-    const finalLanguages = customLanguage.trim()
-      ? [...selectedLanguages, customLanguage.trim()]
-      : selectedLanguages
 
     setLoading(true)
     try {
@@ -169,38 +80,13 @@ export default function RegisterProfessionalPage() {
         birth_date: form.birth_date,
         department: form.department,
         gender: form.gender || undefined,
-        specialty: specialtyToRegister,
-        sub_specialties: subSpecialtyNames,
-        languages: finalLanguages,
       })
       const { user } = res.data
       setAuthenticated(user)
 
-      // A partir de acá ya hay sesión iniciada (cookie httpOnly seteada
-      // por el backend), así que se pueden crear las propuestas
-      // (requieren estar autenticado como profesional).
-      let specialtyProposalId: string | undefined
-
-      if (specialtyNotListed) {
-        const result = await specialtiesAPI.createProposal({
-          type: 'SPECIALTY',
-          proposed_name: specialtyProposal.trim(),
-        })
-        specialtyProposalId = result?.proposal?.id
-      }
-
-      if (subSpecialtyNotListed) {
-        await specialtiesAPI.createProposal({
-          type: 'SUB_SPECIALTY',
-          proposed_name: subSpecialtyProposal.trim(),
-          // Si la especialidad también es nueva, la subespecialidad
-          // depende de esa otra propuesta en vez de un id del catálogo.
-          ...(specialtyNotListed
-            ? { parent_proposal_id: specialtyProposalId }
-            : { parent_specialty_id: form.specialty }),
-        })
-      }
-
+      // El onboarding es donde ahora se completa especialidad
+      // (obligatoria), subespecialidad (opcional) e idiomas, junto con
+      // los documentos — antes de esto el registro ya está terminado.
       router.push('/professional/onboarding')
     } catch (err) {
       setError(getErrorMessage(err))
@@ -225,7 +111,7 @@ export default function RegisterProfessionalPage() {
           <div className="bg-[#E6F1FB] border border-[#85B7EB] rounded-xl px-4 py-3 mb-5">
             <p className="text-xs text-[#0C447C] font-medium mb-1">📋 {t('Tu perfil será verificado')}</p>
             <p className="text-xs text-[#185FA5]">
-              {t('Deberás subir tus documentos profesionales. La verificación toma entre 24 y 72 horas hábiles.')}
+              {t('Después de crear tu cuenta completarás tu especialidad y subirás tus documentos. La verificación toma entre 24 y 72 horas hábiles.')}
             </p>
           </div>
 
@@ -281,158 +167,6 @@ export default function RegisterProfessionalPage() {
                   <option value="Otro">{t('Otro')}</option>
                 </select>
               </div>
-            </div>
-
-            {/* Especialidad */}
-            <div>
-              <label className="block text-xs font-medium text-[#475569] mb-1">{t('Especialidad')} <span className="text-[#E24B4A]">*</span></label>
-              <select
-                name="specialty"
-                className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
-                value={form.specialty}
-                onChange={handleSpecialtyChange}
-                disabled={loadingCatalog}
-                required
-              >
-                <option value="">{loadingCatalog ? t('Cargando especialidades...') : t('Seleccionar especialidad...')}</option>
-                {specialties.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                <option value={NOT_LISTED}>→ {t('No encuentro mi especialidad')}</option>
-              </select>
-
-              {specialtyNotListed && (
-                <div className="mt-2">
-                  <input
-                    className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
-                    placeholder={t('Escribe el nombre de tu especialidad')}
-                    value={specialtyProposal}
-                    onChange={(e) => setSpecialtyProposal(e.target.value)}
-                    required
-                  />
-                  <p className="text-xs text-[#64748B] mt-1">
-                    {t('La revisaremos y te avisaremos cuando esté aprobada.')}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Subespecialidad — solo si ya hay una especialidad elegida */}
-            {form.specialty && (
-              <div>
-                <label className="block text-xs font-medium text-[#475569] mb-1">
-                  {t('Subespecialidad (opcional)')}
-                </label>
-
-                {subSpecialties.length > 0 && (
-                  <select
-                    className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white mb-2"
-                    value={subSpecialtyNotListed ? NOT_LISTED : selectedSubSpecialty}
-                    onChange={handleSubSpecialtyChange}
-                  >
-                    <option value="">{t('Sin subespecialidad')}</option>
-                    {subSpecialties.map((sub) => (
-                      <option key={sub.id} value={sub.name}>{sub.name}</option>
-                    ))}
-                    {!specialtyNotListed && (
-                      <option value={NOT_LISTED}>→ {t('No encuentro mi subespecialidad')}</option>
-                    )}
-                  </select>
-                )}
-
-                {!specialtyNotListed && subSpecialties.length === 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setSubSpecialtyNotListed((v) => !v)}
-                    className="text-xs text-[#185FA5] hover:underline"
-                  >
-                    {subSpecialtyNotListed ? `✕ ${t('Cancelar propuesta')}` : `→ ${t('No encuentro mi subespecialidad')}`}
-                  </button>
-                )}
-
-                {specialtyNotListed && (
-                  <button
-                    type="button"
-                    onClick={() => setSubSpecialtyNotListed((v) => !v)}
-                    className="text-xs text-[#185FA5] hover:underline"
-                  >
-                    {subSpecialtyNotListed ? `✕ ${t('Cancelar')}` : `→ ${t('Agregar una subespecialidad nueva')}`}
-                  </button>
-                )}
-
-                {subSpecialtyNotListed && (
-                  <div className="mt-2">
-                    <input
-                      className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
-                      placeholder={t('Escribe el nombre de tu subespecialidad')}
-                      value={subSpecialtyProposal}
-                      onChange={(e) => setSubSpecialtyProposal(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {hasNewProposal && (
-              <div className="bg-[#FFF8E6] border border-[#F0D88A] rounded-xl px-3 py-2.5">
-                <p className="text-xs text-[#7A5C0E]">
-                  ⏳ Como propusiste {specialtyNotListed && subSpecialtyNotListed
-                    ? 'una especialidad y una subespecialidad nuevas'
-                    : specialtyNotListed ? 'una especialidad nueva' : 'una subespecialidad nueva'}
-                  , tu cuenta quedará <strong>en revisión</strong> hasta que un administrador la apruebe.
-                  Igual puedes completar tu registro y subir tus documentos mientras tanto.
-                </p>
-              </div>
-            )}
-
-            {/* Idiomas */}
-            <div>
-              <label className="block text-xs font-medium text-[#475569] mb-1">
-                {t('Idiomas de atención')} <span className="text-[#E24B4A]">*</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {LANGUAGES.map((lang) => {
-                  const active = selectedLanguages.includes(lang)
-                  return (
-                    <button
-                      key={lang}
-                      type="button"
-                      onClick={() => toggleLanguage(lang)}
-                      className={`text-xs px-2.5 py-1.5 rounded-full border transition-colors ${
-                        active
-                          ? 'bg-[#0F6E56] text-white border-[#0F6E56]'
-                          : 'bg-white text-[#475569] border-[#DDE1EE] hover:border-[#0F6E56]'
-                      }`}
-                    >
-                      {lang}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {!languageNotListed ? (
-                <button
-                  type="button"
-                  onClick={() => setLanguageNotListed(true)}
-                  className="text-xs text-[#185FA5] hover:underline"
-                >
-                  → {t('Agregar otro idioma')}
-                </button>
-              ) : (
-                <div>
-                  <input
-                    className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
-                    placeholder={t('Ej. Italiano')}
-                    value={customLanguage}
-                    onChange={(e) => setCustomLanguage(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => { setLanguageNotListed(false); setCustomLanguage('') }}
-                    className="text-xs text-[#64748B] hover:underline mt-1"
-                  >
-                    ✕ {t('Cancelar')}
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Teléfono */}

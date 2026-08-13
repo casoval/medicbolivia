@@ -30,7 +30,7 @@ interface ProfessionalCardProps {
 
 export function ProfessionalCard({ professional: pro, onConsult, loading, compact }: ProfessionalCardProps) {
   const { t } = useLanguage()
-  const color = SPECIALTY_COLORS[pro.specialty] || 'blue'
+  const color = (pro.specialty && SPECIALTY_COLORS[pro.specialty]) || 'blue'
   const initials = `${pro.first_name[0]}${pro.last_name[0]}`
   const isOnline = pro.availability === 'ONLINE_NOW'
   const [showBooking, setShowBooking] = useState(false)
@@ -121,16 +121,11 @@ export function ProfessionalCard({ professional: pro, onConsult, loading, compac
                 {pro.specialty}
                 {pro.department && <span> · {pro.department}</span>}
               </p>
-              {pro.sub_specialties && pro.sub_specialties.length > 0 && (
+              {pro.sub_specialty && (
                 <div className="flex flex-wrap gap-1 mt-1">
-                  {pro.sub_specialties.map((sub) => (
-                    <span
-                      key={sub}
-                      className="text-[10px] bg-[#F1F3F9] text-[#475569] px-1.5 py-0.5 rounded-full"
-                    >
-                      {sub}
-                    </span>
-                  ))}
+                  <span className="text-[10px] bg-[#F1F3F9] text-[#475569] px-1.5 py-0.5 rounded-full">
+                    {pro.sub_specialty}
+                  </span>
                 </div>
               )}
             </div>

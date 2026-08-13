@@ -46,7 +46,7 @@ async def _enrich(prescription: Prescription, professional: Professional | None,
     if professional:
         base.professional_name     = f"Dr. {professional.first_name} {professional.last_name}"
         base.professional_specialty = professional.specialty
-        base.professional_sub_specialties = professional.sub_specialties or []
+        base.professional_sub_specialties = [professional.sub_specialty] if professional.sub_specialty else []
         base.professional_department = professional.department
         base.professional_license_number = professional.professional_license_number
         base.cmb_matricula          = professional.cmb_matricula
@@ -207,7 +207,7 @@ async def create_prescription(
             patient_age=prescription.patient_age,
             professional_name=f"Dr. {professional.first_name} {professional.last_name}",
             specialty=professional.specialty,
-            sub_specialties=professional.sub_specialties,
+            sub_specialties=[professional.sub_specialty] if professional.sub_specialty else [],
             professional_license_number=professional.professional_license_number,
             cmb_matricula=professional.cmb_matricula,
             sedes_number=professional.sedes_number,

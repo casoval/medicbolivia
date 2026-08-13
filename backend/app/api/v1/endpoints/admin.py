@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from app.db.database import get_db
 from app.core.dependencies import get_current_admin
 from app.services.notify import notify_user
+from app.services.professional_approval import check_and_approve_professional
 from app.core.maintenance import is_maintenance_active, set_platform_flags
 from decimal import Decimal
 
@@ -35,6 +36,7 @@ from app.models.models import (
     ChatBlock, ProfessionalPatientVisibility, ChatConversation, AdminAccessLog, PaymentChannel,
     DoctorLead, DoctorLeadStatus, DoctorLeadSource, WhatsAppMessage,
     ProfessionalBankAccount, PayoutBatch, PayoutBatchStatus, PatientRefundAccount,
+    SpecialtyProposal, ProposalStatus, ProposalType,
 )
 from app.schemas.schemas import (
     DocReviewRequest, RefundRequest, DisputeResolveRequest,
@@ -506,12 +508,31 @@ async def list_all_professionals(
             "since": reset_at.isoformat() if reset_at else None,  # None = todo el historial
         }
 
+    # Propuestas de especialidad/subespecialidad pendientes por profesional
+    # — el frontend lo usa para saber si, al revisar, tiene que llamar al
+    # endpoint de propuestas (specialties.py review_proposal, que puede
+    # agregar al catálogo) o al de confirmación directa de catálogo
+    # (confirm-catalog-pick, más simple, nada que agregar).
+    pending_proposals_result = await db.execute(
+        select(SpecialtyProposal.professional_id, SpecialtyProposal.type, SpecialtyProposal.id)
+        .where(SpecialtyProposal.status == ProposalStatus.PENDING)
+    )
+    pending_proposal_ids: dict[str, dict] = {}
+    for prof_id, ptype, proposal_id in pending_proposals_result.all():
+        pending_proposal_ids.setdefault(prof_id, {})[ptype] = proposal_id
+
     result_list = [
         {
             "id":                  p.id,
             "name":                f"{p.first_name} {p.last_name}",
             "specialty":           p.specialty,
-            "sub_specialties":     p.sub_specialties or [],
+            "specialty_status":    p.specialty_status,
+            "specialty_review_note": p.specialty_review_note,
+            "specialty_proposal_id": pending_proposal_ids.get(p.id, {}).get(ProposalType.SPECIALTY),
+            "sub_specialty":       p.sub_specialty,
+            "sub_specialty_status": p.sub_specialty_status,
+            "sub_specialty_review_note": p.sub_specialty_review_note,
+            "sub_specialty_proposal_id": pending_proposal_ids.get(p.id, {}).get(ProposalType.SUB_SPECIALTY),
             "status":              p.status,
             "availability":        p.availability,
             "auto_availability":   p.auto_availability,
@@ -525,13 +546,16 @@ async def list_all_professionals(
             "bio":                 p.bio,
             "languages":           p.languages or ["Español"],
             "years_experience":    p.years_experience,
-            "years_experience_verified": p.years_experience_verified,
+            "years_experience_status": p.years_experience_status,
+            "years_experience_review_note": p.years_experience_review_note,
             "years_experience_visible":  p.years_experience_visible,
             "university":          p.university,
-            "university_verified": p.university_verified,
+            "university_status":   p.university_status,
+            "university_review_note": p.university_review_note,
             "university_visible":  p.university_visible,
             "professional_license_number":   p.professional_license_number,
-            "professional_license_verified": p.professional_license_verified,
+            "professional_license_status":   p.professional_license_status,
+            "professional_license_review_note": p.professional_license_review_note,
             "cmb_matricula":       p.cmb_matricula,
             "sedes_number":        p.sedes_number,
             "price_general":       float(p.price_general),
@@ -818,34 +842,11 @@ async def review_document(
     doc_label = doc.doc_type.value.replace("_", " ").title()
     professional_approved_now = False
 
-    # Si todos los documentos del profesional están aprobados → aprobar profesional
-    if data.status == DocStatus.APPROVED:
-        all_docs = (await db.execute(
-            select(ProfessionalDoc).where(ProfessionalDoc.professional_id == doc.professional_id)
-        )).scalars().all()
-
-        # CMB_MATRICULA y ACADEMIC_DIPLOMA ya no se piden (ver DocType en
-        # app/models/models.py). SEDES_REGISTRATION se reemplaza acá por
-        # HEALTH_MINISTRY, que es el documento que sí se ofrece subir en
-        # el perfil del profesional — antes este set nunca se completaba
-        # porque exigía un tipo que la UI jamás ofrecía.
-        # SIGNATURE se agregó para que un profesional no quede APPROVED sin
-        # que un admin haya revisado la imagen de firma que se estampa en
-        # sus recetas/órdenes de laboratorio (ver create_prescription y
-        # create_lab_order, que además bloquean la emisión si esta firma no
-        # está aprobada, cubriendo también al profesional que la cambie
-        # después de ya estar activo).
-        required = {'CI_FRONT', 'CI_BACK', 'PROFESSIONAL_TITLE', 'HEALTH_MINISTRY', 'SELFIE_WITH_CI', 'SIGNATURE'}
-        approved_types = {d.doc_type.value for d in all_docs if d.status == DocStatus.APPROVED}
-
-        if required.issubset(approved_types) and professional:
-            professional.status = ProfessionalStatus.APPROVED
-            user_result = await db.execute(select(User).where(User.id == professional.user_id))
-            user = user_result.scalar_one_or_none()
-            if user:
-                user.status = UserStatus.ACTIVE
-            professional_approved_now = True
-            logger.info(f"Profesional aprobado automáticamente: {professional.id}")
+    # Chequeo centralizado: ver app/services/professional_approval.py — ya
+    # no mira solo documentos, también especialidad/subespecialidad,
+    # matrícula, universidad y años de experiencia (los que apliquen).
+    if data.status == DocStatus.APPROVED and professional:
+        professional_approved_now = await check_and_approve_professional(db, professional)
 
     # Notificación in-app al profesional — antes usaba Notification()
     # crudo (solo persistía la fila, sin WS ni endpoint que la marcara
@@ -875,17 +876,6 @@ async def review_document(
                 send_whatsapp=False,
             )
 
-        if professional_approved_now:
-            await notify_user(
-                db, user_id=professional.user_id,
-                title="¡Perfil verificado!",
-                body="Todos tus documentos fueron aprobados. Ya podés activar tu disponibilidad y recibir pacientes.",
-                type_="PROFESSIONAL_APPROVED",
-                entity_type="Professional",
-                entity_id=professional.id,
-                send_whatsapp=False,
-            )
-
     # Auditoría
     log = AuditLog(
         user_id=current_user.id,
@@ -899,6 +889,89 @@ async def review_document(
     await _invalidate_professionals_list_cache()
 
     return {"doc_id": doc_id, "status": data.status, "message": f"Documento {data.status.lower()}"}
+
+
+# ── PATCH /api/v1/admin/professionals/{id}/review-item ──────────────
+# Revisa universidad, años de experiencia o matrícula profesional (texto)
+# con el mismo patrón que un documento: aprobar o rechazar con motivo,
+# notificando al profesional para que sepa qué corregir. Especialidad y
+# subespecialidad NO pasan por acá — tienen su propio endpoint en
+# specialties.py (PATCH /specialties/proposals/{id}) porque además pueden
+# crear una entrada nueva en el catálogo al aprobarse.
+_REVIEWABLE_ITEMS = {
+    "UNIVERSITY": {
+        "status_field": "university_status", "note_field": "university_review_note",
+        "value_field": "university", "label": "Universidad",
+    },
+    "YEARS_EXPERIENCE": {
+        "status_field": "years_experience_status", "note_field": "years_experience_review_note",
+        "value_field": "years_experience", "label": "Años de experiencia",
+    },
+    "PROFESSIONAL_LICENSE": {
+        "status_field": "professional_license_status", "note_field": "professional_license_review_note",
+        "value_field": "professional_license_number", "label": "Matrícula profesional",
+    },
+}
+
+
+class ItemReviewRequest(BaseModel):
+    item: str = Field(..., description="UNIVERSITY | YEARS_EXPERIENCE | PROFESSIONAL_LICENSE")
+    status: DocStatus
+    review_note: Optional[str] = None
+
+
+@router.patch("/professionals/{professional_id}/review-item", summary="[Admin] Aprobar o rechazar universidad/años de experiencia/matrícula")
+async def review_professional_item(
+    professional_id: str,
+    data: ItemReviewRequest,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    spec = _REVIEWABLE_ITEMS.get(data.item)
+    if not spec:
+        raise HTTPException(status_code=400, detail=f"Ítem desconocido: {data.item}")
+    if data.status == DocStatus.REJECTED and not (data.review_note or "").strip():
+        raise HTTPException(status_code=400, detail="El motivo de rechazo es obligatorio")
+
+    result = await db.execute(select(Professional).where(Professional.id == professional_id))
+    professional = result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
+    if getattr(professional, spec["value_field"]) in (None, ""):
+        raise HTTPException(status_code=400, detail=f"El profesional todavía no cargó {spec['label'].lower()}")
+
+    setattr(professional, spec["status_field"], data.status)
+    setattr(professional, spec["note_field"], data.review_note if data.status == DocStatus.REJECTED else None)
+
+    professional_approved_now = False
+    if data.status == DocStatus.APPROVED:
+        professional_approved_now = await check_and_approve_professional(db, professional)
+    elif data.status == DocStatus.REJECTED:
+        await notify_user(
+            db, user_id=professional.user_id,
+            title=f"{spec['label']} rechazada",
+            body=f"Tu dato de {spec['label'].lower()} fue rechazado. Motivo: {data.review_note}. Corrígelo desde tu perfil.",
+            type_=f"{data.item}_REJECTED",
+            entity_type="Professional",
+            entity_id=professional.id,
+            send_whatsapp=False,
+        )
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action=f"PROFESSIONAL_ITEM_{data.status.value}",
+        entity_type="Professional",
+        entity_id=professional.id,
+        metadata_={"item": data.item, "review_note": data.review_note},
+    ))
+    await db.commit()
+    await _invalidate_professionals_list_cache()
+
+    return {
+        "message": f"{spec['label']} {data.status.value.lower()}",
+        "professional_approved_now": professional_approved_now,
+    }
 
 
 # ── GET /api/v1/admin/payments ───────────────────────
@@ -1444,18 +1517,18 @@ class AdminProfessionalUpdate(BaseModel):
     gender: Optional[str] = Field(None, max_length=20)
     phone: Optional[str] = Field(None, min_length=6, max_length=20)
     email: Optional[str] = Field(None, max_length=255)
-    specialty: Optional[str] = Field(None, min_length=1, max_length=100)
-    sub_specialties: Optional[list[str]] = None
+    # specialty, sub_specialty, years_experience, university y
+    # professional_license_number NO están acá a propósito: tienen su
+    # propio ciclo de revisión (PENDING/APPROVED/REJECTED + motivo, ver
+    # PATCH /admin/professionals/{id}/review-item más abajo), igual que un
+    # documento. Editarlos por esta vía genérica saltearía ese flujo — el
+    # admin corrige el VALOR desde review-item (con decisión + motivo), no
+    # desde acá. Lo que sí sigue viviendo acá son datos personales simples
+    # que no necesitan trazabilidad de aprobación (nombre, CI, contacto).
     bio: Optional[str] = None
     languages: Optional[list[str]] = None
-    years_experience: Optional[int] = Field(None, ge=0, le=80)
-    years_experience_verified: Optional[bool] = None
     years_experience_visible: Optional[bool] = None
-    university: Optional[str] = Field(None, max_length=200)
-    university_verified: Optional[bool] = None
     university_visible: Optional[bool] = None
-    professional_license_number: Optional[str] = Field(None, max_length=50)
-    professional_license_verified: Optional[bool] = None
     price_general: Optional[Decimal] = Field(None, gt=0)
     price_urgent: Optional[Decimal] = Field(None, gt=0)
     price_follow_up: Optional[Decimal] = Field(None, gt=0)
@@ -1587,11 +1660,9 @@ async def update_professional_admin(
             raise HTTPException(status_code=409, detail=f"El email {data['email']} ya está en uso por otra cuenta")
 
     simple_fields = [
-        "first_name", "last_name", "ci", "department", "gender", "specialty",
-        "sub_specialties", "bio", "languages", "years_experience",
-        "years_experience_verified", "years_experience_visible",
-        "university", "university_verified", "university_visible",
-        "professional_license_number", "professional_license_verified",
+        "first_name", "last_name", "ci", "department", "gender",
+        "bio", "languages",
+        "years_experience_visible", "university_visible",
         "price_general", "price_urgent", "price_follow_up",
         "cmb_matricula", "sedes_number",
     ]

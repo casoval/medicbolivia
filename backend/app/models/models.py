@@ -62,6 +62,11 @@ class DocType(str, enum.Enum):
     HEALTH_MINISTRY = "HEALTH_MINISTRY"
     SEDES_REGISTRATION = "SEDES_REGISTRATION"
     SPECIALTY_CERT = "SPECIALTY_CERT"
+    # Respaldo de la SUBespecialidad — documento separado de SPECIALTY_CERT
+    # a propósito: un profesional puede tener una especialidad ya aprobada
+    # hace tiempo y agregar una subespecialidad después, con su propio
+    # certificado distinto, sin tener que resubir el de la especialidad.
+    SUBSPECIALTY_CERT = "SUBSPECIALTY_CERT"
     SELFIE_WITH_CI = "SELFIE_WITH_CI"
     # Firma que se estampa en el PDF imprimible de recetas/órdenes de
     # laboratorio. Antes se guardaba libremente en Professional.signature_url
@@ -258,17 +263,34 @@ class Professional(Base):
     birth_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     gender: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    specialty: Mapped[str] = mapped_column(String(100), nullable=False)
-    sub_specialties: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
+    # Especialidad y subespecialidad ya NO se cargan en el registro inicial
+    # (ver ProfessionalRegisterRequest) — se completan después desde el
+    # perfil, por eso son nullable acá. Solo se permite UNA especialidad y
+    # UNA subespecialidad por profesional (a diferencia de la versión
+    # anterior, que guardaba sub_specialties como lista). Cada una tiene su
+    # propio ciclo de revisión de admin, igual que un documento: PENDING al
+    # cargarla, APPROVED/REJECTED con motivo (ver *_review_note). Mientras
+    # specialty_status no sea APPROVED, el profesional no puede quedar
+    # ProfessionalStatus.APPROVED (ver _required_items_approved en
+    # professionals.py) — sub_specialty es opcional y no bloquea eso.
+    specialty: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    specialty_status: Mapped[DocStatus] = mapped_column(SAEnum(DocStatus), default=DocStatus.PENDING)
+    specialty_review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sub_specialty: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    sub_specialty_status: Mapped[Optional[DocStatus]] = mapped_column(SAEnum(DocStatus), nullable=True)
+    sub_specialty_review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     bio: Mapped[Optional[str]] = mapped_column(Text)
     languages: Mapped[List[str]] = mapped_column(ARRAY(String), default=lambda: ["Español"])
     # Nullable a propósito: si el profesional lo deja vacío, no se muestra
     # en el perfil público (a diferencia de antes, que siempre mostraba 0).
     years_experience: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
-    # Verificado por un admin en base a los documentos subidos. Solo si es
-    # True (y el valor no está vacío) se muestra al paciente — ver
-    # ProfessionalPublicResponse en app/schemas/schemas.py.
-    years_experience_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Antes era un booleano years_experience_verified. Se reemplaza por un
+    # estado PENDING/APPROVED/REJECTED (igual que un documento) para poder
+    # explicarle al profesional el motivo si un admin lo rechaza, y que
+    # sepa que tiene que corregirlo. Solo si está APPROVED (y el valor no
+    # está vacío) se muestra al paciente — ver ProfessionalPublicResponse.
+    years_experience_status: Mapped[DocStatus] = mapped_column(SAEnum(DocStatus), default=DocStatus.PENDING)
+    years_experience_review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Visibilidad controlada por el propio profesional: aunque el dato ya
     # esté verificado por un admin, el profesional puede elegir ocultarlo
     # del perfil público sin perder ni el valor ni la verificación (por
@@ -283,7 +305,10 @@ class Professional(Base):
     # si la deja vacía, simplemente no aparece en el perfil público (no
     # bloquea la aprobación del profesional).
     university: Mapped[Optional[str]] = mapped_column(String(200))
-    university_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Antes era un booleano university_verified — mismo motivo del cambio
+    # que years_experience_status (ver comentario arriba).
+    university_status: Mapped[DocStatus] = mapped_column(SAEnum(DocStatus), default=DocStatus.PENDING)
+    university_review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     university_visible: Mapped[bool] = mapped_column(Boolean, default=True)
     # Matrícula profesional emitida por el Ministerio de Salud — la llena
     # el propio profesional en su perfil (una sola vez, igual que
@@ -295,7 +320,13 @@ class Professional(Base):
     # ser un dato legal/regulatorio (y no editable), se muestra siempre
     # que esté verificado, igual que antes.
     professional_license_number: Mapped[Optional[str]] = mapped_column(String(50))
-    professional_license_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Antes era un booleano professional_license_verified — mismo motivo
+    # del cambio que years_experience_status (ver comentario arriba). Este
+    # campo SÍ es obligatorio para que el profesional quede APPROVED (a
+    # diferencia de university/years_experience, que son opcionales) — ver
+    # _required_items_approved en professionals.py.
+    professional_license_status: Mapped[DocStatus] = mapped_column(SAEnum(DocStatus), default=DocStatus.PENDING)
+    professional_license_review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     photo_url: Mapped[Optional[str]] = mapped_column(String(500))
     # Imagen de la firma del médico (PNG con fondo transparente, dibujada en
     # un canvas desde su perfil — ver POST /professionals/signature). Es una

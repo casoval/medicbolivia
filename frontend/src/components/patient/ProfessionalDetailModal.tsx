@@ -34,7 +34,7 @@ export function ProfessionalDetailModal({
   consultLoading,
 }: ProfessionalDetailModalProps) {
   const { t } = useLanguage()
-  const color = SPECIALTY_COLORS[pro.specialty] || 'blue'
+  const color = (pro.specialty && SPECIALTY_COLORS[pro.specialty]) || 'blue'
   const initials = `${pro.first_name[0]}${pro.last_name[0]}`
   const isOnline = pro.availability === 'ONLINE_NOW'
 
@@ -86,16 +86,11 @@ export function ProfessionalDetailModal({
               {pro.department && <span> · {pro.department}</span>}
             </p>
 
-            {pro.sub_specialties && pro.sub_specialties.length > 0 && (
+            {pro.sub_specialty && (
               <div className="flex flex-wrap justify-center gap-1.5 mt-2 px-6">
-                {pro.sub_specialties.map((sub) => (
-                  <span
-                    key={sub}
-                    className="text-xs bg-white border border-[#DDE1EE] text-[#3C4257] px-2 py-0.5 rounded-full"
-                  >
-                    {sub}
-                  </span>
-                ))}
+                <span className="text-xs bg-white border border-[#DDE1EE] text-[#3C4257] px-2 py-0.5 rounded-full">
+                  {pro.sub_specialty}
+                </span>
               </div>
             )}
 

@@ -656,32 +656,36 @@ async def update_profile(
     # admin para que no quede sin revisar indefinidamente. Se manda como
     # texto (no int/Form directo) para poder distinguir "no lo toqué"
     # (None) de "lo dejé vacío a propósito" (string vacío → NULL).
-    years_experience_was_verified = professional.years_experience_verified
+    years_experience_was_approved = professional.years_experience_status == DocStatus.APPROVED
     if years_experience is not None:
         new_years = int(years_experience) if years_experience.strip() != "" else None
         if new_years != professional.years_experience:
             professional.years_experience = new_years
-            professional.years_experience_verified = False
+            professional.years_experience_status = DocStatus.PENDING
+            professional.years_experience_review_note = None
 
-    # university y professional_license_number, en cambio, son datos que
-    # por naturaleza NO cambian una vez que el profesional los ingresa
-    # (la universidad de la que egresó, el número de su matrícula del
-    # Ministerio de Salud) — así que una vez que tienen un valor guardado,
-    # el propio profesional ya no puede modificarlos desde acá. Si se
-    # equivocó al tipearlos, la corrección la tiene que hacer un admin
-    # desde el panel (PATCH /admin/professionals/{id}, que no tiene esta
-    # restricción). Sí se pueden llenar por primera vez sin problema.
+    # university y professional_license_number son datos que por
+    # naturaleza no cambian con el tiempo (la universidad de la que
+    # egresó, el número de su matrícula) — así que, una vez APROBADOS por
+    # un admin, el profesional ya no puede modificarlos desde acá (tendría
+    # que pedirle a soporte/admin). PERO si un admin lo RECHAZÓ, sí se
+    # permite corregirlo desde acá — si no, el profesional quedaría
+    # trabado sin forma de arreglar el dato que le señalaron como
+    # incorrecto. Al corregirlo vuelve a PENDING y se limpia el motivo del
+    # rechazo anterior, igual que al resubir un documento.
     if university is not None:
         new_university = university.strip() or None
-        if professional.university and new_university != professional.university:
+        locked = professional.university and professional.university_status == DocStatus.APPROVED
+        if locked and new_university != professional.university:
             raise HTTPException(
                 status_code=400,
-                detail="La universidad ya fue registrada y no se puede modificar. "
+                detail="La universidad ya fue verificada y no se puede modificar. "
                        "Si necesitas corregirla, contacta al equipo de soporte.",
             )
         if new_university != professional.university:
             professional.university = new_university
-            professional.university_verified = False
+            professional.university_status = DocStatus.PENDING
+            professional.university_review_note = None
             university_newly_set = new_university is not None
         else:
             university_newly_set = False
@@ -690,15 +694,17 @@ async def update_profile(
 
     if professional_license_number is not None:
         new_license = professional_license_number.strip() or None
-        if professional.professional_license_number and new_license != professional.professional_license_number:
+        locked = professional.professional_license_number and professional.professional_license_status == DocStatus.APPROVED
+        if locked and new_license != professional.professional_license_number:
             raise HTTPException(
                 status_code=400,
-                detail="La matrícula profesional ya fue registrada y no se puede modificar. "
+                detail="La matrícula profesional ya fue verificada y no se puede modificar. "
                        "Si necesitas corregirla, contacta al equipo de soporte.",
             )
         if new_license != professional.professional_license_number:
             professional.professional_license_number = new_license
-            professional.professional_license_verified = False
+            professional.professional_license_status = DocStatus.PENDING
+            professional.professional_license_review_note = None
             license_newly_set = new_license is not None
         else:
             license_newly_set = False
@@ -726,7 +732,7 @@ async def update_profile(
     #   (antes no se avisaba nada — el admin solo se enteraba si entraba
     #   a revisar el perfil manualmente)
     full_name = f"{professional.first_name} {professional.last_name}"
-    if years_experience_was_verified and not professional.years_experience_verified:
+    if years_experience_was_approved and professional.years_experience_status == DocStatus.PENDING:
         new_value = f"{professional.years_experience} años" if professional.years_experience is not None else "vacío"
         await _notify_admins_new_review(
             db, professional,
@@ -789,7 +795,11 @@ async def get_my_profile(
         "department": professional.department,
         "gender": professional.gender,
         "specialty": professional.specialty,
-        "sub_specialties": professional.sub_specialties or [],
+        "specialty_status": professional.specialty_status,
+        "specialty_review_note": professional.specialty_review_note,
+        "sub_specialty": professional.sub_specialty,
+        "sub_specialty_status": professional.sub_specialty_status,
+        "sub_specialty_review_note": professional.sub_specialty_review_note,
         "email": current_user.email,
         "phone": current_user.phone,
         "status": professional.status,
@@ -817,13 +827,16 @@ async def get_my_profile(
         "bio": professional.bio,
         "languages": ", ".join(professional.languages) if professional.languages else "Español",
         "years_experience": professional.years_experience,
-        "years_experience_verified": professional.years_experience_verified,
+        "years_experience_status": professional.years_experience_status,
+        "years_experience_review_note": professional.years_experience_review_note,
         "years_experience_visible": professional.years_experience_visible,
         "university": professional.university,
-        "university_verified": professional.university_verified,
+        "university_status": professional.university_status,
+        "university_review_note": professional.university_review_note,
         "university_visible": professional.university_visible,
         "professional_license_number": professional.professional_license_number,
-        "professional_license_verified": professional.professional_license_verified,
+        "professional_license_status": professional.professional_license_status,
+        "professional_license_review_note": professional.professional_license_review_note,
         "cmb_matricula": professional.cmb_matricula,
         "sedes_number": professional.sedes_number,
         "average_rating": professional.average_rating,

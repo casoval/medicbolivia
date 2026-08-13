@@ -154,9 +154,9 @@ async def register_professional(
         birth_date=datetime.strptime(data.birth_date, "%Y-%m-%d") if data.birth_date else None,
         department=data.department,
         gender=data.gender,
-        specialty=data.specialty,
-        sub_specialties=data.sub_specialties or [],
-        languages=data.languages,
+        # specialty/sub_specialty y languages ya NO se cargan acá — quedan
+        # en sus valores por defecto del modelo (specialty=None,
+        # languages=["Español"]) y se completan después desde el perfil.
     )
     db.add(professional)
     await db.flush()
@@ -192,7 +192,7 @@ async def register_professional(
 
     token = create_access_token(subject=user.id, role=user.role)
     set_auth_cookie(response, token)
-    logger.info(f"Nuevo profesional registrado: {user.id} | {data.specialty}")
+    logger.info(f"Nuevo profesional registrado: {user.id} (especialidad pendiente de completar en su perfil)")
 
     return TokenResponse(
         access_token=token,

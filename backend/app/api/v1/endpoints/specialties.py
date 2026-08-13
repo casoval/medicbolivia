@@ -24,15 +24,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from app.core.timezone import utcnow_naive
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uuid
 from loguru import logger
 
 from app.db.database import get_db
 from app.core.dependencies import get_current_professional, get_current_admin
 from app.services.notify import notify_user
+from app.services.professional_approval import check_and_approve_professional
 from app.models.models import (
-    User, Professional, ProfessionalStatus,
+    User, UserRole, Professional, ProfessionalStatus, DocStatus,
     Specialty, SubSpecialty,
     SpecialtyProposal, ProposalType, ProposalStatus,
     AuditLog, Notification,
@@ -41,6 +42,21 @@ from app.schemas.schemas import (
     SpecialtyResponse, SubSpecialtyResponse,
     ProposalCreateRequest, ProposalReviewRequest, ProposalResponse,
 )
+
+
+async def _notify_all_admins(db: AsyncSession, title: str, body: str, type_: str, entity_id: str) -> None:
+    """Avisa a TODOS los admins que hay una especialidad/subespecialidad
+    esperando revisión — mismo patrón que _notify_admins_new_review() en
+    professionals.py, reimplementado acá para no crear un import cruzado
+    entre módulos de endpoints."""
+    admins_result = await db.execute(select(User).where(User.role == UserRole.ADMIN))
+    for admin in admins_result.scalars().all():
+        await notify_user(
+            db, user_id=admin.id,
+            title=title, body=body, type_=type_,
+            entity_type="Professional", entity_id=entity_id,
+            send_whatsapp=False,
+        )
 
 router = APIRouter()
 
@@ -340,6 +356,12 @@ async def create_proposal(
 ):
     professional = await _get_professional_or_404(db, current_user.id)
 
+    # Solo se permite UNA especialidad y UNA subespecialidad por
+    # profesional — si ya tenía una subespecialidad distinta, esta
+    # propuesta la reemplaza (no se acumulan varias).
+    if data.type == ProposalType.SUB_SPECIALTY and not professional.specialty:
+        raise HTTPException(status_code=400, detail="Primero necesitas tener una especialidad para poder agregar una subespecialidad")
+
     proposal = SpecialtyProposal(
         professional_id=professional.id,
         type=data.type,
@@ -350,10 +372,24 @@ async def create_proposal(
     )
     db.add(proposal)
 
-    # Solo una propuesta de especialidad PRINCIPAL bloquea el status del
-    # profesional. Una subespecialidad nueva no afecta su visibilidad.
-    if data.type == ProposalType.SPECIALTY and professional.status == ProfessionalStatus.APPROVED:
-        professional.status = ProfessionalStatus.UNDER_REVIEW
+    # Asignamos el valor propuesto de inmediato (queda PENDING hasta que
+    # un admin lo apruebe o rechace) — así el profesional ve en su perfil
+    # lo que propuso, en vez de tener que esperar sin feedback visual.
+    if data.type == ProposalType.SPECIALTY:
+        professional.specialty = data.proposed_name
+        professional.specialty_status = DocStatus.PENDING
+        professional.specialty_review_note = None
+        # Solo una especialidad PRINCIPAL bloquea la visibilidad de un
+        # profesional que YA estaba aprobado (si recién se está
+        # registrando, su status ya es PENDING_DOCS y esto no aplica —
+        # de todos modos no podrá quedar APPROVED hasta que se resuelva,
+        # ver check_and_approve_professional).
+        if professional.status == ProfessionalStatus.APPROVED:
+            professional.status = ProfessionalStatus.UNDER_REVIEW
+    else:
+        professional.sub_specialty = data.proposed_name
+        professional.sub_specialty_status = DocStatus.PENDING
+        professional.sub_specialty_review_note = None
 
     await db.commit()
     await db.refresh(proposal)
@@ -366,6 +402,18 @@ async def create_proposal(
         metadata_={"type": data.type.value, "proposed_name": data.proposed_name},
     )
     db.add(log)
+
+    # Avisar a TODOS los admins — antes esto no pasaba nunca, la única
+    # forma de enterarse era entrar manualmente a la cola de propuestas.
+    type_label = "especialidad" if data.type == ProposalType.SPECIALTY else "subespecialidad"
+    await _notify_all_admins(
+        db,
+        title=f"Nueva propuesta de {type_label}",
+        body=f"{professional.first_name} {professional.last_name} propuso '{data.proposed_name}' — pendiente de revisión.",
+        type_="SPECIALTY_PROPOSAL_CREATED",
+        entity_id=proposal.id,
+    )
+
     await db.commit()
 
     logger.info(f"Propuesta de especialidad creada: {proposal.id} por profesional {professional.id}")
@@ -373,6 +421,157 @@ async def create_proposal(
         "message": "Propuesta enviada. Un administrador la revisará pronto.",
         "proposal": _serialize_proposal(proposal),
     }
+
+
+# ── POST /specialties/select — elegir del catálogo (sin propuesta) ───
+class SelectCatalogRequest(BaseModel):
+    type: ProposalType
+    catalog_id: str  # Specialty.id o SubSpecialty.id según el type
+
+
+@router.post("/select", summary="Elegir una especialidad/subespecialidad YA existente en el catálogo")
+async def select_from_catalog(
+    data: SelectCatalogRequest,
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db),
+):
+    """A diferencia de /proposals (para lo que NO está en el catálogo),
+    acá el profesional elige algo que ya existe en la lista. Igual queda
+    PENDING: aunque el nombre ya esté en el catálogo, un admin todavía
+    tiene que confirmar que corresponde a este profesional en particular
+    (mismo criterio que el resto de sus datos de verificación)."""
+    professional = await _get_professional_or_404(db, current_user.id)
+
+    if data.type == ProposalType.SPECIALTY:
+        result = await db.execute(select(Specialty).where(Specialty.id == data.catalog_id, Specialty.is_active == True))
+        specialty = result.scalar_one_or_none()
+        if not specialty:
+            raise HTTPException(status_code=404, detail="Especialidad no encontrada en el catálogo")
+        professional.specialty = specialty.name
+        professional.specialty_status = DocStatus.PENDING
+        professional.specialty_review_note = None
+        if professional.status == ProfessionalStatus.APPROVED:
+            professional.status = ProfessionalStatus.UNDER_REVIEW
+    else:
+        if not professional.specialty:
+            raise HTTPException(status_code=400, detail="Primero necesitas tener una especialidad para poder agregar una subespecialidad")
+        result = await db.execute(select(SubSpecialty).where(SubSpecialty.id == data.catalog_id, SubSpecialty.is_active == True))
+        sub = result.scalar_one_or_none()
+        if not sub:
+            raise HTTPException(status_code=404, detail="Subespecialidad no encontrada en el catálogo")
+        professional.sub_specialty = sub.name
+        professional.sub_specialty_status = DocStatus.PENDING
+        professional.sub_specialty_review_note = None
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="SPECIALTY_SELECTED_FROM_CATALOG",
+        entity_type="Professional",
+        entity_id=professional.id,
+        metadata_={"type": data.type.value, "catalog_id": data.catalog_id},
+    ))
+
+    type_label = "especialidad" if data.type == ProposalType.SPECIALTY else "subespecialidad"
+    await _notify_all_admins(
+        db,
+        title=f"{type_label.capitalize()} para confirmar",
+        body=f"{professional.first_name} {professional.last_name} eligió '{specialty.name if data.type == ProposalType.SPECIALTY else sub.name}' del catálogo — pendiente de confirmación.",
+        type_="SPECIALTY_CATALOG_PICK",
+        entity_id=professional.id,
+    )
+
+    await db.commit()
+    return {"message": "Selección guardada. Un administrador la confirmará pronto."}
+
+
+# ── PATCH /specialties/professionals/{id}/confirm-catalog-pick (admin) ──
+class ConfirmCatalogPickRequest(BaseModel):
+    type: ProposalType
+    decision: str = Field(..., pattern="^(APPROVE|REJECT)$")
+    review_note: Optional[str] = None
+
+
+@router.patch(
+    "/professionals/{professional_id}/confirm-catalog-pick",
+    summary="[Admin] Confirmar o rechazar una especialidad/subespecialidad elegida del catálogo",
+)
+async def confirm_catalog_pick(
+    professional_id: str,
+    data: ConfirmCatalogPickRequest,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if data.decision == "REJECT" and not (data.review_note or "").strip():
+        raise HTTPException(status_code=400, detail="El motivo de rechazo es obligatorio")
+
+    result = await db.execute(select(Professional).where(Professional.id == professional_id))
+    professional = result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
+    is_specialty = data.type == ProposalType.SPECIALTY
+    current_value = professional.specialty if is_specialty else professional.sub_specialty
+    if not current_value:
+        raise HTTPException(status_code=400, detail="El profesional no tiene nada cargado en este campo")
+
+    type_label = "especialidad" if is_specialty else "subespecialidad"
+    professional_approved_now = False
+
+    if data.decision == "APPROVE":
+        if is_specialty:
+            professional.specialty_status = DocStatus.APPROVED
+            professional.specialty_review_note = None
+            # check_and_approve_professional revisa TODOS los requisitos
+            # (no solo este) antes de decidir si pasa a APPROVED de nuevo.
+            professional_approved_now = await check_and_approve_professional(db, professional)
+        else:
+            professional.sub_specialty_status = DocStatus.APPROVED
+            professional.sub_specialty_review_note = None
+            professional_approved_now = await check_and_approve_professional(db, professional)
+
+        await notify_user(
+            db, user_id=professional.user_id,
+            title=f"{type_label.capitalize()} confirmada",
+            body=f"Tu {type_label} '{current_value}' fue confirmada por un administrador.",
+            type_="SPECIALTY_CATALOG_PICK_APPROVED",
+            entity_type="Professional", entity_id=professional.id,
+            send_whatsapp=False,
+        )
+    else:
+        # Rechazo: se limpia el campo para que el profesional vuelva a
+        # elegir del catálogo (o proponga una nueva) sin quedar con un
+        # dato huérfano ni tener que re-registrarse — mismo patrón que un
+        # documento rechazado que se puede resubir.
+        if is_specialty:
+            professional.specialty = None
+            professional.specialty_status = DocStatus.PENDING
+            professional.specialty_review_note = data.review_note
+            if professional.status == ProfessionalStatus.UNDER_REVIEW:
+                professional.status = ProfessionalStatus.PENDING_DOCS
+        else:
+            professional.sub_specialty = None
+            professional.sub_specialty_status = None
+            professional.sub_specialty_review_note = data.review_note
+
+        await notify_user(
+            db, user_id=professional.user_id,
+            title=f"{type_label.capitalize()} rechazada",
+            body=f"Tu {type_label} '{current_value}' fue rechazada. Motivo: {data.review_note}. Elige otra del catálogo o propone una nueva desde tu perfil.",
+            type_="SPECIALTY_CATALOG_PICK_REJECTED",
+            entity_type="Professional", entity_id=professional.id,
+            send_whatsapp=False,
+        )
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action=f"SPECIALTY_CATALOG_PICK_{data.decision}",
+        entity_type="Professional",
+        entity_id=professional.id,
+        metadata_={"type": data.type.value, "review_note": data.review_note},
+    ))
+    await db.commit()
+
+    return {"message": f"{type_label.capitalize()} {data.decision.lower()}", "professional_approved_now": professional_approved_now}
 
 
 # ── GET /specialties/proposals — listar (admin) ───────
@@ -460,15 +659,26 @@ async def review_proposal(
         db.add(log)
 
         if professional:
-            # Solo una propuesta de tipo SPECIALTY pone a UNDER_REVIEW (ver
-            # create_proposal) — al rechazarla hay que revertir eso, o el
-            # profesional queda invisible para pacientes de forma
-            # permanente aunque nunca haya hecho nada mal, solo por
-            # habérsele rechazado el nombre de especialidad propuesto. La
-            # rama de APPROVE de abajo ya hacía esto — acá faltaba el
-            # espejo para REJECT.
-            if proposal.type == ProposalType.SPECIALTY and professional.status == ProfessionalStatus.UNDER_REVIEW:
-                professional.status = ProfessionalStatus.APPROVED
+            # Limpiamos el campo en vez de dejarlo con el texto que se
+            # acaba de rechazar (antes quedaba "huérfano": ni en el
+            # catálogo, ni corregible por nadie). Así el profesional puede
+            # volver a elegir del catálogo o proponer otra cosa desde su
+            # perfil sin re-registrarse — mismo patrón que un documento
+            # rechazado que se puede resubir.
+            if proposal.type == ProposalType.SPECIALTY:
+                professional.specialty = None
+                professional.specialty_status = DocStatus.PENDING
+                professional.specialty_review_note = data.admin_note
+                # Antes esto revertía a APPROVED — pero ya no puede ser
+                # APPROVED sin especialidad (ver check_and_approve_professional),
+                # así que vuelve a PENDING_DOCS: sigue sin ser visible para
+                # pacientes hasta que elija otra especialidad válida.
+                if professional.status == ProfessionalStatus.UNDER_REVIEW:
+                    professional.status = ProfessionalStatus.PENDING_DOCS
+            else:
+                professional.sub_specialty = None
+                professional.sub_specialty_status = None
+                professional.sub_specialty_review_note = data.admin_note
 
             type_label = "especialidad" if proposal.type == ProposalType.SPECIALTY else "subespecialidad"
             await notify_user(
@@ -505,8 +715,8 @@ async def review_proposal(
 
         if professional:
             professional.specialty = final_name
-            if professional.status == ProfessionalStatus.UNDER_REVIEW:
-                professional.status = ProfessionalStatus.APPROVED
+            professional.specialty_status = DocStatus.APPROVED
+            professional.specialty_review_note = None
 
     else:  # SUB_SPECIALTY
         parent_specialty_id = proposal.parent_specialty_id
@@ -540,10 +750,9 @@ async def review_proposal(
             db.add(sub)
 
         if professional:
-            current_subs = list(professional.sub_specialties or [])
-            if final_name not in current_subs:
-                current_subs.append(final_name)
-            professional.sub_specialties = current_subs
+            professional.sub_specialty = final_name
+            professional.sub_specialty_status = DocStatus.APPROVED
+            professional.sub_specialty_review_note = None
 
     proposal.status = ProposalStatus.APPROVED
 
@@ -576,8 +785,16 @@ async def review_proposal(
             send_whatsapp=False,
         )
 
+    professional_approved_now = False
+    if professional:
+        professional_approved_now = await check_and_approve_professional(db, professional)
+
     await db.commit()
     await db.refresh(proposal)
 
     logger.info(f"Propuesta aprobada: {proposal.id} → '{final_name}' por admin {current_user.id}")
-    return {"message": "Propuesta aprobada.", "proposal": _serialize_proposal(proposal)}
+    return {
+        "message": "Propuesta aprobada.",
+        "proposal": _serialize_proposal(proposal),
+        "professional_approved_now": professional_approved_now,
+    }

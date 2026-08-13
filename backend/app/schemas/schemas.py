@@ -51,9 +51,11 @@ class ProfessionalRegisterRequest(BaseModel):
     birth_date: Optional[str] = Field(None, description="Formato: YYYY-MM-DD")
     department: Optional[str] = None
     gender: Optional[str] = None
-    specialty: str = Field(..., min_length=3, max_length=100)
-    sub_specialties: List[str] = Field(default_factory=list)
-    languages: List[str] = Field(default=["Español"])
+    # specialty, sub_specialties y languages se sacaron del registro
+    # inicial: ahora se completan desde el perfil, después de crear la
+    # cuenta (ver POST /specialties/select, /specialties/proposals y
+    # PATCH /professionals/profile). La especialidad es obligatoria antes
+    # de poder operar, pero no bloquea el registro en sí.
 
     @field_validator("phone")
     @classmethod
@@ -206,8 +208,13 @@ class ProfessionalPublicResponse(BaseModel):
     id: str
     first_name: str
     last_name: str
-    specialty: str
-    sub_specialties: List[str]
+    # Nullable: mientras specialty_status no sea APPROVED, este profesional
+    # tampoco puede estar en ProfessionalStatus.APPROVED (ver
+    # check_and_approve_professional), así que en la práctica esto nunca
+    # llega vacío a un paciente — se deja Optional solo para no romper si
+    # algún día se lista un profesional que todavía no llegó a ese punto.
+    specialty: Optional[str] = None
+    sub_specialty: Optional[str] = None
     department: Optional[str] = None
     bio: Optional[str]
     languages: List[str]
@@ -219,17 +226,17 @@ class ProfessionalPublicResponse(BaseModel):
     years_experience: Optional[int] = None
     university: Optional[str] = None
     professional_license_number: Optional[str] = None
-    # Banderas de verificación y de visibilidad: existen en el modelo ORM
-    # y se leen acá (from_attributes) para poder aplicar la regla de
-    # visibilidad, pero nunca se exponen tal cual en la respuesta
-    # (exclude=True). "verified" lo decide un admin; "visible" lo decide
+    # Estados de verificación y banderas de visibilidad: existen en el
+    # modelo ORM y se leen acá (from_attributes) para poder aplicar la
+    # regla de visibilidad, pero nunca se exponen tal cual en la respuesta
+    # (exclude=True). El estado lo decide un admin; "visible" lo decide
     # el propio profesional para ocultar (sin borrar) un dato ya
-    # verificado — ver _hide_unverified_fields más abajo.
-    years_experience_verified: bool = Field(default=False, exclude=True)
+    # aprobado — ver _hide_unverified_fields más abajo.
+    years_experience_status: DocStatus = Field(default=DocStatus.PENDING, exclude=True)
     years_experience_visible: bool = Field(default=True, exclude=True)
-    university_verified: bool = Field(default=False, exclude=True)
+    university_status: DocStatus = Field(default=DocStatus.PENDING, exclude=True)
     university_visible: bool = Field(default=True, exclude=True)
-    professional_license_verified: bool = Field(default=False, exclude=True)
+    professional_license_status: DocStatus = Field(default=DocStatus.PENDING, exclude=True)
     photo_url: Optional[str]
     availability: AvailabilityMode
     price_general: Decimal
@@ -249,14 +256,14 @@ class ProfessionalPublicResponse(BaseModel):
     @model_validator(mode="after")
     def _hide_unverified_fields(self):
         """Oculta años de experiencia, universidad y matrícula profesional
-        si están vacíos, si un admin todavía no los verificó, o (para los
+        si están vacíos, si un admin todavía no los aprobó, o (para los
         dos primeros) si el propio profesional eligió ocultarlos pese a
-        estar verificados."""
-        if not self.years_experience_verified or not self.years_experience_visible:
+        estar aprobados."""
+        if self.years_experience_status != DocStatus.APPROVED or not self.years_experience_visible:
             self.years_experience = None
-        if not (self.university and self.university_verified and self.university_visible):
+        if not (self.university and self.university_status == DocStatus.APPROVED and self.university_visible):
             self.university = None
-        if not (self.professional_license_number and self.professional_license_verified):
+        if not (self.professional_license_number and self.professional_license_status == DocStatus.APPROVED):
             self.professional_license_number = None
         return self
 
@@ -267,7 +274,6 @@ class ProfessionalUpdateRequest(BaseModel):
     years_experience: Optional[int] = None
     university: Optional[str] = None
     professional_license_number: Optional[str] = None
-    sub_specialties: Optional[List[str]] = None
     appointment_duration_minutes: Optional[int] = Field(None, ge=10, le=240)
 
 

@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, Alert } from '@/components/ui'
-import { api, adminAPI, specialtiesAPI, getErrorMessage, type CommissionPeriod, type CatalogItem, type ProfessionalMembership } from '@/lib/api'
+import { api, adminAPI, specialtiesAPI, getErrorMessage, type CommissionPeriod, type ProfessionalMembership } from '@/lib/api'
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
@@ -162,19 +162,24 @@ const PENALTY_LABELS: Record<keyof PenaltyBreakdown, string> = {
 }
 
 interface Professional {
-  id: string; name: string; specialty: string; status: string; availability: string
+  id: string; name: string; specialty?: string; status: string; availability: string
   rating: number; total_ratings: number; total_consultations: number; created_at: string
   bio?: string; languages?: string[]; years_experience?: number; cmb_matricula?: string
   sedes_number?: string; price_general?: number; price_urgent?: number; price_follow_up?: number
   phone?: string; email?: string; ci?: string; birth_date?: string; department?: string; gender?: string
-  user_status?: string; photo_url?: string | null; sub_specialties?: string[]; doc_counts?: DocCounts
+  user_status?: string; photo_url?: string | null; sub_specialty?: string; doc_counts?: DocCounts
   penalty?: PenaltyInfo
-  // Campos que llena el propio profesional en su perfil — se muestran al
-  // paciente solo cuando *_verified es true (ver ProfessionalPublicResponse
-  // en el backend). Acá, en el panel admin, se ven siempre para poder revisarlos.
-  years_experience_verified?: boolean; years_experience_visible?: boolean
-  university?: string; university_verified?: boolean; university_visible?: boolean
-  professional_license_number?: string; professional_license_verified?: boolean
+  // Campos que llena el propio profesional en su perfil — cada uno con su
+  // propio ciclo PENDING/APPROVED/REJECTED (igual que un documento, ver
+  // DocBadge más abajo), en vez de un simple booleano *_verified. Solo se
+  // muestran al paciente cuando el status es APPROVED (y, para
+  // universidad/años de experiencia, además *_visible). Acá en el panel
+  // admin se ven siempre, junto al motivo de rechazo si corresponde.
+  specialty_status?: string; specialty_review_note?: string; specialty_proposal_id?: string | null
+  sub_specialty_status?: string; sub_specialty_review_note?: string; sub_specialty_proposal_id?: string | null
+  years_experience_status?: string; years_experience_review_note?: string; years_experience_visible?: boolean
+  university?: string; university_status?: string; university_review_note?: string; university_visible?: boolean
+  professional_license_number?: string; professional_license_status?: string; professional_license_review_note?: string
 }
 
 function getAge(birthDate?: string): number | null {
@@ -193,6 +198,75 @@ function DocBadge({ status }: { status: string }) {
     <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${map[status] || map.PENDING}`}>
       {text[status] || status}
     </span>
+  )
+}
+
+// Fila de revisión para especialidad/subespecialidad — el badge extra
+// "Nuevo en catálogo" avisa al admin que aprobar esto AGREGA un nombre
+// nuevo al catálogo oficial (viene de una propuesta), a diferencia de
+// una selección directa de algo que ya estaba en la lista.
+function SpecialtyReviewRow({
+  label, value, status, reviewNote, isProposal, pending, onApprove, onReject,
+}: {
+  label: string
+  value?: string
+  status?: string
+  reviewNote?: string
+  isProposal: boolean
+  pending: boolean
+  onApprove: () => void
+  onReject: () => void
+}) {
+  if (!value) {
+    return (
+      <div className="bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
+        <p className="text-xs text-[#64748B]">{label}</p>
+        <p className="text-sm font-medium text-[#94A3B8]">No especificado por el profesional</p>
+      </div>
+    )
+  }
+  return (
+    <div className="bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-xs text-[#64748B]">{label}</p>
+            {status && <DocBadge status={status} />}
+            {isProposal ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-[#F2D49A] bg-[#FFF8E6] text-[#854F0B] font-medium">
+                ⚠ Nuevo en catálogo
+              </span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-[#9FE1CB] bg-[#E1F5EE] text-[#0F6E56] font-medium">
+                ✓ Ya está en el catálogo
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-medium truncate">{value}</p>
+          {status === 'REJECTED' && reviewNote && (
+            <p className="text-[10px] text-[#A32D2D] mt-0.5">{reviewNote}</p>
+          )}
+        </div>
+        {status !== 'APPROVED' && (
+          <div className="flex gap-1.5 shrink-0">
+            <button
+              onClick={onApprove}
+              disabled={pending}
+              className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-2 py-1 rounded-md text-[10px] font-medium disabled:opacity-50"
+            >
+              Aprobar
+            </button>
+            <button
+              onClick={onReject}
+              disabled={pending}
+              className="bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] px-2 py-1 rounded-md text-[10px] font-medium disabled:opacity-50"
+            >
+              Rechazar
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -961,15 +1035,6 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   const [saveError, setSaveError] = useState('')
   const [saveWarnings, setSaveWarnings] = useState<string[]>([])
 
-  // Catálogo real de especialidades/subespecialidades (el mismo que usa
-  // Admin → Especialidades), para que el selector no muestre una lista
-  // inventada aparte del resto de la plataforma.
-  const { data: specialtyCatalog = [] } = useQuery({
-    queryKey: ['specialties', 'catalog'],
-    queryFn: () => specialtiesAPI.list(),
-    staleTime: 60_000,
-  })
-
   const nameParts = local.name.split(' ')
   const emptyForm = {
     first_name: nameParts[0] || '',
@@ -980,13 +1045,13 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
     gender: local.gender || '',
     phone: local.phone || '',
     email: local.email || '',
-    specialty: local.specialty,
-    sub_specialties: local.sub_specialties || [] as string[],
+    // specialty, sub_specialty, years_experience, university y
+    // professional_license_number ya NO están en este formulario de
+    // edición genérica — tienen su propio flujo de revisión con
+    // aprobar/rechazar + motivo (ver InfoItemReview y la sección de
+    // Especialidad más abajo), igual que los documentos.
     bio: local.bio || '',
     languages: local.languages?.join(', ') || 'Español',
-    years_experience: local.years_experience != null ? String(local.years_experience) : '',
-    university: local.university || '',
-    professional_license_number: local.professional_license_number || '',
     price_general: String(local.price_general ?? 0),
     price_urgent: String(local.price_urgent ?? 0),
     price_follow_up: String(local.price_follow_up ?? 0),
@@ -994,23 +1059,6 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
     sedes_number: local.sedes_number || '',
   }
   const [form, setForm] = useState(emptyForm)
-
-  const selectedSpecialtyId = specialtyCatalog.find((s: CatalogItem) => s.name === form.specialty)?.id
-  const { data: subSpecialtyCatalog = [] } = useQuery({
-    queryKey: ['specialties', 'sub', selectedSpecialtyId],
-    queryFn: () => specialtiesAPI.listSubSpecialties(selectedSpecialtyId as string),
-    enabled: !!selectedSpecialtyId,
-    staleTime: 60_000,
-  })
-
-  function toggleSubSpecialty(name: string) {
-    setForm((f) => ({
-      ...f,
-      sub_specialties: f.sub_specialties.includes(name)
-        ? f.sub_specialties.filter((s) => s !== name)
-        : [...f.sub_specialties, name],
-    }))
-  }
 
   // El login es solo por número de celular (el email es solo dato de
   // contacto), así que solo el teléfono dispara la advertencia.
@@ -1026,13 +1074,8 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
       gender: form.gender || undefined,
       phone: form.phone || undefined,
       email: form.email || undefined,
-      specialty: form.specialty,
-      sub_specialties: form.sub_specialties,
       bio: form.bio || undefined,
       languages: form.languages.split(',').map((s) => s.trim()).filter(Boolean),
-      years_experience: form.years_experience.trim() === '' ? null : Number(form.years_experience),
-      university: form.university.trim() === '' ? null : form.university.trim(),
-      professional_license_number: form.professional_license_number.trim() === '' ? null : form.professional_license_number.trim(),
       price_general: Number(form.price_general) || undefined,
       price_urgent: Number(form.price_urgent) || undefined,
       price_follow_up: Number(form.price_follow_up) || undefined,
@@ -1049,13 +1092,8 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
         gender: form.gender,
         phone: form.phone,
         email: form.email,
-        specialty: form.specialty,
-        sub_specialties: form.sub_specialties,
         bio: form.bio,
         languages: form.languages.split(',').map((s) => s.trim()).filter(Boolean),
-        years_experience: form.years_experience.trim() === '' ? undefined : Number(form.years_experience),
-        university: form.university.trim() || undefined,
-        professional_license_number: form.professional_license_number.trim() || undefined,
         price_general: Number(form.price_general) || 0,
         price_urgent: Number(form.price_urgent) || 0,
         price_follow_up: Number(form.price_follow_up) || 0,
@@ -1070,21 +1108,84 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
     onError: (err) => setSaveError(getErrorMessage(err)),
   })
 
-  // Verificar/desverificar de un toque los 3 campos que llena el propio
-  // profesional (experiencia, universidad, matrícula) — no requiere entrar
-  // al modo de edición completo. Se usa junto a la documentación ya
-  // subida por el profesional (sección de Documentos, más abajo).
-  const [verifyError, setVerifyError] = useState('')
-  const verifyFieldMutation = useMutation({
-    mutationFn: (payload: { field: 'years_experience_verified' | 'university_verified' | 'professional_license_verified'; value: boolean }) =>
-      adminAPI.updateProfessional(local.id, { [payload.field]: payload.value }),
+  // Aprobar/rechazar universidad, años de experiencia o matrícula
+  // profesional (texto) — mismo patrón que un documento: si se rechaza,
+  // pide motivo con window.prompt (igual que reviewDocMutation más abajo
+  // en este archivo) y lo manda al backend para que el profesional lo vea.
+  const [itemReviewError, setItemReviewError] = useState('')
+  const reviewItemMutation = useMutation({
+    mutationFn: (payload: { item: 'UNIVERSITY' | 'YEARS_EXPERIENCE' | 'PROFESSIONAL_LICENSE'; status: 'APPROVED' | 'REJECTED'; review_note?: string }) =>
+      adminAPI.reviewProfessionalItem(local.id, payload),
     onSuccess: (_res, payload) => {
-      setLocal((prev) => ({ ...prev, [payload.field]: payload.value }))
-      setVerifyError('')
+      const fieldMap = {
+        UNIVERSITY: 'university_status',
+        YEARS_EXPERIENCE: 'years_experience_status',
+        PROFESSIONAL_LICENSE: 'professional_license_status',
+      } as const
+      const noteMap = {
+        UNIVERSITY: 'university_review_note',
+        YEARS_EXPERIENCE: 'years_experience_review_note',
+        PROFESSIONAL_LICENSE: 'professional_license_review_note',
+      } as const
+      setLocal((prev) => ({
+        ...prev,
+        [fieldMap[payload.item]]: payload.status,
+        [noteMap[payload.item]]: payload.status === 'REJECTED' ? payload.review_note : undefined,
+      }))
+      setItemReviewError('')
       qc.invalidateQueries({ queryKey: ['admin', 'professionals'] })
     },
-    onError: (err) => setVerifyError(getErrorMessage(err)),
+    onError: (err) => setItemReviewError(getErrorMessage(err)),
   })
+
+  function reviewItem(item: 'UNIVERSITY' | 'YEARS_EXPERIENCE' | 'PROFESSIONAL_LICENSE', status: 'APPROVED' | 'REJECTED') {
+    if (status === 'REJECTED') {
+      const review_note = window.prompt(t('Motivo del rechazo (visible para el profesional):')) || ''
+      if (!review_note.trim()) return
+      reviewItemMutation.mutate({ item, status, review_note })
+    } else {
+      reviewItemMutation.mutate({ item, status })
+    }
+  }
+
+  // Especialidad/subespecialidad: puede venir de una propuesta nueva
+  // (specialty_proposal_id presente → hay que resolverla con
+  // specialtiesAPI.reviewProposal, que además puede agregarla al
+  // catálogo) o de una selección directa del catálogo ya existente
+  // (specialtiesAPI.confirmCatalogPick, más simple). El backend ya nos
+  // dice cuál es cuál (ver admin.py, pending_proposal_ids).
+  const [specialtyReviewError, setSpecialtyReviewError] = useState('')
+  const reviewSpecialtyMutation = useMutation({
+    mutationFn: (payload: { type: 'SPECIALTY' | 'SUB_SPECIALTY'; decision: 'APPROVE' | 'REJECT'; note?: string }) => {
+      const proposalId = payload.type === 'SPECIALTY' ? local.specialty_proposal_id : local.sub_specialty_proposal_id
+      if (proposalId) {
+        return specialtiesAPI.reviewProposal(proposalId, {
+          decision: payload.decision,
+          admin_note: payload.note,
+        })
+      }
+      return specialtiesAPI.confirmCatalogPick(local.id, {
+        type: payload.type,
+        decision: payload.decision,
+        review_note: payload.note,
+      })
+    },
+    onSuccess: () => {
+      setSpecialtyReviewError('')
+      qc.invalidateQueries({ queryKey: ['admin', 'professionals'] })
+    },
+    onError: (err) => setSpecialtyReviewError(getErrorMessage(err)),
+  })
+
+  function reviewSpecialty(type: 'SPECIALTY' | 'SUB_SPECIALTY', decision: 'APPROVE' | 'REJECT') {
+    if (decision === 'REJECT') {
+      const note = window.prompt(t('Motivo del rechazo (visible para el profesional):')) || ''
+      if (!note.trim()) return
+      reviewSpecialtyMutation.mutate({ type, decision, note })
+    } else {
+      reviewSpecialtyMutation.mutate({ type, decision })
+    }
+  }
 
   function startEdit() {
     setForm(emptyForm)
@@ -1159,10 +1260,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                 <div><p className="text-xs text-[#64748B]">{t('Edad')}</p><p className="text-sm font-medium">{age ? `${age} anios` : 'No especificada'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Ciudad / Departamento')}</p><p className="text-sm font-medium">{local.department || 'No especificado'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Genero')}</p><p className="text-sm font-medium">{local.gender || 'No especificado'}</p></div>
-                <div><p className="text-xs text-[#64748B]">{t('Especialidad')}</p><p className="text-sm font-medium">{local.specialty}</p></div>
-                <div><p className="text-xs text-[#64748B]">{t('Experiencia')}</p><p className="text-sm font-medium">{local.years_experience ? `${local.years_experience} anios` : 'No especificada'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Idiomas')}</p><p className="text-sm font-medium">{local.languages?.join(', ') || 'Espanol'}</p></div>
-                <div><p className="text-xs text-[#64748B]">{t('Sub-especialidades')}</p><p className="text-sm font-medium">{local.sub_specialties?.length ? local.sub_specialties.join(', ') : 'No especificadas'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Matrícula CMB')}</p><p className="text-sm font-medium">{local.cmb_matricula || 'No especificada'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Registro SEDES')}</p><p className="text-sm font-medium">{local.sedes_number || 'No especificado'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Registrado el')}</p><p className="text-sm font-medium">{new Date(local.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
@@ -1170,49 +1268,96 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
               </div>
             ) : null}
 
-            {/* Campos que llena el propio profesional en su perfil — solo
-                se muestran al paciente si tienen valor Y el admin los
-                verifica acá, contra la documentación subida (más abajo). */}
+            {/* Especialidad, subespecialidad, universidad, años de
+                experiencia y matrícula profesional: los 5 ítems
+                "obligatorios/opcionales de información" que el profesional
+                completa desde su perfil y que un admin tiene que aprobar o
+                rechazar (con motivo) antes de que cuenten para dejarlo
+                visible a pacientes — mismo patrón que un documento. Ver
+                check_and_approve_professional en el backend: mientras
+                especialidad no esté APPROVED, este profesional no puede
+                quedar visible aunque tenga todos los documentos aprobados. */}
             {!editing && (
               <div className="mt-2 space-y-1.5">
-                {verifyError && <div className="mb-1"><Alert type="error" message={verifyError} /></div>}
+                {itemReviewError && <div className="mb-1"><Alert type="error" message={itemReviewError} /></div>}
+                {specialtyReviewError && <div className="mb-1"><Alert type="error" message={specialtyReviewError} /></div>}
+
+                {/* Especialidad — obligatoria */}
+                <SpecialtyReviewRow
+                  label={t('Especialidad')}
+                  value={local.specialty}
+                  status={local.specialty_status}
+                  reviewNote={local.specialty_review_note}
+                  isProposal={!!local.specialty_proposal_id}
+                  pending={reviewSpecialtyMutation.isPending}
+                  onApprove={() => reviewSpecialty('SPECIALTY', 'APPROVE')}
+                  onReject={() => reviewSpecialty('SPECIALTY', 'REJECT')}
+                />
+
+                {/* Subespecialidad — opcional, solo aparece si el
+                    profesional cargó una */}
+                {local.sub_specialty && (
+                  <SpecialtyReviewRow
+                    label={t('Subespecialidad')}
+                    value={local.sub_specialty}
+                    status={local.sub_specialty_status}
+                    reviewNote={local.sub_specialty_review_note}
+                    isProposal={!!local.sub_specialty_proposal_id}
+                    pending={reviewSpecialtyMutation.isPending}
+                    onApprove={() => reviewSpecialty('SUB_SPECIALTY', 'APPROVE')}
+                    onReject={() => reviewSpecialty('SUB_SPECIALTY', 'REJECT')}
+                  />
+                )}
+
                 {([
-                  { key: 'years_experience_verified' as const, visibleKey: 'years_experience_visible' as const, label: t('Años de experiencia'), value: local.years_experience != null ? `${local.years_experience} años` : '' },
-                  { key: 'university_verified' as const, visibleKey: 'university_visible' as const, label: t('Universidad'), value: local.university || '' },
-                  { key: 'professional_license_verified' as const, visibleKey: null, label: t('Matrícula profesional (Min. Salud)'), value: local.professional_license_number || '' },
-                ]).map(({ key, visibleKey, label, value }) => {
-                  const verified = !!(local as any)[key]
+                  { item: 'UNIVERSITY' as const, label: t('Universidad'), value: local.university, status: local.university_status, note: local.university_review_note, visibleKey: 'university_visible' as const },
+                  { item: 'YEARS_EXPERIENCE' as const, label: t('Años de experiencia'), value: local.years_experience != null ? `${local.years_experience} años` : undefined, status: local.years_experience_status, note: local.years_experience_review_note, visibleKey: 'years_experience_visible' as const },
+                  { item: 'PROFESSIONAL_LICENSE' as const, label: t('Matrícula profesional (Min. Salud)'), value: local.professional_license_number, status: local.professional_license_status, note: local.professional_license_review_note, visibleKey: null },
+                ]).map(({ item, label, value, status, note, visibleKey }) => {
                   // El profesional puede ocultar del paciente un dato ya
-                  // verificado sin desverificarlo — se lo señalamos al
-                  // admin para que no piense que falta verificar de nuevo.
-                  const hiddenByProfessional = verified && visibleKey && (local as any)[visibleKey] === false
+                  // aprobado sin que un admin lo desapruebe — se lo
+                  // señalamos para que no piense que falta revisar de nuevo.
+                  const hiddenByProfessional = status === 'APPROVED' && visibleKey && (local as any)[visibleKey] === false
                   return (
-                    <div key={key} className="flex items-center justify-between gap-2 bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="text-xs text-[#64748B]">{label}</p>
-                        <p className="text-sm font-medium truncate">{value || t('No especificado por el profesional')}</p>
-                        {hiddenByProfessional && (
-                          <p className="text-[10px] text-[#854F0B] mt-0.5">{t('Verificado, pero el profesional eligió ocultarlo del paciente')}</p>
+                    <div key={item} className="bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs text-[#64748B]">{label}</p>
+                            {value && status && <DocBadge status={status} />}
+                          </div>
+                          <p className="text-sm font-medium truncate">{value || t('No especificado por el profesional')}</p>
+                          {hiddenByProfessional && (
+                            <p className="text-[10px] text-[#854F0B] mt-0.5">{t('Aprobado, pero el profesional eligió ocultarlo del paciente')}</p>
+                          )}
+                          {status === 'REJECTED' && note && (
+                            <p className="text-[10px] text-[#A32D2D] mt-0.5">{note}</p>
+                          )}
+                        </div>
+                        {value && status !== 'APPROVED' && (
+                          <div className="flex gap-1.5 shrink-0">
+                            <button
+                              onClick={() => reviewItem(item, 'APPROVED')}
+                              disabled={reviewItemMutation.isPending}
+                              className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-2 py-1 rounded-md text-[10px] font-medium disabled:opacity-50"
+                            >
+                              {t('Aprobar')}
+                            </button>
+                            <button
+                              onClick={() => reviewItem(item, 'REJECTED')}
+                              disabled={reviewItemMutation.isPending}
+                              className="bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] px-2 py-1 rounded-md text-[10px] font-medium disabled:opacity-50"
+                            >
+                              {t('Rechazar')}
+                            </button>
+                          </div>
                         )}
                       </div>
-                      {value && (
-                        <button
-                          onClick={() => verifyFieldMutation.mutate({ field: key, value: !verified })}
-                          disabled={verifyFieldMutation.isPending}
-                          className={`text-[10px] px-2 py-1 rounded-full border font-medium whitespace-nowrap disabled:opacity-50 ${
-                            verified
-                              ? 'bg-[#E1F5EE] text-[#0F6E56] border-[#9FE1CB] hover:bg-[#D3EFE3]'
-                              : 'bg-[#FEF3E0] text-[#854F0B] border-[#F2D49A] hover:bg-[#FBE9C7]'
-                          }`}
-                        >
-                          {verified ? `✓ ${t('Verificado')} — ${t('quitar')}` : t('Verificar')}
-                        </button>
-                      )}
                     </div>
                   )
                 })}
                 <p className="text-[10px] text-[#64748B] px-1">
-                  {t('El paciente solo ve estos 3 datos cuando el profesional los llenó Y quedaron verificados acá.')}
+                  {t('El paciente solo ve universidad/años de experiencia si además el profesional elige mostrarlos.')}
                 </p>
               </div>
             )}
@@ -1254,37 +1399,6 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#475569] mb-1">{t('Especialidad')}</label>
-                    <select value={form.specialty}
-                      onChange={(e) => setForm({ ...form, specialty: e.target.value, sub_specialties: [] })}
-                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white">
-                      {!specialtyCatalog.some((s: CatalogItem) => s.name === form.specialty) && (
-                        <option value={form.specialty}>{form.specialty} (fuera de catálogo)</option>
-                      )}
-                      {specialtyCatalog.map((s: CatalogItem) => (
-                        <option key={s.id} value={s.name}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-[#475569] mb-1">{t('Años de experiencia')}</label>
-                    <input type="number" min={0} max={80} value={form.years_experience}
-                      onChange={(e) => setForm({ ...form, years_experience: e.target.value })}
-                      placeholder="—"
-                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-[#475569] mb-1">{t('Universidad')}</label>
-                    <input value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })}
-                      placeholder={t('Opcional')}
-                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-[#475569] mb-1">{t('Matrícula profesional (Min. Salud)')}</label>
-                    <input value={form.professional_license_number} onChange={(e) => setForm({ ...form, professional_license_number: e.target.value })}
-                      className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
-                  </div>
-                  <div>
                     <label className="block text-xs text-[#475569] mb-1">{t('Idiomas (coma)')}</label>
                     <input value={form.languages} onChange={(e) => setForm({ ...form, languages: e.target.value })}
                       className="w-full px-2 py-1.5 border border-[#DDE1EE] rounded-lg text-sm bg-white" />
@@ -1301,29 +1415,13 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs text-[#475569] mb-1">{t('Sub-especialidades')}</label>
-                  {!selectedSpecialtyId ? (
-                    <p className="text-xs text-[#64748B]">{t('Elige una especialidad del catálogo para ver sus sub-especialidades.')}</p>
-                  ) : subSpecialtyCatalog.length === 0 ? (
-                    <p className="text-xs text-[#64748B]">{t('Esta especialidad no tiene sub-especialidades en el catálogo.')}</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {subSpecialtyCatalog.map((s: CatalogItem) => (
-                        <label key={s.id} className="flex items-center gap-1.5 bg-white border border-[#DDE1EE] rounded-full px-2.5 py-1 text-xs cursor-pointer">
-                          <input type="checkbox" checked={form.sub_specialties.includes(s.name)}
-                            onChange={() => toggleSubSpecialty(s.name)} />
-                          {s.name}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                  {form.sub_specialties.some((name) => !subSpecialtyCatalog.some((s: CatalogItem) => s.name === name)) && (
-                    <p className="text-[10px] text-[#64748B] mt-1">
-                      También tiene guardadas: {form.sub_specialties.filter((name) => !subSpecialtyCatalog.some((s: CatalogItem) => s.name === name)).join(', ')} (fuera del catálogo actual de esta especialidad — se mantienen a menos que las quites de la lista de arriba).
-                    </p>
-                  )}
-                </div>
+                {/* Especialidad, subespecialidad, universidad, años de
+                    experiencia y matrícula profesional NO están en este
+                    formulario a propósito: se revisan con aprobar/rechazar
+                    + motivo desde la sección de arriba (SpecialtyReviewRow
+                    y los 3 ítems de información), no editando el valor
+                    directo — así queda registro de quién lo aprobó y por
+                    qué se rechazó, igual que con los documentos. */}
 
                 <div>
                   <label className="block text-xs text-[#475569] mb-1">{t('Presentación / bio')}</label>
@@ -1600,7 +1698,7 @@ export default function AdminProfessionalsPage() {
       : true // MEMBERSHIPS: todos los estados, la membresía puede haberse habilitado antes o después
     const matchSearch = !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.specialty.toLowerCase().includes(search.toLowerCase()) ||
+      p.specialty?.toLowerCase().includes(search.toLowerCase()) ||
       p.phone?.includes(search)
     const matchDept = department === 'Todos' || p.department === department
     const matchPenalty = penaltyFilter === 'Todos' || p.penalty?.color === penaltyFilter

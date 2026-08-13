@@ -379,9 +379,11 @@ export const authAPI = {
 
   registerProfessional: (data: {
     phone: string; email?: string; password: string
-    first_name: string; last_name: string; ci: string; specialty: string
-    sub_specialties?: string[]
-    languages?: string[]; birth_date?: string; department?: string; gender?: string
+    first_name: string; last_name: string; ci: string
+    birth_date?: string; department?: string; gender?: string
+    // specialty, sub_specialties y languages ya NO van acá — se
+    // completan después desde el perfil/onboarding (ver
+    // specialtiesAPI.selectFromCatalog / createProposal más abajo).
   }) => api.post<AuthResponse>('/auth/register/professional', data),
 
   login: (phone: string, password: string) =>
@@ -1403,6 +1405,25 @@ export const specialtiesAPI = {
     return res.data
   },
 
+  // ── Elegir directo del catálogo (sin propuesta) ──
+  // A diferencia de createProposal (para lo que NO está en el catálogo),
+  // esto es para cuando el profesional SÍ encuentra su especialidad en la
+  // lista. Igual queda pendiente de confirmación de un admin.
+  selectFromCatalog: async (data: { type: 'SPECIALTY' | 'SUB_SPECIALTY'; catalog_id: string }) => {
+    const res = await api.post('/specialties/select', data)
+    return res.data
+  },
+
+  // [Admin] Confirma o rechaza una especialidad/subespecialidad que el
+  // profesional eligió directo del catálogo (sin pasar por propuesta).
+  confirmCatalogPick: async (
+    professionalId: string,
+    data: { type: 'SPECIALTY' | 'SUB_SPECIALTY'; decision: 'APPROVE' | 'REJECT'; review_note?: string }
+  ) => {
+    const res = await api.patch(`/specialties/professionals/${professionalId}/confirm-catalog-pick`, data)
+    return res.data
+  },
+
   // ── Propuestas (profesional crea, admin revisa) ──
   createProposal: async (data: {
     type: 'SPECIALTY' | 'SUB_SPECIALTY'
@@ -1562,6 +1583,23 @@ export const adminAPI = {
   updateProfessional: (professionalId: string, data: Record<string, unknown>) =>
     api.patch<{ message: string; changed_fields: string[]; warnings: string[] }>(
       `/admin/professionals/${professionalId}`, data
+    ).then(r => r.data),
+
+  // Aprobar/rechazar universidad, años de experiencia o matrícula
+  // profesional (texto), con motivo obligatorio si se rechaza — mismo
+  // patrón que un documento. Especialidad/subespecialidad NO van acá,
+  // tienen su propio flujo en specialtiesAPI (createProposal/reviewProposal
+  // o selectFromCatalog/confirmCatalogPick según el caso).
+  reviewProfessionalItem: (
+    professionalId: string,
+    data: {
+      item: 'UNIVERSITY' | 'YEARS_EXPERIENCE' | 'PROFESSIONAL_LICENSE'
+      status: 'APPROVED' | 'REJECTED'
+      review_note?: string
+    }
+  ) =>
+    api.patch<{ message: string; professional_approved_now: boolean }>(
+      `/admin/professionals/${professionalId}/review-item`, data
     ).then(r => r.data),
 
   // Mensajería masiva (broadcast) — anuncio libre a un segmento de usuarios.
