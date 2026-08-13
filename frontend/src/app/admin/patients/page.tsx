@@ -58,6 +58,7 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
   const [confirmLogin, setConfirmLogin] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [saveWarnings, setSaveWarnings] = useState<string[]>([])
+  const [tab, setTab] = useState<'datos' | 'historial' | 'consultas'>('datos')
 
   // El login es solo por número de celular (el email es solo dato de contacto,
   // no se usa para entrar), así que solo el teléfono dispara la advertencia.
@@ -126,6 +127,28 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
           <button onClick={onClose} className="text-[#475569] hover:text-[#141820] text-xl font-light">✕</button>
         </div>
 
+        {/* Pestañas — dividen la tarjeta en secciones cortas en vez de un
+            solo scroll largo con todo apilado */}
+        <div className="flex gap-1 px-5 pt-3 border-b border-[#DDE1EE] overflow-x-auto">
+          {([
+            { key: 'datos' as const, label: t('Datos personales') },
+            { key: 'historial' as const, label: t('Historial médico') },
+            { key: 'consultas' as const, label: t('Consultas') },
+          ]).map((tabItem) => (
+            <button
+              key={tabItem.key}
+              onClick={() => setTab(tabItem.key)}
+              className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                tab === tabItem.key
+                  ? 'border-[#378ADD] text-[#0C447C]'
+                  : 'border-transparent text-[#475569] hover:text-[#141820]'
+              }`}
+            >
+              {tabItem.label}
+            </button>
+          ))}
+        </div>
+
         <div className="p-5 space-y-4">
 
           {saveWarnings.length > 0 && (
@@ -155,7 +178,24 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
           )}
 
           {/* Datos personales */}
+          {tab === 'datos' && (<>
           <div>
+            {/* Estadísticas — antes vivían al final de la tarjeta, ahora
+                junto a los datos personales para verlas sin bajar */}
+            <div className="bg-[#F5F6FA] rounded-xl p-3 flex gap-4 mb-4">
+              <div className="text-center flex-1">
+                <p className="text-xl font-bold text-[#185FA5]">{local.total_consultations || 0}</p>
+                <p className="text-xs text-[#475569]">{t('Consultas')}</p>
+              </div>
+              <div className="w-px bg-[#DDE1EE]" />
+              <div className="text-center flex-1">
+                <p className="text-xs font-medium text-[#0F6E56] mt-1">
+                  {local.status === 'ACTIVE' ? '✓ Activo' : '✗ Inactivo'}
+                </p>
+                <p className="text-xs text-[#475569]">{t('Estado')}</p>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide">{t('Datos personales')}</p>
               {!editing && (
@@ -278,8 +318,10 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
               </div>
             )}
           </div>
+          </>)}
 
           {/* Historial médico */}
+          {tab === 'historial' && (
           <div>
             <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Historial médico')}</p>
             <div className="space-y-2">
@@ -333,29 +375,14 @@ function PatientModal({ patient, onClose, onSuspend, onReactivate }: { patient: 
               </div>
             </div>
           </div>
-
-          {/* Estadísticas */}
-          <div>
-            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Actividad')}</p>
-            <div className="bg-[#F5F6FA] rounded-xl p-3 flex gap-4">
-              <div className="text-center flex-1">
-                <p className="text-xl font-bold text-[#185FA5]">{local.total_consultations || 0}</p>
-                <p className="text-xs text-[#475569]">{t('Consultas')}</p>
-              </div>
-              <div className="w-px bg-[#DDE1EE]" />
-              <div className="text-center flex-1">
-                <p className="text-xs font-medium text-[#0F6E56] mt-1">
-                  {local.status === 'ACTIVE' ? '✓ Activo' : '✗ Inactivo'}
-                </p>
-                <p className="text-xs text-[#475569]">{t('Estado')}</p>
-              </div>
-            </div>
-          </div>
+          )}
 
           {/* Historial detallado de consultas */}
-          <div className="pt-2 border-t border-[#DDE1EE]">
+          {tab === 'consultas' && (
+          <div>
             <ConsultationHistorySection endpoint={`/admin/patients/${local.id}/history`} counterpartField="professional_name" />
           </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-[#DDE1EE] flex items-center justify-between gap-2">

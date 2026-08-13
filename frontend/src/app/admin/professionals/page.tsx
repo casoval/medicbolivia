@@ -1086,6 +1086,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   const [confirmLogin, setConfirmLogin] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [saveWarnings, setSaveWarnings] = useState<string[]>([])
+  const [tab, setTab] = useState<'datos' | 'documentos' | 'facturacion' | 'historial'>('datos')
 
   const nameParts = local.name.split(' ')
   const emptyForm = {
@@ -1275,7 +1276,32 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
           </div>
           <button onClick={onClose} className="text-[#475569] hover:text-[#141820] text-xl">✕</button>
         </div>
+
+        {/* Pestañas — dividen la tarjeta en secciones cortas en vez de un
+            solo scroll largo con todo apilado */}
+        <div className="flex gap-1 px-5 pt-3 border-b border-[#DDE1EE] overflow-x-auto">
+          {([
+            { key: 'datos' as const, label: t('Datos y credenciales') },
+            { key: 'documentos' as const, label: t('Documentos') },
+            { key: 'facturacion' as const, label: t('Facturación') },
+            { key: 'historial' as const, label: t('Historial') },
+          ]).map((tabItem) => (
+            <button
+              key={tabItem.key}
+              onClick={() => setTab(tabItem.key)}
+              className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                tab === tabItem.key
+                  ? 'border-[#378ADD] text-[#0C447C]'
+                  : 'border-transparent text-[#475569] hover:text-[#141820]'
+              }`}
+            >
+              {tabItem.label}
+            </button>
+          ))}
+        </div>
+
         <div className="p-5 space-y-4">
+          {tab === 'datos' && (<>
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-[#F5F6FA] rounded-xl p-3 text-center">
               <StatusBadge status={local.status} />
@@ -1568,7 +1594,15 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
           {local.penalty && local.penalty.color && (
             <PenaltyDetailSection professionalId={local.id} penalty={local.penalty} />
           )}
+          </>)}
 
+          {/* Documentos */}
+          {tab === 'documentos' && (
+            <ProfessionalDocsSection professionalId={local.id} />
+          )}
+
+          {/* Facturación: precios, comisión, membresía y presentación */}
+          {tab === 'facturacion' && (<>
           {!editing && (
             <div>
               <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Precios de consulta')}</p>
@@ -1587,36 +1621,37 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
             <ProfessionalMembershipSection professionalId={local.id} />
           </div>
           {!editing && local.bio && (
-            <div>
+            <div className="pt-2 border-t border-[#DDE1EE]">
               <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Presentacion')}</p>
               <p className="text-sm text-[#3A4155] bg-[#F5F6FA] rounded-xl p-3 leading-relaxed">{local.bio}</p>
             </div>
           )}
-          <div className="pt-2 border-t border-[#DDE1EE]">
-            <ProfessionalDocsSection professionalId={local.id} />
-          </div>
-          <div className="pt-2 border-t border-[#DDE1EE]">
+          </>)}
+
+          {/* Historial de consultas */}
+          {tab === 'historial' && (
             <ConsultationHistorySection endpoint={`/admin/professionals/${local.id}/history`} counterpartField="patient_name" />
-          </div>
-          <div className="pt-2 border-t border-[#DDE1EE]">
-            <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-3">{t('Acciones')}</p>
-            <div className="flex gap-2 flex-wrap">
-              {(local.status === 'PENDING_DOCS' || local.status === 'UNDER_REVIEW') && (<>
-                <button onClick={() => onAction(local.id,'APPROVED')} disabled={loading}
-                  className="flex-1 bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Aprobar')}</button>
-                <button onClick={() => onAction(local.id,'REJECTED')} disabled={loading}
-                  className="flex-1 bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Rechazar')}</button>
-              </>)}
-              {local.status === 'APPROVED' && (
-                <button onClick={() => onAction(local.id,'SUSPENDED')} disabled={loading}
-                  className="bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Suspender cuenta')}</button>
-              )}
-              {local.status === 'SUSPENDED' && (
-                <button onClick={() => onAction(local.id,'APPROVED')} disabled={loading}
-                  className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Reactivar cuenta')}</button>
-              )}
-              <button onClick={onClose} className="btn-secondary text-xs px-4 py-2">{t('Cerrar')}</button>
-            </div>
+          )}
+        </div>
+
+        {/* Acciones — footer fijo, visible sin importar la pestaña activa */}
+        <div className="p-4 border-t border-[#DDE1EE]">
+          <div className="flex gap-2 flex-wrap">
+            {(local.status === 'PENDING_DOCS' || local.status === 'UNDER_REVIEW') && (<>
+              <button onClick={() => onAction(local.id,'APPROVED')} disabled={loading}
+                className="flex-1 bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Aprobar')}</button>
+              <button onClick={() => onAction(local.id,'REJECTED')} disabled={loading}
+                className="flex-1 bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Rechazar')}</button>
+            </>)}
+            {local.status === 'APPROVED' && (
+              <button onClick={() => onAction(local.id,'SUSPENDED')} disabled={loading}
+                className="bg-[#FCEBEB] text-[#A32D2D] border border-[#F09595] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Suspender cuenta')}</button>
+            )}
+            {local.status === 'SUSPENDED' && (
+              <button onClick={() => onAction(local.id,'APPROVED')} disabled={loading}
+                className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-50">{t('Reactivar cuenta')}</button>
+            )}
+            <button onClick={onClose} className="btn-secondary text-xs px-4 py-2 ml-auto">{t('Cerrar')}</button>
           </div>
         </div>
       </div>
