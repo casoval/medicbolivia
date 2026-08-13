@@ -1,0 +1,202 @@
+diff --git a/frontend/src/app/professional/profile/page.tsx b/frontend/src/app/professional/profile/page.tsx
+index 9efa63a..92aac5b 100644
+--- a/frontend/src/app/professional/profile/page.tsx
++++ b/frontend/src/app/professional/profile/page.tsx
+@@ -28,7 +28,7 @@ const DOCUMENTS: { type: string; label: string; hint: string; optional?: boolean
+   { type: 'CI_BACK',            label: 'Cédula de identidad — reverso',    hint: 'Sin reflejos ni bordes cortados' },
+   { type: 'PROFESSIONAL_TITLE', label: 'Título en Provisión Nacional',     hint: 'Título universitario habilitante para ejercer' },
+   { type: 'HEALTH_MINISTRY',    label: 'Matrícula Profesional emitida por el Ministerio de Salud', hint: 'Matrícula vigente del Ministerio de Salud de Bolivia' },
+-  { type: 'SPECIALTY_CERT',     label: 'Respaldo de Especialidad',        hint: 'Certificado, diploma o título que respalde tu especialidad' },
++  { type: 'SPECIALTY_CERT',     label: 'Respaldo de Especialidad',        hint: 'Certificado, diploma o título que respalde tu especialidad. No se pide si tu especialidad es Medicina General; es obligatorio para cualquier otra especialidad.' },
+   { type: 'SUBSPECIALTY_CERT',  label: 'Respaldo de Subespecialidad',     hint: 'Certificado, diploma o título que respalde tu subespecialidad (solo si agregaste una)', optional: true },
+   { type: 'SELFIE_WITH_CI',     label: 'Selfie sosteniendo tu CI',         hint: 'Tu cara y la CI deben ser legibles' },
+ ]
+@@ -84,6 +84,25 @@ function VerifyBadge({ hasValue, status, reviewNote, t }: { hasValue: boolean; s
+   )
+ }
+ 
++// Badge chico para marcar si un campo/sección es obligatorio, opcional,
++// opcional-pero-recomendado, o condicionalmente obligatorio (depende de
++// otra elección del profesional, ej. la especialidad). Se usa en toda la
++// página para que el profesional nunca tenga dudas de qué le falta para
++// quedar aprobado vs. qué es solo para verse mejor ante el paciente.
++function ReqBadge({ kind, t }: { kind: 'required' | 'optional' | 'recommended' | 'conditional'; t: (s: string) => string }) {
++  const config = {
++    required:    { text: 'Obligatorio',                    cls: 'bg-[#FCEBEB] text-[#A32D2D]' },
++    optional:    { text: 'Opcional',                        cls: 'bg-[#F1F3F9] text-[#64748B]' },
++    recommended: { text: 'Opcional · recomendado',          cls: 'bg-[#E6F1FB] text-[#185FA5]' },
++    conditional: { text: 'Obligatorio según tu especialidad', cls: 'bg-[#FEF3E0] text-[#854F0B]' },
++  }[kind]
++  return (
++    <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide align-middle whitespace-nowrap ${config.cls}`}>
++      {t(config.text)}
++    </span>
++  )
++}
++
+ type UploadStatus = 'idle' | 'uploading' | 'done' | 'error'
+ 
+ interface DocRecord {
+@@ -924,13 +943,23 @@ export default function ProfilePage() {
+               {t('Tu especialidad y los datos que habilitan la emisión de recetas y órdenes de laboratorio. Todo lo de esta sección necesita aprobación de un administrador.')}
+             </p>
+ 
++            <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-4 space-y-1.5">
++              <p className="text-xs text-[#185FA5]">
++                {t('💡 ¿Eres médico general? Esa opción está dentro del selector de "Especialidad" — no es un campo aparte. La subespecialidad es opcional y solo se habilita después de que tu especialidad quede aprobada.')}
++              </p>
++              <p className="text-xs text-[#185FA5]">
++                {t('💡 Si tu especialidad o subespecialidad no aparecen en la lista, elige la opción "No está en la lista" y escríbela manualmente — un administrador la revisará igual.')}
++              </p>
++            </div>
++
+             {specialtyError && <div className="mb-3"><Alert type="error" message={specialtyError} /></div>}
+             {specialtySuccess && <div className="mb-3"><Alert type="success" message={specialtySuccess} /></div>}
+ 
+             {/* Especialidad — obligatoria */}
+             <div className="mb-4">
+-              <div className="flex items-center gap-2 mb-2">
++              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                 <p className="text-sm font-medium">{t('Tu especialidad')} <span className="text-[#E24B4A]">*</span></p>
++                <ReqBadge kind="required" t={t} />
+                 {registrationData?.specialty && (
+                   <VerifyBadge
+                     hasValue={true}
+@@ -995,8 +1024,9 @@ export default function ProfilePage() {
+                 especialidad aprobada. Solo se permite UNA. */}
+             {registrationData?.specialty_status === 'APPROVED' && (
+               <div className="pt-3 border-t border-[#DDE1EE]">
+-                <div className="flex items-center gap-2 mb-2">
+-                  <p className="text-sm font-medium">{t('Subespecialidad (opcional)')}</p>
++                <div className="flex items-center gap-2 mb-2 flex-wrap">
++                  <p className="text-sm font-medium">{t('Subespecialidad')}</p>
++                  <ReqBadge kind="optional" t={t} />
+                   {registrationData?.sub_specialty && (
+                     <VerifyBadge
+                       hasValue={true}
+@@ -1066,7 +1096,10 @@ export default function ProfilePage() {
+             {profileError   && <div className="mb-3"><Alert type="error"   message={profileError} /></div>}
+ 
+             <div className="pb-4 mb-4 border-b border-[#DDE1EE]">
+-              <p className="text-xs font-semibold text-[#1A1F2E] mb-2">{t('Matrícula profesional')}</p>
++              <p className="text-xs font-semibold text-[#1A1F2E] mb-2 flex items-center flex-wrap">
++                {t('Matrícula profesional')}
++                <ReqBadge kind="required" t={t} />
++              </p>
+               <div>
+                 <label className="block text-xs font-medium text-[#475569] mb-1">
+                   {t('Matrícula profesional (Ministerio de Salud)')}
+@@ -1088,7 +1121,10 @@ export default function ProfilePage() {
+             </div>
+ 
+             <div>
+-              <p className="text-xs font-semibold text-[#1A1F2E] mb-2">{t('Firma para recetas médicas')}</p>
++              <p className="text-xs font-semibold text-[#1A1F2E] mb-2 flex items-center flex-wrap">
++                {t('Firma para recetas médicas')}
++                <ReqBadge kind="required" t={t} />
++              </p>
+             <p className="text-xs text-[#475569] mb-3">
+               {t('Se estampa en el PDF imprimible de tus recetas, para las farmacias que todavía piden papel. La autenticidad real de cada receta siempre la da el código QR, no esta imagen.')}
+             </p>
+@@ -1232,7 +1268,16 @@ export default function ProfilePage() {
+               </p>
+             </div>
+             <div className="space-y-2.5">
+-              {DOCUMENTS.map(({ type, label, hint, optional }) => {
++              {DOCUMENTS.map(({ type, label, hint, optional: staticOptional }) => {
++                // Respaldo de Especialidad: solo es obligatorio si la
++                // especialidad elegida NO es Medicina General. Para
++                // Medicina General no aplica (no hay "especialidad" que
++                // respaldar más allá del título habilitante general).
++                const isGeneralMedicine = (registrationData?.specialty || '').trim().toLowerCase() === 'medicina general'
++                const isSpecialtyCert = type === 'SPECIALTY_CERT'
++                const optional = isSpecialtyCert ? isGeneralMedicine : staticOptional
++                const badgeKind: 'required' | 'optional' | 'conditional' =
++                  isSpecialtyCert && !isGeneralMedicine ? 'conditional' : (optional ? 'optional' : 'required')
+                 const localStatus = docStatuses[type] || 'idle'
+                 const record = docRecordOf(type)
+                 // El estado local de "subiendo ahora mismo" siempre gana visualmente.
+@@ -1255,11 +1300,13 @@ export default function ProfilePage() {
+                         <div className="flex items-center gap-1.5 flex-wrap">
+                           <p className="text-xs font-medium">{label}</p>
+                           <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide ${
+-                            optional
+-                              ? 'bg-[#F1F3F9] text-[#64748B]'
+-                              : 'bg-[#FCEBEB] text-[#A32D2D]'
++                            badgeKind === 'optional' ? 'bg-[#F1F3F9] text-[#64748B]' :
++                            badgeKind === 'conditional' ? 'bg-[#FEF3E0] text-[#854F0B]' :
++                            'bg-[#FCEBEB] text-[#A32D2D]'
+                           }`}>
+-                            {optional ? t('Opcional') : t('Obligatorio')}
++                            {badgeKind === 'optional' ? t('Opcional') :
++                             badgeKind === 'conditional' ? t('Obligatorio (no Medicina General)') :
++                             t('Obligatorio')}
+                           </span>
+                         </div>
+                         <p className="text-xs text-[#475569] mt-0.5">{hint}</p>
+@@ -1370,14 +1417,17 @@ export default function ProfilePage() {
+           <div className="card">
+             <SectionTitle>{t('Datos del perfil público')}</SectionTitle>
+             <p className="text-xs text-[#475569] mb-3">
+-              {t('Estos datos son opcionales y no afectan tu capacidad de atender pacientes ni de emitir recetas — solo suman credibilidad frente al paciente una vez verificados por un admin.')}
++              {t('En esta sección la mayoría de los campos son opcionales y no afectan tu capacidad de atender pacientes ni de emitir recetas — pero los marcados como "recomendado" ayudan a que el paciente tenga más confianza en ti antes de elegirte. El único obligatorio acá es "Idiomas de atención".')}
+             </p>
+             {profileSuccess && <div className="mb-3"><Alert type="success" message={profileSuccess} /></div>}
+             {profileError   && <div className="mb-3"><Alert type="error"   message={profileError} /></div>}
+ 
+             {/* Foto de perfil */}
+             <div className="flex flex-col items-center mb-4">
+-              <p className="text-xs font-medium text-[#475569] mb-2 self-start">{t('Foto de perfil')}</p>
++              <p className="text-xs font-medium text-[#475569] mb-2 self-start flex items-center flex-wrap">
++                {t('Foto de perfil')}
++                <ReqBadge kind="recommended" t={t} />
++              </p>
+               <div className="relative">
+                 <div className="w-24 h-24 rounded-full border-2 border-[#DDE1EE] overflow-hidden bg-[#F5F6FA] flex items-center justify-center">
+                   {photoPreview ? (
+@@ -1433,8 +1483,9 @@ export default function ProfilePage() {
+             {/* Datos del perfil */}
+             <div className="space-y-3">
+               <div>
+-                <label className="block text-xs font-medium text-[#475569] mb-1">
++                <label className="block text-xs font-medium text-[#475569] mb-1 flex items-center flex-wrap">
+                   {t('Presentación (visible al paciente)')}
++                  <ReqBadge kind="recommended" t={t} />
+                 </label>
+                 <textarea
+                   className="w-full px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] resize-none"
+@@ -1448,7 +1499,11 @@ export default function ProfilePage() {
+               </div>
+ 
+               <div>
+-                <label className="block text-xs font-medium text-[#475569] mb-1">{t('Idiomas de atención')}</label>
++                <label className="block text-xs font-medium text-[#475569] mb-1 flex items-center flex-wrap">
++                  {t('Idiomas de atención')}
++                  <ReqBadge kind="required" t={t} />
++                </label>
++                <p className="text-xs text-[#64748B] mb-1.5">{t('Elige al menos una opción — el paciente lo ve para saber en qué idioma puede atenderse contigo.')}</p>
+                 {/* Chips en vez de texto libre — así nunca hay comas mal
+                     puestas o nombres mal escritos: se toca para agregar/
+                     quitar, y los que no están en la lista se agregan aparte. */}
+@@ -1511,8 +1566,9 @@ export default function ProfilePage() {
+               </div>
+ 
+               <div>
+-                <label className="block text-xs font-medium text-[#475569] mb-1">
++                <label className="block text-xs font-medium text-[#475569] mb-1 flex items-center flex-wrap">
+                   {t('Años de experiencia')}
++                  <ReqBadge kind="recommended" t={t} />
+                   <VerifyBadge hasValue={years.trim() !== ''} status={verification.years_experience_status} reviewNote={verification.years_experience_review_note} t={t} />
+                 </label>
+                 <input
+@@ -1538,8 +1594,9 @@ export default function ProfilePage() {
+               </div>
+ 
+               <div>
+-                <label className="block text-xs font-medium text-[#475569] mb-1">
++                <label className="block text-xs font-medium text-[#475569] mb-1 flex items-center flex-wrap">
+                   {t('Universidad')}
++                  <ReqBadge kind="recommended" t={t} />
+                   <VerifyBadge hasValue={university.trim() !== ''} status={verification.university_status} reviewNote={verification.university_review_note} t={t} />
+                 </label>
+                 <input
