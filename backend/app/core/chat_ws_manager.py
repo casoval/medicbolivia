@@ -33,9 +33,18 @@ CHANNEL_PREFIX = "chat:conversation:"
 
 class ChatConnectionManager:
     def __init__(self, channel_prefix: str = CHANNEL_PREFIX):
-        # conversation_id -> { user_id -> WebSocket }, solo los sockets
-        # que están físicamente conectados a ESTE proceso worker.
-        self.local: Dict[str, Dict[str, WebSocket]] = {}
+        # conversation_id -> { user_id -> { WebSocket, WebSocket, ... } }
+        # Un Set (no un solo WebSocket) por usuario a propósito: un mismo
+        # usuario puede tener más de una conexión viva a la vez sobre la
+        # misma conversación (dos pestañas, celular + PC, o el instante en
+        # que la reconexión automática del cliente abre el socket nuevo
+        # antes de que el viejo termine de cerrarse del todo). Con un solo
+        # WebSocket por usuario, la conexión más nueva pisaba a la vieja
+        # en el diccionario — la pestaña vieja seguía viéndose "conectada"
+        # del lado del cliente, pero el servidor dejaba de mandarle
+        # broadcasts hasta que se recargaba la página. Con un Set, todas
+        # las conexiones abiertas de ese usuario reciben el mensaje.
+        self.local: Dict[str, Dict[str, Set[WebSocket]]] = {}
         # conversation_id -> task de escucha del canal Redis de esa conversación
         self._listeners: Dict[str, asyncio.Task] = {}
         # Prefijo del canal Redis — parametrizable para poder reusar esta
@@ -48,7 +57,8 @@ class ChatConnectionManager:
 
     async def connect(self, conversation_id: str, user_id: str, ws: WebSocket):
         await ws.accept()
-        self.local.setdefault(conversation_id, {})[user_id] = ws
+        conv = self.local.setdefault(conversation_id, {})
+        conv.setdefault(user_id, set()).add(ws)
 
         # Si es el primer socket local para esta conversación, arranca el
         # listener de Redis. Si ya había otro usuario de la misma
@@ -59,20 +69,22 @@ class ChatConnectionManager:
             )
 
     def disconnect(self, conversation_id: str, user_id: str, ws: WebSocket | None = None):
-        """Si se pasa `ws`, solo se elimina la entrada cuando el socket
-        guardado ES ese mismo objeto. Esto evita una condición de carrera:
-        si el mismo usuario abre una conexión nueva (reconexión automática,
-        doble pestaña) antes de que el `finally` del socket viejo termine
-        de correr, el cleanup del viejo no debe borrar del diccionario la
-        conexión nueva que ya está activa — eso la dejaría "huérfana"
-        (el cliente la sigue viendo conectada, pero deja de recibir
-        broadcasts hasta que recarga o cambia de conversación)."""
+        """Elimina SOLO esta conexión puntual del set del usuario — nunca
+        las demás conexiones que ese mismo usuario pueda tener abiertas
+        (otra pestaña, otro dispositivo, o la conexión nueva que ya
+        reemplazó a esta si venía de una reconexión)."""
         conv_sockets = self.local.get(conversation_id)
         if not conv_sockets:
             return
-        if ws is not None and conv_sockets.get(user_id) is not ws:
+        user_sockets = conv_sockets.get(user_id)
+        if not user_sockets:
             return
-        conv_sockets.pop(user_id, None)
+        if ws is not None:
+            user_sockets.discard(ws)
+        else:
+            user_sockets.clear()
+        if not user_sockets:
+            conv_sockets.pop(user_id, None)
 
         if not conv_sockets:
             self.local.pop(conversation_id, None)
@@ -108,14 +120,17 @@ class ChatConnectionManager:
                             continue
                         payload = json.loads(message["data"])
                         conv_sockets = self.local.get(conversation_id, {})
-                        # Manda a TODOS los sockets locales de esta conversación,
-                        # incluido el emisor (así confirma que se envió, sin
-                        # necesidad de un ack aparte).
-                        for ws in list(conv_sockets.values()):
-                            try:
-                                await ws.send_json(payload)
-                            except Exception:
-                                pass  # el disconnect lo limpia el endpoint
+                        # Manda a TODOS los sockets locales de esta conversación
+                        # (todas las conexiones de todos los usuarios, incluidas
+                        # varias del mismo emisor si tiene más de una pestaña
+                        # abierta), así confirma que se envió, sin necesidad de
+                        # un ack aparte.
+                        for user_sockets in list(conv_sockets.values()):
+                            for ws in list(user_sockets):
+                                try:
+                                    await ws.send_json(payload)
+                                except Exception:
+                                    pass  # el disconnect lo limpia el endpoint
                 except asyncio.CancelledError:
                     raise
                 except Exception:
