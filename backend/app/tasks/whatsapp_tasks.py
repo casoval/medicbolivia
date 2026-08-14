@@ -31,6 +31,7 @@ from app.core.config import settings
 from app.core.phone import normalize_bo_phone, InvalidPhoneError
 from app.db.database import AsyncSessionLocal, engine
 from app.models.models import WhatsAppConversation, WhatsAppMessage, WhatsAppAudience
+from app.services.whatsapp_throttle import wait_for_whatsapp_slot
 
 
 class _TransientSendError(Exception):
@@ -121,6 +122,12 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
             return
 
     try:
+        # Mismo piso global que usa el OTP síncrono (ver
+        # whatsapp_throttle.py) — el rate_limit de Celery en el decorador
+        # de esta tarea solo protege ráfagas DENTRO de send_whatsapp_message;
+        # esto además coordina contra send_whatsapp_document (bucket
+        # separado) y contra el envío de OTP (que no pasa por Celery).
+        await wait_for_whatsapp_slot()
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
                 f"{settings.WHATSAPP_SERVICE_URL}/send",
@@ -170,6 +177,16 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
     name="app.tasks.whatsapp_tasks.send_whatsapp_message",
     max_retries=3,
     default_retry_delay=30,
+    # Techo real de arranques por minuto, sin importar de dónde vino el
+    # .delay() (evento instantáneo, cron de citas, cron de no leídos,
+    # broadcast, o /whatsapp/test-message). El countdown/jitter de cada
+    # mecanismo solo demora CUÁNDO una tarea se vuelve elegible; con
+    # concurrency=4 en el worker (ver ecosystem.config.js), dos tareas de
+    # mecanismos distintos que se vuelven elegibles en el mismo segundo
+    # igual se ejecutan en paralelo. rate_limit lo evita en la única
+    # puerta por la que pasa todo — 3/m ≈ un envío cada ~20s como piso
+    # duro, siga o no cargado el worker.
+    rate_limit="3/m",
 )
 def send_whatsapp_message(
     self,
@@ -232,6 +249,10 @@ async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: st
             return
 
     try:
+        # Ver comentario equivalente en _send_and_log — mismo piso global,
+        # necesario acá también porque send_whatsapp_document tiene su
+        # PROPIO bucket de rate_limit, separado del de send_whatsapp_message.
+        await wait_for_whatsapp_slot()
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{settings.WHATSAPP_SERVICE_URL}/send-document",
@@ -274,6 +295,14 @@ async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: st
     name="app.tasks.whatsapp_tasks.send_whatsapp_document",
     max_retries=3,
     default_retry_delay=30,
+    # Mismo criterio que send_whatsapp_message — ver comentario ahí.
+    # OJO: el rate_limit de Celery es POR TASK NAME, no compartido entre
+    # las dos tareas. Hoy send_whatsapp_document solo se usa para el PDF
+    # de invitación a médicos (volumen bajo), así que en la práctica no
+    # compite con send_whatsapp_message por la misma sesión de WhatsApp
+    # en el mismo segundo — pero si el volumen de documentos crece, esto
+    # deja de ser cierto y hay que unificar el límite (ver nota abajo).
+    rate_limit="3/m",
 )
 def send_whatsapp_document(
     self,

@@ -15,6 +15,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.core.phone import normalize_bo_phone
+from app.services.whatsapp_throttle import wait_for_whatsapp_slot
 
 
 async def send_whatsapp_otp(phone: str, code: str) -> bool:
@@ -39,6 +40,11 @@ async def send_whatsapp_otp(phone: str, code: str) -> bool:
     )
 
     try:
+        # Piso global compartido con el resto del sistema (ver
+        # whatsapp_throttle.py) — este envío es síncrono y nunca pasa por
+        # Celery, así que sin esto no tiene NINGUNA coordinación con los
+        # recordatorios/broadcast/agente que sí van por Celery.
+        await wait_for_whatsapp_slot()
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
                 f"{settings.WHATSAPP_SERVICE_URL}/send",

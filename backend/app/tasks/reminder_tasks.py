@@ -274,6 +274,22 @@ async def _get_recipient_first_name(db, recipient_user_id: str, recipient_role: 
 
 
 async def _send_unread_messages_reminder() -> None:
+    async with AsyncSessionLocal() as db:
+        # Corte temprano: si AMBAS reglas (#6 profesional, #10 paciente)
+        # están apagadas desde el panel, no tiene sentido ni esperar el
+        # jitter de arranque ni pegarle a ChatMessage/ChatConversation con
+        # el join — se lee is_active una sola vez acá (2 SELECT, no uno
+        # por destinatario) y se corta antes de cualquier trabajo real.
+        rules_result = await db.execute(
+            select(ReminderRule.id, ReminderRule.is_active).where(
+                ReminderRule.id.in_([SystemReminderID.PROF_UNREAD_8PM, SystemReminderID.PATIENT_UNREAD_8PM])
+            )
+        )
+        active_by_rule = dict(rules_result.all())
+        if not any(active_by_rule.values()):
+            logger.info("Recordatorio de mensajes sin leer: ambas reglas (#6, #10) inactivas, no se consulta la BD")
+            return
+
     start_jitter = random.uniform(
         UNREAD_REMINDER_START_JITTER_MIN_SECONDS, UNREAD_REMINDER_START_JITTER_MAX_SECONDS
     )
