@@ -80,6 +80,15 @@ function AdminConversationPanel({ conv, currentUserId }: { conv: SupportConversa
   const { data: history, isLoading } = useQuery({
     queryKey: ['admin-support-chat-messages', conv.id],
     queryFn: () => adminSupportChatAPI.getMessages(conv.id),
+    // Sin esto, hereda el staleTime global de 5 minutos (ver Providers.tsx),
+    // pensado para datos casi estáticos. Acá es letal: mientras el admin
+    // está viendo OTRA conversación, esta no tiene socket abierto (solo la
+    // seleccionada lo tiene) — así que un mensaje nuevo que llegue mientras
+    // tanto no se entera ni por WS ni por caché al volver a seleccionarla,
+    // hasta que pasen los 5 minutos o se recargue la página entera. Con
+    // staleTime: 0, cada vez que se (re)selecciona una conversación se pide
+    // la lista fresca al backend, sin depender del reload.
+    staleTime: 0,
   })
 
   const {

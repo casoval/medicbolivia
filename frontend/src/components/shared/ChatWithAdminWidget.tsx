@@ -208,6 +208,12 @@ function SupportChatPanel({
   const { data: history, isLoading } = useQuery({
     queryKey: ['support-chat-messages', conversationId],
     queryFn: () => supportChatAPI.getMessages(),
+    // Ver el comentario equivalente en admin/support-chat/page.tsx: sin esto
+    // hereda el staleTime global de 5 minutos. Acá importa porque cerrar el
+    // panel desmonta este componente (mata el socket) — si llega un mensaje
+    // mientras está cerrado y se reabre antes de los 5 minutos, se vería la
+    // lista vieja sin ese mensaje hasta recargar la página entera.
+    staleTime: 0,
   })
 
   const {
