@@ -1119,6 +1119,12 @@ class PlatformSettings(Base):
     # Activable/desactivable por rol, no un único flag global.
     chat_attachments_enabled_patient: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     chat_attachments_enabled_professional: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # ── Chat directo con soporte (paciente/profesional ↔ admin) ──────
+    # Interruptor general independiente del chat interno de arriba: por
+    # default siempre disponible (es el canal para reportar problemas),
+    # pero el admin puede apagarlo puntualmente (ej. mientras reorganiza
+    # el equipo de soporte) sin afectar el chat paciente-profesional.
+    support_chat_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=utcnow_naive, default=utcnow_naive)
 
 
@@ -1841,3 +1847,74 @@ class DoctorLead(Base):
 
     created_by: Mapped["User"] = relationship(foreign_keys=[created_by_id])
     converted_professional: Mapped[Optional["Professional"]] = relationship(foreign_keys=[converted_professional_id])
+
+
+# ─────────────────────────────────────────────────────
+# Chat directo con soporte (paciente ↔ admin, profesional ↔ admin)
+#
+# A propósito es un módulo SEPARADO del chat interno paciente-profesional
+# (ChatConversation/ChatMessage más arriba): ese chat nace de una
+# Consultation pagada, expira a los N días y se puede bloquear/reportar
+# entre las dos partes. Esta línea con soporte es distinta en naturaleza:
+# siempre disponible (no depende de ninguna consulta), sin expiración ni
+# bloqueo por parte del usuario — es el canal para hablar con el equipo
+# de MedicBolivia (dudas, reclamos, problemas de pago, etc.), así que
+# tiene que estar accesible en todo momento.
+#
+# Es una "bandeja compartida": una sola conversación POR USUARIO (no por
+# admin), para que cualquier admin conectado pueda verla y responder —
+# no hace falta que sea siempre el mismo admin. Por eso no hay concepto
+# de "admin_user_id" en la conversación en sí, solo se registra qué admin
+# mandó cada mensaje puntual (SupportMessage.sender_id).
+# ─────────────────────────────────────────────────────
+
+class SupportConversationStatus(str, enum.Enum):
+    OPEN = "OPEN"      # el usuario puede seguir escribiendo
+    CLOSED = "CLOSED"  # un admin la marcó como resuelta; se reabre sola si el usuario vuelve a escribir
+
+
+class SupportConversation(Base):
+    __tablename__ = "support_conversations"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    # Único por usuario: todo el historial de un paciente/profesional con
+    # soporte vive en un solo hilo, sin importar cuántas veces escriba.
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    # Denormalizado a propósito (igual criterio que ChatConversation con
+    # patient_user_id/professional_user_id): evita un join a
+    # patients/professionals en cada carga de la bandeja del admin, que
+    # lista todas las conversaciones de golpe.
+    user_role: Mapped[str] = mapped_column(String(20), nullable=False)  # "PATIENT" o "PROFESSIONAL"
+    status: Mapped[str] = mapped_column(String(10), nullable=False, default=SupportConversationStatus.OPEN.value)
+    closed_by_admin_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    last_message_preview: Mapped[Optional[str]] = mapped_column(String(300))
+    # "USER" o "ADMIN" — de qué lado vino el último mensaje, para que la
+    # bandeja del admin pueda ordenar/resaltar primero las conversaciones
+    # donde el usuario quedó esperando respuesta.
+    last_message_from: Mapped[Optional[str]] = mapped_column(String(10))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
+
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])
+    closed_by_admin: Mapped[Optional["User"]] = relationship(foreign_keys=[closed_by_admin_id])
+    messages: Mapped[List["SupportMessage"]] = relationship(back_populates="conversation", order_by="SupportMessage.created_at", cascade="all, delete-orphan")
+
+
+class SupportMessage(Base):
+    __tablename__ = "support_messages"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    conversation_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("support_conversations.id", ondelete="CASCADE"), nullable=False)
+    sender_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content: Mapped[Optional[str]] = mapped_column(Text)
+    # Mismo patrón que ChatMessage: key privada en R2, nunca una URL
+    # pública — se firma al momento de mostrarla (ver services/storage.py).
+    attachment_key: Mapped[Optional[str]] = mapped_column(String(500))
+    attachment_content_type: Mapped[Optional[str]] = mapped_column(String(100))
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+
+    conversation: Mapped["SupportConversation"] = relationship(back_populates="messages")
+    sender: Mapped["User"] = relationship()

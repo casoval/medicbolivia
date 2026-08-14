@@ -344,3 +344,48 @@ export type ChatSocketEvent =
   | { type: 'error'; code: 'chat_unavailable' | 'rate_limited' | 'invalid_content' }
   | { type: 'typing'; user_id: string }
   | { type: 'read'; reader_id: string; read_at: string }
+
+// ─────────────────────────────────────────────────────
+// CHAT DIRECTO CON SOPORTE (paciente/profesional ↔ admin)
+// Módulo aparte del chat interno de arriba: siempre disponible, sin
+// bloqueo ni expiración — ver backend/app/services/support_chat.py.
+// ─────────────────────────────────────────────────────
+
+export type SupportConversationStatus = 'OPEN' | 'CLOSED'
+
+export interface SupportChatParticipant {
+  user_id: string
+  full_name: string
+  photo_url: string | null
+  role: 'PATIENT' | 'PROFESSIONAL'
+}
+
+export interface SupportConversationSummary {
+  id: string
+  status: SupportConversationStatus
+  last_message_at: string | null
+  last_message_preview: string | null
+  last_message_from: 'USER' | 'ADMIN' | null
+  created_at: string
+  /** Solo viene completo en la bandeja del admin */
+  participant: SupportChatParticipant | null
+  unread_count: number
+}
+
+export interface SupportMessage {
+  id: string
+  conversation_id: string
+  sender_id: string
+  is_admin_sender: boolean
+  content: string | null
+  attachment_url: string | null
+  attachment_content_type: string | null
+  read_at: string | null
+  created_at: string
+}
+
+export type SupportChatSocketEvent =
+  | ({ type: 'message' } & SupportMessage)
+  | { type: 'error'; code: 'support_chat_unavailable' | 'rate_limited' | 'invalid_content' }
+  | { type: 'typing'; user_id: string; is_admin: boolean }
+  | { type: 'read'; reader_id: string; read_at: string }

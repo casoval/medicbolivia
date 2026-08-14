@@ -4,6 +4,7 @@ import type {
   AuthResponse, User, Professional, Consultation,
   Payment, Prescription, LabOrder, AgentResponse, Rating, FAQ,
   ChatConversationSummary, ChatMessage, ChatReasonCategory,
+  SupportConversationSummary, SupportMessage,
 } from '@/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'
@@ -128,6 +129,8 @@ export interface PlatformSettings {
   chat_window_days: number
   chat_attachments_enabled_patient: boolean
   chat_attachments_enabled_professional: boolean
+  /** Interruptor general del chat directo con soporte (independiente del chat interno de arriba) */
+  support_chat_enabled: boolean
   updated_at: string | null
 }
 
@@ -140,6 +143,7 @@ export interface PlatformSettingsUpdate {
   chat_window_days?: number
   chat_attachments_enabled_patient?: boolean
   chat_attachments_enabled_professional?: boolean
+  support_chat_enabled?: boolean
 }
 
 // ── Comisión por período / por profesional ──
@@ -1941,4 +1945,74 @@ export function buildChatWebSocketUrl(conversationId: string): string {
 export function buildNotificationWebSocketUrl(): string {
   const wsBase = BASE_URL.replace(/^http/, 'ws')
   return `${wsBase}/ws/notifications`
+}
+
+// ── Chat directo con soporte (paciente/profesional ↔ admin) ─────────
+// Módulo aparte del chat interno de arriba (ver backend/app/services/
+// support_chat.py): siempre disponible, un solo hilo por usuario, sin
+// bloqueo ni expiración. Este objeto es el que usan el widget flotante
+// y el botón del encabezado; adminSupportChatAPI (más abajo) es la
+// bandeja compartida que ve el equipo de MedicBolivia.
+export const SUPPORT_CHAT_PAGE_SIZE = 20
+
+export const supportChatAPI = {
+  // Si el chat con soporte está habilitado globalmente (interruptor del
+  // admin en Configuración). El widget lo consulta una sola vez al
+  // montarse para decidir si mostrarse.
+  getConfig: () =>
+    api.get<{ enabled: boolean }>('/support-chat/config').then(r => r.data),
+
+  // Trae (o crea, si es la primera vez) mi conversación con soporte.
+  getMyConversation: () =>
+    api.get<SupportConversationSummary>('/support-chat/conversation').then(r => r.data),
+
+  getMessages: (before?: string) =>
+    api.get<SupportMessage[]>('/support-chat/conversation/messages', {
+      params: before ? { before, limit: SUPPORT_CHAT_PAGE_SIZE } : { limit: SUPPORT_CHAT_PAGE_SIZE },
+    }).then(r => r.data),
+
+  markRead: () =>
+    api.post<{ marked: number }>('/support-chat/conversation/read').then(r => r.data),
+
+  sendAttachment: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<SupportMessage>('/support-chat/conversation/attachments', form).then(r => r.data)
+  },
+}
+
+export function buildSupportChatWebSocketUrl(conversationId: string): string {
+  const wsBase = BASE_URL.replace(/^http/, 'ws')
+  return `${wsBase}/support-chat/ws/${conversationId}`
+}
+
+// ── Bandeja de soporte del admin (/admin/support-chat) ───────────────
+export const adminSupportChatAPI = {
+  listConversations: (opts?: { status?: 'OPEN' | 'CLOSED'; role?: 'PATIENT' | 'PROFESSIONAL' }) =>
+    api.get<SupportConversationSummary[]>('/admin/support-chat/conversations', {
+      params: { status: opts?.status, role: opts?.role },
+    }).then(r => r.data),
+
+  getUnreadCount: () =>
+    api.get<{ unread: number }>('/admin/support-chat/unread-count').then(r => r.data),
+
+  getMessages: (conversationId: string, before?: string) =>
+    api.get<SupportMessage[]>(`/admin/support-chat/conversations/${conversationId}/messages`, {
+      params: before ? { before, limit: SUPPORT_CHAT_PAGE_SIZE } : { limit: SUPPORT_CHAT_PAGE_SIZE },
+    }).then(r => r.data),
+
+  markRead: (conversationId: string) =>
+    api.post<{ marked: number }>(`/admin/support-chat/conversations/${conversationId}/read`).then(r => r.data),
+
+  sendAttachment: (conversationId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<SupportMessage>(`/admin/support-chat/conversations/${conversationId}/attachments`, form).then(r => r.data)
+  },
+
+  close: (conversationId: string, reason?: string) =>
+    api.post<SupportConversationSummary>(`/admin/support-chat/conversations/${conversationId}/close`, { reason }).then(r => r.data),
+
+  reopen: (conversationId: string) =>
+    api.post<SupportConversationSummary>(`/admin/support-chat/conversations/${conversationId}/reopen`).then(r => r.data),
 }

@@ -303,6 +303,12 @@ export const ADMIN_NAV: NavItem[] = [
     description: 'Bloqueos reportados por pacientes y profesionales',
   },
   {
+    label: 'Chat con soporte',
+    href: '/admin/support-chat',
+    icon: <IconChat />,
+    description: 'Bandeja de mensajes directos de pacientes y profesionales con el equipo',
+  },
+  {
     label: 'Auditoría',
     href: '/admin/logs',
     icon: <IconLog />,

@@ -23,6 +23,7 @@ function fromApi(data: PlatformSettings) {
     chatWindowDays: data.chat_window_days,
     chatAttachmentsPatient: data.chat_attachments_enabled_patient,
     chatAttachmentsProfessional: data.chat_attachments_enabled_professional,
+    supportChatEnabled: data.support_chat_enabled,
   }
 }
 
@@ -35,6 +36,7 @@ function toApiPayload(state: {
   chatWindowDays: number
   chatAttachmentsPatient: boolean
   chatAttachmentsProfessional: boolean
+  supportChatEnabled: boolean
 }): PlatformSettingsUpdate {
   return {
     app_name: state.appName,
@@ -45,6 +47,7 @@ function toApiPayload(state: {
     chat_window_days: state.chatWindowDays,
     chat_attachments_enabled_patient: state.chatAttachmentsPatient,
     chat_attachments_enabled_professional: state.chatAttachmentsProfessional,
+    support_chat_enabled: state.supportChatEnabled,
   }
 }
 
@@ -241,6 +244,7 @@ export default function AdminSettingsPage() {
   const [chatWindowDays, setChatWindowDays] = useState(15)
   const [chatAttachmentsPatient, setChatAttachmentsPatient] = useState(true)
   const [chatAttachmentsProfessional, setChatAttachmentsProfessional] = useState(true)
+  const [supportChatEnabled, setSupportChatEnabled] = useState(true)
 
   const { data: systemInfo, isLoading: loadingSystemInfo } = useQuery({
     queryKey: ['admin', 'system-info'],
@@ -261,6 +265,7 @@ export default function AdminSettingsPage() {
         setChatWindowDays(mapped.chatWindowDays)
         setChatAttachmentsPatient(mapped.chatAttachmentsPatient)
         setChatAttachmentsProfessional(mapped.chatAttachmentsProfessional)
+        setSupportChatEnabled(mapped.supportChatEnabled)
       })
       .catch((err) => {
         if (!active) return
@@ -280,6 +285,7 @@ export default function AdminSettingsPage() {
         toApiPayload({
           appName, commission, openRegistration, openProfessionals, maintenance,
           chatWindowDays, chatAttachmentsPatient, chatAttachmentsProfessional,
+          supportChatEnabled,
         })
       )
       const mapped = fromApi(data)
@@ -291,6 +297,7 @@ export default function AdminSettingsPage() {
       setChatWindowDays(mapped.chatWindowDays)
       setChatAttachmentsPatient(mapped.chatAttachmentsPatient)
       setChatAttachmentsProfessional(mapped.chatAttachmentsProfessional)
+      setSupportChatEnabled(mapped.supportChatEnabled)
       setSuccess('Configuración guardada correctamente')
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
@@ -442,6 +449,35 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
 
+              <button
+                onClick={saveSettings}
+                disabled={saving}
+                className="btn-primary w-full text-xs py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Guardando…' : 'Guardar configuración'}
+              </button>
+            </div>
+          </div>
+
+          {/* Chat directo con soporte: canal aparte del chat interno de
+              arriba, entre paciente/profesional y el equipo de admin */}
+          <div className="card">
+            <SectionTitle>{t('Chat con soporte')}</SectionTitle>
+            <div className="space-y-4">
+              <p className="text-xs text-[#475569]">
+                Línea directa de pacientes y profesionales con el equipo de MedicBolivia
+                (botón flotante y en el encabezado de su panel). Es independiente del chat
+                interno paciente-profesional: no expira ni se bloquea.
+              </p>
+              <div className="flex items-center justify-between pt-2 border-t border-[#DDE1EE]">
+                <div>
+                  <p className="text-sm font-medium">Habilitar chat con soporte</p>
+                  <p className="text-xs text-[#475569]">
+                    Si lo apagas, el botón desaparece del panel de pacientes y profesionales
+                  </p>
+                </div>
+                <Toggle on={supportChatEnabled} onChange={setSupportChatEnabled} disabled={saving} />
+              </div>
               <button
                 onClick={saveSettings}
                 disabled={saving}

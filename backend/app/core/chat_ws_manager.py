@@ -32,12 +32,19 @@ CHANNEL_PREFIX = "chat:conversation:"
 
 
 class ChatConnectionManager:
-    def __init__(self):
+    def __init__(self, channel_prefix: str = CHANNEL_PREFIX):
         # conversation_id -> { user_id -> WebSocket }, solo los sockets
         # que están físicamente conectados a ESTE proceso worker.
         self.local: Dict[str, Dict[str, WebSocket]] = {}
         # conversation_id -> task de escucha del canal Redis de esa conversación
         self._listeners: Dict[str, asyncio.Task] = {}
+        # Prefijo del canal Redis — parametrizable para poder reusar esta
+        # misma clase en otros módulos de chat (ver
+        # core/support_chat_ws_manager.py) sin arriesgar que dos módulos
+        # distintos compartan canal por una coincidencia de conversation_id
+        # (en la práctica no pasaría, son UUIDs de tablas distintas, pero
+        # namespaces separados es más prolijo y más fácil de debuggear).
+        self._channel_prefix = channel_prefix
 
     async def connect(self, conversation_id: str, user_id: str, ws: WebSocket):
         await ws.accept()
@@ -67,7 +74,7 @@ class ChatConnectionManager:
         """Publica el evento en Redis — todos los workers con sockets
         abiertos de esta conversación lo recibirán vía _listen()."""
         await redis_client.publish(
-            f"{CHANNEL_PREFIX}{conversation_id}", json.dumps(payload)
+            f"{self._channel_prefix}{conversation_id}", json.dumps(payload)
         )
 
     async def _listen(self, conversation_id: str):
@@ -80,7 +87,7 @@ class ChatConnectionManager:
         self._listeners como si siguiera viva, y este worker dejaba de
         reenviar mensajes de esa conversación hasta que todos los sockets
         locales se cerraran (lo único que limpiaba la entrada muerta)."""
-        channel = f"{CHANNEL_PREFIX}{conversation_id}"
+        channel = f"{self._channel_prefix}{conversation_id}"
         try:
             while True:
                 pubsub = redis_client.pubsub()

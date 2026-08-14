@@ -136,6 +136,9 @@ class PlatformSettingsUpdate(BaseModel):
     chat_window_days: Optional[int] = Field(None, ge=1, le=90)
     chat_attachments_enabled_patient: Optional[bool] = None
     chat_attachments_enabled_professional: Optional[bool] = None
+    # ── Chat directo con soporte (paciente/profesional ↔ admin) ──────
+    # Interruptor general, independiente del chat interno de arriba.
+    support_chat_enabled: Optional[bool] = None
 
 
 async def _get_or_create_settings(db: AsyncSession) -> PlatformSettings:
@@ -160,6 +163,7 @@ def _settings_to_dict(s: PlatformSettings) -> dict:
         "chat_window_days":                  s.chat_window_days,
         "chat_attachments_enabled_patient":       s.chat_attachments_enabled_patient,
         "chat_attachments_enabled_professional":  s.chat_attachments_enabled_professional,
+        "support_chat_enabled":                   s.support_chat_enabled,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
 

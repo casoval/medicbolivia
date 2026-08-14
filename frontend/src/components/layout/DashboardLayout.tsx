@@ -4,12 +4,62 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useAuthStore } from '@/lib/store'
+import { useQuery } from '@tanstack/react-query'
+import { useAuthStore, useSupportChatUIStore } from '@/lib/store'
 import { NotificationToast } from './NotificationToast'
 import { FloatingNotificationBell } from './FloatingNotificationBell'
+import { ChatWithAdminWidget } from '@/components/shared/ChatWithAdminWidget'
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { supportChatAPI, adminSupportChatAPI } from '@/lib/api'
 import type { UserRole } from '@/types'
+
+const IconSupportChat = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+
+// Botón del encabezado para acceso rápido al chat directo con soporte
+// (paciente/profesional ↔ admin). Para PATIENT/PROFESSIONAL abre el
+// mismo panel que la burbuja flotante (ChatWithAdminWidget) — funciona
+// aunque la burbuja esté oculta. Para ADMIN lleva a la bandeja completa
+// (/admin/support-chat), ya que ahí puede haber varias conversaciones
+// a la vez, no tiene sentido un popup único.
+function SupportChatHeaderButton({ role }: { role: UserRole }) {
+  const { t } = useLanguage()
+  const router = useRouter()
+  const { toggle: toggleWidget, unreadCount: widgetUnread } = useSupportChatUIStore()
+
+  const { data: config } = useQuery({
+    queryKey: ['support-chat-config'],
+    queryFn: supportChatAPI.getConfig,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: adminUnread } = useQuery({
+    queryKey: ['admin-support-chat-unread'],
+    queryFn: adminSupportChatAPI.getUnreadCount,
+    enabled: role === 'ADMIN' && config?.enabled !== false,
+    refetchInterval: 20000,
+  })
+
+  if (config?.enabled === false) return null
+
+  const badge = role === 'ADMIN' ? (adminUnread?.unread ?? 0) : widgetUnread
+
+  return (
+    <button
+      onClick={() => (role === 'ADMIN' ? router.push('/admin/support-chat') : toggleWidget())}
+      className="relative shrink-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+      title={t('Chat con soporte')}
+      aria-label={t('Chat con soporte')}
+    >
+      <IconSupportChat />
+      {badge > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 bg-[#E24B4A] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-[#0F6E56] pointer-events-none">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
+    </button>
+  )
+}
 
 interface NavItem {
   label: string
@@ -213,6 +263,10 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
           <span className={`${firstName ? 'hidden' : 'inline'} sm:inline shrink-0 text-xs bg-white/15 text-white px-2.5 py-1 rounded-full font-medium whitespace-nowrap`}>
             {t(roleLabels[role])}
           </span>
+          {/* Chat directo con soporte — acceso rápido, siempre visible en
+              el encabezado independientemente de si la burbuja flotante
+              está oculta (ver ChatWithAdminWidget). */}
+          <SupportChatHeaderButton role={role} />
           <div className="relative shrink-0">
             <button
               onClick={() => setAccountMenuOpen((open) => !open)}
@@ -328,6 +382,10 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
 
       {/* Ícono redondo flotante — avisa de notificaciones nuevas estés donde estés */}
       <FloatingNotificationBell />
+
+      {/* Chat directo con soporte — burbuja flotante + panel (solo para
+          paciente/profesional; el admin usa la bandeja de /admin/support-chat) */}
+      <ChatWithAdminWidget />
     </div>
   )
 }

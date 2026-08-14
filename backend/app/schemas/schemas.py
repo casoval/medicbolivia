@@ -1377,5 +1377,54 @@ class PatientBlockResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ─────────────────────────────────────────────────────
+# Chat directo con soporte (paciente/profesional <-> admin)
+# ─────────────────────────────────────────────────────
+
+class SupportChatParticipantResponse(BaseModel):
+    user_id: str
+    full_name: str
+    photo_url: Optional[str] = None
+    role: str  # "PATIENT" o "PROFESSIONAL"
+
+
+class SupportConversationResponse(BaseModel):
+    id: str
+    status: str
+    last_message_at: Optional[datetime]
+    last_message_preview: Optional[str]
+    last_message_from: Optional[str] = None
+    created_at: datetime
+    # Solo se completa en la bandeja del admin (para el usuario dueño del
+    # hilo, "el otro lado" siempre es "el equipo de soporte", no hace
+    # falta identificarlo).
+    participant: Optional[SupportChatParticipantResponse] = None
+    unread_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class SupportMessageResponse(BaseModel):
+    id: str
+    conversation_id: str
+    sender_id: str
+    is_admin_sender: bool
+    content: Optional[str]
+    attachment_url: Optional[str] = None
+    attachment_content_type: Optional[str] = None
+    read_at: Optional[datetime]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SupportChatConfigResponse(BaseModel):
+    enabled: bool
+
+
+class SupportChatCloseRequest(BaseModel):
+    reason: Optional[str] = Field(None, max_length=255)
+
+
 # Actualizar referencias forward
 TokenResponse.model_rebuild()
