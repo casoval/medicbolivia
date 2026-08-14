@@ -7,14 +7,13 @@ Una ChatConversation pasa a EXPIRED cuando se cumple expires_at
 el historial sigue disponible en modo solo lectura, solo se bloquea el
 envío de mensajes nuevos (ver validación en chat.py, tanto REST como WS).
 """
-import asyncio
 from app.core.timezone import utcnow_naive
 
 from sqlalchemy import select, and_
 from loguru import logger
 
 from app.core.celery_app import celery_app
-from app.db.database import AsyncSessionLocal, engine
+from app.db.database import AsyncSessionLocal, engine, run_task_with_engine_cleanup
 from app.models.models import (
     ChatConversation, ChatConversationStatus, ChatBlock,
     ProfessionalPatientVisibility, User, UserRole,
@@ -52,8 +51,7 @@ async def _notify_admin_of_chat_report(chat_block_id: str):
 
 @celery_app.task(name="app.tasks.chat_tasks.notify_admin_of_chat_report")
 def notify_admin_of_chat_report(chat_block_id: str):
-    asyncio.run(_notify_admin_of_chat_report(chat_block_id))
-    asyncio.run(engine.dispose())
+    run_task_with_engine_cleanup(_notify_admin_of_chat_report(chat_block_id))
 
 
 async def _notify_admin_of_patient_visibility_report(visibility_id: str):
@@ -88,8 +86,7 @@ async def _notify_admin_of_patient_visibility_report(visibility_id: str):
 
 @celery_app.task(name="app.tasks.chat_tasks.notify_admin_of_patient_visibility_report")
 def notify_admin_of_patient_visibility_report(visibility_id: str):
-    asyncio.run(_notify_admin_of_patient_visibility_report(visibility_id))
-    asyncio.run(engine.dispose())
+    run_task_with_engine_cleanup(_notify_admin_of_patient_visibility_report(visibility_id))
 
 
 async def _expire_chat_conversations():
@@ -115,5 +112,4 @@ async def _expire_chat_conversations():
 
 @celery_app.task(name="app.tasks.chat_tasks.expire_chat_conversations")
 def expire_chat_conversations():
-    asyncio.run(_expire_chat_conversations())
-    asyncio.run(engine.dispose())
+    run_task_with_engine_cleanup(_expire_chat_conversations())

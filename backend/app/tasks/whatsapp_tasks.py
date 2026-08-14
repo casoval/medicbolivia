@@ -18,7 +18,6 @@ errores 502/503 y de red hacia whatsapp-service, y solo registra el
 mensaje como FAILED en la BD cuando se agotan los reintentos — así no se
 acumula una fila por cada intento fallido.
 """
-import asyncio
 from app.core.timezone import utcnow_naive
 from typing import Optional
 
@@ -29,7 +28,7 @@ from sqlalchemy import select
 from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.core.phone import normalize_bo_phone, InvalidPhoneError
-from app.db.database import AsyncSessionLocal, engine
+from app.db.database import AsyncSessionLocal, engine, run_task_with_engine_cleanup
 from app.models.models import WhatsAppConversation, WhatsAppMessage, WhatsAppAudience
 from app.services.whatsapp_throttle import wait_for_whatsapp_slot
 
@@ -210,19 +209,21 @@ def send_whatsapp_message(
     (ningún código llamaba a retry), así que cualquier falla puntual del
     frame de Puppeteer quedaba marcada como FAILED para siempre.
     """
-    try:
-        asyncio.run(_send_and_log(
-            task=self,
-            phone=phone,
-            message=message,
-            audience=audience,
-            user_id=user_id,
-            related_entity_type=related_entity_type,
-            related_entity_id=related_entity_id,
-            sent_by=sent_by,
-        ))
-    finally:
-        asyncio.run(engine.dispose())
+    # run_task_with_engine_cleanup ya incluye el try/finally internamente
+    # (ver docstring en app/db/database.py) — cualquier excepción de
+    # _send_and_log (incluida self.retry(...), que Celery usa como señal
+    # interna) sigue propagando igual que antes, pero el dispose() ahora
+    # corre en el MISMO loop que abrió las conexiones.
+    run_task_with_engine_cleanup(_send_and_log(
+        task=self,
+        phone=phone,
+        message=message,
+        audience=audience,
+        user_id=user_id,
+        related_entity_type=related_entity_type,
+        related_entity_id=related_entity_id,
+        sent_by=sent_by,
+    ))
 
 
 async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: str, caption: str,
@@ -323,21 +324,18 @@ def send_whatsapp_document(
     app/services/invitation_pdf.py), pero queda genérica por si en el
     futuro hace falta mandar otro tipo de documento (ej. un comprobante).
     """
-    try:
-        asyncio.run(_send_document_and_log(
-            task=self,
-            phone=phone,
-            pdf_base64=pdf_base64,
-            filename=filename,
-            caption=caption,
-            audience=audience,
-            user_id=user_id,
-            related_entity_type=related_entity_type,
-            related_entity_id=related_entity_id,
-            sent_by=sent_by,
-        ))
-    finally:
-        asyncio.run(engine.dispose())
+    run_task_with_engine_cleanup(_send_document_and_log(
+        task=self,
+        phone=phone,
+        pdf_base64=pdf_base64,
+        filename=filename,
+        caption=caption,
+        audience=audience,
+        user_id=user_id,
+        related_entity_type=related_entity_type,
+        related_entity_id=related_entity_id,
+        sent_by=sent_by,
+    ))
 
 
 async def _notify_admin_of_whatsapp_escalation(conversation_id: str):
@@ -381,5 +379,4 @@ async def _notify_admin_of_whatsapp_escalation(conversation_id: str):
 
 @celery_app.task(name="app.tasks.whatsapp_tasks.notify_admin_of_whatsapp_escalation")
 def notify_admin_of_whatsapp_escalation(conversation_id: str):
-    asyncio.run(_notify_admin_of_whatsapp_escalation(conversation_id))
-    asyncio.run(engine.dispose())
+    run_task_with_engine_cleanup(_notify_admin_of_whatsapp_escalation(conversation_id))

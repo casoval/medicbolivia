@@ -34,7 +34,7 @@ from sqlalchemy import select, and_
 from loguru import logger
 
 from app.core.celery_app import celery_app
-from app.db.database import AsyncSessionLocal, engine
+from app.db.database import AsyncSessionLocal, engine, run_task_with_engine_cleanup
 from app.db.seed_system_reminders import SystemReminderID
 from app.models.models import (
     ReminderRule, ReminderLog, Consultation, ConsultationType, ConsultationStatus,
@@ -91,13 +91,11 @@ def notify_professional_patient_waiting(consultation_id: str):
     Consultation con consultation_type=IMMEDIATE, en
     consultations.py::create_consultation.
     """
-    # asyncio.run() crea un event loop nuevo en cada llamada, pero el
-    # pool de conexiones de `engine` es un singleton de módulo pensado
-    # para el loop único y persistente de FastAPI. Sin este dispose(),
-    # una conexión del pool creada en un loop anterior (ya cerrado)
-    # puede reusarse acá y asyncpg tira "attached to a different loop".
-    asyncio.run(_notify_professional_patient_waiting(consultation_id))
-    asyncio.run(engine.dispose())
+    # run_task_with_engine_cleanup corre la coroutine y el dispose() del
+    # engine en el MISMO event loop — ver docstring en app/db/database.py.
+    # Antes eran dos asyncio.run() separados, lo que causaba justamente el
+    # "Event loop is closed" que este dispose() buscaba evitar.
+    run_task_with_engine_cleanup(_notify_professional_patient_waiting(consultation_id))
 
 
 # ── 2. Cron: recordatorios de citas agendadas (#4 profesional / #1 paciente) ──
@@ -223,8 +221,7 @@ async def _send_reminder_for_rule(db, rule: ReminderRule, consultation: Consulta
 
 @celery_app.task(name="app.tasks.reminder_tasks.check_scheduled_appointment_reminders")
 def check_scheduled_appointment_reminders():
-    asyncio.run(_check_scheduled_appointment_reminders())
-    asyncio.run(engine.dispose())
+    run_task_with_engine_cleanup(_check_scheduled_appointment_reminders())
 
 
 # ── 3. Cron diario 20:00 (La Paz): mensajes sin leer (#6 profesional / #2 paciente) ──
@@ -357,5 +354,4 @@ async def _send_unread_messages_reminder() -> None:
 
 @celery_app.task(name="app.tasks.reminder_tasks.send_unread_messages_reminder")
 def send_unread_messages_reminder():
-    asyncio.run(_send_unread_messages_reminder())
-    asyncio.run(engine.dispose())
+    run_task_with_engine_cleanup(_send_unread_messages_reminder())

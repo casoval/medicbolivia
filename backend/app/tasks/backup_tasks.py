@@ -11,7 +11,6 @@ R2 (mismo patrón que documentos/adjuntos de chat, ver app/services/storage.py)
 y se manda un link firmado (BACKUP_R2_LINK_EXPIRES_HOURS) en el cuerpo del
 correo en vez del archivo.
 """
-import asyncio
 import gzip
 import shutil
 import smtplib
@@ -26,7 +25,7 @@ from loguru import logger
 
 from app.core.celery_app import celery_app
 from app.core.config import settings
-from app.db.database import AsyncSessionLocal, engine
+from app.db.database import AsyncSessionLocal, engine, run_task_with_engine_cleanup
 from app.models.models import DBBackupConfig, DBBackupLog
 from app.services.storage import upload_backup_to_r2, get_presigned_url
 
@@ -157,8 +156,7 @@ async def _run_backup() -> None:
 @celery_app.task(name="app.tasks.backup_tasks.run_backup_now")
 def run_backup_now():
     """Disparo manual — botón 'Enviar backup ahora' en la pestaña 4."""
-    asyncio.run(_run_backup())
-    asyncio.run(engine.dispose())
+    run_task_with_engine_cleanup(_run_backup())
 
 
 async def _check_and_run_backup() -> None:
@@ -188,5 +186,4 @@ async def _check_and_run_backup() -> None:
 
 @celery_app.task(name="app.tasks.backup_tasks.check_and_run_backup")
 def check_and_run_backup():
-    asyncio.run(_check_and_run_backup())
-    asyncio.run(engine.dispose())
+    run_task_with_engine_cleanup(_check_and_run_backup())

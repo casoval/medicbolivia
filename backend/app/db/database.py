@@ -2,6 +2,9 @@
 app/db/database.py
 Configuración de la conexión a PostgreSQL con SQLAlchemy async.
 """
+import asyncio
+from typing import Coroutine
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
@@ -54,3 +57,42 @@ async def create_all_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("✅ Tablas de base de datos creadas/verificadas")
+
+
+# ── Runner para tareas de Celery (fuera del loop de FastAPI) ──
+def run_task_with_engine_cleanup(coro: Coroutine) -> None:
+    """
+    Reemplaza el patrón repetido en las tareas de Celery:
+
+        asyncio.run(alguna_coroutine())
+        asyncio.run(engine.dispose())
+
+    que parecía razonable (dispose() explícito para no dejar conexiones
+    colgando entre corridas) pero en realidad CAUSA el problema que
+    intenta evitar: cada asyncio.run() abre un event loop nuevo y lo
+    cierra al terminar. La primera llamada abre conexiones asyncpg en el
+    loop A y lo cierra; la segunda llamada abre un loop B nuevo e intenta
+    cerrar esas conexiones — que pertenecen al loop A, ya cerrado — y
+    asyncpg tira "Event loop is closed" / "attached to a different loop"
+    (visible en los logs de celery-worker, ej. en
+    check_scheduled_appointment_reminders). La tarea igual queda marcada
+    "succeeded" porque el error ocurre en la limpieza posterior, no en el
+    trabajo real — pero la conexión nunca se cierra limpio: fuga lenta de
+    conexiones/descriptores en cada corrida.
+
+    El fix es correr AMBAS cosas dentro del mismo event loop, para que
+    dispose() limpie las conexiones en el loop que las creó:
+
+        run_task_with_engine_cleanup(alguna_coroutine())
+
+    Uso: pasar la coroutine SIN awaitear (ej. `run_task_with_engine_cleanup(
+    _mi_funcion_async(arg1, arg2))`), igual que se hacía con
+    `asyncio.run(_mi_funcion_async(arg1, arg2))` antes.
+    """
+    async def _run_and_dispose():
+        try:
+            await coro
+        finally:
+            await engine.dispose()
+
+    asyncio.run(_run_and_dispose())
