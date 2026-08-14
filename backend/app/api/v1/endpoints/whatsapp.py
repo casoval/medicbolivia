@@ -25,6 +25,7 @@ from app.db.database import get_db
 from app.core.dependencies import get_current_admin
 from app.core.config import settings
 from app.core.phone import normalize_bo_phone, InvalidPhoneError
+from app.core.redis_client import security_redis_client
 from app.models.models import (
     User, Patient, Professional, Admin, WhatsAppConversation, WhatsAppMessage, WhatsAppAudience,
     AgentConfig, ReminderRule, ReminderLog, DBBackupConfig, DBBackupLog,
@@ -86,15 +87,52 @@ class TestMessageRequest(BaseModel):
     message: str = "Mensaje de prueba desde el panel de MedicBolivia ✅"
 
 
+# Cooldown por admin para /test-message. No reemplaza al rate_limit de
+# Celery ni al piso global de whatsapp_throttle.py (esos siguen siendo la
+# última línea de defensa real contra whatsapp-service) — esto es una
+# capa aparte, PREVIA a encolar nada, pensada para el patrón que generó
+# el bloqueo de la noche del 13→14: varios admins probando el bot a la
+# vez desde el panel, cada click encolando un mensaje real sin ningún
+# freno propio. 45s alcanza para no estorbar una prueba genuina ("¿llegó
+# el mensaje?") pero corta el reflejo de "no vi nada, clickeo de nuevo".
+# Vive en security_redis_client (mismo Redis que OTP/login) y no en el
+# Redis de whatsapp_throttle.py, que es compartido con Celery — así un
+# incidente en un dominio no ensucia namespaces del otro.
+TEST_MESSAGE_COOLDOWN_SECONDS = 45
+_TEST_MESSAGE_COOLDOWN_KEY_PREFIX = "whatsapp:test_message:cooldown:"
+
+
 @router.post("/test-message", summary="Enviar mensaje de prueba (verificar que el bot funciona)")
 async def send_test_message(data: TestMessageRequest, current_user: User = Depends(get_current_admin)):
+    cooldown_key = f"{_TEST_MESSAGE_COOLDOWN_KEY_PREFIX}{current_user.id}"
+    # SET NX: solo escribe si la key no existe. Si ya existía, alguien
+    # (este mismo admin) mandó una prueba hace menos de
+    # TEST_MESSAGE_COOLDOWN_SECONDS — se corta ANTES de encolar nada.
+    acquired = await security_redis_client.set(
+        cooldown_key, "1", nx=True, ex=TEST_MESSAGE_COOLDOWN_SECONDS
+    )
+    if not acquired:
+        remaining = await security_redis_client.ttl(cooldown_key)
+        remaining = max(remaining, 1)
+        logger.info(
+            f"whatsapp/test-message: cooldown activo para admin {current_user.id}, "
+            f"{remaining}s restantes"
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"Esperá {remaining}s antes de mandar otro mensaje de prueba.",
+        )
+
     send_whatsapp_message.delay(
         phone=data.phone,
         message=data.message,
         audience=WhatsAppAudience.ADMIN.value,
         sent_by="ADMIN",
     )
-    return {"status": "queued"}
+    return {
+        "status": "queued",
+        "note": "El envío puede tardar unos segundos por el límite de velocidad de WhatsApp.",
+    }
 
 
 # ═══════════════════════════════════════════════════════
