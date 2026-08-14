@@ -84,10 +84,14 @@ def reopen_if_needed(conv: SupportConversation) -> None:
 
 
 async def has_unread_messages_from_user(db: AsyncSession, conversation_id: str, user_id: str) -> bool:
-    """Usado para decidir si vale la pena escalar por WhatsApp a los
-    admins: si ya había mensajes del usuario sin leer, no hace falta
-    mandar otro aviso por WhatsApp por cada mensaje nuevo del mismo
-    "impulso" de escritura — alcanza con el primero."""
+    """Cuenta mensajes sin leer de un usuario en la conversación de
+    soporte. NO se usa hoy para decidir si escalar por WhatsApp — esa
+    lógica se eliminó por completo (ver docstring de
+    _notify_admins_of_new_message en endpoints/support_chat.py: causó el
+    bloqueo real del número de WhatsApp el 2026-08-14, el chat de soporte
+    es mensajería interna de la plataforma y no debe tocar el bot). Queda
+    disponible por si hace falta para otro uso (ej. un badge visual de
+    pendientes), sin ninguna relación con WhatsApp."""
     result = await db.execute(
         select(func.count(SupportMessage.id)).where(
             SupportMessage.conversation_id == conversation_id,

@@ -33,7 +33,7 @@ from app.schemas.schemas import (
 )
 from app.services.support_chat import (
     is_support_chat_enabled, get_or_create_conversation_for_user,
-    get_conversation_for_participant, reopen_if_needed, has_unread_messages_from_user,
+    get_conversation_for_participant, reopen_if_needed,
     build_participant_label,
 )
 from app.services.storage import upload_chat_attachment_to_r2, get_presigned_url
@@ -68,12 +68,29 @@ async def _build_message_response(msg: SupportMessage, conv_user_id: str) -> Sup
     )
 
 
-async def _notify_admins_of_new_message(conversation_id: str, sender_name: str, preview: str, escalate_whatsapp: bool):
+async def _notify_admins_of_new_message(conversation_id: str, sender_name: str, preview: str):
     """Avisa a TODOS los admins que hay un mensaje nuevo esperando
-    respuesta. El WhatsApp solo se manda si escalate_whatsapp=True (ver
-    llamador: solo en el primer mensaje de una tanda, para no saturar el
-    WhatsApp del equipo con cada mensaje individual de una conversación
-    activa — mismo criterio que ya usa el chat interno)."""
+    respuesta — SOLO in-app (WebSocket + tabla notifications), nunca por
+    WhatsApp.
+
+    Antes esto escalaba por WhatsApp cuando `has_unread_messages_from_user`
+    daba False (ver services/support_chat.py), pensado para mandar "solo el
+    primer mensaje de una tanda". En la práctica, si el admin está
+    respondiendo en vivo y marca los mensajes como leídos a medida que
+    llegan, CADA mensaje nuevo vuelve a verse como "el primero" — así, una
+    conversación activa dispara un WhatsApp automático por cada mensaje
+    corto ("hola", "en que", "sube una foto"...). Ese patrón (envíos
+    instantáneos, mecánicos, en ráfaga) fue lo que causó el bloqueo real
+    del número el 2026-08-14, ~9 minutos después del primer mensaje.
+
+    Decisión de diseño: el chat de soporte es mensajería INTERNA de la
+    plataforma — el admin y el usuario ya están (o pueden estar) mirando
+    la conversación en la app en tiempo real. WhatsApp no debería
+    involucrarse nunca acá; queda reservado exclusivamente para eventos
+    puntuales del flujo de negocio (recordatorios, pagos, aceptación de
+    consulta, etc. — ver app/services/system_reminders.py y
+    app/tasks/reminder_tasks.py), que sí son casos genuinos de "avisar a
+    alguien que no está mirando la app en este momento"."""
     async with AsyncSessionLocal() as db:
         admins_result = await db.execute(select(User).where(User.role == UserRole.ADMIN))
         admins = admins_result.scalars().all()
@@ -84,7 +101,7 @@ async def _notify_admins_of_new_message(conversation_id: str, sender_name: str, 
                 body=f"{sender_name}: {preview[:100]}",
                 type_="SUPPORT_CHAT_MESSAGE",
                 entity_type="SupportConversation", entity_id=conversation_id,
-                send_whatsapp=escalate_whatsapp,
+                send_whatsapp=False,
             )
         await db.commit()
 
@@ -199,8 +216,6 @@ async def send_my_attachment(
         conversation_id=conv.id, content_type=file.content_type,
     )
 
-    was_unread_already = await has_unread_messages_from_user(db, conv.id, current_user.id)
-
     msg = SupportMessage(
         conversation_id=conv.id, sender_id=current_user.id,
         attachment_key=attachment_key, attachment_content_type=file.content_type,
@@ -217,10 +232,7 @@ async def send_my_attachment(
     await support_chat_manager.broadcast(conv.id, {"type": "message", **response.model_dump(mode="json")})
 
     sender_name, _ = await build_participant_label(db, current_user.id)
-    await _notify_admins_of_new_message(
-        conv.id, sender_name, "📎 Envió un archivo adjunto",
-        escalate_whatsapp=not was_unread_already,
-    )
+    await _notify_admins_of_new_message(conv.id, sender_name, "📎 Envió un archivo adjunto")
 
     return response
 
@@ -313,7 +325,6 @@ async def support_chat_websocket(
                     continue
 
                 reopen_if_needed(conv)
-                was_unread_already = await has_unread_messages_from_user(db, conv.id, conv.user_id) if not is_admin else False
 
                 msg = SupportMessage(conversation_id=conversation_id, sender_id=current_user.id, content=content)
                 db.add(msg)
@@ -347,10 +358,7 @@ async def support_chat_websocket(
                     )
                     await notif_db.commit()
             else:
-                await _notify_admins_of_new_message(
-                    conversation_id, sender_name, content,
-                    escalate_whatsapp=not was_unread_already,
-                )
+                await _notify_admins_of_new_message(conversation_id, sender_name, content)
 
     except WebSocketDisconnect:
         pass
