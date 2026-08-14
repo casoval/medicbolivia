@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from app.db.database import AsyncSessionLocal
 from app.models.models import FAQ, FAQAudience
+from app.core.professional_requirements import build_docs_public_text
 
 
 # Cada tupla: (pregunta, respuesta, orden)
@@ -65,8 +66,8 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
         (
             "¿Los profesionales de la plataforma están verificados?",
             "Sí. Cada profesional pasa por un proceso de verificación de identidad y matrícula "
-            "profesional (Colegio Médico de Bolivia u organismo equivalente según su profesión) "
-            "antes de poder atender en la plataforma.",
+            "profesional emitida por el Ministerio de Salud de Bolivia antes de poder atender en "
+            "la plataforma.",
             4,
         ),
         (
@@ -194,16 +195,16 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
         ),
         (
             "¿Qué documentos necesito para verificarme?",
-            "Necesitás tu matrícula profesional vigente (Colegio Médico de Bolivia u organismo "
-            "equivalente según tu profesión) y un documento de identidad. El equipo de "
-            "administración revisa y aprueba cada perfil antes de habilitarlo.",
+            build_docs_public_text(),
             1,
         ),
         (
             "¿Cómo y cuándo recibo mis pagos?",
             "El pago de cada consulta se retiene de forma segura y se libera a tu cuenta una vez "
             "que la consulta se completa correctamente. Podés ver el estado de tus pagos desde tu "
-            "panel de profesional.",
+            "panel de profesional. La comisión de MedicBolivia es baja comparada con otras "
+            "plataformas del rubro, y además hay promociones y beneficios para profesionales — "
+            "para el detalle exacto y vigente, comunicate directo con el equipo administrativo.",
             2,
         ),
         (

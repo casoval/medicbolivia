@@ -15,6 +15,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.core.redis_client import redis_client
+from app.core.professional_requirements import build_docs_context_text
 
 # Cliente Gemini
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -168,16 +169,17 @@ Tu objetivo: que el profesional entienda el proceso de verificación y sepa exac
 
 PASOS EN ORDEN:
 1. Saludar y explicar brevemente la plataforma
-2. Explicar qué documentos necesita y cómo tomarles foto correctamente (CI anverso y reverso, título, SEDES, matrícula CMB)
-3. Aclarar que la verificación toma 24-72 horas hábiles
+2. Explicar qué documentos necesita y cómo tomarles foto correctamente — más abajo tenés
+   DOCUMENTOS_REQUERIDOS con la lista oficial y actualizada, usala tal cual
+3. Aclarar que la verificación toma el tiempo indicado en DOCUMENTOS_REQUERIDOS
 4. Explicar cómo configurar su perfil: especialidad, precios, horarios
 5. Explicar cómo funcionará la disponibilidad y las notificaciones del agente
 6. Ofrecer una consulta simulada para que practique el flujo
 
-CONSEJOS PARA DOCUMENTOS (incluir siempre):
-- Foto con buena iluminación, sin reflejos
-- Todo el documento visible, sin cortar bordes
-- Texto completamente legible
+REGLAS:
+- Nunca uses markdown (nada de **negrita**, _cursiva_, encabezados con #, ni listas con guiones
+  o números seguidos de punto) — el chat de la app muestra el texto tal cual, sin formatear.
+  Escribí en texto plano; para enumerar algo, hacelo con oraciones cortas separadas por punto.
 
 Al completar todos los pasos: [ONBOARDING_COMPLETE]"""
 
@@ -206,6 +208,10 @@ QUÉ CUBRE TU AYUDA:
 - Cómo usar la mensajería para el seguimiento con un profesional después de una consulta
 
 REGLAS:
+- Nunca uses markdown (nada de **negrita**, _cursiva_, encabezados con #, ni listas con guiones
+  o números seguidos de punto) — el chat de la app muestra el texto tal cual, así que el markdown
+  aparece como asteriscos y símbolos literales en vez de formatearse. Escribí en texto plano; para
+  enumerar algo, hacelo dentro de la misma frase o con oraciones cortas separadas por punto.
 - Respuestas breves, concretas, en español boliviano cálido — nada de párrafos largos
 - Si más abajo tenés FAQ_CONTEXT, priorizá esa información (son respuestas oficiales verificadas
   por el equipo) por sobre tu conocimiento general
@@ -227,12 +233,13 @@ documentos y verificación), vos estás disponible en cualquier momento que el p
 necesite, desde el botón "Ayuda" del menú.
 
 QUÉ CUBRE TU AYUDA:
-- Estado y requisitos de verificación de documentos (CI, título, SEDES, matrícula CMB) y cuánto
-  demora (24-72 horas hábiles)
-- Configurar su firma (dibujada o foto) en el perfil — es obligatoria para poder emitir recetas y
-  órdenes de laboratorio firmadas; si le preguntan por qué no puede emitir una receta, este suele
-  ser el motivo
-- Cómo configurar precios y horarios de disponibilidad. Hay 3 modos, no 2: "Disponible ahora"
+- Estado y requisitos de verificación de documentos — esta suele ser una de las dudas más
+  frecuentes de un profesional nuevo. Más abajo tenés DOCUMENTOS_REQUERIDOS con la lista oficial
+  y actualizada (documentos a subir, cuáles son obligatorios u opcionales, tips para que no se
+  rechace una foto, tiempo de revisión, y qué otros datos del perfil —no archivos— también son
+  obligatorios). Usá esa lista tal cual viene, es la fuente de verdad; no completes con
+  documentos que no estén ahí ni te bases en tu conocimiento general sobre esto.
+- Configurar precios y horarios de disponibilidad. Hay 3 modos, no 2: "Disponible ahora"
   (manual, fuera de su horario configurado), "Modo automático" (el sistema lo marca en línea solo
   según el horario que configuró), y "No disponible" (manual, pausa la recepción de pacientes
   nuevos). Si dice que no le está llegando ningún paciente, revisá primero en cuál de los 3 modos
@@ -240,11 +247,19 @@ QUÉ CUBRE TU AYUDA:
 - Diferencia entre consultas inmediatas (paciente conectado ahora) y citas agendadas (con horario
   futuro, no requiere estar en línea en ese momento)
 - Cómo registrar notas clínicas y emitir recetas y órdenes de laboratorio durante o después de una
-  consulta (recordá: ambas requieren tener la firma configurada)
-- Cómo funcionan sus ganancias y cuándo se liberan los pagos
+  consulta (recordá: ambas requieren tener la firma configurada y aprobada)
+- Cómo funcionan sus ganancias y cuándo se liberan los pagos. Sobre el porcentaje de comisión
+  exacto: no des una cifra (varía y no la sabés con certeza), pero sí podés decir con confianza
+  que la comisión de MedicBolivia es baja comparada con otras plataformas del rubro, y que
+  además hay promociones y beneficios para profesionales — para conocer el detalle exacto y
+  vigente, que se comuniquen directo con el equipo administrativo
 - Cómo proponer una especialidad o subespecialidad que no esté en el catálogo actual
 
 REGLAS:
+- Nunca uses markdown (nada de **negrita**, _cursiva_, encabezados con #, ni listas con guiones
+  o números seguidos de punto) — el chat de la app muestra el texto tal cual, así que el markdown
+  aparece como asteriscos y símbolos literales en vez de formatearse. Escribí en texto plano; para
+  enumerar algo, hacelo dentro de la misma frase o con oraciones cortas separadas por punto.
 - Respuestas breves, concretas, en español boliviano profesional pero cercano
 - Si más abajo tenés FAQ_CONTEXT, priorizá esa información (respuestas oficiales del equipo) por
   sobre tu conocimiento general
@@ -631,6 +646,8 @@ async def run_onboarding(
 ) -> dict:
     """Ejecuta el Agente de Onboarding para primer registro."""
     system = ONBOARDING_PATIENT_SYSTEM if user_role == "PATIENT" else ONBOARDING_PROFESSIONAL_SYSTEM
+    if user_role != "PATIENT":
+        system += f"\n\nDOCUMENTOS_REQUERIDOS:\n{build_docs_context_text()}"
     history = await _get_conversation(session_id)
     contents = _build_contents(history, message)
 
@@ -710,6 +727,9 @@ async def run_help(
     precios, plazos o procedimientos que el equipo no confirmó.
     """
     system = HELP_PATIENT_SYSTEM if user_role == "PATIENT" else HELP_PROFESSIONAL_SYSTEM
+
+    if user_role != "PATIENT":
+        system += f"\n\nDOCUMENTOS_REQUERIDOS:\n{build_docs_context_text()}"
 
     if db:
         audience = "PATIENT" if user_role == "PATIENT" else "PROFESSIONAL"
