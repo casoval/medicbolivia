@@ -571,4 +571,4 @@ async def chat_websocket(
     except WebSocketDisconnect:
         pass
     finally:
-        chat_manager.disconnect(conversation_id, current_user.id)
+        chat_manager.disconnect(conversation_id, current_user.id, websocket)

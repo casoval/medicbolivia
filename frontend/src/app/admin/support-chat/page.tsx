@@ -331,7 +331,7 @@ export default function AdminSupportChatPage() {
                 >
                   ← {t('Volver a la lista')}
                 </button>
-                <AdminConversationPanel conv={selected} currentUserId={user.id} />
+                <AdminConversationPanel key={selected.id} conv={selected} currentUserId={user.id} />
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center">

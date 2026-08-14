@@ -355,4 +355,4 @@ async def support_chat_websocket(
     except WebSocketDisconnect:
         pass
     finally:
-        support_chat_manager.disconnect(conversation_id, current_user.id)
+        support_chat_manager.disconnect(conversation_id, current_user.id, websocket)

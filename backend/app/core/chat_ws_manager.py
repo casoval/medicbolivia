@@ -58,9 +58,19 @@ class ChatConnectionManager:
                 self._listen(conversation_id)
             )
 
-    def disconnect(self, conversation_id: str, user_id: str):
+    def disconnect(self, conversation_id: str, user_id: str, ws: WebSocket | None = None):
+        """Si se pasa `ws`, solo se elimina la entrada cuando el socket
+        guardado ES ese mismo objeto. Esto evita una condición de carrera:
+        si el mismo usuario abre una conexión nueva (reconexión automática,
+        doble pestaña) antes de que el `finally` del socket viejo termine
+        de correr, el cleanup del viejo no debe borrar del diccionario la
+        conexión nueva que ya está activa — eso la dejaría "huérfana"
+        (el cliente la sigue viendo conectada, pero deja de recibir
+        broadcasts hasta que recarga o cambia de conversación)."""
         conv_sockets = self.local.get(conversation_id)
         if not conv_sockets:
+            return
+        if ws is not None and conv_sockets.get(user_id) is not ws:
             return
         conv_sockets.pop(user_id, None)
 

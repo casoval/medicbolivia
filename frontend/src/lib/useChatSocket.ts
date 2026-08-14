@@ -9,6 +9,8 @@ import { buildChatWebSocketUrl } from './api'
 import type { ChatMessage, ChatSocketEvent } from '@/types'
 
 const RECONNECT_DELAY_MS = 2500
+const RECONNECT_MAX_DELAY_MS = 30000
+const RECONNECT_BACKOFF_FACTOR = 2
 
 export function useChatSocket(conversationId: string | null, currentUserId: string | undefined) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -30,6 +32,7 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
   const [otherTyping, setOtherTyping] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectAttempt = useRef(0)
   const shouldReconnect = useRef(true)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTypingSentRef = useRef(0)
@@ -56,12 +59,16 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
   useEffect(() => {
     if (!conversationId || !currentUserId) return
     shouldReconnect.current = true
+    reconnectAttempt.current = 0
 
     function connect() {
       const ws = new WebSocket(buildChatWebSocketUrl(conversationId!))
       wsRef.current = ws
 
-      ws.onopen = () => setConnected(true)
+      ws.onopen = () => {
+        setConnected(true)
+        reconnectAttempt.current = 0
+      }
 
       ws.onmessage = (event) => {
         const data: ChatSocketEvent = JSON.parse(event.data)
@@ -113,7 +120,12 @@ export function useChatSocket(conversationId: string | null, currentUserId: stri
           return
         }
         if (shouldReconnect.current) {
-          reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS)
+          const delay = Math.min(
+            RECONNECT_DELAY_MS * RECONNECT_BACKOFF_FACTOR ** reconnectAttempt.current,
+            RECONNECT_MAX_DELAY_MS
+          )
+          reconnectAttempt.current += 1
+          reconnectTimer.current = setTimeout(connect, delay)
         }
       }
 

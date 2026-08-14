@@ -11,6 +11,9 @@ import { buildSupportChatWebSocketUrl } from './api'
 import type { SupportMessage, SupportChatSocketEvent } from '@/types'
 
 const RECONNECT_DELAY_MS = 2500
+const RECONNECT_MAX_DELAY_MS = 30000
+// Multiplicador de backoff exponencial: 2.5s, 5s, 10s, 20s, 30s (tope), 30s...
+const RECONNECT_BACKOFF_FACTOR = 2
 
 export function useSupportChatSocket(conversationId: string | null, currentUserId: string | undefined) {
   const [messages, setMessages] = useState<SupportMessage[]>([])
@@ -20,6 +23,7 @@ export function useSupportChatSocket(conversationId: string | null, currentUserI
   const [otherTyping, setOtherTyping] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectAttempt = useRef(0)
   const shouldReconnect = useRef(true)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTypingSentRef = useRef(0)
@@ -41,12 +45,16 @@ export function useSupportChatSocket(conversationId: string | null, currentUserI
   useEffect(() => {
     if (!conversationId || !currentUserId) return
     shouldReconnect.current = true
+    reconnectAttempt.current = 0
 
     function connect() {
       const ws = new WebSocket(buildSupportChatWebSocketUrl(conversationId!))
       wsRef.current = ws
 
-      ws.onopen = () => setConnected(true)
+      ws.onopen = () => {
+        setConnected(true)
+        reconnectAttempt.current = 0
+      }
 
       ws.onmessage = (event) => {
         const data: SupportChatSocketEvent = JSON.parse(event.data)
@@ -92,7 +100,12 @@ export function useSupportChatSocket(conversationId: string | null, currentUserI
           return
         }
         if (shouldReconnect.current) {
-          reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS)
+          const delay = Math.min(
+            RECONNECT_DELAY_MS * RECONNECT_BACKOFF_FACTOR ** reconnectAttempt.current,
+            RECONNECT_MAX_DELAY_MS
+          )
+          reconnectAttempt.current += 1
+          reconnectTimer.current = setTimeout(connect, delay)
         }
       }
 
