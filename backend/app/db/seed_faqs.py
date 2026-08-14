@@ -158,29 +158,44 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
         ),
         (
             "¿Cómo recibo mi reembolso si me corresponde uno?",
-            "Registrando una cuenta bancaria propia desde tu perfil. Cuando un reembolso se "
-            "aprueba, se transfiere automáticamente a esa cuenta — por eso conviene tenerla "
-            "cargada de antemano, así el reembolso no queda pendiente esperando ese dato.",
+            "Registrando una cuenta bancaria propia desde tu perfil; un administrador la revisa y "
+            "la verifica. Una vez verificada, cuando un reembolso se aprueba, un administrador lo "
+            "confirma y recién ahí se transfiere a esa cuenta — por eso conviene tenerla cargada "
+            "y verificada de antemano, así el reembolso no queda pendiente esperando ese dato.",
             6,
+        ),
+        (
+            "¿Puedo reprogramar una cita ya agendada?",
+            "Sí. Tanto vos como el profesional pueden proponer un nuevo horario para una cita "
+            "agendada. Hay un máximo de 3 propuestas por cita entre ambas partes, y una vez que "
+            "una propuesta se acepta, esa cita ya no admite más cambios de horario.",
+            7,
+        ),
+        (
+            "¿Puedo bloquear a un profesional en el chat?",
+            "Sí. Desde la conversación podés bloquear a un profesional puntual para dejar de "
+            "recibir sus mensajes, o activar un bloqueo global si preferís no recibir mensajes de "
+            "nadie por ahora.",
+            8,
         ),
         (
             "¿Necesito una cámara y buena conexión a internet?",
             "Sí, la videoconsulta requiere cámara, micrófono y una conexión estable a internet. "
             "Recomendamos usar wifi en lugar de datos móviles cuando sea posible, para evitar "
             "cortes durante la consulta.",
-            7,
+            9,
         ),
         (
             "¿Puedo calificar al profesional después de la consulta?",
             "Sí, al finalizar la consulta podés dejar una calificación y un comentario. Esto ayuda "
             "a otros pacientes a elegir con más información.",
-            8,
+            10,
         ),
         (
             "¿Dónde veo mi historial de consultas y recetas?",
             "En tu panel de paciente, en la sección de Historia clínica, tenés acceso a todas tus "
             "consultas pasadas, notas clínicas, recetas y órdenes de laboratorio emitidas.",
-            9,
+            11,
         ),
     ],
 
@@ -200,12 +215,42 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
         ),
         (
             "¿Cómo y cuándo recibo mis pagos?",
-            "El pago de cada consulta se retiene de forma segura y se libera a tu cuenta una vez "
-            "que la consulta se completa correctamente. Podés ver el estado de tus pagos desde tu "
-            "panel de profesional. La comisión de MedicBolivia es baja comparada con otras "
-            "plataformas del rubro, y además hay promociones y beneficios para profesionales — "
-            "para el detalle exacto y vigente, comunicate directo con el equipo administrativo.",
+            "El pago de cada consulta se retiene de forma segura y se libera una vez que la "
+            "consulta se completa correctamente. Para poder cobrar, primero tenés que registrar "
+            "tu cuenta bancaria en tu perfil; un administrador la revisa y la verifica. Una vez "
+            "verificada, tus pagos liberados se agrupan en lotes que se procesan cada cierto "
+            "tiempo, y un administrador confirma cada lote — ahí recién se transfiere y te llega "
+            "el aviso. Podés ver el estado de tus pagos desde tu panel de profesional. La "
+            "comisión de MedicBolivia es baja comparada con otras plataformas del rubro, y "
+            "además hay promociones y beneficios para profesionales — para el detalle exacto y "
+            "vigente, comunicate directo con el equipo administrativo.",
             2,
+        ),
+        (
+            "¿Qué es la membresía de profesional y qué beneficios tiene?",
+            "Es un beneficio que un administrador activa mes a mes para el profesional. Mientras "
+            "está activa, pagás 0% de comisión y además podés agendar citas directo para tus "
+            "pacientes vinculados, sin que ellos tengan que iniciar la reserva. Si te interesa, "
+            "comunicate con el equipo administrativo para coordinarla.",
+            3,
+        ),
+        (
+            "¿Qué es el puntaje de penalización?",
+            "Es un puntaje que sube cuando pasan cosas como no presentarte a una consulta, "
+            "rechazar consultas inmediatas seguido, cancelar tarde, no dejar la nota clínica de "
+            "una consulta, o recibir calificaciones bajas. Puede afectar tu visibilidad o tus "
+            "métricas dentro de la plataforma. Un administrador es quien verifica y revisa el "
+            "detalle de las penalizaciones — si tenés dudas sobre tu puntaje, querés más "
+            "información, o sentís que no refleja tu situación real, comunicate con el equipo "
+            "administrativo para que lo revisen.",
+            4,
+        ),
+        (
+            "¿Puedo reprogramar una cita ya agendada?",
+            "Sí. Tanto vos como el paciente pueden proponer un nuevo horario para una cita "
+            "agendada. Hay un máximo de 3 propuestas por cita entre ambas partes, y una vez que "
+            "una propuesta se acepta, esa cita ya no admite más cambios de horario.",
+            5,
         ),
         (
             "¿Qué pasa si no puedo atender una consulta a tiempo?",
@@ -213,7 +258,7 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             "próxima sea la cita. Si no la aceptás a tiempo, se libera automáticamente para no "
             "hacer esperar al paciente, y eso puede afectar tus métricas de respuesta si se repite "
             "seguido.",
-            3,
+            6,
         ),
         (
             "¿Puedo emitir recetas digitales?",
@@ -221,7 +266,7 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             "paciente recibe al instante con un código QR de verificación único. Una receta "
             "firmada no se puede editar — si es necesario corregirla, se anula y se emite una "
             "nueva. Lo mismo aplica para órdenes de laboratorio.",
-            4,
+            7,
         ),
         (
             "¿Por qué no puedo emitir una receta o una orden de laboratorio?",
@@ -229,14 +274,14 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             "una foto de tu firma). Es un requisito obligatorio antes de poder emitir cualquier "
             "documento firmado, así que si te aparece un error al intentar emitir, revisá primero "
             "eso.",
-            5,
+            8,
         ),
         (
             "¿Cómo se ven mis calificaciones?",
             "Los pacientes pueden calificar y comentar cada consulta finalizada. Tu calificación "
             "promedio es visible en tu perfil público, así que mantener una buena atención ayuda "
             "a que más pacientes te elijan.",
-            6,
+            9,
         ),
         (
             "¿Puedo definir mis propios horarios y tarifas?",
@@ -245,14 +290,21 @@ FAQS_SEED: dict[FAQAudience, list[tuple[str, str, int]]] = {
             "automático\" (el sistema te marca en línea solo según el horario que configuraste), "
             "y \"No disponible\" (pausás manualmente la recepción de pacientes nuevos). Si no te "
             "está llegando ningún paciente, revisá en cuál de los 3 modos estás.",
-            7,
+            10,
         ),
         (
             "¿Qué pasa si un paciente disputa un pago?",
             "Si un paciente reporta un problema con una consulta, el pago queda en estado de "
             "disputa hasta que el equipo de administración la revisa y resuelve — liberando el "
             "pago, reembolsándolo total o parcialmente, según corresponda.",
-            8,
+            11,
+        ),
+        (
+            "¿Puedo escribirle a un paciente después de la consulta?",
+            "Sí. Podés usar la mensajería de la plataforma para hacer seguimiento con tus "
+            "pacientes después de una consulta, responder dudas o coordinar lo que necesites, de "
+            "la misma forma en que ellos pueden escribirte a vos.",
+            12,
         ),
     ],
 }
