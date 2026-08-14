@@ -115,6 +115,57 @@ async def build_participant_label(db: AsyncSession, user_id: str) -> tuple[str, 
     return "Usuario", None
 
 
+async def build_participant_labels(db: AsyncSession, user_ids: list[str]) -> dict[str, tuple[str, Optional[str]]]:
+    """Versión batch de build_participant_label: resuelve (nombre, photo_url)
+    para una lista de user_id con solo 2 queries (IN (...) a patients y a
+    professionals), en vez de hasta 2 queries por usuario. Pensada para la
+    bandeja del admin, que hace polling cada 20s sobre N conversaciones."""
+    if not user_ids:
+        return {}
+
+    labels: dict[str, tuple[str, Optional[str]]] = {}
+
+    patients_result = await db.execute(select(Patient).where(Patient.user_id.in_(user_ids)))
+    for patient in patients_result.scalars().all():
+        labels[patient.user_id] = (f"{patient.first_name} {patient.last_name}", patient.photo_url)
+
+    remaining = [uid for uid in user_ids if uid not in labels]
+    if remaining:
+        prof_result = await db.execute(select(Professional).where(Professional.user_id.in_(remaining)))
+        for professional in prof_result.scalars().all():
+            labels[professional.user_id] = (
+                f"Dr(a). {professional.first_name} {professional.last_name}", professional.photo_url,
+            )
+
+    for uid in user_ids:
+        labels.setdefault(uid, ("Usuario", None))
+
+    return labels
+
+
+async def count_unread_by_conversation(db: AsyncSession, conversation_ids: list[str]) -> dict[str, int]:
+    """Versión batch de "contar no leídos por conversación": un solo
+    GROUP BY conversation_id con COUNT, en vez de traer todas las filas
+    de mensajes no leídos de cada conversación para contarlas con len()
+    en Python. Solo cuenta mensajes enviados por el usuario (no por
+    admins), igual que el criterio de count_admin_unread."""
+    if not conversation_ids:
+        return {}
+
+    result = await db.execute(
+        select(SupportMessage.conversation_id, func.count(SupportMessage.id))
+        .join(SupportConversation, SupportMessage.conversation_id == SupportConversation.id)
+        .where(
+            SupportMessage.conversation_id.in_(conversation_ids),
+            SupportMessage.sender_id == SupportConversation.user_id,
+            SupportMessage.read_at.is_(None),
+        )
+        .group_by(SupportMessage.conversation_id)
+    )
+    counts = {conv_id: count for conv_id, count in result.all()}
+    return {conv_id: counts.get(conv_id, 0) for conv_id in conversation_ids}
+
+
 async def list_admin_conversations(
     db: AsyncSession,
     status_filter: Optional[str] = None,

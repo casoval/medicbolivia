@@ -15,7 +15,7 @@ quien se conecta.
 """
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 from datetime import datetime
 from app.core.timezone import utcnow_naive
 from jose import JWTError
@@ -112,18 +112,18 @@ async def get_my_conversation(
     await db.commit()
     await db.refresh(conv)
 
-    unread = (await db.execute(
-        select(SupportMessage).where(
+    unread_count = (await db.execute(
+        select(func.count(SupportMessage.id)).where(
             SupportMessage.conversation_id == conv.id,
             SupportMessage.sender_id != current_user.id,
             SupportMessage.read_at.is_(None),
         )
-    )).scalars().all()
+    )).scalar_one()
 
     return SupportConversationResponse(
         id=conv.id, status=conv.status, last_message_at=conv.last_message_at,
         last_message_preview=conv.last_message_preview, last_message_from=conv.last_message_from,
-        created_at=conv.created_at, participant=None, unread_count=len(unread),
+        created_at=conv.created_at, participant=None, unread_count=unread_count or 0,
     )
 
 

@@ -8,21 +8,20 @@
 // disponible. Se monta una sola vez desde DashboardLayout para los
 // roles PATIENT y PROFESSIONAL.
 //
-// Dos puntos de entrada comparten el mismo panel (via useSupportChatUIStore):
-// - La burbuja flotante de acá abajo, que se puede ocultar con la "x"
-//   (persistido en localStorage — vuelve a aparecer solo si el usuario
-//   entra a una pestaña nueva, no con cada mensaje).
-// - El botón del encabezado (ver DashboardLayout.tsx), que siempre
-//   funciona aunque la burbuja esté oculta.
+// El panel se abre desde un único punto de entrada: el botón del
+// encabezado (ver DashboardLayout.tsx), vía useSupportChatUIStore. Antes
+// existía además una burbuja flotante propia acá (con su "x" para
+// ocultarla, persistida en localStorage) — se eliminó para no duplicar
+// el acceso al chat con dos elementos flotantes compitiendo por la misma
+// esquina de la pantalla; ahora hay un solo punto de entrada, siempre
+// visible, con el mismo badge de no leídos.
 //
-// Para ADMIN la burbuja también se muestra (con el mismo badge de no
-// leídos que el botón del encabezado), pero en vez de abrir el panel
-// mini lleva a la bandeja completa /admin/support-chat — un admin puede
+// Para ADMIN no se monta panel acá: el botón del encabezado lleva
+// directo a la bandeja completa /admin/support-chat — un admin puede
 // tener varias conversaciones abiertas a la vez, así que un popup de
 // una sola conversación no tiene sentido para ese rol.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { supportChatAPI, adminSupportChatAPI, SUPPORT_CHAT_PAGE_SIZE, getErrorMessage } from '@/lib/api'
 import { useSupportChatSocket } from '@/lib/useSupportChatSocket'
@@ -30,7 +29,6 @@ import { useAuthStore, useSupportChatUIStore } from '@/lib/store'
 import { Alert, Spinner } from '@/components/ui'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
-const IconChat = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
 const IconSend = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
 const IconClip = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a5.5 5.5 0 01-7.78-7.78l9.19-9.19a3.5 3.5 0 014.95 4.95l-9.2 9.19a1.5 1.5 0 01-2.12-2.12l8.49-8.48"/></svg>
 const IconFile = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
@@ -55,18 +53,13 @@ function TypingDots() {
   )
 }
 
-const SIZE = 56
-const MARGIN = 20
-
 export function ChatWithAdminWidget() {
-  const { t } = useLanguage()
-  const router = useRouter()
   const { user } = useAuthStore()
   const role = user?.role
   const isAdmin = role === 'ADMIN'
   const eligible = role === 'PATIENT' || role === 'PROFESSIONAL' || isAdmin
 
-  const { isOpen, open, close, unreadCount, setUnreadCount, bubbleHidden, setBubbleHidden } = useSupportChatUIStore()
+  const { isOpen, close, setUnreadCount } = useSupportChatUIStore()
 
   const { data: config } = useQuery({
     queryKey: ['support-chat-config'],
@@ -105,78 +98,14 @@ export function ChatWithAdminWidget() {
     }
   }, [conversation, adminUnread, isAdmin, isOpen, setUnreadCount])
 
-  // ── burbuja oculta manualmente (persistido por usuario) ──
-  const storageKey = user ? `mb_support_widget_hidden_${role}_${user.id}` : null
-  useEffect(() => {
-    if (!storageKey) return
-    try {
-      if (localStorage.getItem(storageKey) === '1') setBubbleHidden(true)
-    } catch {
-      // no crítico
-    }
-  }, [storageKey, setBubbleHidden])
-
-  function dismissBubble(e: React.MouseEvent) {
-    e.stopPropagation()
-    setBubbleHidden(true)
-    if (storageKey) {
-      try { localStorage.setItem(storageKey, '1') } catch { /* no crítico */ }
-    }
-  }
-
-  function handleBubbleClick() {
-    if (isAdmin) {
-      router.push('/admin/support-chat')
-    } else {
-      open()
-    }
-  }
-
   if (!eligible || !supportChatEnabled) return null
-  // Para paciente/profesional, la burbuja necesita el hilo propio ya
-  // resuelto (para poder abrir el panel al toque); para admin no hace
-  // falta (el clic solo navega a la bandeja).
-  if (!isAdmin && !conversation) return null
 
-  return (
-    <>
-      {!bubbleHidden && !isOpen && (
-        <div className="fixed z-[60]" style={{ right: MARGIN, bottom: MARGIN }}>
-          <div className="relative">
-            <button
-              onClick={handleBubbleClick}
-              className="rounded-full bg-[#185FA5] text-white shadow-lg flex items-center justify-center border-2 border-white active:scale-95 transition-transform"
-              style={{ width: SIZE, height: SIZE }}
-              title={t('Chat con soporte')}
-            >
-              <IconChat />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#E24B4A] text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white pointer-events-none">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={dismissBubble}
-              className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-white text-[#475569] border border-[#DDE1EE] shadow flex items-center justify-center hover:text-[#141820]"
-              title={t('Ocultar (accedé desde el botón del encabezado)')}
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
+  // El panel mini solo aplica a paciente/profesional — el admin siempre
+  // va a la bandeja completa desde el botón del encabezado
+  // (ver DashboardLayout.tsx), que navega directo a /admin/support-chat.
+  if (isAdmin || !isOpen || !user || !conversation) return null
 
-      {/* El panel mini solo aplica a paciente/profesional — el admin
-          siempre va a la bandeja completa (ver handleBubbleClick). */}
-      {!isAdmin && isOpen && user && conversation && (
-        <SupportChatPanel conversationId={conversation.id} currentUserId={user.id} onClose={close} />
-      )}
-    </>
-  )
+  return <SupportChatPanel conversationId={conversation.id} currentUserId={user.id} onClose={close} />
 }
 
 // ─────────────────────────────────────────────────────

@@ -14,12 +14,15 @@
 //   notificación realmente nueva (no reaparece por las mismas que ya tenía).
 // - Un clic (sin arrastrar) abre un panel rápido con las notificaciones,
 //   sin salir de la página en la que el usuario está.
+// - Cada notificación del panel es clickeable: la marca como leída y, si
+//   es de tipo SUPPORT_CHAT_MESSAGE, lleva directo al chat (panel mini
+//   para paciente/profesional, bandeja completa para admin).
 
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { notificationsAPI } from '@/lib/api'
-import { useAuthStore } from '@/lib/store'
+import { notificationsAPI, NotificationItem } from '@/lib/api'
+import { useAuthStore, useSupportChatUIStore } from '@/lib/store'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const SIZE = 52
@@ -33,6 +36,7 @@ export function FloatingNotificationBell() {
   const enabled = role === 'PATIENT' || role === 'PROFESSIONAL' || role === 'ADMIN'
   const queryClient = useQueryClient()
   const router = useRouter()
+  const { open: openSupportChat } = useSupportChatUIStore()
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications', role],
@@ -72,6 +76,29 @@ export function FloatingNotificationBell() {
       localStorage.setItem(storageKey, JSON.stringify(Array.from(next)))
     } catch {
       // no crítico si falla el guardado
+    }
+  }
+
+  // Clic en una notificación individual: la marca como leída y, si es de
+  // chat de soporte, lleva directo a la conversación (panel mini para
+  // paciente/profesional, bandeja completa para admin) en vez de solo
+  // cerrar el panel rápido sin hacer nada.
+  async function handleNotificationClick(n: NotificationItem) {
+    setOpen(false)
+    if (!n.read && role) {
+      try {
+        await notificationsAPI.markRead(role as 'PATIENT' | 'PROFESSIONAL' | 'ADMIN', n.id)
+        queryClient.invalidateQueries({ queryKey: ['notifications', role] })
+      } catch {
+        // no crítico si falla el marcado
+      }
+    }
+    if (n.type === 'SUPPORT_CHAT_MESSAGE') {
+      if (role === 'ADMIN') {
+        router.push('/admin/support-chat')
+      } else {
+        openSupportChat()
+      }
     }
   }
 
@@ -189,13 +216,24 @@ export function FloatingNotificationBell() {
               ) : (
                 <div className="divide-y divide-[#DDE1EE]">
                   {notifications.slice(0, 10).map((n) => (
-                    <div key={n.id} className={`p-3 ${!n.read ? 'bg-[#F5FBF8]' : ''}`}>
-                      <p className="text-xs font-medium">{n.title}</p>
+                    <button
+                      key={n.id}
+                      onClick={() => handleNotificationClick(n)}
+                      className={`w-full text-left p-3 hover:bg-[#EEF6F3] transition-colors ${!n.read ? 'bg-[#F5FBF8]' : ''}`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-medium">{n.title}</p>
+                        {n.type === 'SUPPORT_CHAT_MESSAGE' && (
+                          <span className="text-[9px] font-semibold text-[#0F6E56] bg-[#DCF3EA] rounded-full px-1.5 py-0.5">
+                            {t('Chat')}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-[#475569] mt-0.5">{n.body}</p>
                       <p className="text-[10px] text-[#64748B] mt-1">
                         {new Date(n.created_at).toLocaleString('es-BO')}
                       </p>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}

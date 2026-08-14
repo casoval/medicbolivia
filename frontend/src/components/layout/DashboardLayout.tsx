@@ -51,6 +51,11 @@ function SupportChatHeaderButton({ role }: { role: UserRole }) {
       title={t('Chat con soporte')}
       aria-label={t('Chat con soporte')}
     >
+      {/* Halo tipo sonar, permanente y sutil — señala que el botón es
+          interactivo (único punto de entrada al chat ahora que no hay
+          burbuja flotante propia). Independiente del badge rojo, que
+          solo aparece cuando hay mensajes sin leer. */}
+      <span className="absolute inset-0 rounded-full bg-white/40 animate-ping" style={{ animationDuration: '2.4s', opacity: 0.25 }} aria-hidden="true" />
       <IconSupportChat />
       {badge > 0 && (
         <span className="absolute -top-0.5 -right-0.5 bg-[#E24B4A] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-[#0F6E56] pointer-events-none">

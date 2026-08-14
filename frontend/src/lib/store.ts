@@ -145,30 +145,23 @@ export const useAgentStore = create<AgentState>((set) => ({
 
 // ── Store del chat directo con soporte (paciente/profesional ↔ admin) ──
 // Estado de UI compartido entre el botón del encabezado (DashboardLayout)
-// y la burbuja flotante (ChatWithAdminWidget): ambos necesitan poder
+// y el botón del encabezado (DashboardLayout): ambos necesitan poder
 // abrir/cerrar el mismo panel y mostrar el mismo contador de no leídos,
 // sin acoplarse por props a través de todo el árbol de layout.
 interface SupportChatUIState {
   isOpen: boolean
   unreadCount: number
-  // Si el usuario ocultó la burbuja flotante con la "x" (se persiste en
-  // localStorage por usuario, ver ChatWithAdminWidget). El botón del
-  // encabezado sigue funcionando igual, esto solo afecta a la burbuja.
-  bubbleHidden: boolean
   open: () => void
   close: () => void
   toggle: () => void
   setUnreadCount: (n: number) => void
-  setBubbleHidden: (hidden: boolean) => void
 }
 
 export const useSupportChatUIStore = create<SupportChatUIState>((set) => ({
   isOpen: false,
   unreadCount: 0,
-  bubbleHidden: false,
   open: () => set({ isOpen: true }),
   close: () => set({ isOpen: false }),
   toggle: () => set((s) => ({ isOpen: !s.isOpen })),
   setUnreadCount: (n) => set({ unreadCount: n }),
-  setBubbleHidden: (hidden) => set({ bubbleHidden: hidden }),
 }))

@@ -26,7 +26,8 @@ from app.schemas.schemas import (
     SupportMessageResponse, SupportChatCloseRequest,
 )
 from app.services.support_chat import (
-    list_admin_conversations, build_participant_label, count_admin_unread,
+    list_admin_conversations, build_participant_labels,
+    count_unread_by_conversation, count_admin_unread,
 )
 from app.services.storage import upload_chat_attachment_to_r2, get_presigned_url
 
@@ -61,16 +62,16 @@ async def list_conversations(
 ):
     conversations = await list_admin_conversations(db, status_filter=status_filter, role_filter=role)
 
+    # 2 queries batch (IN (...) a patients y professionals) en vez de hasta
+    # 2 por conversación, y 1 query GROUP BY para los no leídos en vez de
+    # traer todas las filas de cada conversación. Total: 3 queries sin
+    # importar cuántas conversaciones haya.
+    labels = await build_participant_labels(db, [conv.user_id for conv in conversations])
+    unread_counts = await count_unread_by_conversation(db, [conv.id for conv in conversations])
+
     responses = []
     for conv in conversations:
-        name, photo = await build_participant_label(db, conv.user_id)
-        unread = (await db.execute(
-            select(SupportMessage).where(
-                SupportMessage.conversation_id == conv.id,
-                SupportMessage.sender_id == conv.user_id,
-                SupportMessage.read_at.is_(None),
-            )
-        )).scalars().all()
+        name, photo = labels[conv.user_id]
         responses.append(SupportConversationResponse(
             id=conv.id, status=conv.status, last_message_at=conv.last_message_at,
             last_message_preview=conv.last_message_preview, last_message_from=conv.last_message_from,
@@ -78,7 +79,7 @@ async def list_conversations(
             participant=SupportChatParticipantResponse(
                 user_id=conv.user_id, full_name=name, photo_url=photo, role=conv.user_role,
             ),
-            unread_count=len(unread),
+            unread_count=unread_counts[conv.id],
         ))
     return responses
 
