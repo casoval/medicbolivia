@@ -150,8 +150,8 @@ export function ContactSection() {
           <a href="mailto:info@medicbolivia.com" className="text-[#0F6E56] font-medium hover:underline">
             info@medicbolivia.com
           </a>{' '}{t('o por WhatsApp al')}{' '}
-          <a href="https://wa.me/59168427797" target="_blank" rel="noopener noreferrer" className="text-[#0F6E56] font-medium hover:underline">
-            +591 68427797
+          <a href="https://wa.me/59169625434" target="_blank" rel="noopener noreferrer" className="text-[#0F6E56] font-medium hover:underline">
+            +591 69625434
           </a>.
         </p>
       </Reveal>

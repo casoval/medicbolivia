@@ -786,8 +786,8 @@ function LandingFooter() {
           <a href="mailto:info@medicbolivia.com" className="flex items-center gap-1.5 hover:text-[#141820]">
             <Mail className="w-3.5 h-3.5" aria-hidden="true" /> info@medicbolivia.com
           </a>
-          <a href="https://wa.me/59168427797" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-[#141820]">
-            <Phone className="w-3.5 h-3.5" aria-hidden="true" /> +591 68427797
+          <a href="https://wa.me/59169625434" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-[#141820]">
+            <Phone className="w-3.5 h-3.5" aria-hidden="true" /> +591 69625434
           </a>
         </div>
         <div className="flex gap-4">

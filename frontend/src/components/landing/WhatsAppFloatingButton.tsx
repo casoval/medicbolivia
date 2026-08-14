@@ -10,8 +10,8 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
-// +591 68427797, en formato wa.me: solo dígitos, sin "+" ni espacios.
-const WHATSAPP_NUMBER = '59168427797'
+// +591 69625434, en formato wa.me: solo dígitos, sin "+" ni espacios.
+const WHATSAPP_NUMBER = '59169625434'
 const WHATSAPP_MESSAGE = 'Hola, quiero más información sobre MedicBolivia'
 
 // Ícono oficial de WhatsApp (glyph de la marca) en SVG puro, para que se
