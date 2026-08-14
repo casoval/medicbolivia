@@ -73,8 +73,10 @@ function AdminConversationPanel({ conv, currentUserId }: { conv: SupportConversa
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [closing, setClosing] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const historyRef = useRef<HTMLDivElement>(null)
   const didInitialScroll = useRef(false)
 
   const { data: history, isLoading } = useQuery({
@@ -92,7 +94,7 @@ function AdminConversationPanel({ conv, currentUserId }: { conv: SupportConversa
   })
 
   const {
-    messages, connected, sendMessage, seedMessages, addLocalMessage,
+    messages, hasMore, connected, sendMessage, seedMessages, prependOlderMessages, addLocalMessage,
   } = useSupportChatSocket(conv.id, currentUserId)
 
   useEffect(() => {
@@ -124,6 +126,27 @@ function AdminConversationPanel({ conv, currentUserId }: { conv: SupportConversa
     if (messages.length > prevCountRef.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     prevCountRef.current = messages.length
   }, [messages.length])
+
+  async function handleLoadOlder() {
+    const oldest = messages[0]
+    if (!oldest || loadingOlder) return
+    setLoadingOlder(true)
+    const container = historyRef.current
+    const prevScrollHeight = container?.scrollHeight ?? 0
+    try {
+      const older = await adminSupportChatAPI.getMessages(conv.id, oldest.created_at)
+      prependOlderMessages(older, SUPPORT_CHAT_PAGE_SIZE)
+      requestAnimationFrame(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight - prevScrollHeight
+        }
+      })
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setLoadingOlder(false)
+    }
+  }
 
   function handleSend() {
     const content = draft.trim()
@@ -200,11 +223,24 @@ function AdminConversationPanel({ conv, currentUserId }: { conv: SupportConversa
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#FAFAFA]">
+      <div ref={historyRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#FAFAFA]">
         {isLoading ? (
           <div className="flex justify-center py-8"><Spinner /></div>
         ) : (
-          messages.map((m) => {
+          <>
+          {hasMore && (
+            <div className="flex justify-center pb-2">
+              <button
+                onClick={handleLoadOlder}
+                disabled={loadingOlder}
+                className="text-xs text-[#185FA5] hover:underline disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {loadingOlder ? <Spinner size="sm" /> : null}
+                {loadingOlder ? 'Cargando...' : 'Ver mensajes anteriores'}
+              </button>
+            </div>
+          )}
+          {messages.map((m) => {
             const own = m.is_admin_sender
             return (
               <div key={m.id} className={`flex flex-col ${own ? 'items-end' : 'items-start'}`}>
@@ -229,7 +265,8 @@ function AdminConversationPanel({ conv, currentUserId }: { conv: SupportConversa
                 <p className="text-[11px] text-[#9CA3AF] mt-1 px-1">{fmtHora(m.created_at)}</p>
               </div>
             )
-          })
+          })}
+          </>
         )}
         <div ref={bottomRef} />
       </div>

@@ -37,6 +37,12 @@ const IconExpand = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="n
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 const MAX_MB = 10
+// Tope de historial cargable en este widget (paciente/profesional). El
+// admin, en cambio, no tiene tope (ver /admin/support-chat/page.tsx) ya
+// que necesita poder revisar todo el historial de cualquier conversación.
+// Acá alcanza y sobra con 100 mensajes recientes para autoservicio; más
+// atrás que eso, se lo pedimos por soporte directo.
+const MAX_LOADABLE_MESSAGES = 100
 
 function fmtHora(iso: string) {
   const s = iso.endsWith('Z') ? iso : iso + 'Z'
@@ -186,7 +192,7 @@ function SupportChatPanel({
 
   async function handleLoadOlder() {
     const oldest = messages[0]
-    if (!oldest || loadingOlder) return
+    if (!oldest || loadingOlder || messages.length >= MAX_LOADABLE_MESSAGES) return
     setLoadingOlder(true)
     const container = historyRef.current
     const prevScrollHeight = container?.scrollHeight ?? 0
@@ -270,7 +276,7 @@ function SupportChatPanel({
                 {t('¿En qué te podemos ayudar? Escribinos y el equipo de MedicBolivia te responde a la brevedad.')}
               </p>
             )}
-            {hasMore && (
+            {hasMore && messages.length < MAX_LOADABLE_MESSAGES && (
               <div className="flex justify-center pb-2">
                 <button
                   onClick={handleLoadOlder}
@@ -281,6 +287,11 @@ function SupportChatPanel({
                   {loadingOlder ? 'Cargando...' : 'Ver mensajes anteriores'}
                 </button>
               </div>
+            )}
+            {hasMore && messages.length >= MAX_LOADABLE_MESSAGES && (
+              <p className="text-[11px] text-[#94A3B8] text-center pb-2">
+                {t('Para ver mensajes más antiguos, contactanos por otro medio')}
+              </p>
             )}
             {messages.map((m) => {
               const own = !m.is_admin_sender
