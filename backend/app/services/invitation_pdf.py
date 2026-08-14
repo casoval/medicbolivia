@@ -66,6 +66,8 @@ BENEFITS = [
     "inasistencias.",
     "El paciente puede llamar al agente IA para resolver dudas antes o después de la consulta, "
     "sin ocupar su tiempo directo.",
+    "El pago del paciente se procesa de forma automática y confiable mediante QR, sin que usted "
+    "tenga que gestionar el cobro.",
     "Historial clínico, recetas y notas médicas digitales, y pagos gestionados por la plataforma "
     "de principio a fin.",
 ]

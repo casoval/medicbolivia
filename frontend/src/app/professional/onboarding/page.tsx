@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { agentAPI } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { AgentMessageText } from '@/components/shared/AgentMessageText'
 
 interface Message {
   role: 'user' | 'agent'
@@ -119,7 +120,7 @@ export default function ProfessionalOnboardingPage() {
                     ? 'bg-[#0F6E56] text-white rounded-br-sm'
                     : 'bg-white border border-[#DDE1EE] text-[#141820] rounded-bl-sm'
                 }`}>
-                  {msg.text}
+                  {msg.role === 'agent' ? <AgentMessageText text={msg.text} /> : msg.text}
                 </div>
               </div>
             ))}

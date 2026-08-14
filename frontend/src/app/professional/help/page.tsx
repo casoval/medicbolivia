@@ -11,6 +11,7 @@ import { agentAPI } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PROFESSIONAL_NAV as NAV } from '@/lib/nav'
+import { AgentMessageText } from '@/components/shared/AgentMessageText'
 
 interface Message {
   role: 'user' | 'agent'
@@ -94,7 +95,7 @@ export default function ProfessionalHelpPage() {
                     ? 'bg-[#185FA5] text-white rounded-br-sm'
                     : 'bg-white border border-[#DDE1EE] text-[#141820] rounded-bl-sm'
                 }`}>
-                  {msg.text}
+                  {msg.role === 'agent' ? <AgentMessageText text={msg.text} /> : msg.text}
                 </div>
               </div>
             ))}
