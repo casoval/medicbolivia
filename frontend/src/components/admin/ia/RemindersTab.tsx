@@ -4,11 +4,144 @@
 // separadas por audiencia (paciente/profesional/admin) y por tipo de
 // disparador (evento instantáneo vs. cron antes de una cita agendada).
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Alert, LoadingScreen, EmptyState } from '@/components/ui'
 import { whatsappAPI, getErrorMessage } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+
+const AUDIENCE_LABEL_FEED: Record<string, string> = { PATIENT: 'Paciente', PROFESSIONAL: 'Profesional', ADMIN: 'Admin', PUBLIC: 'Público' }
+
+interface FeedItem {
+  id: string
+  recipient_name: string | null
+  phone: string
+  audience: string
+  body: string
+  status: 'SENT' | 'FAILED' | 'DELIVERED' | 'READ'
+  error_detail: string | null
+  related_entity_type: string | null
+  created_at: string
+}
+
+const FEED_POLL_MS = 4000
+const FEED_MAX_ITEMS = 100
+
+function timeAgo(iso: string): string {
+  const isoUtc = iso.endsWith('Z') ? iso : iso + 'Z'
+  const diffMs = Date.now() - new Date(isoUtc).getTime()
+  const s = Math.max(0, Math.floor(diffMs / 1000))
+  if (s < 5) return 'ahora'
+  if (s < 60) return `hace ${s}s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `hace ${m}min`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `hace ${h}h`
+  return new Date(isoUtc).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+function LiveFeed() {
+  const { t } = useLanguage()
+  const [items, setItems] = useState<FeedItem[]>([])
+  const [freshIds, setFreshIds] = useState<Set<string>>(new Set())
+  const [live, setLive] = useState(true)
+  const [error, setError] = useState('')
+  const [, forceTick] = useState(0) // solo para refrescar los "hace Xs" sin repollear
+  const cursorRef = useRef<string | null>(null)
+  const liveRef = useRef(live)
+  liveRef.current = live
+  const isFirstLoadRef = useRef(true)
+
+  useEffect(() => {
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+
+    async function poll() {
+      if (cancelled) return
+      if (liveRef.current) {
+        try {
+          const params = cursorRef.current ? { since: cursorRef.current, limit: 50 } : { limit: 30 }
+          const { data } = await whatsappAPI.getReminderFeed(params)
+          if (data.length > 0) {
+            cursorRef.current = data[data.length - 1].created_at
+            if (!isFirstLoadRef.current) {
+              const ids = new Set(data.map((d: FeedItem) => d.id))
+              setFreshIds(ids)
+              setTimeout(() => setFreshIds(new Set()), 3000)
+            }
+            setItems((prev) => [...data].reverse().concat(prev).slice(0, FEED_MAX_ITEMS))
+          }
+          isFirstLoadRef.current = false
+          setError('')
+        } catch (err) {
+          setError(getErrorMessage(err))
+        }
+      }
+      if (!cancelled) timer = setTimeout(poll, FEED_POLL_MS)
+    }
+    poll()
+    const tickTimer = setInterval(() => forceTick((n) => n + 1), 5000)
+    return () => { cancelled = true; clearTimeout(timer); clearInterval(tickTimer) }
+  }, [])
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <span className={`inline-block w-2 h-2 rounded-full ${live ? 'bg-[#2F7D4F] animate-pulse' : 'bg-[#94A3B8]'}`} />
+          <h3 className="text-sm font-semibold text-[#141820]">{t('Feed en vivo')}</h3>
+        </div>
+        <button
+          className="text-xs text-[#185FA5] hover:underline"
+          onClick={() => setLive((v) => !v)}
+        >
+          {live ? t('Pausar') : t('Reanudar')}
+        </button>
+      </div>
+      <p className="text-xs text-[#475569] mb-3">
+        {t('Cada recordatorio automático que sale de la plataforma, con el texto real y el resultado real de entrega (no si solo se encoló).')}
+      </p>
+      {error && <Alert type="error" message={error} />}
+
+      <div className="max-h-[480px] overflow-y-auto space-y-2 -mx-1 px-1">
+        {items.length === 0 && !error && (
+          <p className="text-xs text-[#475569] py-6 text-center">{t('Esperando actividad...')}</p>
+        )}
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className={`rounded-lg border p-3 transition-colors duration-1000 ${
+              item.status === 'FAILED'
+                ? 'border-[#F3C6C6] bg-[#FDF3F3]'
+                : freshIds.has(item.id)
+                ? 'border-[#BFE3CC] bg-[#EFFAF3]'
+                : 'border-[#E5E7EB] bg-white'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                {item.status === 'FAILED' ? (
+                  <span className="text-[#A32D2D] text-xs">✕</span>
+                ) : (
+                  <span className="text-[#2F7D4F] text-xs">✓</span>
+                )}
+                <span className="text-sm font-medium text-[#141820] truncate">
+                  {item.recipient_name || item.phone}
+                </span>
+                <span className="badge-gray text-[10px]">{AUDIENCE_LABEL_FEED[item.audience] || item.audience}</span>
+              </div>
+              <span className="text-[10px] text-[#475569] whitespace-nowrap">{timeAgo(item.created_at)}</span>
+            </div>
+            <p className="text-xs text-[#334155] mt-1.5 whitespace-pre-wrap">{item.body}</p>
+            {item.status === 'FAILED' && item.error_detail && (
+              <p className="text-[10px] text-[#A32D2D] mt-1.5">⚠ {item.error_detail}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 const TRIGGER_LABEL: Record<string, string> = {
   IMMEDIATE_CONSULTATION_WAITING: 'Paciente esperando (consulta inmediata)',
@@ -142,6 +275,8 @@ export function RemindersTab() {
         &quot;Paciente esperando&quot; se dispara al instante cuando se crea una consulta inmediata — no usa el
         campo de minutos. El resto de reglas corre por un chequeo cada minuto contra la hora de la cita.
       </p>
+
+      <LiveFeed />
 
       {stats && (
         <div className="card p-4">

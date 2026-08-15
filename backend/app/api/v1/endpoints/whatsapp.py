@@ -411,6 +411,72 @@ async def get_reminder_stats(db: AsyncSession = Depends(get_db), current_user: U
     }
 
 
+@router.get("/reminders/feed", summary="Feed en vivo de recordatorios enviados (mensaje real + estado real de entrega)")
+async def get_reminder_feed(
+    since: Optional[str] = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    """
+    A propósito NO lee de ReminderLog: esa tabla se escribe en el momento
+    de ENCOLAR el envío (status="SENT" ahí solo significa "se mandó a la
+    cola de Celery"), no cuando WhatsApp realmente confirma o rechaza el
+    mensaje — eso pasa después, de forma async, y puede fallar (ver
+    incidente 13→14 ago: 28 mensajes quedaron "SENT" en ReminderLog pero
+    en realidad dieron 503 whatsapp-service). El texto del mensaje
+    tampoco se guarda en ReminderLog.
+
+    Ambas cosas SÍ están en WhatsAppMessage, escrito por _log_message()
+    una sola vez, al final, con el resultado definitivo. `sent_by="SYSTEM"`
+    es el marcador que usa fire_system_reminder() para todo recordatorio
+    automático — lo distingue de "BOT" (agente IA) y "ADMIN" (respuesta
+    manual desde el panel), así que filtrar por eso alcanza sin tocar
+    ReminderRule/ReminderLog para nada.
+
+    `since` = cursor de polling (mismo criterio que el resto del feed:
+    el frontend manda el `created_at` de lo último que ya tiene y acá se
+    devuelve solo lo nuevo, para no relampaguear la lista completa).
+    """
+    query = (
+        select(WhatsAppMessage, WhatsAppConversation.phone, WhatsAppConversation.contact_name,
+               WhatsAppConversation.user_id, WhatsAppConversation.audience)
+        .join(WhatsAppConversation, WhatsAppConversation.id == WhatsAppMessage.conversation_id)
+        .where(WhatsAppMessage.direction == "OUT", WhatsAppMessage.sent_by == "SYSTEM")
+    )
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="`since` debe ser un datetime ISO válido")
+        query = query.where(WhatsAppMessage.created_at > since_dt).order_by(WhatsAppMessage.created_at.asc()).limit(min(limit, 200))
+    else:
+        query = query.order_by(WhatsAppMessage.created_at.desc()).limit(min(limit, 200))
+
+    result = await db.execute(query)
+    rows = result.all()
+    if not since:
+        rows = list(reversed(rows))  # el frontend siempre pinta más nuevo arriba; reversa acá simplifica ese lado
+
+    user_ids = [uid for _, _, _, uid, _ in rows if uid]
+    names = await _resolve_platform_names(db, user_ids)
+
+    return [
+        {
+            "id": msg.id,
+            "recipient_name": names.get(user_id) or contact_name,
+            "phone": phone,
+            "audience": audience,
+            "body": msg.body,
+            "status": msg.status,
+            "error_detail": msg.error_detail,
+            "related_entity_type": msg.related_entity_type,
+            "created_at": msg.created_at.isoformat(),
+        }
+        for msg, phone, contact_name, user_id, audience in rows
+    ]
+
+
 # ═══════════════════════════════════════════════════════
 # PESTAÑA 3 — Conversaciones + configuración del agente
 # ═══════════════════════════════════════════════════════

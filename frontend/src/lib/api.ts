@@ -1253,6 +1253,11 @@ export const whatsappAPI = {
   deleteReminder: (id: string) => api.delete(`/whatsapp/reminders/${id}`),
   getReminderLogs: (id: string) => api.get(`/whatsapp/reminders/${id}/logs`),
   getReminderStats: () => api.get('/whatsapp/reminders/stats'),
+  // Feed en vivo de envíos (todas las reglas mezcladas, no una por vez).
+  // `since` = sent_at ISO de la fila más nueva que el frontend ya tiene,
+  // para traer solo lo nuevo en cada poll.
+  getReminderFeed: (params?: { since?: string; limit?: number }) =>
+    api.get('/whatsapp/reminders/feed', { params }),
 
   // Pestaña 3 — conversaciones + configuración del agente
   listConversations: (audience?: string) =>
