@@ -20,7 +20,7 @@ Resumen del flujo:
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, inspect as sa_inspect
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from app.core.timezone import utcnow_naive
@@ -81,13 +81,23 @@ async def _get_professional_or_404(db: AsyncSession, user_id: str) -> Profession
 
 
 def _serialize_proposal(p: SpecialtyProposal, extra: Optional[dict] = None) -> dict:
+    # OJO: p.parent_specialty es una relación lazy. Si no está cargada en
+    # memoria (p.ej. porque el caller no usó selectinload, o porque un
+    # db.commit() previo expiró los atributos), NO hay que tocarla acá:
+    # en contexto async eso dispara sqlalchemy.exc.MissingGreenlet en vez
+    # de un lazy-load normal. Si no está cargada, devolvemos None y el
+    # caller puede pasar el valor correcto ya resuelto vía "extra".
+    state = sa_inspect(p)
+    parent_specialty_name = None
+    if "parent_specialty" not in state.unloaded:
+        parent_specialty_name = p.parent_specialty.name if p.parent_specialty else None
     base = {
         "id": p.id,
         "professional_id": p.professional_id,
         "type": p.type,
         "proposed_name": p.proposed_name,
         "parent_specialty_id": p.parent_specialty_id,
-        "parent_specialty_name": p.parent_specialty.name if p.parent_specialty else None,
+        "parent_specialty_name": parent_specialty_name,
         "parent_proposal_id": p.parent_proposal_id,
         "status": p.status,
         "final_name": p.final_name,
@@ -825,13 +835,24 @@ async def review_proposal(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(SpecialtyProposal).where(SpecialtyProposal.id == proposal_id)
+        select(SpecialtyProposal)
+        .options(selectinload(SpecialtyProposal.parent_specialty))
+        .where(SpecialtyProposal.id == proposal_id)
     )
     proposal = result.scalar_one_or_none()
     if not proposal:
         raise HTTPException(status_code=404, detail="Propuesta no encontrada")
     if proposal.status != ProposalStatus.PENDING:
         raise HTTPException(status_code=400, detail="Esta propuesta ya fue resuelta")
+
+    # Se captura acá, con la relación ya cargada por el selectinload de
+    # arriba. Más abajo hacemos db.commit() (expire_on_commit=True por
+    # defecto) seguido de db.refresh(proposal), que solo recarga columnas
+    # -- NO relaciones. Si _serialize_proposal accediera a
+    # proposal.parent_specialty después de eso, dispararía un lazy-load
+    # async fuera de contexto (MissingGreenlet). Por eso lo pasamos ya
+    # resuelto como override en "extra".
+    parent_specialty_name = proposal.parent_specialty.name if proposal.parent_specialty else None
 
     # Si es subespecialidad y depende de otra propuesta de especialidad
     # todavía pendiente, no se puede aprobar hasta resolver esa primero.
@@ -919,7 +940,10 @@ async def review_proposal(
         await db.refresh(proposal)
         await invalidate_professionals_list_cache()
         logger.info(f"Propuesta rechazada: {proposal.id} por admin {current_user.id}")
-        return {"message": "Propuesta rechazada.", "proposal": _serialize_proposal(proposal)}
+        return {
+            "message": "Propuesta rechazada.",
+            "proposal": _serialize_proposal(proposal, {"parent_specialty_name": parent_specialty_name}),
+        }
 
     # decision == "APPROVE"
     final_name = (data.final_name or proposal.proposed_name).strip()
@@ -1016,6 +1040,6 @@ async def review_proposal(
     logger.info(f"Propuesta aprobada: {proposal.id} → '{final_name}' por admin {current_user.id}")
     return {
         "message": "Propuesta aprobada.",
-        "proposal": _serialize_proposal(proposal),
+        "proposal": _serialize_proposal(proposal, {"parent_specialty_name": parent_specialty_name}),
         "professional_approved_now": professional_approved_now,
     }
