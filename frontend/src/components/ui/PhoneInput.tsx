@@ -12,7 +12,8 @@
 // es "tonto" respecto a ese formato: no valida longitud por país, eso
 // queda del lado del backend.
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { COUNTRY_CODES, DEFAULT_COUNTRY_CODE, type CountryCode } from '@/lib/countryCodes'
 
 interface PhoneInputProps {
@@ -51,10 +52,23 @@ export function PhoneInput({ value, onChange, required, placeholder = '72345678'
   const [countryCode, setCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [localNumber, setLocalNumber] = useState('')
   const [open, setOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  // Posición del dropdown en coordenadas de VIEWPORT (position: fixed),
+  // recalculada cada vez que se abre. Se pinta vía portal a document.body
+  // — ver comentario grande más abajo sobre por qué hace falta esto.
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 224 })
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLUListElement>(null)
 
   const selected: CountryCode =
     COUNTRY_CODES.find((c) => c.code === countryCode) ?? COUNTRY_CODES[0]
+
+  // createPortal no puede correr en el server (necesita document.body) —
+  // se habilita recién después del primer render en el cliente.
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Si el padre resetea `value` a '' (ej. al limpiar el formulario), este
   // componente también se resetea a su estado inicial en vez de quedar
@@ -66,16 +80,53 @@ export function PhoneInput({ value, onChange, required, placeholder = '72345678'
     }
   }, [value])
 
-  // Cerrar el dropdown al hacer click afuera.
+  const updateDropdownPos = useCallback(() => {
+    const btn = buttonRef.current
+    if (!btn) return
+    const rect = btn.getBoundingClientRect()
+    setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: 224 })
+  }, [])
+
+  // Recalcula la posición justo antes de pintar el dropdown, para que no
+  // haya un frame donde se vea en (0,0) y "salte" a su lugar.
+  useLayoutEffect(() => {
+    if (open) updateDropdownPos()
+  }, [open, updateDropdownPos])
+
+  // Cerrar el dropdown al hacer click afuera. Como el <ul> ahora vive en
+  // un portal (fuera del DOM de wrapperRef), hay que chequear también
+  // dropdownRef — si no, cualquier click DENTRO de la lista se
+  // interpretaría como "afuera" y la cerraría antes de que el onClick
+  // de la opción llegue a dispararse.
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const insideButton = wrapperRef.current?.contains(target)
+      const insideDropdown = dropdownRef.current?.contains(target)
+      if (!insideButton && !insideDropdown) {
         setOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Si la página hace scroll o cambia de tamaño mientras el dropdown está
+  // abierto, lo más simple y predecible es cerrarlo (en vez de perseguir
+  // al botón recalculando en cada evento) — mismo criterio que ya usan la
+  // mayoría de los selects nativos.
+  useEffect(() => {
+    if (!open) return
+    function closeOnScrollOrResize() {
+      setOpen(false)
+    }
+    window.addEventListener('scroll', closeOnScrollOrResize, true)
+    window.addEventListener('resize', closeOnScrollOrResize)
+    return () => {
+      window.removeEventListener('scroll', closeOnScrollOrResize, true)
+      window.removeEventListener('resize', closeOnScrollOrResize)
+    }
+  }, [open])
 
   function emitChange(nextCountryCode: string, nextLocalNumber: string) {
     const digitsOnly = nextLocalNumber.replace(/\D/g, '')
@@ -97,6 +148,7 @@ export function PhoneInput({ value, onChange, required, placeholder = '72345678'
     <div className="flex gap-2">
       <div className="relative" ref={wrapperRef}>
         <button
+          ref={buttonRef}
           type="button"
           onClick={() => setOpen((o) => !o)}
           className="input w-[104px] flex-shrink-0 flex items-center gap-1.5 cursor-pointer"
@@ -120,10 +172,28 @@ export function PhoneInput({ value, onChange, required, placeholder = '72345678'
           </svg>
         </button>
 
-        {open && (
+        {/*
+          El dropdown se pinta con un PORTAL a document.body, en vez de
+          quedar anidado en el DOM acá adentro. Motivo (bug real visto en
+          producción): esta sección envuelve cada campo del formulario en
+          su propio <Reveal>, que anima con `translate-y-*` — y CUALQUIER
+          transform distinto de `none` (incluido translate(0,0) ya
+          asentado) crea un stacking context nuevo. Eso encierra este
+          z-20 dentro de la burbuja del Reveal de "Teléfono", así que no
+          puede ganarle a los Reveal de "Correo" y "Tipo de consulta"
+          (que vienen después en el DOM y se pintan encima como bloques
+          completos) por más z-index que tenga puertas adentro. Con el
+          portal, el <ul> vive directo en <body>, fuera de esa jerarquía,
+          y position:fixed + coordenadas calculadas con
+          getBoundingClientRect() lo ubican pegado al botón igual que
+          antes — pero ya sin quedar atrapado.
+        */}
+        {open && mounted && createPortal(
           <ul
+            ref={dropdownRef}
             role="listbox"
-            className="absolute z-20 mt-1 max-h-64 w-56 overflow-auto rounded-lg border border-blue-100 bg-white py-1 shadow-lg"
+            className="fixed z-50 max-h-64 overflow-auto rounded-lg border border-blue-100 bg-white py-1 shadow-lg"
+            style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
           >
             {COUNTRY_CODES.map((c) => (
               // El `code` (código de marcado) no es único por sí solo —
@@ -144,7 +214,8 @@ export function PhoneInput({ value, onChange, required, placeholder = '72345678'
                 </button>
               </li>
             ))}
-          </ul>
+          </ul>,
+          document.body
         )}
       </div>
       <input
