@@ -927,6 +927,12 @@ export default function ProfilePage() {
       const res = await professionalsAPI.uploadSignature(file)
       setSignatureUrl(res.data.signature_url)
       setSignatureMode('view')
+      // BUG encontrado: a diferencia de especialidad/universidad/matrícula
+      // (que actualizan su estado local al instante), acá nunca se pedía
+      // refrescar myDocs — el mensaje "Firma en revisión" dependía del
+      // refetchInterval de 20s de la query de documentos, así que tardaba
+      // hasta 20s en reflejar el nuevo PENDING. Refetch inmediato acá.
+      refetchDocs()
     } catch (err) {
       setSignatureError(getErrorMessage(err))
     } finally {
@@ -964,6 +970,8 @@ export default function ProfilePage() {
       setSignatureMode('view')
       setSignaturePhotoFile(null)
       setSignaturePhotoPreview(null)
+      // Mismo fix que saveSignatureFromCanvas — ver comentario ahí.
+      refetchDocs()
     } catch (err) {
       setSignatureError(getErrorMessage(err))
     } finally {
@@ -977,6 +985,10 @@ export default function ProfilePage() {
     try {
       await professionalsAPI.deleteSignature()
       setSignatureUrl(null)
+      // Mismo fix — al quitar la firma también desaparece su
+      // ProfessionalDoc en el backend; sin este refetch, el mensaje de
+      // estado quedaba mostrando el status viejo hasta el próximo poll.
+      refetchDocs()
     } catch (err) {
       setSignatureError(getErrorMessage(err))
     } finally {
@@ -1919,6 +1931,7 @@ export default function ProfilePage() {
                   <ReqBadge kind="required" t={t} />
                 </label>
                 <p className="text-xs text-[#64748B] mb-1.5">{t('Elige al menos una opción — el paciente lo ve para saber en qué idioma puede atenderse contigo.')}</p>
+                <p className="text-xs text-[#64748B] mb-1.5">{t('Por defecto se elige Español — puedes editarlo agregando o quitando idiomas.')}</p>
                 {/* Chips en vez de texto libre — así nunca hay comas mal
                     puestas o nombres mal escritos: se toca para agregar/
                     quitar, y los que no están en la lista se agregan aparte. */}
