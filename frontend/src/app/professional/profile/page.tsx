@@ -578,6 +578,11 @@ export default function ProfilePage() {
   const [responsibilityAck, setResponsibilityAck] = useState(false)
   const [bankSuccess, setBankSuccess] = useState('')
   const [bankError, setBankError]     = useState('')
+  // Con una cuenta ya cargada (PENDING o APPROVED), el formulario arranca
+  // cerrado y solo se muestra al tocar "Editar" — mismo patrón que
+  // especialidad/subespecialidad/firma, para no dar a entender que hay
+  // que volver a llenarlo cada vez que se entra a la pestaña.
+  const [editingBank, setEditingBank] = useState(false)
 
   // % de comisión vigente ahora mismo (individual > promo global > default)
   // y cuánto le llegaría neto por cada tipo de consulta con los precios
@@ -701,6 +706,7 @@ export default function ProfilePage() {
       setAccountNumber('')
       setAccountNumberConfirm('')
       setResponsibilityAck(false)
+      setEditingBank(false)
       refetchBankAccount()
     },
     onError: (err) => {
@@ -2303,14 +2309,39 @@ export default function ProfilePage() {
                     )}
                   </div>
                 )}
+
+                {/* Todavía pendiente de revisión: sí se puede corregir un
+                    error mientras nadie la aprobó, pero el formulario
+                    arranca cerrado — se abre recién al tocar "Editar",
+                    igual que especialidad/subespecialidad/firma. */}
+                {!myBankAccount.verified && !editingBank && (
+                  <div className="mt-2 pt-2 border-t border-[#DDE1EE]">
+                    <button
+                      onClick={() => setEditingBank(true)}
+                      className="btn-secondary text-xs py-1.5 px-3"
+                    >
+                      {t('Editar')}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
-            {!myBankAccount?.verified && (
+            {(!myBankAccount || (!myBankAccount.verified && editingBank)) && (
             <>
-            <p className="text-xs font-semibold text-[#141820] mb-2">
-              {myBankAccount ? t('Cambiar cuenta bancaria') : t('Registrar cuenta bancaria')}
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-[#141820]">
+                {myBankAccount ? t('Corregir cuenta bancaria') : t('Registrar cuenta bancaria')}
+              </p>
+              {myBankAccount && (
+                <button
+                  onClick={() => { setEditingBank(false); setBankError('') }}
+                  className="text-xs text-[#64748B] hover:text-[#141820]"
+                >
+                  {t('Cancelar')}
+                </button>
+              )}
+            </div>
 
             <div className="space-y-3">
               <div>
