@@ -743,31 +743,21 @@ async def confirm_catalog_pick(
             send_whatsapp=False,
         )
     else:
-        # Rechazo: se limpia el campo para que el profesional vuelva a
-        # elegir del catálogo (o proponga una nueva) sin quedar con un
-        # dato huérfano ni tener que re-registrarse — mismo patrón que un
-        # documento rechazado que se puede resubir.
+        # Rechazo (incluye "Revertir aprobación" sobre algo ya APPROVED,
+        # ya que este mismo endpoint se usa para ambos casos una vez que
+        # la propuesta original -si la hubo- ya quedó resuelta: ver
+        # pending_proposal_ids en admin.py). Se mantiene el valor visible
+        # -no se borra- para que el profesional vea exactamente qué se
+        # cuestionó y lo corrija, en vez de perder el dato y tener que
+        # elegir todo de nuevo desde cero. Mismo patrón que universidad,
+        # años de experiencia, matrícula y documentos.
         if is_specialty:
-            professional.specialty = None
-            professional.specialty_status = DocStatus.PENDING
+            professional.specialty_status = DocStatus.REJECTED
             professional.specialty_review_note = data.review_note
             if professional.status == ProfessionalStatus.UNDER_REVIEW:
                 professional.status = ProfessionalStatus.PENDING_DOCS
-            # La subespecialidad ahora se puede cargar ANTES de que la
-            # especialidad esté aprobada (el profesional ya no tiene que
-            # esperar). Eso significa que si la especialidad se rechaza,
-            # cualquier subespecialidad que hubiera cargado quedaría
-            # huérfana — conceptualmente ligada a una especialidad que ya
-            # no existe (ej. "Electrofisiología cardíaca" sin "Cardiología"
-            # detrás). Se limpia acá para forzar al profesional a elegir
-            # de nuevo una vez que tenga una especialidad válida.
-            if professional.sub_specialty:
-                professional.sub_specialty = None
-                professional.sub_specialty_status = None
-                professional.sub_specialty_review_note = "Se limpió automáticamente: la especialidad de la que dependía fue rechazada."
         else:
-            professional.sub_specialty = None
-            professional.sub_specialty_status = None
+            professional.sub_specialty_status = DocStatus.REJECTED
             professional.sub_specialty_review_note = data.review_note
 
         await notify_user(

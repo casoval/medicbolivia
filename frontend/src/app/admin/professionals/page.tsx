@@ -312,7 +312,7 @@ function SpecialtyReviewRow({
             </div>
           )}
         </div>
-        {status !== 'APPROVED' && (
+        {status !== 'APPROVED' ? (
           <div className="flex gap-1.5 shrink-0">
             <button
               onClick={handleApprove}
@@ -329,6 +329,21 @@ function SpecialtyReviewRow({
               Rechazar
             </button>
           </div>
+        ) : (
+          // Escape hatch para el caso "se aprobó rápido y después el
+          // profesional/paciente nota un error" — reutiliza el mismo
+          // onReject (pide motivo con prompt) en vez de dejar esto
+          // bloqueado sin salida. No toca el status general de la cuenta
+          // ni la suspende; solo reabre este campo puntual para que el
+          // profesional lo corrija (ver confirm_catalog_pick en el
+          // backend, que ya no borra el valor al rechazar).
+          <button
+            onClick={onReject}
+            disabled={pending}
+            className="text-[10px] text-[#64748B] hover:text-[#A32D2D] disabled:opacity-50 shrink-0"
+          >
+            Revertir aprobación
+          </button>
         )}
       </div>
     </div>
@@ -1467,6 +1482,15 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                               {t('Rechazar')}
                             </button>
                           </div>
+                        )}
+                        {value && status === 'APPROVED' && (
+                          <button
+                            onClick={() => reviewItem(item, 'REJECTED')}
+                            disabled={reviewItemMutation.isPending}
+                            className="text-[10px] text-[#64748B] hover:text-[#A32D2D] disabled:opacity-50 shrink-0"
+                          >
+                            {t('Revertir aprobación')}
+                          </button>
                         )}
                       </div>
                     </div>
