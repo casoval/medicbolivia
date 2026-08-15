@@ -247,6 +247,19 @@ function SpecialtyReviewRow({
       <div className="bg-white border border-[#DDE1EE] rounded-lg px-3 py-2">
         <p className="text-xs text-[#64748B]">{label}</p>
         <p className="text-sm font-medium text-[#94A3B8]">No especificado por el profesional</p>
+        {/* Si esto quedó vacío justo porque el admin lo acaba de rechazar
+            (ver confirm_catalog_pick / review_proposal en el backend: al
+            rechazar, limpian el campo a propósito para que el profesional
+            pueda elegir de nuevo), el motivo queda guardado en
+            *_review_note aunque ya no haya valor que mostrar. Sin esto,
+            el admin pierde de vista qué motivo escribió apenas refresca,
+            y el profesional tampoco lo ve reflejado acá — solo por
+            notificación, que puede pasar desapercibida. */}
+        {reviewNote && (
+          <p className="text-[10px] text-[#A32D2D] mt-1">
+            Rechazado — motivo enviado al profesional: {reviewNote}
+          </p>
+        )}
       </div>
     )
   }

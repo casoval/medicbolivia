@@ -488,6 +488,13 @@ export default function ProfilePage() {
     first_name?: string; last_name?: string; ci?: string; birth_date?: string
     department?: string; gender?: string; specialty?: string; sub_specialty?: string
     specialty_status?: string; sub_specialty_status?: string
+    // El backend ya manda esto (ver GET /professionals/me) con el motivo
+    // que el admin escribió al rechazar — antes no estaba ni tipado acá
+    // ni se mostraba en ningún lado, así que el profesional solo se
+    // enteraba del motivo si abría la notificación correspondiente (fácil
+    // de pasar por alto). Ver uso más abajo, junto al selector que
+    // reaparece cuando el campo queda vacío tras el rechazo.
+    specialty_review_note?: string | null; sub_specialty_review_note?: string | null
     email?: string; phone?: string; cmb_matricula?: string; sedes_number?: string
   } | null>(null)
   // Status de habilitación del profesional ('PENDING' | 'APPROVED' | 'REJECTED'),
@@ -1179,6 +1186,22 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="mt-2 space-y-2">
+                  {/* Si specialty quedó null justo porque un admin la
+                      acaba de rechazar (ver confirm_catalog_pick /
+                      review_proposal en el backend: al rechazar limpian
+                      el campo para que el profesional pueda elegir de
+                      nuevo), el motivo viaja en specialty_review_note
+                      aunque ya no haya nada que mostrar en la tarjeta de
+                      arriba. Antes esto solo se veía en la notificación
+                      — fácil de no abrir — así que se repite acá, justo
+                      donde el profesional tiene que actuar. */}
+                  {!registrationData?.specialty && registrationData?.specialty_review_note && (
+                    <div className="bg-[#FCEBEB] border border-[#F09595] rounded-lg px-3 py-2">
+                      <p className="text-xs text-[#A32D2D]">
+                        {t('Tu especialidad anterior fue rechazada. Motivo:')} {registrationData.specialty_review_note}
+                      </p>
+                    </div>
+                  )}
                   <select
                     value={specialtyChoice}
                     onChange={(e) => setSpecialtyChoice(e.target.value)}
@@ -1269,6 +1292,13 @@ export default function ProfilePage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
+                    {!registrationData?.sub_specialty && registrationData?.sub_specialty_review_note && (
+                      <div className="bg-[#FCEBEB] border border-[#F09595] rounded-lg px-3 py-2">
+                        <p className="text-xs text-[#A32D2D]">
+                          {t('Tu subespecialidad anterior fue rechazada. Motivo:')} {registrationData.sub_specialty_review_note}
+                        </p>
+                      </div>
+                    )}
                     <select
                       value={subSpecialtyChoice}
                       onChange={(e) => setSubSpecialtyChoice(e.target.value)}
