@@ -1029,13 +1029,26 @@ class ProposalCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_parent_for_sub_specialty(self):
+        # OJO — este validador ANTES exigía que el cliente mandara
+        # exactamente uno de los dos (parent_specialty_id o
+        # parent_proposal_id) para toda subespecialidad. Eso bloqueaba la
+        # request con un 422 de Pydantic ANTES de que create_proposal()
+        # llegara a ejecutarse — el frontend nunca manda ninguno de los
+        # dos cuando el profesional usa "no está en la lista" (ver
+        # saveSubSpecialty en professional/profile/page.tsx), así que
+        # TODA subespecialidad escrita a mano quedaba bloqueada acá mismo,
+        # sin que importara nada de lo que se resolviera después en el
+        # endpoint (ver la resolución server-side ahí). Ahora el endpoint
+        # resuelve el padre él solo a partir de professional.specialty, así
+        # que el cliente NO tiene que mandar ninguno de los dos — solo
+        # bloqueamos el caso realmente contradictorio: que mande AMBOS a
+        # la vez (no tendría sentido, ¿cuál es el padre real?).
         if self.type == ProposalType.SUB_SPECIALTY:
-            has_specialty = self.parent_specialty_id is not None
-            has_proposal = self.parent_proposal_id is not None
-            if has_specialty == has_proposal:  # ambos True o ambos False
+            if self.parent_specialty_id is not None and self.parent_proposal_id is not None:
                 raise ValueError(
-                    "Una subespecialidad necesita exactamente uno: "
-                    "parent_specialty_id o parent_proposal_id"
+                    "Una subespecialidad no puede tener parent_specialty_id y "
+                    "parent_proposal_id al mismo tiempo — el backend resuelve "
+                    "el padre solo, no hace falta mandar ninguno."
                 )
         return self
 
