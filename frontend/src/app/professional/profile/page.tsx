@@ -593,14 +593,6 @@ export default function ProfilePage() {
   type TabKey = 'verificacion' | 'perfil' | 'pagos' | 'cuenta'
   const [activeTab, setActiveTab] = useState<TabKey>('verificacion')
 
-  const isApproved = professionalStatus === 'APPROVED'
-
-  // Anchor → a qué pestaña pertenece cada sección — usado por el
-  // indicador de progreso de arriba y por scrollToSection.
-  function tabForAnchor(anchor: string): { tab: TabKey } {
-    return { tab: 'verificacion' }
-  }
-
   // Pestaña inicial: si ya está aprobado, no tiene sentido abrir en
   // "Verificación" (no le queda nada pendiente ahí) — abrimos en "Perfil
   // público". Si todavía no está aprobado, "Verificación" es lo primero
@@ -613,9 +605,11 @@ export default function ProfilePage() {
     setActiveTab(professionalStatus === 'APPROVED' ? 'perfil' : 'verificacion')
   }, [professionalStatus])
 
+  // Todas las secciones con anchor (especialidad, documentos, etc.) viven
+  // en la pestaña "verificación" — ya no hay pasos de wizard entre ellas,
+  // así que alcanza con activar esa pestaña y hacer scroll al id.
   function scrollToSection(anchor: string) {
-    const { tab } = tabForAnchor(anchor)
-    setActiveTab(tab)
+    setActiveTab('verificacion')
     setTimeout(() => {
       document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 60)
@@ -1211,7 +1205,7 @@ export default function ProfilePage() {
 
                     {subSpecialtyChoice && (
                       <button
-                        onClick={saveSubSpecialty}
+                        onClick={() => saveSubSpecialty()}
                         disabled={specialtySaving}
                         className="bg-[#0F6E56] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
                       >
