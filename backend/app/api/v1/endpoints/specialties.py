@@ -367,6 +367,59 @@ async def create_proposal(
     if not proposed_name_clean:
         raise HTTPException(status_code=400, detail="El nombre no puede estar vacío")
 
+    # ── Resolución server-side de la especialidad padre ─────────────
+    # El frontend NUNCA manda parent_specialty_id ni parent_proposal_id
+    # cuando el profesional usa "no está en la lista" para subespecialidad
+    # (ver saveSubSpecialty en professional/profile/page.tsx) — solo manda
+    # proposed_name. Si confiáramos en data.parent_specialty_id, esta
+    # propuesta quedaría sin padre y sería imposible de aprobar más
+    # adelante (review_proposal exige uno de los dos). Por eso lo resolvemos
+    # acá mismo, a partir del valor real que ya tiene el profesional en
+    # professional.specialty (que a esta altura sabemos que existe, por el
+    # chequeo de arriba):
+    #   1) si ya es una especialidad real del catálogo -> parent_specialty_id
+    #   2) si todavía es solo una propuesta pendiente del mismo profesional
+    #      -> parent_proposal_id
+    # Preferimos lo resuelto acá sobre lo que mande el cliente porque el
+    # cliente no tiene forma confiable de saber cuál es el registro final
+    # (podría estar desactualizado o directamente no mandarlo, como hoy).
+    resolved_parent_specialty_id: Optional[str] = None
+    resolved_parent_proposal_id: Optional[str] = None
+    if data.type == ProposalType.SUB_SPECIALTY:
+        parent_specialty_result = await db.execute(
+            select(Specialty).where(
+                func.lower(Specialty.name) == professional.specialty.strip().lower(),
+                Specialty.is_active == True,
+            )
+        )
+        parent_specialty_obj = parent_specialty_result.scalar_one_or_none()
+        if parent_specialty_obj:
+            resolved_parent_specialty_id = parent_specialty_obj.id
+        else:
+            parent_proposal_result = await db.execute(
+                select(SpecialtyProposal).where(
+                    SpecialtyProposal.professional_id == professional.id,
+                    SpecialtyProposal.type == ProposalType.SPECIALTY,
+                    SpecialtyProposal.status == ProposalStatus.PENDING,
+                    func.lower(SpecialtyProposal.proposed_name) == professional.specialty.strip().lower(),
+                )
+            )
+            parent_proposal_obj = parent_proposal_result.scalar_one_or_none()
+            if parent_proposal_obj:
+                resolved_parent_proposal_id = parent_proposal_obj.id
+        # Caso borde: si professional.specialty no coincide con ningún
+        # Specialty activo ni con ninguna propuesta PENDING del propio
+        # profesional (ej. la propuesta de especialidad ya fue rechazada
+        # pero el campo todavía no se limpió, o quedó en un estado raro),
+        # no dejamos crear una subespecialidad que después nadie podría
+        # aprobar — mejor fallar acá con un mensaje claro.
+        if not resolved_parent_specialty_id and not resolved_parent_proposal_id:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo vincular la subespecialidad a tu especialidad actual. "
+                       "Vuelve a guardar tu especialidad e intenta de nuevo.",
+            )
+
     # ── Guard anti-duplicados ──────────────────────────────────────
     # Antes de crear una propuesta (pensada solo para lo que NO está en
     # el catálogo), nos fijamos si el nombre ya existe ahí — comparación
@@ -418,13 +471,14 @@ async def create_proposal(
                 "proposal": None,
             }
     else:  # SUB_SPECIALTY — solo se puede chequear contra el catálogo si
-        # la especialidad padre YA es real (parent_specialty_id). Si el
-        # padre es a su vez otra propuesta pendiente (parent_proposal_id),
-        # no hay nada en el catálogo todavía contra qué comparar.
-        if data.parent_specialty_id:
+        # la especialidad padre YA es real (resolved_parent_specialty_id).
+        # Si el padre es a su vez otra propuesta pendiente
+        # (resolved_parent_proposal_id), no hay nada en el catálogo
+        # todavía contra qué comparar.
+        if resolved_parent_specialty_id:
             dup_result = await db.execute(
                 select(SubSpecialty).where(
-                    SubSpecialty.specialty_id == data.parent_specialty_id,
+                    SubSpecialty.specialty_id == resolved_parent_specialty_id,
                     func.lower(SubSpecialty.name) == proposed_name_clean.lower(),
                     SubSpecialty.is_active == True,
                 )
@@ -464,8 +518,8 @@ async def create_proposal(
         professional_id=professional.id,
         type=data.type,
         proposed_name=proposed_name_clean,
-        parent_specialty_id=data.parent_specialty_id if data.type == ProposalType.SUB_SPECIALTY else None,
-        parent_proposal_id=data.parent_proposal_id if data.type == ProposalType.SUB_SPECIALTY else None,
+        parent_specialty_id=resolved_parent_specialty_id if data.type == ProposalType.SUB_SPECIALTY else None,
+        parent_proposal_id=resolved_parent_proposal_id if data.type == ProposalType.SUB_SPECIALTY else None,
         status=ProposalStatus.PENDING,
     )
     db.add(proposal)
