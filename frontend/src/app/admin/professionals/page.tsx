@@ -1403,9 +1403,15 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                   onReject={() => reviewSpecialty('SPECIALTY', 'REJECT')}
                 />
 
-                {/* Subespecialidad — opcional, solo aparece si el
-                    profesional cargó una */}
-                {local.sub_specialty && (
+                {/* Subespecialidad — opcional, aparece si el profesional
+                    cargó una O si quedó un motivo de rechazo pendiente de
+                    mostrar. Antes esto era solo `local.sub_specialty &&`
+                    — como el backend limpia el campo a null al rechazar
+                    (ver confirm_catalog_pick / review_proposal), la fila
+                    entera desaparecía junto con el motivo apenas se
+                    rechazaba, aunque SpecialtyReviewRow ya sabe mostrarlo
+                    (ver su rama `if (!value)` más arriba). */}
+                {(local.sub_specialty || local.sub_specialty_review_note) && (
                   <SpecialtyReviewRow
                     label={t('Subespecialidad')}
                     value={local.sub_specialty}
