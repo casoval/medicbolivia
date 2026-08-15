@@ -733,6 +733,12 @@ export default function ProfilePage() {
     return myDocs.find((d) => d.doc_type === type)
   }
 
+  // Firma ya verificada por un admin — igual que especialidad y
+  // subespecialidad, una vez APPROVED queda bloqueada: "Cambiar
+  // firma"/"Quitar" se ocultan y solo se destraba si un admin revierte
+  // la aprobación (ver botones más abajo en signatureMode === 'view').
+  const sigApproved = docRecordOf('SIGNATURE')?.status === 'APPROVED'
+
   // Resumen de los pasos obligatorios (ver REQUIRED_STEPS), para el
   // indicador de arriba de todo. SPECIALTY y PROFESSIONAL_LICENSE no son
   // documentos (ProfessionalDoc) — su estado sale de registrationData en
@@ -1246,11 +1252,11 @@ export default function ProfilePage() {
                 // el selector completo se mostraban los dos a la vez
                 // (mientras no estuviera APPROVED), lo cual era confuso.
                 // Ahora, con un valor cargado, se ve SOLO esta tarjeta.
-                // Tocar "Editar" es intencional: además de destrabar el
-                // campo, sirve como aviso de que volver a guardar
-                // re-envía la propuesta para revisión de nuevo (útil para
-                // corregir algo en una emergencia real, incluso ya
-                // aprobado).
+                // El botón "Editar" solo aparece mientras NO está APPROVED
+                // (PENDING/REJECTED). Una vez que un admin la verificó, el
+                // dato queda bloqueado de verdad — la única forma de volver
+                // a editarlo es que un admin la revierta desde el panel de
+                // administración (botón "Revertir aprobación").
                 <div className="bg-[#F5F6FA] border border-[#DDE1EE] rounded-lg px-3 py-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -1263,13 +1269,18 @@ export default function ProfilePage() {
                       {registrationData.specialty_status === 'PENDING' && (
                         <p className="text-xs text-[#854F0B] mt-1">{t('Pendiente de confirmación de un administrador.')}</p>
                       )}
+                      {registrationData.specialty_status === 'APPROVED' && (
+                        <p className="text-xs text-[#1D9E75] mt-1">{t('Verificada por un administrador. Para corregirla, un administrador debe revertir la aprobación primero.')}</p>
+                      )}
                     </div>
-                    <button
-                      onClick={startEditSpecialty}
-                      className="text-xs text-[#185FA5] font-medium underline underline-offset-2 flex-shrink-0"
-                    >
-                      {t('Editar')}
-                    </button>
+                    {registrationData.specialty_status !== 'APPROVED' && (
+                      <button
+                        onClick={startEditSpecialty}
+                        className="text-xs text-[#185FA5] font-medium underline underline-offset-2 flex-shrink-0"
+                      >
+                        {t('Editar')}
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -1369,13 +1380,18 @@ export default function ProfilePage() {
                         {registrationData.sub_specialty_status === 'PENDING' && (
                           <p className="text-xs text-[#854F0B] mt-1">{t('Pendiente de confirmación de un administrador.')}</p>
                         )}
+                        {registrationData.sub_specialty_status === 'APPROVED' && (
+                          <p className="text-xs text-[#1D9E75] mt-1">{t('Verificada por un administrador. Para corregirla, un administrador debe revertir la aprobación primero.')}</p>
+                        )}
                       </div>
-                      <button
-                        onClick={startEditSubSpecialty}
-                        className="text-xs text-[#185FA5] font-medium underline underline-offset-2 flex-shrink-0"
-                      >
-                        {t('Editar')}
-                      </button>
+                      {registrationData.sub_specialty_status !== 'APPROVED' && (
+                        <button
+                          onClick={startEditSubSpecialty}
+                          className="text-xs text-[#185FA5] font-medium underline underline-offset-2 flex-shrink-0"
+                        >
+                          {t('Editar')}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -1467,15 +1483,17 @@ export default function ProfilePage() {
                         <p className="text-xs text-[#854F0B] mt-1">{t('Pendiente de confirmación de un administrador.')}</p>
                       )}
                       {verification.professional_license_status === 'APPROVED' && (
-                        <p className="text-xs text-[#64748B] mt-1">{t('Verificada por un administrador. Si la editas, vuelve a quedar pendiente de revisión.')}</p>
+                        <p className="text-xs text-[#64748B] mt-1">{t('Verificada por un administrador. Para corregirla, un administrador debe revertir la aprobación primero.')}</p>
                       )}
                     </div>
-                    <button
-                      onClick={startEditLicense}
-                      className="text-xs text-[#185FA5] font-medium underline underline-offset-2 flex-shrink-0"
-                    >
-                      {t('Editar')}
-                    </button>
+                    {verification.professional_license_status !== 'APPROVED' && (
+                      <button
+                        onClick={startEditLicense}
+                        className="text-xs text-[#185FA5] font-medium underline underline-offset-2 flex-shrink-0"
+                      >
+                        {t('Editar')}
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -1565,16 +1583,22 @@ export default function ProfilePage() {
                     <p className="text-xs text-[#A0A8BF] px-4 text-center">{t('Todavía no cargaste tu firma')}</p>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setSignatureMode('choose')} className="btn-primary text-xs py-1.5 px-3">
-                    {signatureUrl ? t('Cambiar firma') : t('Agregar firma')}
-                  </button>
-                  {signatureUrl && (
-                    <button onClick={removeSignature} disabled={signatureSaving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
-                      {t('Quitar')}
+                {(!signatureUrl || !sigApproved) ? (
+                  <div className="flex gap-2">
+                    <button onClick={() => setSignatureMode('choose')} className="btn-primary text-xs py-1.5 px-3">
+                      {signatureUrl ? t('Cambiar firma') : t('Agregar firma')}
                     </button>
-                  )}
-                </div>
+                    {signatureUrl && (
+                      <button onClick={removeSignature} disabled={signatureSaving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
+                        {t('Quitar')}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#64748B] text-center max-w-xs">
+                    {t('Para cambiarla, un administrador debe revertir la aprobación primero.')}
+                  </p>
+                )}
               </div>
             )}
 
@@ -2021,15 +2045,17 @@ export default function ProfilePage() {
                           <p className="text-xs text-[#854F0B] mt-1">{t('Pendiente de confirmación de un administrador.')}</p>
                         )}
                         {verification.university_status === 'APPROVED' && (
-                          <p className="text-xs text-[#64748B] mt-1">{t('Verificada por un administrador. Si la editas, vuelve a quedar pendiente de revisión.')}</p>
+                          <p className="text-xs text-[#64748B] mt-1">{t('Verificada por un administrador. Para corregirla, un administrador debe revertir la aprobación primero.')}</p>
                         )}
                       </div>
-                      <button
-                        onClick={startEditUniversity}
-                        className="text-xs text-[#185FA5] font-medium underline underline-offset-2 flex-shrink-0"
-                      >
-                        {t('Editar')}
-                      </button>
+                      {verification.university_status !== 'APPROVED' && (
+                        <button
+                          onClick={startEditUniversity}
+                          className="text-xs text-[#185FA5] font-medium underline underline-offset-2 flex-shrink-0"
+                        >
+                          {t('Editar')}
+                        </button>
+                      )}
                     </div>
                     {verification.university_status === 'APPROVED' && (
                       <label className="flex items-center gap-2 mt-2 text-xs text-[#475569]">

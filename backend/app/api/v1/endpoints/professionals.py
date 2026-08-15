@@ -454,12 +454,6 @@ async def _save_signature(db: AsyncSession, professional: Professional, png_byte
     tenga que aprobarla antes de que cuente para la aprobación del perfil o
     para poder emitir recetas/órdenes de laboratorio (ver create_prescription
     y create_lab_order)."""
-    signature_url = await upload_signature_to_r2(
-        file_content=png_bytes,
-        professional_id=str(professional.id),
-    )
-    professional.signature_url = signature_url
-
     existing = await db.execute(
         select(ProfessionalDoc).where(
             and_(
@@ -469,6 +463,24 @@ async def _save_signature(db: AsyncSession, professional: Professional, png_byte
         )
     )
     doc = existing.scalar_one_or_none()
+
+    # Igual que especialidad/subespecialidad: una firma ya APPROVED por
+    # un admin queda bloqueada — no se puede reemplazar directamente,
+    # solo si un admin revierte la aprobación primero. Antes esto no se
+    # chequeaba y cualquier subida nueva pisaba silenciosamente la firma
+    # verificada y la volvía a mandar a PENDING.
+    if doc and doc.status == DocStatus.APPROVED:
+        raise HTTPException(
+            status_code=400,
+            detail="Tu firma ya fue verificada. Para cambiarla, un administrador debe revertir la aprobación primero.",
+        )
+
+    signature_url = await upload_signature_to_r2(
+        file_content=png_bytes,
+        professional_id=str(professional.id),
+    )
+    professional.signature_url = signature_url
+
     if doc:
         doc.file_url = signature_url
         doc.status = DocStatus.PENDING
@@ -602,8 +614,6 @@ async def delete_signature(
     if not professional:
         raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
 
-    professional.signature_url = None
-
     existing = await db.execute(
         select(ProfessionalDoc).where(
             and_(
@@ -613,6 +623,17 @@ async def delete_signature(
         )
     )
     doc = existing.scalar_one_or_none()
+
+    # Mismo bloqueo que subir/reemplazar: si ya está APPROVED, quitarla
+    # también cuenta como modificar un dato verificado — requiere que un
+    # admin revierta la aprobación primero.
+    if doc and doc.status == DocStatus.APPROVED:
+        raise HTTPException(
+            status_code=400,
+            detail="Tu firma ya fue verificada. Para quitarla, un administrador debe revertir la aprobación primero.",
+        )
+
+    professional.signature_url = None
     if doc:
         await db.delete(doc)
 

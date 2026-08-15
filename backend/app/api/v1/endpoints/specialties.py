@@ -377,6 +377,27 @@ async def create_proposal(
 ):
     professional = await _get_professional_or_404(db, current_user.id)
 
+    # ── Bloqueo de edición sobre un dato ya APPROVED ─────────────────
+    # Antes, el profesional podía re-enviar especialidad/subespecialidad
+    # aunque ya estuvieran verificadas por un admin (el frontend incluso
+    # lo permitía "a propósito" con el botón Editar siempre visible). Eso
+    # contradice el propio flujo de verificación: una vez APPROVED, el
+    # dato solo debería poder cambiar si un admin lo revierte primero
+    # (ver review_proposal / confirm_catalog_pick, acción "revertir
+    # aprobación"). El frontend ya oculta el botón "Editar" en ese caso;
+    # este chequeo es la fuente de verdad real, por si alguien manda la
+    # request directo a la API.
+    if data.type == ProposalType.SPECIALTY and professional.specialty_status == DocStatus.APPROVED:
+        raise HTTPException(
+            status_code=400,
+            detail="Tu especialidad ya fue verificada. Para corregirla, un administrador debe revertir la aprobación primero.",
+        )
+    if data.type == ProposalType.SUB_SPECIALTY and professional.sub_specialty_status == DocStatus.APPROVED:
+        raise HTTPException(
+            status_code=400,
+            detail="Tu subespecialidad ya fue verificada. Para corregirla, un administrador debe revertir la aprobación primero.",
+        )
+
     # Solo se permite UNA especialidad y UNA subespecialidad por
     # profesional — si ya tenía una subespecialidad distinta, esta
     # propuesta la reemplaza (no se acumulan varias).
@@ -646,6 +667,19 @@ async def select_from_catalog(
     tiene que confirmar que corresponde a este profesional en particular
     (mismo criterio que el resto de sus datos de verificación)."""
     professional = await _get_professional_or_404(db, current_user.id)
+
+    # Mismo bloqueo que en /proposals: si ya está APPROVED, no se puede
+    # reemplazar sin que un admin revierta la aprobación primero.
+    if data.type == ProposalType.SPECIALTY and professional.specialty_status == DocStatus.APPROVED:
+        raise HTTPException(
+            status_code=400,
+            detail="Tu especialidad ya fue verificada. Para corregirla, un administrador debe revertir la aprobación primero.",
+        )
+    if data.type == ProposalType.SUB_SPECIALTY and professional.sub_specialty_status == DocStatus.APPROVED:
+        raise HTTPException(
+            status_code=400,
+            detail="Tu subespecialidad ya fue verificada. Para corregirla, un administrador debe revertir la aprobación primero.",
+        )
 
     if data.type == ProposalType.SPECIALTY:
         result = await db.execute(select(Specialty).where(Specialty.id == data.catalog_id, Specialty.is_active == True))
