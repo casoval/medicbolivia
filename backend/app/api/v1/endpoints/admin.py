@@ -71,23 +71,21 @@ router = APIRouter()
 # completo de esas tablas cada 15 segundos, sin importar si algo cambió.
 # Con un TTL corto en Redis, la mayoría de esos polls se sirven desde
 # cache y el scan pesado corre como máximo 1 vez cada
-# _PROFESSIONALS_LIST_CACHE_TTL segundos. Se invalida manualmente (ver
-# `_invalidate_professionals_list_cache`) en las acciones que sí cambian
-# lo que se muestra (aprobar/rechazar profesional o documento, resetear
-# penalizaciones) para que el admin vea su propio cambio al instante, en
-# vez de esperar a que expire el TTL.
-_PROFESSIONALS_LIST_CACHE_KEY = "cache:admin:professionals_list"
-_PROFESSIONALS_LIST_CACHE_TTL = 20  # segundos
-
-
-async def _invalidate_professionals_list_cache() -> None:
-    try:
-        await redis_client.delete(_PROFESSIONALS_LIST_CACHE_KEY)
-    except Exception as e:
-        # Si Redis está caído, no vale la pena tumbar la request completa
-        # por esto — en el peor caso el admin ve datos con hasta
-        # _PROFESSIONALS_LIST_CACHE_TTL segundos de atraso.
-        logger.warning(f"No se pudo invalidar cache de admin/professionals: {e}")
+# PROFESSIONALS_LIST_CACHE_TTL segundos. Se invalida manualmente (ver
+# `invalidate_professionals_list_cache`, ahora en
+# app/services/professionals_list_cache.py — se movió ahí porque
+# specialties.py también necesita invalidarla y vivía como función
+# privada acá, lo que causaba justamente el bug que la sacó de acá:
+# aprobar/rechazar especialidad no invalidaba nada) en las acciones que
+# sí cambian lo que se muestra (aprobar/rechazar profesional, documento,
+# especialidad/subespecialidad, o resetear penalizaciones) para que el
+# admin vea su propio cambio al instante, en vez de esperar a que expire
+# el TTL.
+from app.services.professionals_list_cache import (
+    PROFESSIONALS_LIST_CACHE_KEY as _PROFESSIONALS_LIST_CACHE_KEY,
+    PROFESSIONALS_LIST_CACHE_TTL as _PROFESSIONALS_LIST_CACHE_TTL,
+    invalidate_professionals_list_cache as _invalidate_professionals_list_cache,
+)
 
 
 # ── Sistema de penalizaciones por semáforo (solo visible para admin) ──

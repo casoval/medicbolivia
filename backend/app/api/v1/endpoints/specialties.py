@@ -32,6 +32,16 @@ from app.db.database import get_db
 from app.core.dependencies import get_current_professional, get_current_admin
 from app.services.notify import notify_user
 from app.services.professional_approval import check_and_approve_professional
+# El admin panel cachea GET /admin/professionals por unos segundos (ver
+# app/services/professionals_list_cache.py) para no escanear todo el
+# historial en cada poll. Aprobar/rechazar especialidad o subespecialidad
+# cambia justo lo que esa lista muestra (specialty, specialty_status,
+# sub_specialty, sub_specialty_status y a veces professional.status), así
+# que hay que invalidarla acá también — si no, el admin ve su propio
+# cambio recién cuando el TTL expira solo, aunque ya haya quedado bien
+# guardado en la base. Este era el bug real detrás de "aprobar/rechazar
+# especialidad no se actualiza en vivo".
+from app.services.professionals_list_cache import invalidate_professionals_list_cache
 from app.models.models import (
     User, UserRole, Professional, ProfessionalStatus, DocStatus,
     Specialty, SubSpecialty,
@@ -767,6 +777,7 @@ async def confirm_catalog_pick(
         metadata_={"type": data.type.value, "review_note": data.review_note},
     ))
     await db.commit()
+    await invalidate_professionals_list_cache()
 
     return {"message": f"{type_label.capitalize()} {data.decision.lower()}", "professional_approved_now": professional_approved_now}
 
@@ -906,6 +917,7 @@ async def review_proposal(
 
         await db.commit()
         await db.refresh(proposal)
+        await invalidate_professionals_list_cache()
         logger.info(f"Propuesta rechazada: {proposal.id} por admin {current_user.id}")
         return {"message": "Propuesta rechazada.", "proposal": _serialize_proposal(proposal)}
 
@@ -999,6 +1011,7 @@ async def review_proposal(
 
     await db.commit()
     await db.refresh(proposal)
+    await invalidate_professionals_list_cache()
 
     logger.info(f"Propuesta aprobada: {proposal.id} → '{final_name}' por admin {current_user.id}")
     return {
