@@ -65,7 +65,7 @@ function LiveFeed() {
           if (data.length > 0) {
             cursorRef.current = data[data.length - 1].created_at
             if (!isFirstLoadRef.current) {
-              const ids = new Set(data.map((d: FeedItem) => d.id))
+              const ids = new Set<string>(data.map((d: FeedItem) => d.id))
               setFreshIds(ids)
               setTimeout(() => setFreshIds(new Set()), 3000)
             }
