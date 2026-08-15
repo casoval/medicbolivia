@@ -22,8 +22,9 @@ export default function RegisterChoicePage() {
   ]
 
   const professionalPoints = [
-    'Recibí pacientes sin pagar comisión de entrada',
+    'Recibí pacientes y cobrá de forma segura y confiable',
     'Elegí tus horarios y tus precios de consulta',
+    'Un agente IA con voz te guía durante la consulta',
     'Perfil verificado que genera confianza',
     'Cobrá tus consultas directamente, sin intermediarios',
   ]
