@@ -316,7 +316,22 @@ export default function ProfilePage() {
       } else {
         await specialtiesAPI.selectFromCatalog({ type: 'SPECIALTY', catalog_id: specialtyChoice })
       }
-      setSpecialtySuccess(t('Especialidad guardada. Un administrador la confirmará pronto.'))
+      // El backend exige que professional.specialty ya esté guardado antes
+      // de aceptar una subespecialidad (ver create_proposal / select_from_catalog
+      // en specialties.py) — pero en la UI la sección de subespecialidad ya
+      // se muestra apenas se ELIGE una especialidad, sin esperar este guardado
+      // (ver effectiveSpecialtyName más abajo). Si el profesional ya había
+      // elegido también una subespecialidad en ese campo recién revelado,
+      // la guardamos acá mismo automáticamente, encadenada, para que no
+      // tenga que darse cuenta de que hay que tocar "Guardar" dos veces.
+      const hadPendingSubSpecialty =
+        !!subSpecialtyChoice && (subSpecialtyChoice !== NOT_LISTED || !!subSpecialtyProposalText.trim())
+      if (hadPendingSubSpecialty) {
+        await saveSubSpecialty({ skipOwnMessages: true })
+        setSpecialtySuccess(t('Especialidad y subespecialidad guardadas. Un administrador las confirmará pronto.'))
+      } else {
+        setSpecialtySuccess(t('Especialidad guardada. Un administrador la confirmará pronto.'))
+      }
       const data = await professionalsAPI.getMyProfile()
       setRegistrationData(data as any)
     } catch (err) {
@@ -326,29 +341,44 @@ export default function ProfilePage() {
     }
   }
 
-  async function saveSubSpecialty() {
-    setSpecialtyError('')
-    setSpecialtySuccess('')
-    if (!subSpecialtyChoice) { setSpecialtyError(t('Elige una subespecialidad')); return }
-    if (subSpecialtyChoice === NOT_LISTED && !subSpecialtyProposalText.trim()) {
-      setSpecialtyError(t('Escribe el nombre de tu subespecialidad')); return
+  async function saveSubSpecialty(opts?: { skipOwnMessages?: boolean }) {
+    const skipOwnMessages = !!opts?.skipOwnMessages
+    if (!skipOwnMessages) {
+      setSpecialtyError('')
+      setSpecialtySuccess('')
     }
-    setSpecialtySaving(true)
+    if (!subSpecialtyChoice) { if (!skipOwnMessages) setSpecialtyError(t('Elige una subespecialidad')); return }
+    if (subSpecialtyChoice === NOT_LISTED && !subSpecialtyProposalText.trim()) {
+      if (!skipOwnMessages) setSpecialtyError(t('Escribe el nombre de tu subespecialidad'))
+      return
+    }
+    // Cuando se llama encadenada desde saveSpecialty(), esa función ya
+    // controla specialtySaving/errores/mensaje final — acá no los tocamos
+    // de nuevo para no pisarlos ni parpadear el spinner dos veces.
+    if (!skipOwnMessages) setSpecialtySaving(true)
     try {
       if (subSpecialtyChoice === NOT_LISTED) {
         await specialtiesAPI.createProposal({ type: 'SUB_SPECIALTY', proposed_name: subSpecialtyProposalText.trim() })
       } else {
         await specialtiesAPI.selectFromCatalog({ type: 'SUB_SPECIALTY', catalog_id: subSpecialtyChoice })
       }
-      setSpecialtySuccess(t('Subespecialidad guardada. Un administrador la confirmará pronto.'))
+      if (!skipOwnMessages) setSpecialtySuccess(t('Subespecialidad guardada. Un administrador la confirmará pronto.'))
       setSubSpecialtyChoice('')
       setSubSpecialtyProposalText('')
-      const data = await professionalsAPI.getMyProfile()
-      setRegistrationData(data as any)
+      if (!skipOwnMessages) {
+        const data = await professionalsAPI.getMyProfile()
+        setRegistrationData(data as any)
+      }
     } catch (err) {
+      if (skipOwnMessages) throw err
       setSpecialtyError(getErrorMessage(err))
     } finally {
-      setSpecialtySaving(false)
+      // OJO: nunca usar `return` acá dentro — un return en un bloque
+      // finally anula silenciosamente cualquier excepción que se haya
+      // lanzado en el catch de arriba (semántica de JS), lo que rompería
+      // la propagación del error hacia saveSpecialty() cuando se llama
+      // encadenada con skipOwnMessages.
+      if (!skipOwnMessages) setSpecialtySaving(false)
     }
   }
   // Visibilidad ante el paciente, controlada por el profesional — solo
@@ -412,17 +442,40 @@ export default function ProfilePage() {
   // estado de cada documento individual.
   const [professionalStatus, setProfessionalStatus] = useState<string | null>(null)
 
-  // Se cargan subespecialidades en cuanto hay una especialidad cargada,
-  // sin esperar a que esté APROBADA — el admin revisa especialidad y
-  // subespecialidad juntas en la misma pantalla (ver panel admin), así
-  // que no hace falta que el profesional espere una aprobación antes de
-  // poder cargar la segunda. Si la especialidad todavía es solo una
-  // propuesta nueva (no existe aún en el catálogo), catalogEntry no
-  // aparece y sencillamente no hay subespecialidades para ofrecer todavía
-  // — el profesional puede seguir usando "no está en la lista" a mano.
+  // Se cargan subespecialidades en cuanto el profesional TIENE UNA
+  // ESPECIALIDAD ELEGIDA — ya sea guardada en el backend o recién elegida
+  // en el selector de arriba, sin esperar a hacer clic en "Guardar
+  // especialidad" primero ni a que esté APROBADA. Por lógica, elegir
+  // cualquier especialidad (incluso "no está en la lista") ya debería
+  // habilitar la subespecialidad de una — no tiene sentido forzar un
+  // guardado intermedio solo para desbloquear el siguiente campo.
+  // Preferimos la selección local (specialtyChoice) porque está
+  // disponible al instante; si no hay ninguna todavía, caemos a lo que ya
+  // esté guardado en el backend (registrationData.specialty), por si el
+  // profesional vuelve a entrar a la página con la especialidad ya
+  // cargada de una sesión anterior. Si la especialidad elegida (local o
+  // guardada) todavía es solo una propuesta nueva (no existe aún en el
+  // catálogo), catalogEntry no aparece y sencillamente no hay
+  // subespecialidades para ofrecer todavía — el profesional puede seguir
+  // usando "no está en la lista" a mano para la subespecialidad también.
+  const effectiveSpecialtyName =
+    specialtyChoice && specialtyChoice !== NOT_LISTED
+      ? specialtyCatalog.find((s) => s.id === specialtyChoice)?.name || null
+      : registrationData?.specialty || null
+
+  // Controla si se MUESTRA la sección de subespecialidad. A diferencia de
+  // effectiveSpecialtyName (que solo resuelve un nombre real de catálogo,
+  // usado para buscar subespecialidades sugeridas), esto también cuenta
+  // el caso "no está en la lista" con texto ya escrito — ahí no hay
+  // catálogo de subespecialidades que ofrecer, pero el campo "no está en
+  // la lista" de subespecialidad igual debe quedar disponible.
+  const hasSpecialtyChosen =
+    !!effectiveSpecialtyName ||
+    (specialtyChoice === NOT_LISTED && !!specialtyProposalText.trim())
+
   useEffect(() => {
-    if (registrationData?.specialty) {
-      const catalogEntry = specialtyCatalog.find((s) => s.name === registrationData!.specialty)
+    if (effectiveSpecialtyName) {
+      const catalogEntry = specialtyCatalog.find((s) => s.name === effectiveSpecialtyName)
       if (catalogEntry) {
         specialtiesAPI.listSubSpecialties(catalogEntry.id).then(setSubSpecialtyCatalog).catch(() => setSubSpecialtyCatalog([]))
       } else {
@@ -431,7 +484,7 @@ export default function ProfilePage() {
     } else {
       setSubSpecialtyCatalog([])
     }
-  }, [registrationData?.specialty, specialtyCatalog])
+  }, [effectiveSpecialtyName, specialtyCatalog])
 
   // Estado real de los documentos guardado en el backend (aprobado/rechazado/pendiente)
   const { data: myDocs = [], refetch: refetchDocs } = useQuery({
@@ -531,43 +584,22 @@ export default function ProfilePage() {
   })
   const pendingSteps = stepStatuses.filter((s) => s.status !== 'APPROVED')
 
-  // ── Pestañas de la página + wizard de primeros pasos ──────────────
+  // ── Pestañas de la página ──────────────────────────────────────────
   // La página se divide en 4 pestañas para que el profesional nunca vea
-  // todo junto de golpe. Dentro de "Verificación", mientras la cuenta no
-  // esté APPROVED, se muestra además un mini-wizard de 2 pasos (Especialidad
-  // → Documentos) en vez de las dos tarjetas apiladas, para guiar al
-  // profesional nuevo paso a paso. `verifShowAll` es la vía de escape para
-  // quien ya conoce la página y quiere ver/editar todo de una vez (por
-  // ejemplo, tras un rechazo, para saltar directo al documento a corregir).
+  // todo junto de golpe. Dentro de "Verificación" antes había además un
+  // mini-wizard de 2 pasos (Especialidad → Documentos); se eliminó: ahora
+  // ambas tarjetas se muestran siempre juntas, de corrido, sin pasos ni
+  // navegación intermedia.
   type TabKey = 'verificacion' | 'perfil' | 'pagos' | 'cuenta'
   const [activeTab, setActiveTab] = useState<TabKey>('verificacion')
-  const [verifStep, setVerifStep] = useState<0 | 1>(0)
-  const [verifShowAll, setVerifShowAll] = useState(false)
-  const verifStepInitialized = useRef(false)
 
   const isApproved = professionalStatus === 'APPROVED'
-  const wizardActive = activeTab === 'verificacion' && !isApproved && !verifShowAll
 
-  // Anchor → a qué pestaña (y, si es "verificación", a qué paso del
-  // wizard) pertenece cada sección — usado por el indicador de progreso
-  // de arriba y por scrollToSection.
-  function tabForAnchor(anchor: string): { tab: TabKey; step: 0 | 1 } {
-    if (anchor === 'section-documentos') return { tab: 'verificacion', step: 1 }
-    if (anchor === 'section-especialidad' || anchor === 'section-recetas-seguridad') return { tab: 'verificacion', step: 0 }
-    return { tab: 'verificacion', step: 0 }
+  // Anchor → a qué pestaña pertenece cada sección — usado por el
+  // indicador de progreso de arriba y por scrollToSection.
+  function tabForAnchor(anchor: string): { tab: TabKey } {
+    return { tab: 'verificacion' }
   }
-
-  // Al cargar los datos reales del backend, si el profesional es nuevo
-  // arrancamos el wizard en el primer paso que todavía tenga algo
-  // pendiente, en vez de forzar siempre el paso 1.
-  useEffect(() => {
-    if (verifStepInitialized.current) return
-    if (pendingSteps.length === 0) return
-    verifStepInitialized.current = true
-    const firstPending = pendingSteps[0]
-    setVerifStep(tabForAnchor(firstPending.anchor).step)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingSteps.length])
 
   // Pestaña inicial: si ya está aprobado, no tiene sentido abrir en
   // "Verificación" (no le queda nada pendiente ahí) — abrimos en "Perfil
@@ -582,12 +614,8 @@ export default function ProfilePage() {
   }, [professionalStatus])
 
   function scrollToSection(anchor: string) {
-    const { tab, step } = tabForAnchor(anchor)
+    const { tab } = tabForAnchor(anchor)
     setActiveTab(tab)
-    if (tab === 'verificacion') {
-      setVerifShowAll(true)
-      setVerifStep(step)
-    }
     setTimeout(() => {
       document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 60)
@@ -1031,67 +1059,13 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Cabecera del wizard de Verificación — pasos, punteo de
-              progreso y botones Siguiente/Atrás. Solo aparece mientras la
-              cuenta no esté aprobada y el profesional no haya elegido ver
-              todo de una vez. */}
-          {activeTab === 'verificacion' && !isApproved && (
-            <div className="card lg:col-span-2 !py-3">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  {(['0', '1'] as const).map((s, i) => {
-                    const idx = i as 0 | 1
-                    const labels = [t('1. Especialidad y recetas'), t('2. Documentos')]
-                    const active = verifShowAll ? false : verifStep === idx
-                    const stepDone = idx === 0
-                      ? stepStatuses.filter(st => st.anchor !== 'section-documentos').every(st => st.status === 'APPROVED')
-                      : stepStatuses.filter(st => st.anchor === 'section-documentos').every(st => st.status === 'APPROVED')
-                    return (
-                      <button
-                        key={s}
-                        onClick={() => { setVerifShowAll(false); setVerifStep(idx) }}
-                        className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-full border transition-colors ${
-                          active
-                            ? 'bg-[#0F6E56] text-white border-[#0F6E56]'
-                            : stepDone
-                              ? 'bg-[#E1F5EE] text-[#0F6E56] border-[#BFE6D4]'
-                              : 'bg-white text-[#475569] border-[#DDE1EE]'
-                        }`}
-                      >
-                        {stepDone && !active && '✓ '}{labels[idx]}
-                      </button>
-                    )
-                  })}
-                </div>
-                <div className="flex items-center gap-2">
-                  {!verifShowAll && verifStep === 1 && (
-                    <button onClick={() => setVerifStep(0)} className="text-xs text-[#64748B] underline underline-offset-2">
-                      {t('← Atrás')}
-                    </button>
-                  )}
-                  {!verifShowAll && verifStep === 0 && (
-                    <button onClick={() => setVerifStep(1)} className="text-xs font-medium text-[#0F6E56] underline underline-offset-2">
-                      {t('Siguiente →')}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setVerifShowAll((v) => !v)}
-                    className="text-xs text-[#64748B] underline underline-offset-2"
-                  >
-                    {verifShowAll ? t('Ver un paso a la vez') : t('Ver todo en esta pestaña')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Especialidad / subespecialidad — obligatoria/opcional, con su
               propio flujo de confirmación de admin (ver saveSpecialty y
               saveSubSpecialty más arriba). Antes esto se cargaba en el
               registro sin control de nadie; ahora vive acá y bloquea
               quedar visible para pacientes hasta que se confirme (ver
               check_and_approve_professional en el backend). */}
-          {activeTab === 'verificacion' && (!wizardActive || verifStep === 0) && (
+          {activeTab === 'verificacion' && (
           <div className="card lg:col-span-2" id="section-especialidad">
             <SectionTitle>{t('Especialidad y datos para recetas')}</SectionTitle>
             <p className="text-xs text-[#475569] -mt-2 mb-4">
@@ -1175,14 +1149,16 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Subespecialidad — opcional, se habilita en cuanto hay una
-                especialidad cargada (no hace falta que esté aprobada: el
-                admin revisa ambas juntas en la misma pantalla). Solo se
-                permite UNA. Si la especialidad terminara rechazándose,
-                el backend limpia la subespecialidad automáticamente (ver
+            {/* Subespecialidad — opcional, se habilita apenas se elige
+                CUALQUIER especialidad en el selector de arriba (incluso
+                "no está en la lista"), sin esperar a tocar "Guardar
+                especialidad" ni a que esté aprobada: el admin revisa
+                ambas juntas en la misma pantalla. Solo se permite UNA.
+                Si la especialidad terminara rechazándose, el backend
+                limpia la subespecialidad automáticamente (ver
                 confirm_catalog_pick / review_proposal en specialties.py)
                 para no dejarla huérfana. */}
-            {!!registrationData?.specialty && (
+            {hasSpecialtyChosen && (
               <div className="pt-3 border-t border-[#DDE1EE]">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <p className="text-sm font-medium">{t('Subespecialidad')}</p>
@@ -1421,7 +1397,7 @@ export default function ProfilePage() {
           )}
 
           {/* Documentos de verificación */}
-          {activeTab === 'verificacion' && (!wizardActive || verifStep === 1) && (
+          {activeTab === 'verificacion' && (
           <div className="card lg:col-span-2" id="section-documentos">
             <SectionTitle>{t('Documentos de verificación')}</SectionTitle>
             <div className="bg-[#E6F1FB] rounded-lg px-3 py-2.5 mb-3">
