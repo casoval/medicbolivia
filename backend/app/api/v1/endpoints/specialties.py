@@ -20,7 +20,7 @@ Resumen del flujo:
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from app.core.timezone import utcnow_naive
@@ -363,10 +363,107 @@ async def create_proposal(
     if data.type == ProposalType.SUB_SPECIALTY and not professional.specialty:
         raise HTTPException(status_code=400, detail="Primero necesitas tener una especialidad para poder agregar una subespecialidad")
 
+    proposed_name_clean = data.proposed_name.strip()
+    if not proposed_name_clean:
+        raise HTTPException(status_code=400, detail="El nombre no puede estar vacío")
+
+    # ── Guard anti-duplicados ──────────────────────────────────────
+    # Antes de crear una propuesta (pensada solo para lo que NO está en
+    # el catálogo), nos fijamos si el nombre ya existe ahí — comparación
+    # case-insensitive porque "cardiología" y "Cardiología" son la misma
+    # especialidad para un humano aunque no para un string exacto. Si ya
+    # existe, tratamos esto como si el profesional hubiera usado
+    # /specialties/select (mismo resultado: PENDING de confirmación, SIN
+    # generar una fila nueva en specialty_proposals ni marcar el badge
+    # "Nuevo en catálogo" para el admin, que sería engañoso). Esto evita
+    # el caso real detectado: alguien elige "No está en la lista" por
+    # error y tipea a mano un nombre que ya existía.
+    if data.type == ProposalType.SPECIALTY:
+        dup_result = await db.execute(
+            select(Specialty).where(
+                func.lower(Specialty.name) == proposed_name_clean.lower(),
+                Specialty.is_active == True,
+            )
+        )
+        existing_specialty = dup_result.scalar_one_or_none()
+        if existing_specialty:
+            professional.specialty = existing_specialty.name
+            professional.specialty_status = DocStatus.PENDING
+            professional.specialty_review_note = None
+            if professional.status == ProfessionalStatus.APPROVED:
+                professional.status = ProfessionalStatus.UNDER_REVIEW
+
+            db.add(AuditLog(
+                user_id=current_user.id,
+                action="SPECIALTY_SELECTED_FROM_CATALOG",
+                entity_type="Professional",
+                entity_id=professional.id,
+                metadata_={
+                    "type": data.type.value,
+                    "catalog_id": existing_specialty.id,
+                    "note": "Redirigido desde /proposals: el nombre propuesto ya existía en el catálogo",
+                },
+            ))
+            await _notify_all_admins(
+                db,
+                title="Especialidad para confirmar",
+                body=f"{professional.first_name} {professional.last_name} eligió '{existing_specialty.name}' del catálogo — pendiente de confirmación.",
+                type_="SPECIALTY_CATALOG_PICK",
+                entity_id=professional.id,
+            )
+            await db.commit()
+            logger.info(f"Propuesta redirigida a catálogo existente: '{proposed_name_clean}' -> {existing_specialty.id} (profesional {professional.id})")
+            return {
+                "message": f"'{existing_specialty.name}' ya está en el catálogo — se guardó como selección directa, pendiente de confirmación de un administrador.",
+                "proposal": None,
+            }
+    else:  # SUB_SPECIALTY — solo se puede chequear contra el catálogo si
+        # la especialidad padre YA es real (parent_specialty_id). Si el
+        # padre es a su vez otra propuesta pendiente (parent_proposal_id),
+        # no hay nada en el catálogo todavía contra qué comparar.
+        if data.parent_specialty_id:
+            dup_result = await db.execute(
+                select(SubSpecialty).where(
+                    SubSpecialty.specialty_id == data.parent_specialty_id,
+                    func.lower(SubSpecialty.name) == proposed_name_clean.lower(),
+                    SubSpecialty.is_active == True,
+                )
+            )
+            existing_sub = dup_result.scalar_one_or_none()
+            if existing_sub:
+                professional.sub_specialty = existing_sub.name
+                professional.sub_specialty_status = DocStatus.PENDING
+                professional.sub_specialty_review_note = None
+
+                db.add(AuditLog(
+                    user_id=current_user.id,
+                    action="SPECIALTY_SELECTED_FROM_CATALOG",
+                    entity_type="Professional",
+                    entity_id=professional.id,
+                    metadata_={
+                        "type": data.type.value,
+                        "catalog_id": existing_sub.id,
+                        "note": "Redirigido desde /proposals: el nombre propuesto ya existía en el catálogo",
+                    },
+                ))
+                await _notify_all_admins(
+                    db,
+                    title="Subespecialidad para confirmar",
+                    body=f"{professional.first_name} {professional.last_name} eligió '{existing_sub.name}' del catálogo — pendiente de confirmación.",
+                    type_="SPECIALTY_CATALOG_PICK",
+                    entity_id=professional.id,
+                )
+                await db.commit()
+                logger.info(f"Propuesta redirigida a catálogo existente: '{proposed_name_clean}' -> {existing_sub.id} (profesional {professional.id})")
+                return {
+                    "message": f"'{existing_sub.name}' ya está en el catálogo — se guardó como selección directa, pendiente de confirmación de un administrador.",
+                    "proposal": None,
+                }
+
     proposal = SpecialtyProposal(
         professional_id=professional.id,
         type=data.type,
-        proposed_name=data.proposed_name,
+        proposed_name=proposed_name_clean,
         parent_specialty_id=data.parent_specialty_id if data.type == ProposalType.SUB_SPECIALTY else None,
         parent_proposal_id=data.parent_proposal_id if data.type == ProposalType.SUB_SPECIALTY else None,
         status=ProposalStatus.PENDING,
@@ -377,7 +474,7 @@ async def create_proposal(
     # un admin lo apruebe o rechace) — así el profesional ve en su perfil
     # lo que propuso, en vez de tener que esperar sin feedback visual.
     if data.type == ProposalType.SPECIALTY:
-        professional.specialty = data.proposed_name
+        professional.specialty = proposed_name_clean
         professional.specialty_status = DocStatus.PENDING
         professional.specialty_review_note = None
         # Solo una especialidad PRINCIPAL bloquea la visibilidad de un
@@ -388,7 +485,7 @@ async def create_proposal(
         if professional.status == ProfessionalStatus.APPROVED:
             professional.status = ProfessionalStatus.UNDER_REVIEW
     else:
-        professional.sub_specialty = data.proposed_name
+        professional.sub_specialty = proposed_name_clean
         professional.sub_specialty_status = DocStatus.PENDING
         professional.sub_specialty_review_note = None
 
@@ -400,7 +497,7 @@ async def create_proposal(
         action="SPECIALTY_PROPOSAL_CREATED",
         entity_type="SpecialtyProposal",
         entity_id=proposal.id,
-        metadata_={"type": data.type.value, "proposed_name": data.proposed_name},
+        metadata_={"type": data.type.value, "proposed_name": proposed_name_clean},
     )
     db.add(log)
 
@@ -410,7 +507,7 @@ async def create_proposal(
     await _notify_all_admins(
         db,
         title=f"Nueva propuesta de {type_label}",
-        body=f"{professional.first_name} {professional.last_name} propuso '{data.proposed_name}' — pendiente de revisión.",
+        body=f"{professional.first_name} {professional.last_name} propuso '{proposed_name_clean}' — pendiente de revisión.",
         type_="SPECIALTY_PROPOSAL_CREATED",
         entity_id=proposal.id,
     )
@@ -549,6 +646,18 @@ async def confirm_catalog_pick(
             professional.specialty_review_note = data.review_note
             if professional.status == ProfessionalStatus.UNDER_REVIEW:
                 professional.status = ProfessionalStatus.PENDING_DOCS
+            # La subespecialidad ahora se puede cargar ANTES de que la
+            # especialidad esté aprobada (el profesional ya no tiene que
+            # esperar). Eso significa que si la especialidad se rechaza,
+            # cualquier subespecialidad que hubiera cargado quedaría
+            # huérfana — conceptualmente ligada a una especialidad que ya
+            # no existe (ej. "Electrofisiología cardíaca" sin "Cardiología"
+            # detrás). Se limpia acá para forzar al profesional a elegir
+            # de nuevo una vez que tenga una especialidad válida.
+            if professional.sub_specialty:
+                professional.sub_specialty = None
+                professional.sub_specialty_status = None
+                professional.sub_specialty_review_note = "Se limpió automáticamente: la especialidad de la que dependía fue rechazada."
         else:
             professional.sub_specialty = None
             professional.sub_specialty_status = None
@@ -676,6 +785,16 @@ async def review_proposal(
                 # pacientes hasta que elija otra especialidad válida.
                 if professional.status == ProfessionalStatus.UNDER_REVIEW:
                     professional.status = ProfessionalStatus.PENDING_DOCS
+                # Misma limpieza que en confirm_catalog_pick: la
+                # subespecialidad se puede cargar antes de que la
+                # especialidad esté aprobada, así que si esta propuesta de
+                # especialidad se rechaza, cualquier subespecialidad
+                # cargada quedaría huérfana. Se limpia para forzar a
+                # elegir de nuevo con la especialidad definitiva.
+                if professional.sub_specialty:
+                    professional.sub_specialty = None
+                    professional.sub_specialty_status = None
+                    professional.sub_specialty_review_note = "Se limpió automáticamente: la especialidad de la que dependía fue rechazada."
             else:
                 professional.sub_specialty = None
                 professional.sub_specialty_status = None

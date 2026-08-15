@@ -412,17 +412,26 @@ export default function ProfilePage() {
   // estado de cada documento individual.
   const [professionalStatus, setProfessionalStatus] = useState<string | null>(null)
 
-  // Solo se cargan subespecialidades cuando ya hay una especialidad
-  // APROBADA (no tiene sentido elegir subespecialidad de algo que
-  // todavía ni siquiera confirmó un admin).
+  // Se cargan subespecialidades en cuanto hay una especialidad cargada,
+  // sin esperar a que esté APROBADA — el admin revisa especialidad y
+  // subespecialidad juntas en la misma pantalla (ver panel admin), así
+  // que no hace falta que el profesional espere una aprobación antes de
+  // poder cargar la segunda. Si la especialidad todavía es solo una
+  // propuesta nueva (no existe aún en el catálogo), catalogEntry no
+  // aparece y sencillamente no hay subespecialidades para ofrecer todavía
+  // — el profesional puede seguir usando "no está en la lista" a mano.
   useEffect(() => {
-    if (registrationData?.specialty && registrationData.specialty_status === 'APPROVED') {
+    if (registrationData?.specialty) {
       const catalogEntry = specialtyCatalog.find((s) => s.name === registrationData!.specialty)
       if (catalogEntry) {
         specialtiesAPI.listSubSpecialties(catalogEntry.id).then(setSubSpecialtyCatalog).catch(() => setSubSpecialtyCatalog([]))
+      } else {
+        setSubSpecialtyCatalog([])
       }
+    } else {
+      setSubSpecialtyCatalog([])
     }
-  }, [registrationData?.specialty, registrationData?.specialty_status, specialtyCatalog])
+  }, [registrationData?.specialty, specialtyCatalog])
 
   // Estado real de los documentos guardado en el backend (aprobado/rechazado/pendiente)
   const { data: myDocs = [], refetch: refetchDocs } = useQuery({
@@ -1166,9 +1175,14 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Subespecialidad — opcional, solo se habilita si ya hay
-                especialidad aprobada. Solo se permite UNA. */}
-            {registrationData?.specialty_status === 'APPROVED' && (
+            {/* Subespecialidad — opcional, se habilita en cuanto hay una
+                especialidad cargada (no hace falta que esté aprobada: el
+                admin revisa ambas juntas en la misma pantalla). Solo se
+                permite UNA. Si la especialidad terminara rechazándose,
+                el backend limpia la subespecialidad automáticamente (ver
+                confirm_catalog_pick / review_proposal en specialties.py)
+                para no dejarla huérfana. */}
+            {!!registrationData?.specialty && (
               <div className="pt-3 border-t border-[#DDE1EE]">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <p className="text-sm font-medium">{t('Subespecialidad')}</p>
