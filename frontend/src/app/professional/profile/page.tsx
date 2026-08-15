@@ -325,6 +325,11 @@ export default function ProfilePage() {
       await professionalsAPI.updateProfile({ professional_license_number: licenseNumber })
       setLicenseSaved(licenseNumber)
       setEditingLicense(false)
+      // El backend vuelve a poner el estado en PENDING y limpia el motivo
+      // de rechazo apenas el valor cambia (ver update_profile) — lo
+      // reflejamos acá de una para no esperar a un refresh de página,
+      // igual que ya pasa con especialidad/subespecialidad.
+      setVerification((prev) => ({ ...prev, professional_license_status: 'PENDING', professional_license_review_note: null }))
       setProfileSuccess(t('Matrícula guardada. Queda pendiente de revisión de un administrador.'))
       setTimeout(() => setProfileSuccess(''), 6000)
     } catch (err) {
@@ -341,6 +346,7 @@ export default function ProfilePage() {
       await professionalsAPI.updateProfile({ university, university_visible: universityVisible })
       setUniversitySaved(university)
       setEditingUniversity(false)
+      setVerification((prev) => ({ ...prev, university_status: 'PENDING', university_review_note: null }))
       setProfileSuccess(t('Universidad guardada. Queda pendiente de revisión de un administrador.'))
       setTimeout(() => setProfileSuccess(''), 6000)
     } catch (err) {
@@ -356,6 +362,7 @@ export default function ProfilePage() {
     try {
       await professionalsAPI.updateProfile({ years_experience: years, years_experience_visible: yearsVisible })
       setYearsSaved(years)
+      setVerification((prev) => ({ ...prev, years_experience_status: 'PENDING', years_experience_review_note: null }))
       setProfileSuccess(t('Años de experiencia guardados. Quedan pendientes de revisión de un administrador.'))
       setTimeout(() => setProfileSuccess(''), 6000)
     } catch (err) {

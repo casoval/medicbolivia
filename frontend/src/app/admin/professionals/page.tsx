@@ -312,7 +312,7 @@ function SpecialtyReviewRow({
             </div>
           )}
         </div>
-        {status !== 'APPROVED' ? (
+        {status === 'PENDING' && (
           <div className="flex gap-1.5 shrink-0">
             <button
               onClick={handleApprove}
@@ -329,7 +329,22 @@ function SpecialtyReviewRow({
               Rechazar
             </button>
           </div>
-        ) : (
+        )}
+        {status === 'REJECTED' && (
+          // Ya está rechazado — volver a mostrar "Rechazar" acá no aporta
+          // nada nuevo (mismo estado, mismo prompt de motivo pedido de
+          // nuevo) y confundía al verse junto a "Aprobar". Dejamos solo
+          // la opción de reconsiderar y aprobarlo tal cual está; si el
+          // profesional lo edita, vuelve a PENDING automáticamente.
+          <button
+            onClick={handleApprove}
+            disabled={pending || (showRename && !finalName.trim())}
+            className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-2 py-1 rounded-md text-[10px] font-medium disabled:opacity-50 shrink-0"
+          >
+            Aprobar
+          </button>
+        )}
+        {status === 'APPROVED' && (
           // Escape hatch para el caso "se aprobó rápido y después el
           // profesional/paciente nota un error" — reutiliza el mismo
           // onReject (pide motivo con prompt) en vez de dejar esto
@@ -1465,7 +1480,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                             <p className="text-[10px] text-[#A32D2D] mt-0.5">{note}</p>
                           )}
                         </div>
-                        {value && status !== 'APPROVED' && (
+                        {value && status === 'PENDING' && (
                           <div className="flex gap-1.5 shrink-0">
                             <button
                               onClick={() => reviewItem(item, 'APPROVED')}
@@ -1482,6 +1497,22 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                               {t('Rechazar')}
                             </button>
                           </div>
+                        )}
+                        {value && status === 'REJECTED' && (
+                          // Ya está rechazado — repetir "Rechazar" acá no
+                          // hace nada nuevo (mismo estado, mismo motivo
+                          // pedido de nuevo por prompt) y confundía al
+                          // verse junto a "Aprobar". Solo dejamos la
+                          // opción de reconsiderar y aprobarlo tal cual
+                          // está, o esperar a que el profesional lo edite
+                          // (eso lo vuelve a PENDING automáticamente).
+                          <button
+                            onClick={() => reviewItem(item, 'APPROVED')}
+                            disabled={reviewItemMutation.isPending}
+                            className="bg-[#E1F5EE] text-[#0F6E56] border border-[#9FE1CB] px-2 py-1 rounded-md text-[10px] font-medium disabled:opacity-50 shrink-0"
+                          >
+                            {t('Aprobar')}
+                          </button>
                         )}
                         {value && status === 'APPROVED' && (
                           <button
