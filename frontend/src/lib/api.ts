@@ -541,8 +541,16 @@ export const professionalsAPI = {
 
   // Alta o edición — siempre reemplaza (una sola cuenta activa por
   // profesional). Vuelve a quedar sin verificar cada vez que se guarda.
+  // El backend rechaza esto con 400 si la cuenta actual ya está
+  // verificada — en ese caso hay que usar requestBankAccountChange.
   updateMyBankAccount: (data: BankAccountUpdateRequest) =>
     api.put<{ message: string; verified: boolean }>('/professionals/me/bank-account', data).then(r => r.data),
+
+  // Con la cuenta ya verificada no se puede editar directo — esto le
+  // avisa puntualmente a un admin (queda marcado en la ficha del
+  // profesional) para que revierta la aprobación y destrabe la edición.
+  requestBankAccountChange: () =>
+    api.post<{ message: string }>('/professionals/me/bank-account/request-change').then(r => r.data),
 
   // Pacientes que se vincularon a mí (ver PatientProfessionalLink) —
   // el vínculo lo crea/revoca siempre el paciente, esto es solo lectura.
@@ -688,6 +696,9 @@ export interface BankAccount {
   account_holder_name: string
   verified: boolean
   verified_at: string | null
+  // No null si ya pedí cambiarla y un admin todavía no revirtió la
+  // aprobación para destrabar la edición (ver requestBankAccountChange).
+  change_requested_at: string | null
   updated_at: string | null
 }
 
@@ -739,8 +750,16 @@ export interface ProfessionalBankAccountFull {
   account_holder_name: string
   account_holder_ci: string
   verified: boolean
+  change_requested_at: string | null
   responsibility_acknowledged_at: string
   updated_at: string | null
+}
+
+export interface ProfessionalBankAccountStatus {
+  bank_name: string
+  account_number_last4: string
+  verified: boolean
+  change_requested_at: string | null
 }
 
 // ── Reembolsos a pacientes (Fase 1 semi-automática, cuenta PERMANENTE
@@ -1692,8 +1711,20 @@ export const adminAPI = {
   getProfessionalBankAccount: (professionalId: string) =>
     api.get<ProfessionalBankAccountFull>(`/admin/professionals/${professionalId}/bank-account`).then(r => r.data),
 
+  // Versión liviana para pintar el estado en la ficha del profesional
+  // (verificada / pidió cambio) sin exponer el número completo ni dejar
+  // un AuditLog de "vista" cada vez que se abre la ficha.
+  getProfessionalBankAccountStatus: (professionalId: string) =>
+    api.get<ProfessionalBankAccountStatus | null>(`/admin/professionals/${professionalId}/bank-account/status`).then(r => r.data),
+
   verifyProfessionalBankAccount: (professionalId: string) =>
     api.post<{ message: string }>(`/admin/professionals/${professionalId}/bank-account/verify`).then(r => r.data),
+
+  // "Revertir aprobación" de la cuenta bancaria — mismo patrón que
+  // especialidad/subespecialidad/firma: no borra los datos, solo
+  // destraba la edición del lado del profesional (PUT /me/bank-account).
+  revertProfessionalBankAccount: (professionalId: string) =>
+    api.post<{ message: string }>(`/admin/professionals/${professionalId}/bank-account/revert`).then(r => r.data),
 
   // ── Reembolsos a pacientes (Fase 1 semi-automática) ──
   // Ver app/services/refund_payout.py en el backend.

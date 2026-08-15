@@ -3192,6 +3192,32 @@ async def verify_patient_refund_account(
 
 # ── Cuenta bancaria de un profesional puntual (vista + verificación) ──
 
+# GET liviano para la ficha del profesional (banner de estado / pedido de
+# cambio) — a propósito NO devuelve el número completo ni genera el
+# AuditLog de "vista" del endpoint de abajo: ese es para cuando un admin
+# entra específicamente a revisar el dato sensible, no para pintar un
+# badge cada vez que se abre la ficha.
+@router.get("/professionals/{professional_id}/bank-account/status", summary="Estado resumido de la cuenta bancaria de un profesional (sin número completo)")
+async def get_professional_bank_account_status(
+    professional_id: str,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ProfessionalBankAccount).where(ProfessionalBankAccount.professional_id == professional_id)
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        return None
+
+    return {
+        "bank_name": account.bank_name,
+        "account_number_last4": account.account_number_last4,
+        "verified": account.verified,
+        "change_requested_at": account.change_requested_at.isoformat() if account.change_requested_at else None,
+    }
+
+
 @router.get("/professionals/{professional_id}/bank-account", summary="Ver la cuenta bancaria de un profesional (número completo)")
 async def get_professional_bank_account(
     professional_id: str,
@@ -3222,6 +3248,7 @@ async def get_professional_bank_account(
         "account_holder_name": account.account_holder_name,
         "account_holder_ci": decrypt_value(account.account_holder_ci_encrypted),
         "verified": account.verified,
+        "change_requested_at": account.change_requested_at.isoformat() if account.change_requested_at else None,
         "responsibility_acknowledged_at": account.responsibility_acknowledged_at.isoformat(),
         "updated_at": account.updated_at.isoformat() if account.updated_at else None,
     }
@@ -3243,9 +3270,60 @@ async def verify_professional_bank_account(
     account.verified = True
     account.verified_at = utcnow_naive()
     account.verified_by = current_user.id
+    # Cualquier pedido de cambio pendiente queda resuelto al (re)verificar
+    # — típicamente el propio flujo de "revertir → profesional edita →
+    # verificar de nuevo" ya lo había limpiado en el PUT, pero por si un
+    # admin verifica directo sin pasar por ahí.
+    account.change_requested_at = None
     db.add(AuditLog(
         user_id=current_user.id, action="BANK_ACCOUNT_VERIFIED",
         entity_type="ProfessionalBankAccount", entity_id=account.id,
     ))
     await db.commit()
     return {"message": "Cuenta bancaria verificada. Ya puede entrar en el próximo lote de pago."}
+
+
+# ── POST /admin/professionals/{id}/bank-account/revert ──
+# "Revertir aprobación" — mismo patrón que especialidad/subespecialidad/
+# firma/universidad/años/matrícula: no borra ni toca los datos de la
+# cuenta, solo la destraba (verified=False) para que el profesional pueda
+# editarla desde /me/bank-account, que hasta ahora estaba bloqueado
+# porque ya estaba verificada.
+@router.post("/professionals/{professional_id}/bank-account/revert", summary="Revertir la aprobación de la cuenta bancaria para que el profesional pueda editarla")
+async def revert_professional_bank_account(
+    professional_id: str,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ProfessionalBankAccount)
+        .options(selectinload(ProfessionalBankAccount.professional))
+        .where(ProfessionalBankAccount.professional_id == professional_id)
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Este profesional no registró una cuenta bancaria")
+    if not account.verified:
+        raise HTTPException(status_code=400, detail="Esta cuenta ya está sin verificar, no hay nada que revertir")
+
+    account.verified = False
+    account.verified_at = None
+    account.verified_by = None
+    account.change_requested_at = None
+    db.add(AuditLog(
+        user_id=current_user.id, action="BANK_ACCOUNT_VERIFICATION_REVERTED",
+        entity_type="ProfessionalBankAccount", entity_id=account.id,
+    ))
+
+    if account.professional:
+        await notify_user(
+            db, user_id=account.professional.user_id,
+            title="Puedes editar tu cuenta bancaria",
+            body="Un administrador revirtió la verificación de tu cuenta bancaria. Ya puedes cargar los datos nuevos desde tu perfil.",
+            type_="BANK_ACCOUNT_VERIFICATION_REVERTED",
+            entity_type="Professional", entity_id=account.professional.id,
+            send_whatsapp=False,
+        )
+
+    await db.commit()
+    return {"message": "Aprobación revertida. El profesional ya puede editar su cuenta bancaria."}

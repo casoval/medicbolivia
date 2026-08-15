@@ -6,8 +6,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
 import { StatusBadge, LoadingScreen, Alert } from '@/components/ui'
-import { api, adminAPI, specialtiesAPI, getErrorMessage, type CommissionPeriod, type ProfessionalMembership } from '@/lib/api'
+import { api, adminAPI, specialtiesAPI, getErrorMessage, type CommissionPeriod, type ProfessionalMembership, type ProfessionalBankAccountStatus } from '@/lib/api'
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
+import { BankAccountModal } from '@/components/admin/BankAccountModal'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 // ── Selector de fecha en español, semana empieza en lunes ──────────────
@@ -1131,6 +1132,33 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   const [saveWarnings, setSaveWarnings] = useState<string[]>([])
   const [tab, setTab] = useState<'datos' | 'documentos' | 'facturacion' | 'historial'>('datos')
 
+  // Cuenta bancaria — antes la única forma de verla/verificarla era desde
+  // "Pagos a profesionales" (/admin/payouts), pero esa lista solo incluye
+  // a quienes YA tienen ganancias liberadas sin pagar. Un profesional
+  // recién aprobado sin consultas todavía no aparecía ahí, así que su
+  // cuenta quedaba sin poder verificarse hasta su primer pago pendiente.
+  // Ahora también se puede ver/verificar directo desde acá, sin esperar.
+  const [showBankModal, setShowBankModal] = useState(false)
+  const [bankVerifiedMsg, setBankVerifiedMsg] = useState('')
+
+  // Estado resumido (sin número completo) para pintar el badge de
+  // verificada/pendiente y, sobre todo, el aviso puntual de "el
+  // profesional pidió cambiarla" — así el admin no tiene que abrir el
+  // modal a ciegas para enterarse.
+  const { data: bankStatus, refetch: refetchBankStatus } = useQuery<ProfessionalBankAccountStatus | null>({
+    queryKey: ['admin-bank-account-status', local.id],
+    queryFn: () => adminAPI.getProfessionalBankAccountStatus(local.id),
+  })
+
+  const revertBankMutation = useMutation({
+    mutationFn: () => adminAPI.revertProfessionalBankAccount(local.id),
+    onSuccess: (res) => {
+      setBankVerifiedMsg(res.message)
+      refetchBankStatus()
+    },
+    onError: (err) => setBankVerifiedMsg(getErrorMessage(err)),
+  })
+
   const nameParts = local.name.split(' ')
   const emptyForm = {
     first_name: nameParts[0] || '',
@@ -1709,6 +1737,50 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
           <div className="pt-2 border-t border-[#DDE1EE]">
             <ProfessionalMembershipSection professionalId={local.id} />
           </div>
+          <div className="pt-2 border-t border-[#DDE1EE]">
+            <div className="flex items-center gap-1.5 mb-2">
+              <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide">{t('Cuenta bancaria')}</p>
+              {bankStatus?.verified && (
+                <span className="text-[10px] font-semibold text-[#0F6E56] bg-[#E3F6EF] px-1.5 py-0.5 rounded-full">
+                  ✓ {t('Verificada')}
+                </span>
+              )}
+              {bankStatus && !bankStatus.verified && (
+                <span className="text-[10px] font-semibold text-[#B45309] bg-[#FEF3C7] px-1.5 py-0.5 rounded-full">
+                  {t('Pendiente')}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-[#64748B] mb-2">
+              {t('Ver los datos completos que registró el profesional y marcarla como verificada — no hace falta esperar a que tenga pagos pendientes.')}
+            </p>
+            {/* Pedido puntual de cambio de cuenta — ver
+                POST /me/bank-account/request-change en el backend. Se
+                resuelve con "Revertir aprobación", mismo patrón que
+                especialidad/subespecialidad/firma. */}
+            {bankStatus?.change_requested_at && (
+              <div className="mb-2 p-2 rounded-lg bg-[#FEF3C7] border border-[#FCD34D]">
+                <p className="text-xs text-[#854F0B] font-medium">
+                  {t('El profesional pidió cambiar su cuenta bancaria — revisar antes del próximo pago.')}
+                </p>
+              </div>
+            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={() => setShowBankModal(true)} className="btn-secondary text-xs py-1.5 px-3">
+                {t('Ver / verificar cuenta bancaria')}
+              </button>
+              {bankStatus?.verified && (
+                <button
+                  onClick={() => revertBankMutation.mutate()}
+                  disabled={revertBankMutation.isPending}
+                  className="text-[10px] text-[#64748B] hover:text-[#A32D2D] disabled:opacity-50"
+                >
+                  {revertBankMutation.isPending ? t('Revirtiendo...') : t('Revertir aprobación')}
+                </button>
+              )}
+            </div>
+            {bankVerifiedMsg && <p className="text-xs text-[#0F6E56] font-medium mt-2">{bankVerifiedMsg}</p>}
+          </div>
           {!editing && local.bio && (
             <div className="pt-2 border-t border-[#DDE1EE]">
               <p className="text-xs font-semibold text-[#475569] uppercase tracking-wide mb-2">{t('Presentacion')}</p>
@@ -1744,6 +1816,18 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
           </div>
         </div>
       </div>
+
+      {showBankModal && (
+        <BankAccountModal
+          professionalId={local.id}
+          professionalName={local.name}
+          onClose={() => setShowBankModal(false)}
+          onVerified={() => {
+            setBankVerifiedMsg(t('Cuenta bancaria verificada correctamente.'))
+            refetchBankStatus()
+          }}
+        />
+      )}
     </div>
   )
 }

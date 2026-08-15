@@ -334,6 +334,10 @@ class ProfessionalBankAccountResponse(BaseModel):
     account_holder_name: str
     verified: bool
     verified_at: Optional[str] = None
+    # No None si el profesional ya pidió cambiarla (ver
+    # POST /me/bank-account/request-change) y todavía nadie de admin
+    # revirtió la aprobación para destrabar la edición.
+    change_requested_at: Optional[str] = None
     updated_at: str
 
 

@@ -709,6 +709,23 @@ export default function ProfilePage() {
     },
   })
 
+  // Con la cuenta ya verificada, editar está bloqueado del lado del
+  // backend (ver PUT /me/bank-account) — esto es lo que el botón "Pedir
+  // cambio de cuenta" dispara en su lugar: no toca la cuenta actual,
+  // solo le avisa a un admin para que la revierta y destrabe la edición.
+  const requestBankChangeMutation = useMutation({
+    mutationFn: () => professionalsAPI.requestBankAccountChange(),
+    onSuccess: (res) => {
+      setBankSuccess(res.message)
+      setBankError('')
+      refetchBankAccount()
+    },
+    onError: (err) => {
+      setBankError(getErrorMessage(err))
+      setBankSuccess('')
+    },
+  })
+
   function saveBankAccount() {
     setBankSuccess('')
     setBankError('')
@@ -2257,9 +2274,40 @@ export default function ProfilePage() {
                     {t('Un administrador la revisará antes de incluirte en el próximo pago.')}
                   </p>
                 )}
+
+                {/* Ya verificada: no se puede editar directo (bloqueado en
+                    el backend) — un cambio de cuenta requiere que un admin
+                    la revise de nuevo, así que en vez de un formulario
+                    editable se ofrece "pedir el cambio" y esperar a que
+                    revierta la aprobación. Mismo patrón que
+                    especialidad/subespecialidad/firma. */}
+                {myBankAccount.verified && (
+                  <div className="mt-2 pt-2 border-t border-[#DDE1EE]">
+                    {myBankAccount.change_requested_at ? (
+                      <p className="text-xs text-[#185FA5] font-medium">
+                        {t('Ya le avisamos a un administrador que quieres cambiarla. Te habilitará la edición apenas lo revise.')}
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-[#64748B] mb-1.5">
+                          {t('Verificada por un administrador. Para cambiarla, pídele el cambio primero.')}
+                        </p>
+                        <button
+                          onClick={() => requestBankChangeMutation.mutate()}
+                          disabled={requestBankChangeMutation.isPending}
+                          className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50"
+                        >
+                          {requestBankChangeMutation.isPending ? t('Enviando...') : t('Pedir cambio de cuenta')}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
+            {!myBankAccount?.verified && (
+            <>
             <p className="text-xs font-semibold text-[#141820] mb-2">
               {myBankAccount ? t('Cambiar cuenta bancaria') : t('Registrar cuenta bancaria')}
             </p>
@@ -2375,6 +2423,8 @@ export default function ProfilePage() {
                 {saveBankMutation.isPending ? t('Guardando...') : t('Guardar cuenta bancaria')}
               </button>
             </div>
+            </>
+            )}
           </div>
           )}
 

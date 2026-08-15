@@ -707,6 +707,13 @@ class ProfessionalBankAccount(Base):
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
     verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     verified_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
+    # Se llena cuando el profesional pide cambiar una cuenta YA verificada
+    # (ver POST /me/bank-account/request-change) — mientras verified=True
+    # no puede editarla directo, así que esto es la señal puntual para que
+    # el admin la vea en la ficha del profesional y decida revertir la
+    # aprobación. Se limpia solo cuando un admin revierte o vuelve a
+    # verificar la cuenta.
+    change_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     # Momento en que el profesional aceptó el aviso de responsabilidad por
     # errores en los datos que ingresó — sin esto no se puede guardar la
     # cuenta (ver validación en ProfessionalBankAccountRequest).

@@ -1049,6 +1049,7 @@ async def get_my_bank_account(
         "account_holder_name": account.account_holder_name,
         "verified": account.verified,
         "verified_at": account.verified_at.isoformat() if account.verified_at else None,
+        "change_requested_at": account.change_requested_at.isoformat() if account.change_requested_at else None,
         "updated_at": account.updated_at.isoformat() if account.updated_at else None,
     }
 
@@ -1057,6 +1058,13 @@ async def get_my_bank_account(
 # Alta o edición (siempre reemplaza — una sola cuenta activa por
 # profesional en v1). Cada guardado vuelve verified=False: un admin tiene
 # que revisarla de nuevo antes de que entre en el próximo lote de pago.
+#
+# Si la cuenta YA está verified=True, esto se bloquea (mismo patrón que
+# especialidad/subespecialidad/firma): editar a mano una cuenta ya
+# verificada dejaba pasar cambios de cuenta sin que ningún admin se
+# enterara hasta el próximo lote de pago. Ahora el profesional tiene que
+# pedir el cambio (ver POST /me/bank-account/request-change) y un admin
+# revertir la aprobación antes de que este PUT vuelva a aceptarse.
 @router.put("/me/bank-account", summary="Registrar o actualizar mi cuenta bancaria para recibir pagos")
 async def upsert_my_bank_account(
     data: ProfessionalBankAccountRequest,
@@ -1073,6 +1081,16 @@ async def upsert_my_bank_account(
     )
     account = result.scalar_one_or_none()
     is_new = account is None
+
+    if account is not None and account.verified:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Tu cuenta bancaria ya fue verificada. Para cambiarla, pide el cambio "
+                "y un administrador debe revertir la aprobación primero."
+            ),
+        )
+
     if account is None:
         account = ProfessionalBankAccount(professional_id=professional.id)
         db.add(account)
@@ -1087,6 +1105,10 @@ async def upsert_my_bank_account(
     account.verified = False
     account.verified_at = None
     account.verified_by = None
+    # Si esto se pudo guardar es porque la cuenta no estaba verificada (o
+    # un admin recién revirtió la aprobación) — cualquier solicitud de
+    # cambio pendiente ya quedó atendida.
+    account.change_requested_at = None
 
     await db.flush()
 
@@ -1115,6 +1137,60 @@ async def upsert_my_bank_account(
         "message": "Cuenta bancaria guardada. Un administrador la revisará antes del próximo pago.",
         "verified": False,
     }
+
+
+# ── POST /api/v1/professionals/me/bank-account/request-change ──
+# Con la cuenta ya verificada, el PUT de arriba está bloqueado — esto es
+# lo que el profesional usa en su lugar para avisarle puntualmente a un
+# admin que necesita cambiarla (ej. cambió de banco). No toca la cuenta
+# actual (se le sigue pagando ahí mientras tanto): solo deja la marca en
+# change_requested_at para que aparezca en la ficha del profesional, y un
+# admin decida revertir la aprobación para destrabar la edición.
+@router.post("/me/bank-account/request-change", summary="Pedir a un administrador que habilite el cambio de mi cuenta bancaria verificada")
+async def request_bank_account_change(
+    current_user: User = Depends(get_current_professional),
+    db: AsyncSession = Depends(get_db)
+):
+    prof_result = await db.execute(select(Professional).where(Professional.user_id == current_user.id))
+    professional = prof_result.scalar_one_or_none()
+    if not professional:
+        raise HTTPException(status_code=404, detail="Perfil profesional no encontrado")
+
+    result = await db.execute(
+        select(ProfessionalBankAccount).where(ProfessionalBankAccount.professional_id == professional.id)
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Todavía no registraste una cuenta bancaria")
+    if not account.verified:
+        raise HTTPException(status_code=400, detail="Tu cuenta todavía no está verificada, puedes editarla directamente")
+    if account.change_requested_at:
+        raise HTTPException(status_code=400, detail="Ya pediste este cambio, un administrador todavía no lo revisó")
+
+    account.change_requested_at = utcnow_naive()
+    await db.flush()
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="BANK_ACCOUNT_CHANGE_REQUESTED",
+        entity_type="ProfessionalBankAccount",
+        entity_id=account.id,
+    ))
+
+    full_name = f"{professional.first_name} {professional.last_name}"
+    await _notify_admins_new_review(
+        db, professional,
+        title="Pedido de cambio de cuenta bancaria",
+        body=(
+            f"{full_name} quiere cambiar su cuenta bancaria verificada "
+            f"({account.bank_name}, terminada en {account.account_number_last4}). "
+            "Revisa su ficha y revierte la aprobación para que pueda editarla."
+        ),
+        type_="BANK_ACCOUNT_CHANGE_REQUESTED",
+    )
+
+    await db.commit()
+    return {"message": "Le avisamos a un administrador. Te habilitará la edición apenas lo revise."}
 
 
 # ── GET /api/v1/professionals/me/documents ──────────
