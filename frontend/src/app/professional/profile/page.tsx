@@ -293,6 +293,17 @@ export default function ProfilePage() {
   const [specialtySaving, setSpecialtySaving] = useState(false)
   const [specialtyError, setSpecialtyError] = useState('')
   const [specialtySuccess, setSpecialtySuccess] = useState('')
+  // Antes, apenas había un valor cargado (aunque fuera PENDING), el
+  // selector completo se mostraba igual debajo de la tarjeta de solo
+  // lectura — dos formas de ver lo mismo a la vez, confuso. Ahora: con
+  // valor cargado, se ve SOLO la tarjeta de solo lectura + un botón
+  // "Editar" explícito. Tocar "Editar" es intencional — sirve además
+  // como aviso de que cambiarlo reenvía la propuesta para revisión (por
+  // ejemplo, en una emergencia real donde hace falta corregir algo ya
+  // aprobado). Antes de entrar a estos dos, no hay nada que "bloquear"
+  // todavía, así que el selector se muestra directo sin pasar por acá.
+  const [editingSpecialty, setEditingSpecialty] = useState(false)
+  const [editingSubSpecialty, setEditingSubSpecialty] = useState(false)
 
   useEffect(() => {
     specialtiesAPI.list().then(setSpecialtyCatalog).catch(() => {})
@@ -301,6 +312,44 @@ export default function ProfilePage() {
   // (el useEffect que carga subespecialidades del catálogo se define más
   // abajo, después de declarar registrationData — ver cerca de esa
   // declaración)
+
+  // Precarga el selector con el valor YA guardado (match exacto contra el
+  // catálogo → esa opción; si no matchea, asumimos que es una propuesta
+  // manual → NOT_LISTED con el texto) para que "Editar" arranque mostrando
+  // lo que ya había, no un formulario en blanco.
+  function startEditSpecialty() {
+    const current = registrationData?.specialty || ''
+    const match = specialtyCatalog.find((s) => s.name === current)
+    setSpecialtyChoice(match ? match.id : (current ? NOT_LISTED : ''))
+    setSpecialtyProposalText(match ? '' : current)
+    setSpecialtyError('')
+    setSpecialtySuccess('')
+    setEditingSpecialty(true)
+  }
+
+  function cancelEditSpecialty() {
+    setEditingSpecialty(false)
+    setSpecialtyChoice('')
+    setSpecialtyProposalText('')
+    setSpecialtyError('')
+  }
+
+  function startEditSubSpecialty() {
+    const current = registrationData?.sub_specialty || ''
+    const match = subSpecialtyCatalog.find((s) => s.name === current)
+    setSubSpecialtyChoice(match ? match.id : (current ? NOT_LISTED : ''))
+    setSubSpecialtyProposalText(match ? '' : current)
+    setSpecialtyError('')
+    setSpecialtySuccess('')
+    setEditingSubSpecialty(true)
+  }
+
+  function cancelEditSubSpecialty() {
+    setEditingSubSpecialty(false)
+    setSubSpecialtyChoice('')
+    setSubSpecialtyProposalText('')
+    setSpecialtyError('')
+  }
 
   async function saveSpecialty() {
     setSpecialtyError('')
@@ -334,6 +383,10 @@ export default function ProfilePage() {
       }
       const data = await professionalsAPI.getMyProfile()
       setRegistrationData(data as any)
+      // Vuelve a la vista de solo lectura + "Editar" — ya se envió, no
+      // hace falta seguir mostrando el selector abierto.
+      setEditingSpecialty(false)
+      if (hadPendingSubSpecialty) setEditingSubSpecialty(false)
     } catch (err) {
       setSpecialtyError(getErrorMessage(err))
     } finally {
@@ -368,6 +421,7 @@ export default function ProfilePage() {
       if (!skipOwnMessages) {
         const data = await professionalsAPI.getMyProfile()
         setRegistrationData(data as any)
+        setEditingSubSpecialty(false)
       }
     } catch (err) {
       if (skipOwnMessages) throw err
@@ -1092,24 +1146,38 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              {registrationData?.specialty ? (
+              {registrationData?.specialty && !editingSpecialty ? (
+                // Vista de solo lectura + "Editar" explícito — antes esto y
+                // el selector completo se mostraban los dos a la vez
+                // (mientras no estuviera APPROVED), lo cual era confuso.
+                // Ahora, con un valor cargado, se ve SOLO esta tarjeta.
+                // Tocar "Editar" es intencional: además de destrabar el
+                // campo, sirve como aviso de que volver a guardar
+                // re-envía la propuesta para revisión de nuevo (útil para
+                // corregir algo en una emergencia real, incluso ya
+                // aprobado).
                 <div className="bg-[#F5F6FA] border border-[#DDE1EE] rounded-lg px-3 py-2.5">
-                  <p className="text-sm font-medium">{registrationData.specialty}</p>
-                  {registrationData.specialty_status === 'REJECTED' && (
-                    <p className="text-xs text-[#A32D2D] mt-1">
-                      {t('Fue rechazada por un administrador. Elige otra especialidad abajo para volver a intentarlo.')}
-                    </p>
-                  )}
-                  {registrationData.specialty_status === 'PENDING' && (
-                    <p className="text-xs text-[#854F0B] mt-1">{t('Pendiente de confirmación de un administrador.')}</p>
-                  )}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{registrationData.specialty}</p>
+                      {registrationData.specialty_status === 'REJECTED' && (
+                        <p className="text-xs text-[#A32D2D] mt-1">
+                          {t('Fue rechazada por un administrador. Toca "Editar" para elegir otra.')}
+                        </p>
+                      )}
+                      {registrationData.specialty_status === 'PENDING' && (
+                        <p className="text-xs text-[#854F0B] mt-1">{t('Pendiente de confirmación de un administrador.')}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={startEditSpecialty}
+                      className="text-xs text-[#185FA5] font-medium underline underline-offset-2 flex-shrink-0"
+                    >
+                      {t('Editar')}
+                    </button>
+                  </div>
                 </div>
-              ) : null}
-
-              {/* El selector se muestra siempre que no hay especialidad
-                  APROBADA — así, si fue rechazada, el profesional puede
-                  elegir otra sin trabas. */}
-              {registrationData?.specialty_status !== 'APPROVED' && (
+              ) : (
                 <div className="mt-2 space-y-2">
                   <select
                     value={specialtyChoice}
@@ -1132,13 +1200,24 @@ export default function ProfilePage() {
                     />
                   )}
 
-                  <button
-                    onClick={saveSpecialty}
-                    disabled={specialtySaving || !specialtyChoice}
-                    className="bg-[#0F6E56] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-                  >
-                    {specialtySaving ? t('Guardando...') : t('Guardar especialidad')}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={saveSpecialty}
+                      disabled={specialtySaving || !specialtyChoice}
+                      className="bg-[#0F6E56] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                    >
+                      {specialtySaving ? t('Guardando...') : t('Guardar especialidad')}
+                    </button>
+                    {registrationData?.specialty && (
+                      <button
+                        onClick={cancelEditSpecialty}
+                        disabled={specialtySaving}
+                        className="px-4 py-2 rounded-lg text-sm font-medium text-[#475569] border border-[#DDE1EE] disabled:opacity-50"
+                      >
+                        {t('Cancelar')}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1166,21 +1245,29 @@ export default function ProfilePage() {
                   )}
                 </div>
 
-                {registrationData?.sub_specialty ? (
-                  <div className="bg-[#F5F6FA] border border-[#DDE1EE] rounded-lg px-3 py-2.5 mb-2">
-                    <p className="text-sm font-medium">{registrationData.sub_specialty}</p>
-                    {registrationData.sub_specialty_status === 'REJECTED' && (
-                      <p className="text-xs text-[#A32D2D] mt-1">
-                        {t('Fue rechazada por un administrador. Puedes elegir otra abajo.')}
-                      </p>
-                    )}
-                    {registrationData.sub_specialty_status === 'PENDING' && (
-                      <p className="text-xs text-[#854F0B] mt-1">{t('Pendiente de confirmación de un administrador.')}</p>
-                    )}
+                {registrationData?.sub_specialty && !editingSubSpecialty ? (
+                  <div className="bg-[#F5F6FA] border border-[#DDE1EE] rounded-lg px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{registrationData.sub_specialty}</p>
+                        {registrationData.sub_specialty_status === 'REJECTED' && (
+                          <p className="text-xs text-[#A32D2D] mt-1">
+                            {t('Fue rechazada por un administrador. Toca "Editar" para elegir otra.')}
+                          </p>
+                        )}
+                        {registrationData.sub_specialty_status === 'PENDING' && (
+                          <p className="text-xs text-[#854F0B] mt-1">{t('Pendiente de confirmación de un administrador.')}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={startEditSubSpecialty}
+                        className="text-xs text-[#185FA5] font-medium underline underline-offset-2 flex-shrink-0"
+                      >
+                        {t('Editar')}
+                      </button>
+                    </div>
                   </div>
-                ) : null}
-
-                {registrationData?.sub_specialty_status !== 'APPROVED' && (
+                ) : (
                   <div className="space-y-2">
                     <select
                       value={subSpecialtyChoice}
@@ -1203,15 +1290,26 @@ export default function ProfilePage() {
                       />
                     )}
 
-                    {subSpecialtyChoice && (
-                      <button
-                        onClick={() => saveSubSpecialty()}
-                        disabled={specialtySaving}
-                        className="bg-[#0F6E56] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-                      >
-                        {specialtySaving ? t('Guardando...') : t('Guardar subespecialidad')}
-                      </button>
-                    )}
+                    <div className="flex gap-2">
+                      {subSpecialtyChoice && (
+                        <button
+                          onClick={() => saveSubSpecialty()}
+                          disabled={specialtySaving}
+                          className="bg-[#0F6E56] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                        >
+                          {specialtySaving ? t('Guardando...') : t('Guardar subespecialidad')}
+                        </button>
+                      )}
+                      {registrationData?.sub_specialty && (
+                        <button
+                          onClick={cancelEditSubSpecialty}
+                          disabled={specialtySaving}
+                          className="px-4 py-2 rounded-lg text-sm font-medium text-[#475569] border border-[#DDE1EE] disabled:opacity-50"
+                        >
+                          {t('Cancelar')}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

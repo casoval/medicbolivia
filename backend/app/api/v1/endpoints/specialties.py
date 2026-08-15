@@ -367,6 +367,33 @@ async def create_proposal(
     if not proposed_name_clean:
         raise HTTPException(status_code=400, detail="El nombre no puede estar vacío")
 
+    # ── Evitar propuestas PENDING duplicadas del mismo profesional ──
+    # BUG REAL detectado: nada impedía que cada clic en "Guardar
+    # especialidad"/"Guardar subespecialidad" insertara una fila nueva en
+    # specialty_proposals, aunque el profesional estuviera re-enviando
+    # exactamente lo mismo (ej. reintentos, doble clic, o simplemente
+    # volver a guardar). El docstring del modelo ya decía "esta propuesta
+    # la reemplaza (no se acumulan varias)" pero eso nunca se implementó.
+    # Consecuencia real: con 2+ propuestas SPECIALTY "PENDING" del mismo
+    # profesional con el mismo nombre, la resolución de padre para
+    # subespecialidad de más abajo (que espera UNA sola coincidencia)
+    # tiraba un error interno al encontrar más de una — por eso la
+    # subespecialidad escrita a mano "no se guardaba": la request fallaba
+    # con 500 antes de llegar a crear la fila.
+    # Ahora: antes de insertar la propuesta nueva, cualquier PENDING
+    # previa del mismo profesional y mismo tipo se marca REJECTED
+    # (reemplazada), dejando como mucho UNA PENDING por tipo a la vez.
+    stale_result = await db.execute(
+        select(SpecialtyProposal).where(
+            SpecialtyProposal.professional_id == professional.id,
+            SpecialtyProposal.type == data.type,
+            SpecialtyProposal.status == ProposalStatus.PENDING,
+        )
+    )
+    for stale in stale_result.scalars().all():
+        stale.status = ProposalStatus.REJECTED
+        stale.admin_note = "Reemplazada automáticamente por una propuesta más nueva del mismo profesional."
+
     # ── Resolución server-side de la especialidad padre ─────────────
     # El frontend NUNCA manda parent_specialty_id ni parent_proposal_id
     # cuando el profesional usa "no está en la lista" para subespecialidad
@@ -403,6 +430,12 @@ async def create_proposal(
                     SpecialtyProposal.status == ProposalStatus.PENDING,
                     func.lower(SpecialtyProposal.proposed_name) == professional.specialty.strip().lower(),
                 )
+                # .scalar_one_or_none() explotaría con "MultipleResultsFound"
+                # si ya existieran propuestas PENDING duplicadas de antes de
+                # este fix (ver limpieza de arriba) — nos quedamos con la
+                # más reciente en vez de reventar la request.
+                .order_by(SpecialtyProposal.created_at.desc())
+                .limit(1)
             )
             parent_proposal_obj = parent_proposal_result.scalar_one_or_none()
             if parent_proposal_obj:

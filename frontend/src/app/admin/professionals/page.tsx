@@ -1227,9 +1227,24 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
         review_note: payload.note,
       })
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setSpecialtyReviewError('')
-      qc.invalidateQueries({ queryKey: ['admin', 'professionals'] })
+      // BUG REAL detectado: esta mutación solo invalidaba la query de la
+      // lista (['admin','professionals']) pero nunca actualizaba `local`
+      // — el estado que el modal en realidad usa para pintar la UI (ver
+      // useState(pro) al abrir el modal, arriba). Como el modal recibe
+      // `professional` como prop una sola vez y no se resincroniza solo,
+      // aprobar/rechazar especialidad o subespecialidad hacía el request
+      // real (se guardaba bien en el backend) pero el modal seguía
+      // mostrando el estado viejo — daba la sensación de estar colgado,
+      // aunque el clic sí había funcionado. Mismo patrón ya usado abajo
+      // en reviewItemMutation/saveMutation: refrescamos la lista y
+      // pescamos de ahí el registro actualizado de este profesional para
+      // parchear `local` de una.
+      await qc.invalidateQueries({ queryKey: ['admin', 'professionals'] })
+      const freshList = qc.getQueryData<Professional[]>(['admin', 'professionals', 'all']) || []
+      const fresh = freshList.find((p) => p.id === local.id)
+      if (fresh) setLocal(fresh)
     },
     onError: (err) => setSpecialtyReviewError(getErrorMessage(err)),
   })
