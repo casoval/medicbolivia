@@ -17,6 +17,7 @@ export default function RegisterChoicePage() {
   const patientPoints = [
     'Consultá por videollamada o chat con médicos verificados',
     'Agendá y gestioná tus citas cuando quieras',
+    'Un agente IA con voz te guía durante la consulta',
     'Recordatorios automáticos por WhatsApp antes de tu cita',
     'Sin costo de registro ni suscripciones',
   ]
@@ -24,7 +25,6 @@ export default function RegisterChoicePage() {
   const professionalPoints = [
     'Recibí pacientes y cobrá de forma segura y confiable',
     'Elegí tus horarios y tus precios de consulta',
-    'Un agente IA con voz te guía durante la consulta',
     'Perfil verificado que genera confianza',
     'Cobrá tus consultas directamente, sin intermediarios',
   ]

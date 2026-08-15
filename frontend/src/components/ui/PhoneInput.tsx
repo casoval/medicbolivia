@@ -115,9 +115,21 @@ export function PhoneInput({ value, onChange, required, placeholder = '72345678'
   // abierto, lo más simple y predecible es cerrarlo (en vez de perseguir
   // al botón recalculando en cada evento) — mismo criterio que ya usan la
   // mayoría de los selects nativos.
+  //
+  // Ojo: 'scroll' no burbujea en el DOM, así que para detectar el scroll
+  // de LA PÁGINA (mientras el dropdown está abierto) hace falta escuchar
+  // en la fase de CAPTURA (tercer argumento `true`) — si no, un scroll
+  // fuera de la ventana nunca llegaría a este listener. Pero eso mismo
+  // hace que la captura también vea el scroll INTERNO de la propia lista
+  // (que tiene overflow-auto, para poder recorrer los ~15 países) antes
+  // de que el evento llegue a su destino real — cerrando el dropdown
+  // apenas la persona intenta bajar con la ruedita o la scrollbar, sin
+  // dejarla ver el resto de países. Por eso se excluye explícitamente
+  // cualquier scroll cuyo target esté DENTRO de dropdownRef.
   useEffect(() => {
     if (!open) return
-    function closeOnScrollOrResize() {
+    function closeOnScrollOrResize(e: Event) {
+      if (dropdownRef.current?.contains(e.target as Node)) return
       setOpen(false)
     }
     window.addEventListener('scroll', closeOnScrollOrResize, true)
