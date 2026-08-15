@@ -16,6 +16,7 @@ from loguru import logger
 from app.core.config import settings
 from app.core.phone import normalize_bo_phone
 from app.services.whatsapp_throttle import wait_for_whatsapp_slot
+from app.services.whatsapp_pause import WhatsAppPausedError
 
 
 async def send_whatsapp_otp(phone: str, code: str) -> bool:
@@ -51,6 +52,14 @@ async def send_whatsapp_otp(phone: str, code: str) -> bool:
                 json={"to": to, "message": message},
                 headers={"X-Internal-Secret": settings.WHATSAPP_SERVICE_INTERNAL_SECRET},
             )
+    except WhatsAppPausedError:
+        # A diferencia de las tareas de Celery, esto es una request HTTP
+        # que el usuario está esperando en pantalla — no tiene sentido
+        # reencolar/reintentar acá. Se corta ya, mismo `return False` que
+        # cualquier otro fallo de envío (el endpoint que llama a esto ya
+        # sabe convertirlo en un mensaje genérico al usuario).
+        logger.warning(f"OTP a {phone} no enviado: WhatsApp pausado por un admin")
+        return False
     except httpx.RequestError as exc:
         logger.error(f"Error de red enviando OTP por WhatsApp a {phone}: {exc}")
         return False

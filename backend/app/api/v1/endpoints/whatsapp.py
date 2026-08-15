@@ -10,7 +10,7 @@ Backend del menú "IA" del panel admin (4 pestañas):
     (Node/whatsapp-web.js) cada vez que llega un mensaje nuevo al número real.
 """
 from datetime import datetime, timedelta
-from app.core.timezone import utcnow_naive
+from app.core.timezone import utcnow_naive, utc_naive_to_bolivia_naive
 from typing import Optional, List
 import hmac
 
@@ -26,6 +26,7 @@ from app.core.dependencies import get_current_admin
 from app.core.config import settings
 from app.core.phone import normalize_bo_phone, InvalidPhoneError
 from app.core.redis_client import security_redis_client
+from app.services.whatsapp_pause import get_pause_info, set_whatsapp_paused
 from app.models.models import (
     User, Patient, Professional, Admin, WhatsAppConversation, WhatsAppMessage, WhatsAppAudience,
     AgentConfig, ReminderRule, ReminderLog, DBBackupConfig, DBBackupLog,
@@ -54,6 +55,7 @@ async def get_whatsapp_status(current_user: User = Depends(get_current_admin)):
     responde, se informa como DOWN en vez de tirar un 500 — el admin
     necesita ver esto como un estado, no como un error de la página.
     """
+    pause_info = await get_pause_info()
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(
@@ -62,11 +64,126 @@ async def get_whatsapp_status(current_user: User = Depends(get_current_admin)):
             )
         if resp.status_code == 200:
             data = resp.json()
-            return {"service_reachable": True, **data}
-        return {"service_reachable": True, "connection_state": "ERROR", "detail": resp.text[:200]}
+            return {"service_reachable": True, "paused": pause_info, **data}
+        return {"service_reachable": True, "connection_state": "ERROR", "detail": resp.text[:200], "paused": pause_info}
     except httpx.RequestError as exc:
         logger.warning(f"whatsapp-service no responde: {exc}")
-        return {"service_reachable": False, "connection_state": "DOWN", "detail": str(exc)}
+        return {"service_reachable": False, "connection_state": "DOWN", "detail": str(exc), "paused": pause_info}
+
+
+class PauseRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+@router.get("/pause-status", summary="Estado del kill switch de envíos")
+async def get_whatsapp_pause_status(current_user: User = Depends(get_current_admin)):
+    info = await get_pause_info()
+    return {"paused": info is not None, "info": info}
+
+
+@router.post("/pause", summary="Kill switch: frena TODO envío de WhatsApp al instante")
+async def pause_whatsapp(data: PauseRequest, current_user: User = Depends(get_current_admin)):
+    """
+    Prende el flag global en Redis (whatsapp_pause.py). Efecto inmediato
+    en todos los procesos (uvicorn y Celery worker) sin reiniciar nada:
+    los envíos nuevos se cortan en el portón (wait_for_whatsapp_slot) y
+    las tareas en curso se reencolan solas cada 60s hasta que se reanude.
+    No cancela mensajes ya encolados ni en vuelo — solo evita que salgan
+    mientras el switch esté prendido.
+    """
+    await set_whatsapp_paused(True, reason=data.reason or "", admin_email=current_user.email or "")
+    return {"paused": True, "reason": data.reason}
+
+
+@router.post("/resume", summary="Reanuda los envíos de WhatsApp")
+async def resume_whatsapp(current_user: User = Depends(get_current_admin)):
+    await set_whatsapp_paused(False, admin_email=current_user.email or "")
+    return {"paused": False}
+
+
+@router.get("/volume-stats", summary="Historial agregado de volumen de envíos (para correlacionar con un incidente)")
+async def get_whatsapp_volume_stats(current_user: User = Depends(get_current_admin), db: AsyncSession = Depends(get_db)):
+    """
+    Cuenta mensajes salientes (direction='OUT') de whatsapp_messages,
+    agregados en dos vistas:
+      - Totales de la última hora y de las últimas 24h, por status
+        (SENT/FAILED) y por origen (sent_by: SYSTEM/ADMIN/BOT).
+      - Un desglose HORA POR HORA de las últimas 24h, para poder mirar
+        "¿qué se mandó entre las 23:00 y la 1:00 de anoche?" sin ir a
+        buscarlo en logs de Celery — que es justo lo que tuvimos que
+        hacer a mano la noche del 13→14 de agosto.
+
+    OJO — lo que esto NO cubre: el envío de OTP (app/services/whatsapp.py)
+    no pasa por _log_message, así que no deja fila en whatsapp_messages.
+    Si algún día se sospecha que un pico de OTPs contribuyó a un
+    bloqueo, este endpoint no lo va a mostrar — habría que sumar un log
+    aparte para esa ruta.
+    """
+    now = utcnow_naive()
+    hour_ago = now - timedelta(hours=1)
+    day_ago = now - timedelta(hours=24)
+
+    async def _counts_since(cutoff: datetime) -> dict:
+        result = await db.execute(
+            select(WhatsAppMessage.status, func.count())
+            .where(WhatsAppMessage.direction == "OUT", WhatsAppMessage.created_at >= cutoff)
+            .group_by(WhatsAppMessage.status)
+        )
+        by_status = {status: count for status, count in result.all()}
+        result = await db.execute(
+            select(WhatsAppMessage.sent_by, func.count())
+            .where(WhatsAppMessage.direction == "OUT", WhatsAppMessage.created_at >= cutoff)
+            .group_by(WhatsAppMessage.sent_by)
+        )
+        by_sent_by = {(sent_by or "DESCONOCIDO"): count for sent_by, count in result.all()}
+        return {
+            "total": sum(by_status.values()),
+            "sent": by_status.get("SENT", 0),
+            "failed": by_status.get("FAILED", 0),
+            "by_sent_by": by_sent_by,
+        }
+
+    last_hour = await _counts_since(hour_ago)
+    last_24h = await _counts_since(day_ago)
+
+    # Desglose hora por hora — se trunca a la hora en UTC (mismo dominio
+    # que created_at) y se convierte a hora de Bolivia solo para el label
+    # que ve el admin, sin mezclar dominios en la comparación (ver
+    # advertencia en app/core/timezone.py).
+    hourly_result = await db.execute(
+        select(
+            func.date_trunc("hour", WhatsAppMessage.created_at).label("hour_bucket"),
+            WhatsAppMessage.status,
+            func.count(),
+        )
+        .where(WhatsAppMessage.direction == "OUT", WhatsAppMessage.created_at >= day_ago)
+        .group_by("hour_bucket", WhatsAppMessage.status)
+        .order_by("hour_bucket")
+    )
+    hourly_raw: dict[datetime, dict[str, int]] = {}
+    for hour_bucket, status, count in hourly_result.all():
+        hourly_raw.setdefault(hour_bucket, {"sent": 0, "failed": 0})
+        if status == "SENT":
+            hourly_raw[hour_bucket]["sent"] = count
+        elif status == "FAILED":
+            hourly_raw[hour_bucket]["failed"] = count
+
+    hourly = [
+        {
+            "hour_utc": hour_bucket.isoformat(),
+            "hour_bolivia": utc_naive_to_bolivia_naive(hour_bucket).strftime("%H:00"),
+            "sent": counts["sent"],
+            "failed": counts["failed"],
+        }
+        for hour_bucket, counts in sorted(hourly_raw.items())
+    ]
+
+    return {
+        "last_hour": last_hour,
+        "last_24h": last_24h,
+        "hourly_24h": hourly,
+        "note": "No incluye OTP (no se loguea en whatsapp_messages).",
+    }
 
 
 @router.get("/qr", summary="QR pendiente para vincular el número (si aplica)")

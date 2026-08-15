@@ -44,10 +44,16 @@ from app.services.system_reminders import fire_system_reminder
 
 # Escalonado aleatorio entre un envío y el siguiente dentro de un mismo
 # lote de "cita 1 hora antes" (antes era DEFAULT_STAGGER_SECONDS = 4s fijo
-# siempre, mismo patrón mecánico que causó el bloqueo de WhatsApp). Mismo
-# criterio que ya usa el recordatorio de mensajes sin leer y broadcast.py.
-SCHEDULED_REMINDER_MIN_GAP_SECONDS = 4
-SCHEDULED_REMINDER_MAX_GAP_SECONDS = 16
+# siempre, mismo patrón mecánico que causó el bloqueo de WhatsApp). Subido
+# de 4-16s a 12-35s tras el bloqueo del 13→14 de agosto: comparado contra
+# centro_terapias (otro bot de WhatsApp del mismo dueño, nunca baneado),
+# que usa 4-7 MINUTOS para sus lotes, 4-16s seguía siendo demasiado rápido
+# — esto no iguala ese margen (sería un cambio de arquitectura mayor,
+# lotes tardando mucho más en salir del todo) pero se acerca bastante más
+# que el valor anterior. Mismo criterio que ya usa el recordatorio de
+# mensajes sin leer y broadcast.py.
+SCHEDULED_REMINDER_MIN_GAP_SECONDS = 12
+SCHEDULED_REMINDER_MAX_GAP_SECONDS = 35
 # Además del espaciado entre mensajes, el PRIMER mensaje del lote tampoco
 # sale en el segundo exacto en que corre el cron — un pequeño delay
 # inicial también aleatorio evita que todos los lotes (uno por minuto)
@@ -205,7 +211,7 @@ async def _send_reminder_for_rule(db, rule: ReminderRule, consultation: Consulta
     await fire_system_reminder(
         db, rule.id, target_user_id,
         related_entity_type="Consultation", related_entity_id=consultation.id,
-        # Escalonado ALEATORIO (4-16s entre uno y otro, más un delay
+        # Escalonado ALEATORIO (12-35s entre uno y otro, más un delay
         # inicial también aleatorio para el primero del lote) en vez de un
         # múltiplo fijo — importante si hay muchas citas cayendo en la
         # misma ventana horaria, mismo criterio que unread/broadcast.
@@ -230,10 +236,11 @@ def check_scheduled_appointment_reminders():
 # diario. Antes era un valor fijo (DEFAULT_STAGGER_SECONDS = 4s siempre),
 # lo que hacía que todo el lote saliera con el mismo ritmo mecánico —
 # justo el patrón que llevó al bloqueo real de WhatsApp de jul-2026 (ver
-# incidente). Ahora cada salto es aleatorio entre estos dos valores, igual
-# criterio que ya usa broadcast.py para los anuncios del admin.
-UNREAD_REMINDER_MIN_GAP_SECONDS = 4
-UNREAD_REMINDER_MAX_GAP_SECONDS = 20
+# incidente). Subido de 4-20s a 12-35s tras el bloqueo del 13→14 de
+# agosto, mismo criterio y mismo valor que SCHEDULED_REMINDER_* arriba y
+# que broadcast.py — ver esa constante para el detalle de por qué 12-35s.
+UNREAD_REMINDER_MIN_GAP_SECONDS = 12
+UNREAD_REMINDER_MAX_GAP_SECONDS = 35
 
 # El beat dispara este cron a las 19:59 en punto (ver celery_app.py). Antes
 # de mandar el primer mensaje, la tarea espera un jitter aleatorio dentro

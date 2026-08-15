@@ -32,11 +32,18 @@ export function BotTab() {
   const [testPhone, setTestPhone] = useState('')
   const [testError, setTestError] = useState('')
   const [testOk, setTestOk] = useState(false)
+  const [pauseError, setPauseError] = useState('')
 
   const { data: status, isLoading, refetch } = useQuery({
     queryKey: ['admin', 'whatsapp', 'status'],
     queryFn: async () => (await whatsappAPI.getStatus()).data,
     refetchInterval: 15000,
+  })
+
+  const { data: volumeStats } = useQuery({
+    queryKey: ['admin', 'whatsapp', 'volume-stats'],
+    queryFn: async () => (await whatsappAPI.getVolumeStats()).data,
+    refetchInterval: 60000,
   })
 
   const { data: qrData, refetch: refetchQR } = useQuery({
@@ -52,13 +59,154 @@ export function BotTab() {
     onError: (err) => { setTestError(getErrorMessage(err)); setTestOk(false) },
   })
 
+  const pauseMutation = useMutation({
+    mutationFn: (reason: string) => whatsappAPI.pause(reason),
+    onSuccess: () => { setPauseError(''); refetch() },
+    onError: (err) => setPauseError(getErrorMessage(err)),
+  })
+
+  const resumeMutation = useMutation({
+    mutationFn: () => whatsappAPI.resume(),
+    onSuccess: () => { setPauseError(''); refetch() },
+    onError: (err) => setPauseError(getErrorMessage(err)),
+  })
+
   if (isLoading) return <LoadingScreen text="Consultando estado del bot..." />
 
   const state = status?.connection_state || 'DOWN'
   const reachable = status?.service_reachable
+  const pausedInfo = status?.paused as { reason?: string; by?: string; at?: string } | null | undefined
+  const isPaused = !!pausedInfo
+
+  const handlePauseClick = () => {
+    const confirmed = window.confirm(
+      '¿Frenar TODOS los envíos de WhatsApp ahora mismo? Ningún mensaje (recordatorios, broadcast, agente IA, OTP) va a salir hasta que lo reanudes vos u otro admin.'
+    )
+    if (!confirmed) return
+    const reason = window.prompt('¿Por qué lo pausás? (queda registrado, opcional)') || ''
+    pauseMutation.mutate(reason)
+  }
+
+  const handleResumeClick = () => {
+    const confirmed = window.confirm('¿Reanudar los envíos de WhatsApp?')
+    if (!confirmed) return
+    resumeMutation.mutate()
+  }
 
   return (
     <div className="space-y-4">
+      {/* ── Kill switch ── */}
+      <div className="card p-4">
+        <SectionTitle>{t('Kill switch de envíos')}</SectionTitle>
+        <p className="text-xs text-[#475569] mb-3">
+          Frena todo envío de WhatsApp al instante (recordatorios, broadcast, agente IA, OTP) sin
+          bajar ningún proceso. Usalo apenas algo se vea raro — mensajes duplicados, respuestas del
+          bot fuera de lugar, o cualquier señal de que el número podría terminar bloqueado.
+        </p>
+
+        {pauseError && <div className="mb-2"><Alert type="error" message={pauseError} /></div>}
+
+        {isPaused ? (
+          <>
+            <Alert
+              type="warning"
+              message={`⏸ Envíos pausados${pausedInfo?.by ? ` por ${pausedInfo.by}` : ''}${pausedInfo?.reason ? `: "${pausedInfo.reason}"` : ''}`}
+            />
+            <button
+              className="btn-primary mt-3"
+              disabled={resumeMutation.isPending}
+              onClick={handleResumeClick}
+            >
+              {resumeMutation.isPending ? 'Reanudando...' : t('Reanudar envíos')}
+            </button>
+          </>
+        ) : (
+          <button
+            className="mt-1 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#A32D2D] hover:bg-[#8A2626] transition-colors"
+            disabled={pauseMutation.isPending}
+            onClick={handlePauseClick}
+          >
+            {pauseMutation.isPending ? 'Pausando...' : t('⏸ Pausar todos los envíos')}
+          </button>
+        )}
+      </div>
+
+      {/* ── Volumen de envíos ── */}
+      <div className="card p-4">
+        <SectionTitle>{t('Volumen de envíos')}</SectionTitle>
+        <p className="text-xs text-[#475569] mb-3">
+          Para correlacionar un bloqueo con lo que se mandó, sin ir a buscarlo en logs de Celery.
+          No incluye OTP (esos no dejan registro en esta tabla).
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="p-3 bg-[#F5F6FA] rounded-xl">
+            <p className="text-xs text-[#475569]">{t('Última hora')}</p>
+            <p className="text-lg font-semibold">
+              {volumeStats?.last_hour?.sent ?? '—'}
+              <span className="text-xs font-normal text-[#475569]"> {t('enviados')}</span>
+            </p>
+            {!!volumeStats?.last_hour?.failed && (
+              <p className="text-xs text-[#A32D2D]">{volumeStats.last_hour.failed} {t('fallidos')}</p>
+            )}
+          </div>
+          <div className="p-3 bg-[#F5F6FA] rounded-xl">
+            <p className="text-xs text-[#475569]">{t('Últimas 24 horas')}</p>
+            <p className="text-lg font-semibold">
+              {volumeStats?.last_24h?.sent ?? '—'}
+              <span className="text-xs font-normal text-[#475569]"> {t('enviados')}</span>
+            </p>
+            {!!volumeStats?.last_24h?.failed && (
+              <p className="text-xs text-[#A32D2D]">{volumeStats.last_24h.failed} {t('fallidos')}</p>
+            )}
+          </div>
+        </div>
+
+        {volumeStats?.last_24h?.by_sent_by && Object.keys(volumeStats.last_24h.by_sent_by).length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {Object.entries(volumeStats.last_24h.by_sent_by as Record<string, number>).map(([origin, count]) => (
+              <span key={origin} className="text-xs px-2 py-1 rounded-full bg-[#E6F1FB] text-[#185FA5]">
+                {origin}: {count}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {Array.isArray(volumeStats?.hourly_24h) && volumeStats.hourly_24h.length > 0 && (() => {
+          const hourly = volumeStats.hourly_24h as { hour_bolivia: string; sent: number; failed: number }[]
+          const maxVal = Math.max(1, ...hourly.map((h) => h.sent + h.failed))
+          return (
+            <div>
+              <p className="text-xs text-[#475569] mb-2">{t('Por hora (últimas 24h, hora Bolivia)')}</p>
+              <div className="flex items-end gap-1 h-24">
+                {hourly.map((h) => (
+                  <div key={h.hour_bolivia} className="flex-1 flex flex-col items-center justify-end group relative">
+                    <div className="w-full flex flex-col justify-end" style={{ height: '100%' }}>
+                      {h.failed > 0 && (
+                        <div
+                          className="w-full bg-[#A32D2D] rounded-t-sm"
+                          style={{ height: `${(h.failed / maxVal) * 100}%` }}
+                          title={`${h.hour_bolivia} — ${h.failed} fallidos`}
+                        />
+                      )}
+                      <div
+                        className="w-full bg-[#185FA5]"
+                        style={{ height: `${(h.sent / maxVal) * 100}%` }}
+                        title={`${h.hour_bolivia} — ${h.sent} enviados`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between text-[10px] text-[#475569] mt-1">
+                <span>{hourly[0]?.hour_bolivia}</span>
+                <span>{hourly[hourly.length - 1]?.hour_bolivia}</span>
+              </div>
+            </div>
+          )
+        })()}
+      </div>
+
       {/* ── Estado de conexión ── */}
       <div className="card p-4">
         <SectionTitle
@@ -112,6 +260,11 @@ export function BotTab() {
           Manda un WhatsApp real a un número para confirmar que todo el pipeline funciona
           (backend → Celery → whatsapp-service → WhatsApp).
         </p>
+        {isPaused && (
+          <div className="mb-2">
+            <Alert type="warning" message="Los envíos están pausados — el mensaje de prueba quedará en espera y no llegará hasta que reanudes." />
+          </div>
+        )}
         {testError && <div className="mb-2"><Alert type="error" message={testError} /></div>}
         {testOk && <div className="mb-2"><Alert type="success" message="Mensaje encolado. Debería llegar en unos segundos." /></div>}
         <div className="flex gap-2">

@@ -31,6 +31,7 @@ from app.core.phone import normalize_bo_phone, InvalidPhoneError
 from app.db.database import AsyncSessionLocal, engine, run_task_with_engine_cleanup
 from app.models.models import WhatsAppConversation, WhatsAppMessage, WhatsAppAudience
 from app.services.whatsapp_throttle import wait_for_whatsapp_slot
+from app.services.whatsapp_pause import WhatsAppPausedError
 
 
 class _TransientSendError(Exception):
@@ -40,6 +41,19 @@ class _TransientSendError(Exception):
     reiniciando, etc.) — dispara un reintento de la tarea en vez de
     marcar el mensaje como fallido de una.
     """
+
+
+# Cada cuánto reintenta una tarea que se topó con el kill switch prendido
+# (whatsapp_pause.py). Deliberadamente NO usa task.retry(): eso comparte
+# el contador `task.request.retries` con _TransientSendError, y una pausa
+# larga (el kill switch puede quedar prendido horas mientras se investiga
+# algo) agotaría el presupuesto de 3 reintentos pensado para fallas reales
+# de whatsapp-service — dejando el mensaje FAILED apenas se reanuda, por
+# una causa que no tuvo nada que ver con whatsapp-service. En cambio, se
+# reencola una tarea NUEVA (apply_async), con su propio contador en cero,
+# y esta invocación simplemente termina sin loguear nada en la BD (no es
+# ni SENT ni FAILED todavía, solo está esperando).
+WHATSAPP_PAUSE_RETRY_SECONDS = 60
 
 
 # Contactos con privacidad de número activada en WhatsApp (@lid) no tienen
@@ -147,6 +161,20 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
             await _log_message(phone, message, audience, user_id, related_entity_type, related_entity_id, sent_by,
                                 status="FAILED", error_detail=error_detail)
             return
+    except WhatsAppPausedError:
+        logger.warning(
+            f"WhatsApp a {phone} en espera: kill switch activo, "
+            f"reencolando en {WHATSAPP_PAUSE_RETRY_SECONDS}s"
+        )
+        send_whatsapp_message.apply_async(
+            kwargs=dict(
+                phone=phone, message=message, audience=audience, user_id=user_id,
+                related_entity_type=related_entity_type, related_entity_id=related_entity_id,
+                sent_by=sent_by,
+            ),
+            countdown=WHATSAPP_PAUSE_RETRY_SECONDS,
+        )
+        return
     except httpx.RequestError as exc:
         # Error de red hacia whatsapp-service (ej. el proceso se está
         # reiniciando justo en este instante) — también transitorio.
@@ -272,6 +300,20 @@ async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: st
                                 related_entity_type, related_entity_id, sent_by,
                                 status="FAILED", error_detail=error_detail)
             return
+    except WhatsAppPausedError:
+        logger.warning(
+            f"Documento WhatsApp a {phone} en espera: kill switch activo, "
+            f"reencolando en {WHATSAPP_PAUSE_RETRY_SECONDS}s"
+        )
+        send_whatsapp_document.apply_async(
+            kwargs=dict(
+                phone=phone, pdf_base64=pdf_base64, filename=filename, caption=caption,
+                audience=audience, user_id=user_id, related_entity_type=related_entity_type,
+                related_entity_id=related_entity_id, sent_by=sent_by,
+            ),
+            countdown=WHATSAPP_PAUSE_RETRY_SECONDS,
+        )
+        return
     except httpx.RequestError as exc:
         raise _TransientSendError(f"Error de red hacia whatsapp-service: {exc}") from exc
     except _TransientSendError as exc:

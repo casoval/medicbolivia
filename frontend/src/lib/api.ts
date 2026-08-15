@@ -1228,6 +1228,18 @@ export const whatsappAPI = {
   sendTestMessage: (data: { phone: string; message?: string }) =>
     api.post('/whatsapp/test-message', data),
 
+  // Kill switch — frena TODO envío de WhatsApp al instante (ver
+  // backend/app/services/whatsapp_pause.py). `getStatus()` de arriba ya
+  // trae el campo `paused` embebido; `getPauseStatus` es para cuando se
+  // necesita ese dato solo, sin pegarle también a whatsapp-service.
+  getPauseStatus: () => api.get('/whatsapp/pause-status'),
+  pause: (reason?: string) => api.post('/whatsapp/pause', { reason }),
+  resume: () => api.post('/whatsapp/resume'),
+
+  // Historial agregado de volumen — para correlacionar un bloqueo con
+  // lo que se mandó, sin ir a buscarlo en logs de Celery.
+  getVolumeStats: () => api.get('/whatsapp/volume-stats'),
+
   // Pestaña 2 — recordatorios automáticos
   listReminders: () => api.get('/whatsapp/reminders'),
   createReminder: (data: {

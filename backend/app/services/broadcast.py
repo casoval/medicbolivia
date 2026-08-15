@@ -36,9 +36,12 @@ from app.services.notify import push_notification_ws
 
 # Espaciado aleatorio entre un envío de WhatsApp y el siguiente dentro de
 # un mismo broadcast. Rango amplio a propósito (no un número redondo fijo
-# tipo "cada 5s") para que el patrón de tiempos no sea reconocible.
-MIN_GAP_SECONDS = 4
-MAX_GAP_SECONDS = 15
+# tipo "cada 5s") para que el patrón de tiempos no sea reconocible. Subido
+# de 4-15s a 12-35s tras el bloqueo del 13→14 de agosto — ver la constante
+# equivalente en reminder_tasks.py (SCHEDULED_REMINDER_MIN_GAP_SECONDS)
+# para el detalle completo de por qué este valor.
+MIN_GAP_SECONDS = 12
+MAX_GAP_SECONDS = 35
 
 # El admin redacta un único título/cuerpo que se manda tal cual a todo un
 # segmento — eso es contenido 100% idéntico en volumen alto, justo el

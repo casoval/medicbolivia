@@ -36,6 +36,7 @@ import time
 from loguru import logger
 
 from app.core.redis_client import redis_client
+from app.services.whatsapp_pause import WhatsAppPausedError, is_whatsapp_paused
 
 # Separación mínima real entre dos envíos consecutivos a whatsapp-service,
 # sin importar el origen. Deliberadamente chico (no son los 12-35s del
@@ -62,7 +63,19 @@ async def wait_for_whatsapp_slot(min_gap_seconds: float = WHATSAPP_GLOBAL_MIN_GA
     (el patrón que preocupa: dos mensajes en el mismo segundo real desde
     orígenes que no se conocen entre sí), no una exclusión mutua perfecta
     a nivel de milisegundos.
+
+    Raises:
+        WhatsAppPausedError: si el kill switch (whatsapp_pause.py) está
+            activo. Se chequea ACÁ, en el portón único hacia
+            whatsapp-service, para que sea imposible que un call site
+            nuevo se olvide de respetarlo. Deliberadamente falla rápido
+            (no espera a que se levante la pausa) — cada call site decide
+            qué hacer: OTP la propaga y responde al usuario ya, las
+            tareas de Celery la capturan y se reencolan solas más tarde.
     """
+    if await is_whatsapp_paused():
+        raise WhatsAppPausedError("Envíos de WhatsApp pausados por un admin")
+
     while True:
         now = time.time()
         last_raw = await redis_client.get(_LAST_SEND_KEY)
