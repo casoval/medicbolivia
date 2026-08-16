@@ -228,7 +228,20 @@ export function BotTab() {
 
         {reachable && (
           <div className="flex items-center gap-3 p-3 bg-[#F5F6FA] rounded-xl mt-2">
-            <div className={`w-2.5 h-2.5 rounded-full ${state === 'CONNECTED' ? 'bg-[#0F6E56]' : state === 'DOWN' || state === 'ERROR' ? 'bg-[#A32D2D]' : 'bg-[#185FA5] animate-pulse'}`} />
+            {/* Punto de estado: cuando está CONNECTED, un anillo verde se
+                expande y se desvanece detrás del punto sólido — el
+                clásico indicador "en vivo", mucho más visible que un
+                círculo estático a simple vistazo en un panel que se
+                revisa de reojo. Los demás estados (DOWN/ERROR/CONNECTING)
+                mantienen su propio color y comportamiento de antes. */}
+            {state === 'CONNECTED' ? (
+              <span className="relative flex w-2.5 h-2.5 shrink-0">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-[#0F6E56] opacity-75 animate-ping-slow" />
+                <span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-[#0F6E56]" />
+              </span>
+            ) : (
+              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${state === 'DOWN' || state === 'ERROR' ? 'bg-[#A32D2D]' : 'bg-[#185FA5] animate-pulse'}`} />
+            )}
             <div>
               <p className="text-sm font-medium">{STATE_LABEL[state] || state}</p>
               <p className="text-xs text-[#475569]">{t('Número vinculado vía whatsapp-service (Baileys)')}</p>
