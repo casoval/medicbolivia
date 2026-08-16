@@ -421,6 +421,23 @@ que requiere datos reales o personalizados (la app siempre tiene la info actuali
   registrarse (médicos reales por videoconsulta, recetas digitales, historia clínica, agendar o
   consultar al instante, etc.): respondé con entusiasmo pero breve, priorizando FAQ_CONTEXT si
   está presente más abajo.
+- Si preguntan "¿qué es esta invitación?", "¿quién me escribió?", "¿esto es real/spam?", o algo
+  similar (típico de médicos que reciben nuestra invitación formal por este mismo WhatsApp, ver
+  CONTACTO más abajo si es un lead identificado) — confirmá que es una invitación real de
+  MedicBolivia, no spam, y usá lo siguiente para responder con confianza (resumido en 2-3 líneas,
+  nunca lo repitas todo textual ni como un discurso):
+  · MedicBolivia es una plataforma de telemedicina boliviana hecha por médicos, para médicos —
+    la dirige el Dr. Javier F. Castro A., director médico, con más de 30 años de experiencia,
+    a cargo de toda la gestión profesional de la plataforma.
+  · El objetivo es resolver un problema real: la falta de conexión rápida entre médico y
+    paciente. La plataforma le da al paciente un primer contacto simple con el médico; si le
+    genera confianza, de ahí puede escalar a atención más completa según lo que el médico
+    ofrezca (incluso derivar a procedimientos o cirugías si corresponde).
+  · La gestión día a día es de un equipo de médicos e ingenieros trabajando juntos, pensado
+    para que la experiencia sea buena tanto para el profesional como para el paciente.
+  Si preguntan algo más puntual sobre cómo registrarse o qué gana como profesional, guialos a la
+  app o a FAQ_CONTEXT si está disponible — este bloque es solo para explicar de qué se trata la
+  invitación en sí, no reemplaza el flujo de registro.
 - Precios, horarios, especialidades puntuales, cómo agendar: si FAQ_CONTEXT tiene la respuesta
   exacta, usala. Si no la tenés, no inventes — decí que en la app ve la info real y actualizada.
 - Si preguntan qué tan bueno/confiable es el servicio, si "funciona de verdad", o algo similar
@@ -480,13 +497,31 @@ async def _load_faq_context(db, audience: str) -> str:
 
 def _parse_escalation_tag(reply: str) -> tuple[str, Optional[str]]:
     """Extrae [ESCALATE_ADMIN:motivo] del texto del agente de WhatsApp y lo
-    quita del mensaje visible. Devuelve (mensaje_limpio, motivo_o_None)."""
+    quita del mensaje visible. Devuelve (mensaje_limpio, motivo_o_None).
+
+    Maneja también el tag SIN cerrar (ej. "...[ESCALATE_ADMIN:quiere pro")
+    — puede pasar si Gemini corta la generación justo en medio del tag por
+    el límite de max_output_tokens (ver run_whatsapp_agent). El prompt
+    instruye a poner el tag AL FINAL del mensaje, después del texto
+    visible para el paciente — es la parte con más chance de quedar
+    afuera si la respuesta se acerca al límite. Sin este fallback, el
+    regex original nunca matchea (no hay ']' de cierre) y el tag roto
+    queda LITERAL en el mensaje que le llega al paciente.
+    """
     match = re.search(r'\[ESCALATE_ADMIN:([^\]]*)\]', reply)
-    if not match:
-        return reply.strip(), None
-    reason = match.group(1).strip() or "Sin motivo especificado por el agente"
-    clean = re.sub(r'\[ESCALATE_ADMIN:[^\]]*\]', '', reply).strip()
-    return clean, reason
+    if match:
+        reason = match.group(1).strip() or "Sin motivo especificado por el agente"
+        clean = re.sub(r'\[ESCALATE_ADMIN:[^\]]*\]', '', reply).strip()
+        return clean, reason
+
+    # Tag abierto pero nunca cerrado — truncamiento a mitad de tag.
+    broken = re.search(r'\[ESCALATE_ADMIN:([^\]]*)$', reply)
+    if broken:
+        reason = broken.group(1).strip() or "Sin motivo especificado por el agente (respuesta truncada)"
+        clean = reply[:broken.start()].strip()
+        return clean, reason
+
+    return reply.strip(), None
 
 
 # Saludo puro (ej. "hola", "buenas tardes!", "hey") — sin ninguna otra
@@ -514,6 +549,7 @@ async def run_whatsapp_agent(
     contact_name: Optional[str] = None,
     audience: str = "PUBLIC",
     db=None,
+    doctor_lead_name: Optional[str] = None,
 ) -> dict:
     """
     Genera la respuesta corta que el agente manda por WhatsApp. No usa
@@ -525,6 +561,19 @@ async def run_whatsapp_agent(
     la plataforma si es un User registrado, o el pushname de WhatsApp) para
     poder saludar por nombre y distinguir paciente/profesional/desconocido.
 
+    `doctor_lead_name`: viene resuelto por el webhook cuando el número NO es
+    un User registrado pero SÍ coincide con un DoctorLead (ver
+    app/api/v1/endpoints/admin.py::invite_doctor_lead — la campaña de
+    captación de médicos manda una invitación formal por este mismo
+    WhatsApp). Sin esto, un médico invitado que responde a esa invitación
+    se trataba como "contacto aún no identificado" — el agente no tenía
+    forma de saber que ya recibió una invitación y contestaba genérico.
+    Con esto: (1) el prompt sabe que es justo esa persona invitada, y
+    (2) se carga FAQ de PROFESSIONAL en vez de la genérica de PUBLIC (ver
+    más abajo), porque un médico preguntando "¿de qué se trata?" necesita
+    la info de profesional (cómo atender consultas, cobros, etc.), no la
+    de paciente.
+
     Devuelve {"message": str, "escalate": bool, "escalation_reason": str|None}
     — a diferencia de la versión anterior (que devolvía solo el texto), el
     caller necesita saber si hay que marcar la conversación para admin.
@@ -535,19 +584,45 @@ async def run_whatsapp_agent(
         audience, "contacto aún no identificado en la plataforma"
     )
     contacto = f"Tipo: {tipo}"
-    if contact_name:
+    if doctor_lead_name:
+        # Ver docstring del parámetro más arriba. Esto pisa la línea
+        # genérica de "contacto aún no identificado" — es justo lo que
+        # queremos: acá SÍ sabemos quién es y por qué escribe.
+        contacto = (
+            f"Tipo: médico (Dr./Dra. {doctor_lead_name}) al que el equipo de MedicBolivia le mandó "
+            f"una invitación formal por este mismo WhatsApp para sumarse a la plataforma como "
+            f"profesional. Todavía NO tiene cuenta creada — si pregunta por la invitación, "
+            f"confirmá que la mandamos nosotros y resolvé su duda puntual; si quiere registrarse, "
+            f"guialo a hacerlo desde la app."
+        )
+    elif contact_name:
         contacto = f"Nombre: {contact_name}\n{contacto}"
     system += f"\n\nCONTACTO:\n{contacto}"
 
     if db and not _is_bare_greeting(message):
-        faq_audience = audience if audience in ("PATIENT", "PROFESSIONAL") else "GENERAL"
+        # Un DoctorLead pregunta como médico (cobros, agenda, cómo atiende
+        # consultas) aunque `audience` siga en PUBLIC (no es User todavía)
+        # — sin esto cargaba FAQ genérica/de paciente, no la de profesional.
+        faq_audience = "PROFESSIONAL" if doctor_lead_name else (
+            audience if audience in ("PATIENT", "PROFESSIONAL") else "GENERAL"
+        )
         faq_text = await _load_faq_context(db, faq_audience)
         if faq_text:
             system += f"\n\nFAQ_CONTEXT (respuestas oficiales verificadas por el equipo, priorizalas):\n{faq_text}"
 
     contents = _build_contents(history or [], message)
     try:
-        reply = await _call_gemini(system, contents, max_tokens=220)
+        # Antes 220 — muy justo: el prompt pide "máximo 2-3 líneas", pero
+        # cuando corresponde derivar a admin (ver DERIVAR A ADMINISTRACIÓN
+        # arriba) el modelo tiene que sumar el mensaje visible al paciente
+        # MÁS el tag [ESCALATE_ADMIN:...] al final — y 220 tokens alcanzaba
+        # para cortar la generación a mitad del tag, dejando el tag roto
+        # literal en el WhatsApp del paciente (ver _parse_escalation_tag,
+        # ahora con fallback para ese caso, pero mejor evitarlo de raíz).
+        # 500 da margen de sobra sin presionar al modelo a escribir más —
+        # sigue siendo un TECHO, no un objetivo; el "2-3 líneas" del
+        # prompt sigue siendo la instrucción real de longitud.
+        reply = await _call_gemini(system, contents, max_tokens=500)
         clean_reply, escalation_reason = _parse_escalation_tag(reply)
         return {
             "message": clean_reply,

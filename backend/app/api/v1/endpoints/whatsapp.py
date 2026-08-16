@@ -36,7 +36,7 @@ from app.services.registration_verification import (
 )
 from app.models.models import (
     User, Patient, Professional, Admin, WhatsAppConversation, WhatsAppMessage, WhatsAppAudience,
-    AgentConfig, ReminderRule, ReminderLog, DBBackupConfig, DBBackupLog,
+    AgentConfig, ReminderRule, ReminderLog, DBBackupConfig, DBBackupLog, DoctorLead,
 )
 from app.tasks.whatsapp_tasks import send_whatsapp_message
 from app.tasks.backup_tasks import run_backup_now
@@ -853,6 +853,19 @@ async def receive_inbound_message(
         user = user_result.scalar_one_or_none()
     audience = user.role.value if user else WhatsAppAudience.PUBLIC.value
 
+    # Si no es un User registrado, puede ser un médico al que le mandamos
+    # la invitación por WhatsApp desde /admin/doctor-leads (ver admin.py::
+    # invite_doctor_lead) — hoy el agente no tenía forma de saber que
+    # quien escribe es justo ese prospecto respondiendo a esa invitación
+    # específica, y contestaba genérico como a cualquier desconocido. Con
+    # esto el prompt sabe que es un médico ya invitado, y carga FAQ de
+    # profesional en vez de la genérica/paciente (ver run_whatsapp_agent).
+    doctor_lead = None
+    if user is None and is_resolved:
+        local_format = phone[3:] if phone.startswith("591") and len(phone) == 11 else phone
+        lead_result = await db.execute(select(DoctorLead).where(DoctorLead.phone.in_([phone, local_format])))
+        doctor_lead = lead_result.scalar_one_or_none()
+
     conv_result = await db.execute(select(WhatsAppConversation).where(WhatsAppConversation.phone == phone))
     conversation = conv_result.scalar_one_or_none()
     if conversation is None:
@@ -970,6 +983,7 @@ async def receive_inbound_message(
             contact_name=display_name if display_name != conversation.phone else None,
             audience=audience,
             db=db,
+            doctor_lead_name=doctor_lead.full_name if doctor_lead else None,
         )
         reply_text = result["message"]
 

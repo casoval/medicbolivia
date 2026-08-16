@@ -74,6 +74,13 @@ WHATSAPP_PAUSE_RETRY_SECONDS = 60
 # nunca baneado) y su piso para respuestas de chat en vivo es de 5-10s,
 # vía una cola secuencial en su bot Node — nunca instantáneo.
 #
+# Piso subido de 5s a 8s (16-ago, tras probar en prod): con 5s, un
+# mensaje corto (poca parte proporcional) podía sentirse "instantáneo" en
+# la práctica aunque objetivamente ya fuera mucho más lento que el <5s
+# mecánico de antes — 8s da más margen para que hasta el mensaje más
+# corto se perciba con una pausa real, sin alejarse del rango 5-10s de
+# centro_terapias.
+#
 # HUMAN_REPLY_FLOOR_SECONDS: mínimo absoluto, ni el mensaje más corto baja
 # de acá.
 # HUMAN_REPLY_CHARS_PER_SECOND: velocidad de "tipeo" simulada para la
@@ -87,7 +94,7 @@ WHATSAPP_PAUSE_RETRY_SECONDS = 60
 # "pensado", se ve roto/colgado desde el punto de vista del usuario, y
 # además supera el TTL de "escribiendo..." de WhatsApp, ver
 # whatsapp-service/src/index.js::/typing).
-HUMAN_REPLY_FLOOR_SECONDS = 5.0
+HUMAN_REPLY_FLOOR_SECONDS = 8.0
 HUMAN_REPLY_CHARS_PER_SECOND = 14.0
 HUMAN_REPLY_EXTRA_CAP_SECONDS = 12.0
 
