@@ -213,10 +213,11 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
             await asyncio.sleep(_human_reply_delay_seconds(message))
 
         # Mismo piso global que usa el OTP síncrono (ver
-        # whatsapp_throttle.py) — el rate_limit de Celery en el decorador
-        # de esta tarea solo protege ráfagas DENTRO de send_whatsapp_message;
-        # esto además coordina contra send_whatsapp_document (bucket
-        # separado) y contra el envío de OTP (que no pasa por Celery).
+        # whatsapp_throttle.py) — este es el único gate real antes de
+        # tocar whatsapp-service (ver comentario en el decorador de
+        # send_whatsapp_message sobre por qué ya no hay rate_limit acá);
+        # coordina contra send_whatsapp_document y contra el envío de
+        # OTP (que no pasa por Celery) igual.
         await wait_for_whatsapp_slot()
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
@@ -281,16 +282,27 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
     name="app.tasks.whatsapp_tasks.send_whatsapp_message",
     max_retries=3,
     default_retry_delay=30,
-    # Techo real de arranques por minuto, sin importar de dónde vino el
-    # .delay() (evento instantáneo, cron de citas, cron de no leídos,
-    # broadcast, o /whatsapp/test-message). El countdown/jitter de cada
-    # mecanismo solo demora CUÁNDO una tarea se vuelve elegible; con
-    # concurrency=4 en el worker (ver ecosystem.config.js), dos tareas de
-    # mecanismos distintos que se vuelven elegibles en el mismo segundo
-    # igual se ejecutan en paralelo. rate_limit lo evita en la única
-    # puerta por la que pasa todo — 3/m ≈ un envío cada ~20s como piso
-    # duro, siga o no cargado el worker.
-    rate_limit="3/m",
+    # Antes tenía rate_limit="3/m" acá (techo de ~1 arranque cada 20s,
+    # sin importar el origen del .delay()). Se sacó porque dejó de sumar
+    # protección real y pasó a ser un cuello de botella:
+    #   - En horas pico con >3 conversaciones de chat en vivo en el mismo
+    #     minuto, el rate_limit encolaba respuestas del agente detrás de
+    #     su propio piso de 20s, aunque el worker (concurrency=4, ver
+    #     ecosystem.config.js) tuviera hueco libre — sumándose ARRIBA del
+    #     human_delay de 5-19s ya pensado para esto (ver
+    #     _human_reply_delay_seconds), en vez de reemplazarlo.
+    #   - Contra los lotes (SCHEDULED_REMINDER_*_GAP_SECONDS / broadcast.py,
+    #     12-35s), el piso de 20s podía terminar comprimiendo el extremo
+    #     inferior del jitter que se subió a propósito tras el bloqueo del
+    #     13→14 de agosto.
+    # El caso real que un rate_limit por-nombre-de-tarea busca evitar —dos
+    # envíos de orígenes distintos saliendo en el mismo instante real—
+    # ya lo cubre wait_for_whatsapp_slot() (whatsapp_throttle.py): un
+    # piso GLOBAL de 3s en Redis, cross-proceso, que corre justo antes del
+    # POST real a whatsapp-service. Ese mecanismo es estrictamente mejor
+    # acá porque además cubre el OTP síncrono y send_whatsapp_document,
+    # que el rate_limit de esta tarea nunca vio (bucket separado por
+    # nombre de tarea). No agregar rate_limit de vuelta sin releer esto.
 )
 def send_whatsapp_message(
     self,
@@ -366,8 +378,9 @@ async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: st
 
     try:
         # Ver comentario equivalente en _send_and_log — mismo piso global,
-        # necesario acá también porque send_whatsapp_document tiene su
-        # PROPIO bucket de rate_limit, separado del de send_whatsapp_message.
+        # necesario acá también porque este es el único gate real que
+        # coordina send_whatsapp_document contra send_whatsapp_message y
+        # contra el OTP síncrono.
         await wait_for_whatsapp_slot()
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
@@ -425,13 +438,16 @@ async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: st
     name="app.tasks.whatsapp_tasks.send_whatsapp_document",
     max_retries=3,
     default_retry_delay=30,
-    # Mismo criterio que send_whatsapp_message — ver comentario ahí.
-    # OJO: el rate_limit de Celery es POR TASK NAME, no compartido entre
-    # las dos tareas. Hoy send_whatsapp_document solo se usa para el PDF
-    # de invitación a médicos (volumen bajo), así que en la práctica no
-    # compite con send_whatsapp_message por la misma sesión de WhatsApp
-    # en el mismo segundo — pero si el volumen de documentos crece, esto
-    # deja de ser cierto y hay que unificar el límite (ver nota abajo).
+    # A diferencia de send_whatsapp_message (ver su decorador: ahí se
+    # sacó el rate_limit porque competía con human_delay y con los gaps
+    # de lote), esta tarea SÍ lo conserva: no tiene human_delay ni jitter
+    # propio, y sin un piso de arranque una ráfaga de PDFs podría volcarse
+    # entera al worker de una. OJO: el rate_limit de Celery es POR TASK
+    # NAME, no compartido entre las dos tareas. Hoy send_whatsapp_document
+    # solo se usa para el PDF de invitación a médicos (volumen bajo), así
+    # que en la práctica no compite con send_whatsapp_message por la misma
+    # sesión de WhatsApp en el mismo segundo — pero si el volumen de
+    # documentos crece, esto deja de ser cierto y hay que revisarlo.
     rate_limit="3/m",
 )
 def send_whatsapp_document(

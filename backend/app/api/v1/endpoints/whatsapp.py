@@ -204,10 +204,11 @@ class TestMessageRequest(BaseModel):
     message: str = "Mensaje de prueba desde el panel de MedicBolivia ✅"
 
 
-# Cooldown por admin para /test-message. No reemplaza al rate_limit de
-# Celery ni al piso global de whatsapp_throttle.py (esos siguen siendo la
-# última línea de defensa real contra whatsapp-service) — esto es una
-# capa aparte, PREVIA a encolar nada, pensada para el patrón que generó
+# Cooldown por admin para /test-message. No reemplaza al piso global de
+# whatsapp_throttle.py (esa sigue siendo la última línea de defensa real
+# contra whatsapp-service; send_whatsapp_message ya NO tiene rate_limit
+# propio — ver su decorador en whatsapp_tasks.py) — esto es una capa
+# aparte, PREVIA a encolar nada, pensada para el patrón que generó
 # el bloqueo de la noche del 13→14: varios admins probando el bot a la
 # vez desde el panel, cada click encolando un mensaje real sin ningún
 # freno propio. 45s alcanza para no estorbar una prueba genuina ("¿llegó

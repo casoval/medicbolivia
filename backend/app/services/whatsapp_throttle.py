@@ -5,18 +5,17 @@ sin importar qué parte del sistema lo dispara.
 
 Por qué existe esto y no alcanza con el rate_limit de Celery:
   - `rate_limit` en las tareas de whatsapp_tasks.py (ver ese archivo) solo
-    protege lo que pasa POR Celery. Usa un TokenBucket con capacity=1 por
-    tarea (ver celery/worker/consumer/consumer.py::TokenBucket(limit,
-    capacity=1)), así que dentro de una misma tarea nunca hay ráfaga —
-    pero es un bucket por NOMBRE de tarea (send_whatsapp_message y
-    send_whatsapp_document tienen cada uno el suyo, sin coordinarse entre
-    sí), y sobre todo: no ve nada que no pase por .delay()/.apply_async().
+    protege lo que pasa POR Celery, y es un bucket por NOMBRE de tarea
+    (no coordina entre tareas distintas). Hoy solo send_whatsapp_document
+    lo conserva — send_whatsapp_message lo sacó porque competía con su
+    propio human_delay/jitter (ver su decorador). Aunque las dos lo
+    tuvieran, seguiría sin ver nada que no pase por .delay()/.apply_async().
   - El envío de OTP (app/services/whatsapp.py, llamado síncrono desde
     /auth/otp/send y /auth/password/forgot) le pega a whatsapp-service
-    DIRECTO, sin encolar nada — nunca pasa por Celery, así que el
-    rate_limit no lo ve. Solo tenía cooldown POR TELÉFONO, no un límite
-    global: nada impedía que 5 OTPs a números distintos, o un OTP y un
-    recordatorio en background, salieran en el mismo segundo real.
+    DIRECTO, sin encolar nada — nunca pasa por Celery, así que ningún
+    rate_limit de Celery lo ve. Solo tenía cooldown POR TELÉFONO, no un
+    límite global: nada impedía que 5 OTPs a números distintos, o un OTP
+    y un recordatorio en background, salieran en el mismo segundo real.
 
 Esta es la única puerta de entrada real hacia whatsapp-service (una sola
 sesión de whatsapp-web.js, un solo Chromium) — así que el piso tiene que
