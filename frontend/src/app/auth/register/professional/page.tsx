@@ -1,6 +1,6 @@
 'use client'
 // src/app/auth/register/professional/page.tsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -43,6 +43,21 @@ export default function RegisterProfessionalPage() {
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  // Ver misma nota en app/auth/register/patient/page.tsx: si un admin
+  // desactivó el kill switch de verificación (panel IA → Verificación de
+  // registro), este paso deja de ser obligatorio.
+  const [verificationRequired, setVerificationRequired] = useState(true)
+  const [configLoaded, setConfigLoaded] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    authAPI.getRegistrationConfig()
+      .then((res) => { if (active) setVerificationRequired(res.data.phone_verification_required) })
+      .catch(() => { /* si falla la consulta, se mantiene obligatoria por defecto */ })
+      .finally(() => { if (active) setConfigLoaded(true) })
+    return () => { active = false }
+  }, [])
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
   }
@@ -66,7 +81,7 @@ export default function RegisterProfessionalPage() {
     }
 
     if (form.password !== form.confirm_password) { setError(t('Las contraseñas no coinciden')); return }
-    if (!phoneVerified) { setError(t('Verificá tu número de celular por WhatsApp antes de continuar')); return }
+    if (verificationRequired && !phoneVerified) { setError(t('Verificá tu número de celular por WhatsApp antes de continuar')); return }
 
     setLoading(true)
     try {
@@ -177,13 +192,15 @@ export default function RegisterProfessionalPage() {
                 onChange={(phone) => { setForm((prev) => ({ ...prev, phone })); setPhoneVerified(false) }}
                 required
               />
-              <div className="mt-2">
-                <PhoneVerification
-                  phone={form.phone}
-                  verified={phoneVerified}
-                  onVerified={() => setPhoneVerified(true)}
-                />
-              </div>
+              {verificationRequired && (
+                <div className="mt-2">
+                  <PhoneVerification
+                    phone={form.phone}
+                    verified={phoneVerified}
+                    onVerified={() => setPhoneVerified(true)}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Email — opcional para profesionales, el celular ya es el
@@ -209,7 +226,9 @@ export default function RegisterProfessionalPage() {
               <span className="text-[#E24B4A]">*</span> {t('Campos obligatorios')}
             </p>
 
-            <button type="submit" disabled={loading || !phoneVerified}
+            <button
+              type="submit"
+              disabled={loading || !configLoaded || (verificationRequired && !phoneVerified)}
               className="w-full bg-[#0F6E56] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#085041] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
               {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />}
               {loading ? t('Registrando...') : t('Crear cuenta profesional')}

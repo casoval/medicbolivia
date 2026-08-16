@@ -1,10 +1,14 @@
 """
 app/api/v1/endpoints/whatsapp.py
-Backend del menú "IA" del panel admin (4 pestañas):
-  1. GET  /whatsapp/status                 → monitor del bot
-  2. CRUD /whatsapp/reminders               → recordatorios automáticos
-  3. GET  /whatsapp/conversations           → inbox + toggle agente
-  4. CRUD /whatsapp/backup-config           → automatización BD → Gmail
+Backend del menú "IA" del panel admin:
+  1. GET  /whatsapp/status                          → monitor del bot
+  2. CRUD /whatsapp/reminders                        → recordatorios automáticos
+  3. GET  /whatsapp/conversations                    → inbox + toggle agente
+  4. POST /whatsapp/broadcast                        → mensajería masiva
+  5. CRUD /whatsapp/backup-config                    → automatización BD → Gmail
+  6. GET/POST /whatsapp/registration-verification-*  → hace opcional la
+     verificación de teléfono en el registro (kill switch aparte del de
+     envíos, para cuando el bot no está disponible)
 
   + POST /whatsapp/webhook/inbound          → llamado por whatsapp-service
     (Node/whatsapp-web.js) cada vez que llega un mensaje nuevo al número real.
@@ -27,6 +31,9 @@ from app.core.config import settings
 from app.core.phone import normalize_bo_phone, InvalidPhoneError
 from app.core.redis_client import security_redis_client
 from app.services.whatsapp_pause import get_pause_info, set_whatsapp_paused
+from app.services.registration_verification import (
+    is_phone_verification_required, get_disabled_info, set_phone_verification_required,
+)
 from app.models.models import (
     User, Patient, Professional, Admin, WhatsAppConversation, WhatsAppMessage, WhatsAppAudience,
     AgentConfig, ReminderRule, ReminderLog, DBBackupConfig, DBBackupLog,
@@ -99,6 +106,49 @@ async def pause_whatsapp(data: PauseRequest, current_user: User = Depends(get_cu
 async def resume_whatsapp(current_user: User = Depends(get_current_admin)):
     await set_whatsapp_paused(False, admin_email=current_user.email or "")
     return {"paused": False}
+
+
+# ═══════════════════════════════════════════════════════
+# PESTAÑA 6 — Verificación de teléfono en el registro
+# ═══════════════════════════════════════════════════════
+# Kill switch separado del de arriba: aquel frena el ENVÍO de mensajes;
+# este hace OPCIONAL el paso de verificación dentro del registro de
+# pacientes/profesionales, para usarlo cuando el bot no está disponible
+# (caído, número baneado, corte del proveedor) y no se quiere frenar el
+# alta de cuentas nuevas mientras se resuelve. Ver
+# app/services/registration_verification.py y los checks en
+# app/api/v1/endpoints/auth.py (register_patient / register_professional).
+
+@router.get("/registration-verification-status", summary="Estado de la verificación de teléfono en el registro")
+async def get_registration_verification_status(current_user: User = Depends(get_current_admin)):
+    info = await get_disabled_info()
+    return {"required": info is None, "info": info}
+
+
+class RegistrationVerificationRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+@router.post("/registration-verification/disable", summary="Desactiva la verificación de teléfono obligatoria en el registro")
+async def disable_registration_verification(
+    data: RegistrationVerificationRequest, current_user: User = Depends(get_current_admin)
+):
+    """
+    Con esto apagado, /auth/register/patient y /auth/register/professional
+    dejan de exigir que el teléfono haya pasado por /auth/otp/send +
+    /auth/otp/verify, y las pantallas de registro dejan de mostrar el paso
+    y el botón de "Verificar número por WhatsApp" — se puede crear la
+    cuenta directo con solo el número, sin confirmarlo. Efecto inmediato,
+    sin reiniciar nada.
+    """
+    await set_phone_verification_required(False, reason=data.reason or "", admin_email=current_user.email or "")
+    return {"required": False, "reason": data.reason}
+
+
+@router.post("/registration-verification/enable", summary="Reactiva la verificación de teléfono obligatoria en el registro")
+async def enable_registration_verification(current_user: User = Depends(get_current_admin)):
+    await set_phone_verification_required(True, admin_email=current_user.email or "")
+    return {"required": True}
 
 
 @router.get("/volume-stats", summary="Historial agregado de volumen de envíos (para correlacionar con un incidente)")

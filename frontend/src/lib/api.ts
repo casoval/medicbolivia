@@ -375,6 +375,11 @@ export function getErrorMessage(error: unknown): string {
 }
 
 export const authAPI = {
+  // Público, sin sesión: lo consultan las pantallas de registro para
+  // saber si mostrar el paso de verificación por WhatsApp. Refleja el
+  // kill switch que un admin prende/apaga en IA → Verificación de registro.
+  getRegistrationConfig: () => api.get<{ phone_verification_required: boolean }>('/auth/registration-config'),
+
   registerPatient: (data: {
     phone: string; password: string; first_name: string
     last_name: string; ci: string; birth_date: string
@@ -1302,6 +1307,16 @@ export const whatsappAPI = {
   }) => api.put('/whatsapp/backup-config', data),
   sendBackupNow: () => api.post('/whatsapp/backup-config/send-now'),
   getBackupLogs: () => api.get('/whatsapp/backup-logs'),
+
+  // Pestaña 6 — kill switch de verificación de teléfono en el registro
+  // (independiente del kill switch de envíos de arriba: este hace
+  // opcional el paso de OTP dentro de /auth/register/patient y
+  // /auth/register/professional, para usar cuando el bot no está
+  // disponible y no se quiere frenar el alta de cuentas nuevas).
+  getRegistrationVerificationStatus: () => api.get('/whatsapp/registration-verification-status'),
+  disableRegistrationVerification: (reason?: string) =>
+    api.post('/whatsapp/registration-verification/disable', { reason }),
+  enableRegistrationVerification: () => api.post('/whatsapp/registration-verification/enable'),
 }
 
 // ── GAP 4: Historia clínica ──────────────────────────

@@ -30,8 +30,26 @@ from app.schemas.schemas import (
     ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest
 )
 from app.services.whatsapp import send_whatsapp_otp
+from app.services.registration_verification import is_phone_verification_required
 
 router = APIRouter()
+
+
+# ── GET /api/v1/auth/registration-config ─────────────
+@router.get(
+    "/registration-config",
+    status_code=status.HTTP_200_OK,
+    summary="Configuración pública de registro (si la verificación por WhatsApp es obligatoria)"
+)
+async def get_registration_config():
+    """
+    Público y sin autenticación a propósito: lo consultan las pantallas
+    de registro de paciente/profesional (que todavía no tienen sesión)
+    para decidir si mostrar el paso de verificación por WhatsApp o
+    saltarlo directo al formulario. Refleja en vivo el kill switch que
+    un admin prende/apaga desde el panel (IA → Verificación de registro).
+    """
+    return {"phone_verification_required": await is_phone_verification_required()}
 
 
 # ── POST /api/v1/auth/register/patient ──────────────
@@ -48,12 +66,17 @@ async def register_patient(
     db: AsyncSession = Depends(get_db)
 ):
     # El teléfono debe haber pasado por /auth/otp/send + /auth/otp/verify
-    # en los últimos 30 minutos antes de poder completar el registro.
-    if not await redis_client.get(f"phone_verified:{data.phone}"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verificá tu número de WhatsApp antes de registrarte."
-        )
+    # en los últimos 30 minutos antes de poder completar el registro —
+    # salvo que un admin haya apagado el kill switch de verificación
+    # (ver app/services/registration_verification.py), típicamente
+    # porque el bot de WhatsApp está caído o baneado y no se quiere
+    # frenar el alta de pacientes nuevos mientras se soluciona.
+    if await is_phone_verification_required():
+        if not await redis_client.get(f"phone_verified:{data.phone}"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Verificá tu número de WhatsApp antes de registrarte."
+            )
 
     # Verificar si ya existe el teléfono o email
     conditions = [User.phone == data.phone]
@@ -114,12 +137,15 @@ async def register_professional(
     db: AsyncSession = Depends(get_db)
 ):
     # El teléfono debe haber pasado por /auth/otp/send + /auth/otp/verify
-    # en los últimos 30 minutos antes de poder completar el registro.
-    if not await redis_client.get(f"phone_verified:{data.phone}"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verificá tu número de WhatsApp antes de registrarte."
-        )
+    # en los últimos 30 minutos antes de poder completar el registro —
+    # salvo que un admin haya apagado el kill switch de verificación
+    # (ver app/services/registration_verification.py).
+    if await is_phone_verification_required():
+        if not await redis_client.get(f"phone_verified:{data.phone}"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Verificá tu número de WhatsApp antes de registrarte."
+            )
 
     # Verificar si ya existe el teléfono o email (el email es opcional
     # acá — si no vino, solo chequeamos el teléfono; comparar

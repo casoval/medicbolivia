@@ -2,7 +2,7 @@
 // src/app/auth/register/patient/page.tsx
 // Registro de nuevo paciente
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -33,6 +33,24 @@ export default function RegisterPatientPage() {
   const [loading, setLoading] = useState(false)
   const [phoneVerified, setPhoneVerified] = useState(false)
 
+  // Si un admin desactivó el kill switch de verificación (panel IA →
+  // Verificación de registro, típicamente porque el bot de WhatsApp no
+  // está disponible), este paso deja de ser obligatorio: se oculta el
+  // bloque de PhoneVerification y no se exige phoneVerified para enviar
+  // el formulario. Por defecto (mientras carga o si la consulta falla)
+  // se asume obligatoria, que es el comportamiento seguro actual.
+  const [verificationRequired, setVerificationRequired] = useState(true)
+  const [configLoaded, setConfigLoaded] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    authAPI.getRegistrationConfig()
+      .then((res) => { if (active) setVerificationRequired(res.data.phone_verification_required) })
+      .catch(() => { /* si falla la consulta, se mantiene obligatoria por defecto */ })
+      .finally(() => { if (active) setConfigLoaded(true) })
+    return () => { active = false }
+  }, [])
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
   }
@@ -60,7 +78,7 @@ export default function RegisterPatientPage() {
       return
     }
 
-    if (!phoneVerified) {
+    if (verificationRequired && !phoneVerified) {
       setError(t('Verificá tu número de celular por WhatsApp antes de continuar'))
       return
     }
@@ -160,13 +178,15 @@ export default function RegisterPatientPage() {
                 onChange={(phone) => { setForm((prev) => ({ ...prev, phone })); setPhoneVerified(false) }}
                 required
               />
-              <div className="mt-2">
-                <PhoneVerification
-                  phone={form.phone}
-                  verified={phoneVerified}
-                  onVerified={() => setPhoneVerified(true)}
-                />
-              </div>
+              {verificationRequired && (
+                <div className="mt-2">
+                  <PhoneVerification
+                    phone={form.phone}
+                    verified={phoneVerified}
+                    onVerified={() => setPhoneVerified(true)}
+                  />
+                </div>
+              )}
             </div>
 
             <div>
@@ -189,7 +209,11 @@ export default function RegisterPatientPage() {
               <span className="text-[#E24B4A]">*</span> {t('Campos obligatorios')}
             </p>
 
-            <button type="submit" disabled={loading || !phoneVerified} className="btn-primary w-full flex items-center justify-center gap-2">
+            <button
+              type="submit"
+              disabled={loading || !configLoaded || (verificationRequired && !phoneVerified)}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
               {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin-slow" />}
               {loading ? t('Registrando...') : t('Crear cuenta')}
             </button>
