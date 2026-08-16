@@ -366,7 +366,8 @@ def _parse_action(reply: str) -> dict:
 async def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> str:
     """Llama a Gemini con el nuevo SDK google-genai y retorna el texto.
 
-    Dos cuidados de concurrencia acá, no cosméticos:
+    Tres cuidados acá, ninguno cosmético:
+
     1) client.models.generate_content (el cliente sync del SDK) es una
        llamada de red BLOQUEANTE. Si se corriera directo, con uvicorn
        --workers 2 cualquier otra request que caiga en el mismo worker
@@ -377,6 +378,21 @@ async def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> s
        NO se respeta y la llamada puede colgarse indefinidamente (googleapis/
        python-genai#911, #4031). No confiamos en eso: ponemos un timeout acá,
        a nivel de asyncio, que no depende del SDK.
+    3) thinking_budget=0 — GEMINI_MODEL ("gemini-2.5-flash") es un modelo
+       "thinking": por defecto razona internamente antes de escribir la
+       respuesta visible, y esos tokens de razonamiento SALEN del mismo
+       presupuesto que max_output_tokens (no son aparte). Con prompts más
+       largos (ej. el contexto de la invitación a médicos) el modelo podía
+       gastar la mayor parte del presupuesto pensando y cortar el texto
+       visible a mitad de palabra ("hola jackie, MedicBol") — de forma
+       inconsistente, porque cuánto "piensa" varía de una llamada a otra
+       aunque el prompt sea el mismo. Ninguno de los agentes acá (WhatsApp,
+       coordinador, onboarding, post-consulta, ayuda) necesita razonamiento
+       multi-paso: son respuestas conversacionales cortas guiadas por el
+       system prompt. thinking_budget=0 apaga el razonamiento por completo
+       en Flash (a diferencia de Pro, que exige un mínimo de 128 y no
+       permite desactivarlo) — todo max_output_tokens queda para el texto
+       real, y de paso baja la latencia.
     """
     def _sync_call() -> str:
         response = client.models.generate_content(
@@ -386,6 +402,7 @@ async def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> s
                 system_instruction=system,
                 max_output_tokens=max_tokens,
                 temperature=0.7,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
         return response.text
@@ -622,6 +639,17 @@ async def run_whatsapp_agent(
         # 500 da margen de sobra sin presionar al modelo a escribir más —
         # sigue siendo un TECHO, no un objetivo; el "2-3 líneas" del
         # prompt sigue siendo la instrucción real de longitud.
+        #
+        # Esto resuelve el corte "a mitad del tag" cuando el mensaje SÍ
+        # llega a escribirse. Pero había un segundo caso, más raro y más
+        # grave, que 220→500 no tocaba: con el prompt más largo (contexto
+        # de la invitación a médicos) a veces el modelo cortaba clavado al
+        # arrancar ("hola jackie, MedicBol") — eso no era el mensaje
+        # llegando al límite, era el razonamiento interno de Gemini
+        # (thinking, ver _call_gemini) comiéndose casi todo el presupuesto
+        # antes de escribir una sola palabra visible. Se arregla en la raíz
+        # con thinking_budget=0 en _call_gemini, no acá — este max_tokens=500
+        # sigue siendo válido tal cual, ahora sin competir con el thinking.
         reply = await _call_gemini(system, contents, max_tokens=500)
         clean_reply, escalation_reason = _parse_escalation_tag(reply)
         return {
