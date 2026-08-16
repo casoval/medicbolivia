@@ -1,6 +1,7 @@
 'use client'
 // src/app/admin/professionals/page.tsx — con filtro ciudad, contadores en tabs, mas datos y documentos de verificación
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -447,7 +448,7 @@ function DocThumbnail({ doc, onExpand, onReview, reviewing }: {
 function DocViewerModal({ doc, onClose }: { doc: ProfessionalDocItem; onClose: () => void }) {
   const { t } = useLanguage()
   const pdf = isPdfUrl(doc.url)
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-[#DDE1EE]">
@@ -468,7 +469,8 @@ function DocViewerModal({ doc, onClose }: { doc: ProfessionalDocItem; onClose: (
           </a>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -1338,7 +1340,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   }
 
   const age = getAge(local.birth_date)
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-[#DDE1EE]">
@@ -1828,7 +1830,8 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
           }}
         />
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
 

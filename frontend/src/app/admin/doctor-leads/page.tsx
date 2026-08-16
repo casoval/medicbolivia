@@ -4,6 +4,7 @@
 // (leads) hasta invitarlos por WhatsApp a probar la plataforma.
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ADMIN_NAV as NAV } from '@/lib/nav'
@@ -59,6 +60,11 @@ function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImpor
   const [city, setCity] = useState(BOLIVIA_CITIES[DEPARTMENTS[0]][0])
   const [error, setError] = useState('')
   const [importingId, setImportingId] = useState<string | null>(null)
+  // place_id de resultados importados durante esta sesión del modal. La
+  // bandera already_imported de cada resultado viene fija desde el momento
+  // de la búsqueda, así que sin esto el botón "Agregar como prospecto" se
+  // quedaba mostrándose para algo que el admin ya acababa de importar.
+  const [justImportedIds, setJustImportedIds] = useState<Set<string>>(new Set())
 
   const handleDepartmentChange = (dep: string) => {
     setDepartment(dep)
@@ -90,6 +96,7 @@ function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImpor
           ? `Teléfono encontrado sin normalizar: ${details.phone}`
           : undefined,
       } as any)
+      setJustImportedIds((prev) => new Set(prev).add(place.place_id))
       onImported()
     } catch (err) {
       setError(getErrorMessage(err))
@@ -98,8 +105,8 @@ function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImpor
     }
   }
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" onClick={onClose}>
       <div
         className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -172,7 +179,7 @@ function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImpor
                     </p>
                   )}
                 </div>
-                {place.already_imported ? (
+                {place.already_imported || justImportedIds.has(place.place_id) ? (
                   <span className="badge-gray shrink-0">{t('Ya en tu lista')}</span>
                 ) : (
                   <button
@@ -188,7 +195,8 @@ function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImpor
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -204,8 +212,8 @@ function AddLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     onError: (err) => setError(getErrorMessage(err)),
   })
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <p className="text-sm font-semibold mb-4">{t('Agregar prospecto manual')}</p>
         {error && <div className="mb-3"><Alert type="error" message={error} /></div>}
@@ -253,7 +261,8 @@ function AddLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -314,8 +323,8 @@ function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () 
     onError: (err) => setError(getErrorMessage(err)),
   })
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <p className="text-sm font-semibold mb-1">{t('Invitar por WhatsApp')}</p>
         <p className="text-xs text-[#475569] mb-4">{lead.full_name} · {lead.phone}</p>
@@ -360,7 +369,8 @@ function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
