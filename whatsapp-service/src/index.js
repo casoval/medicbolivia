@@ -271,7 +271,7 @@ function connectToWhatsApp() {
       }
 
       const contact = await msg.getContact().catch(() => null)
-      const contactName = contact?.pushname || contact?.name || null
+      const contactName = contact?.pushname || null
 
       await forwardInboundToBackend(phone, msg.from, text, contactName)
     } catch (err) {
