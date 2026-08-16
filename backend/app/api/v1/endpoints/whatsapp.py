@@ -616,6 +616,12 @@ async def send_manual_message(
         audience=conversation.audience,
         user_id=conversation.user_id,
         sent_by="ADMIN",
+        # Aunque lo tipeó un humano real, sigue siendo el mismo número/
+        # sesión de whatsapp-web.js que manda las respuestas del agente —
+        # que nunca salga con latencia cero es parte del mismo patrón de
+        # comportamiento que cuidamos para el bot (ver human_delay en
+        # whatsapp_tasks.py).
+        human_delay=True,
     )
     return {"status": "queued"}
 
@@ -865,6 +871,7 @@ async def receive_inbound_message(
                     related_entity_type="Consultation",
                     related_entity_id=pending.id,
                     sent_by="BOT",
+                    human_delay=True,
                 )
                 conversation.unread_count = 0
                 await db.commit()
@@ -934,6 +941,7 @@ async def receive_inbound_message(
             related_entity_type="WhatsAppConversation",
             related_entity_id=conversation.id,
             sent_by="BOT",
+            human_delay=True,
         )
 
     return {"status": "received", "conversation_id": conversation.id}

@@ -24,6 +24,12 @@
  *   POST /send-document → { to, filename, caption, base64, mimetype } →
  *        manda un archivo adjunto (ej. PDF de invitación, ver
  *        app/services/invitation_pdf.py del backend)
+ *   POST /typing   → { to } → marca "escribiendo..." en el chat mientras
+ *        el backend simula el tiempo humano de tipeo antes de mandar la
+ *        respuesta real (ver app/tasks/whatsapp_tasks.py::_human_reply_delay
+ *        y el _TYPING_TTL_SECONDS de acá abajo). Best-effort: si falla,
+ *        el backend igual manda el mensaje normal después del delay — es
+ *        cosmético, no bloquea el envío.
  *
  * Y llama hacia afuera:
  *   POST {BACKEND_URL}/api/v1/whatsapp/webhook/inbound
@@ -367,6 +373,37 @@ function _handleSendError(err, to, res) {
 
   res.status(502).json({ error: err.message })
 }
+
+// whatsapp-web.js apaga el estado "escribiendo..." solo (WhatsApp lo hace
+// expirar del lado del cliente a los ~25s si no se refresca), así que no
+// hace falta un /typing/stop explícito: el backend llama /typing una vez
+// y, cuando termina su delay simulado (ver _human_reply_delay, tope hoy
+// bien por debajo de 25s), manda /send — el propio sendMessage() apaga el
+// estado "escribiendo..." al llegar el mensaje real.
+app.post('/typing', requireInternalSecret, async (req, res) => {
+  const { to } = req.body || {}
+  if (!to) {
+    return res.status(400).json({ error: 'Falta campo "to"' })
+  }
+  if (connectionState !== 'CONNECTED' || !client) {
+    // No es un error real: simplemente no hay nada que mostrar como
+    // "escribiendo..." si no hay sesión — el backend sigue con su delay
+    // igual y el /send de después fallará (o no) por su cuenta.
+    return res.json({ status: 'skipped', reason: 'not_connected' })
+  }
+
+  try {
+    const chat = await client.getChatById(toWhatsAppChatId(to))
+    await chat.sendStateTyping()
+    res.json({ status: 'typing' })
+  } catch (err) {
+    // Cosmético — no forzamos reconexión ni devolvemos 502 acá, a
+    // diferencia de _handleSendError en /send: que falle esto nunca debe
+    // frenar el mensaje real.
+    logger.warn(`No se pudo marcar "escribiendo..." para ${to}: ${err.message}`)
+    res.json({ status: 'skipped', reason: err.message })
+  }
+})
 
 app.post('/send', requireInternalSecret, async (req, res) => {
   const { to, message } = req.body || {}

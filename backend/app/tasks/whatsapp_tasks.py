@@ -21,6 +21,9 @@ acumula una fila por cada intento fallido.
 from app.core.timezone import utcnow_naive
 from typing import Optional
 
+import asyncio
+import random
+
 import httpx
 from loguru import logger
 from sqlalchemy import select
@@ -54,6 +57,70 @@ class _TransientSendError(Exception):
 # y esta invocación simplemente termina sin loguear nada en la BD (no es
 # ni SENT ni FAILED todavía, solo está esperando).
 WHATSAPP_PAUSE_RETRY_SECONDS = 60
+
+
+# ─────────────────────────────────────────────────────────────
+# Delay "humano" para respuestas de chat en vivo (agente IA, confirmación
+# de aceptar/rechazar consulta inmediata) — NO para OTP ni para
+# recordatorios/broadcast, que tienen su propio jitter en reminder_tasks.py.
+#
+# Por qué existe: antes de esto, una respuesta del agente salía en
+# LLM (1-3s) + piso global de whatsapp_throttle.py (3.0s fijos, sin azar)
+# ≈ menos de 5s siempre, con muy poca variación real entre mensajes — un
+# patrón de latencia mecánico y predecible. whatsapp-web.js es una
+# biblioteca no oficial (ver README de whatsapp-service/), y WhatsApp usa
+# señales de comportamiento (no solo volumen) para detectar automatización;
+# revisamos el histórico de centro_terapias (otro bot del mismo dueño,
+# nunca baneado) y su piso para respuestas de chat en vivo es de 5-10s,
+# vía una cola secuencial en su bot Node — nunca instantáneo.
+#
+# HUMAN_REPLY_FLOOR_SECONDS: mínimo absoluto, ni el mensaje más corto baja
+# de acá.
+# HUMAN_REPLY_CHARS_PER_SECOND: velocidad de "tipeo" simulada para la
+# parte proporcional al largo del mensaje — deliberadamente más rápida que
+# un tipeo humano real (~3-4 caract/s) porque ya estamos sumando el tiempo
+# de "pensar" en el piso fijo; esto es la variable que hace que un mensaje
+# largo tarde visiblemente más que uno corto, no un cronómetro de tipeo
+# literal.
+# HUMAN_REPLY_EXTRA_CAP_SECONDS: tope de la parte proporcional, para que
+# un mensaje muy largo no genere una espera absurda (>25s ya no se ve
+# "pensado", se ve roto/colgado desde el punto de vista del usuario, y
+# además supera el TTL de "escribiendo..." de WhatsApp, ver
+# whatsapp-service/src/index.js::/typing).
+HUMAN_REPLY_FLOOR_SECONDS = 5.0
+HUMAN_REPLY_CHARS_PER_SECOND = 14.0
+HUMAN_REPLY_EXTRA_CAP_SECONDS = 12.0
+
+
+def _human_reply_delay_seconds(message: str) -> float:
+    """
+    Delay total (incluye el piso) antes de mandar una respuesta de chat en
+    vivo. Aleatorizado (±15%) para que no sea un valor mecánico incluso
+    para mensajes del mismo largo.
+    """
+    extra = min(len(message) / HUMAN_REPLY_CHARS_PER_SECOND, HUMAN_REPLY_EXTRA_CAP_SECONDS)
+    base = HUMAN_REPLY_FLOOR_SECONDS + extra
+    return base * random.uniform(0.85, 1.15)
+
+
+async def _mark_typing_best_effort(phone: str) -> None:
+    """
+    Pide a whatsapp-service que marque "escribiendo..." en el chat.
+    Best-effort a propósito: es cosmético, si whatsapp-service no responde
+    o tira error no debe frenar ni marcar como fallido el envío real que
+    viene después — por eso el catch amplio y sin logger.error (esto no es
+    una falla que amerite investigación, a diferencia de un fallo real de
+    /send).
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{settings.WHATSAPP_SERVICE_URL}/typing",
+                json={"to": phone},
+                headers={"X-Internal-Secret": settings.WHATSAPP_SERVICE_INTERNAL_SECRET},
+            )
+    except Exception as exc:
+        logger.debug(f"No se pudo marcar 'escribiendo...' para {phone} (no crítico): {exc}")
 
 
 # Contactos con privacidad de número activada en WhatsApp (@lid) no tienen
@@ -112,7 +179,8 @@ async def _log_message(
 
 
 async def _send_and_log(task, phone: str, message: str, audience: str, user_id: Optional[str],
-                         related_entity_type: Optional[str], related_entity_id: Optional[str], sent_by: str) -> None:
+                         related_entity_type: Optional[str], related_entity_id: Optional[str], sent_by: str,
+                         human_delay: bool = False) -> None:
     # Normalizamos ACÁ, antes de todo — así el número usado como clave de
     # WhatsAppConversation es siempre el mismo formato que usa el webhook
     # de entrada (whatsapp.py::receive_inbound_message), sin importar si
@@ -135,6 +203,15 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
             return
 
     try:
+        if human_delay:
+            # Ver _human_reply_delay_seconds arriba para el porqué. El
+            # /typing es best-effort y se dispara ANTES de dormir (así el
+            # "escribiendo..." se ve durante toda la espera, no solo al
+            # final) — deliberadamente no se espera más que su propio
+            # timeout corto, no debe restarle tiempo al delay simulado.
+            await _mark_typing_best_effort(phone)
+            await asyncio.sleep(_human_reply_delay_seconds(message))
+
         # Mismo piso global que usa el OTP síncrono (ver
         # whatsapp_throttle.py) — el rate_limit de Celery en el decorador
         # de esta tarea solo protege ráfagas DENTRO de send_whatsapp_message;
@@ -170,7 +247,7 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
             kwargs=dict(
                 phone=phone, message=message, audience=audience, user_id=user_id,
                 related_entity_type=related_entity_type, related_entity_id=related_entity_id,
-                sent_by=sent_by,
+                sent_by=sent_by, human_delay=human_delay,
             ),
             countdown=WHATSAPP_PAUSE_RETRY_SECONDS,
         )
@@ -224,12 +301,21 @@ def send_whatsapp_message(
     related_entity_type: Optional[str] = None,
     related_entity_id: Optional[str] = None,
     sent_by: str = "SYSTEM",
+    human_delay: bool = False,
 ):
     """
     Punto de entrada síncrono (Celery worker) que ejecuta la lógica async
     real. Se llama con `.delay(...)` desde notify.py, reminder_tasks.py,
     o directamente desde cualquier endpoint que necesite mandar un
     WhatsApp puntual (ej. el admin respondiendo un chat a mano).
+
+    `human_delay`: True solo para respuestas de chat en vivo (agente IA,
+    confirmación de aceptar/rechazar consulta inmediata — ver
+    app/api/v1/endpoints/whatsapp.py). Ver _human_reply_delay_seconds
+    arriba para el porqué. NO se usa para OTP (nunca pasa por acá, ver
+    app/services/whatsapp.py) ni para recordatorios/broadcast (tienen su
+    propio jitter en reminder_tasks.py, pensado para lotes, no para una
+    respuesta 1-a-1).
 
     `bind=True` para poder llamar a self.retry(...) desde _send_and_log
     en fallos transitorios de whatsapp-service — antes max_retries/
@@ -251,6 +337,7 @@ def send_whatsapp_message(
         related_entity_type=related_entity_type,
         related_entity_id=related_entity_id,
         sent_by=sent_by,
+        human_delay=human_delay,
     ))
 
 
