@@ -94,5 +94,7 @@ def run_task_with_engine_cleanup(coro: Coroutine) -> None:
             await coro
         finally:
             await engine.dispose()
+            from app.core.redis_client import redis_client
+            await redis_client.aclose()
 
     asyncio.run(_run_and_dispose())
