@@ -89,10 +89,21 @@ def generate_invitation_pdf(doctor_name: str) -> bytes:
     para adjuntar (ver app/tasks/whatsapp_tasks.py::send_whatsapp_document).
     """
     buffer = io.BytesIO()
+    greeting_name = _greeting_name(doctor_name)
     doc = SimpleDocTemplate(
         buffer, pagesize=letter,
         topMargin=1.5 * cm, bottomMargin=1.5 * cm,
         leftMargin=2 * cm, rightMargin=2 * cm,
+        # Metadatos del PDF (propiedades del documento, no texto visible).
+        # Sin esto, reportlab deja "(anonymous)" como autor en TODOS los
+        # PDFs generados — mismo autor genérico para cualquier médico, lo
+        # que suma al patrón de archivos "idénticos" que ayudó a que
+        # WhatsApp marcara los envíos como spam. Ahora cada PDF queda
+        # identificado con el nombre del médico destinatario.
+        title=f"Invitación MedicBolivia — {greeting_name}",
+        author="MedicBolivia",
+        subject=f"Invitación a unirse a MedicBolivia para {greeting_name}",
+        creator="MedicBolivia",
     )
 
     styles = getSampleStyleSheet()
@@ -152,7 +163,7 @@ def generate_invitation_pdf(doctor_name: str) -> bytes:
     elements.append(Paragraph(fecha_es, footer_style))
     elements.append(Spacer(1, 8))
 
-    name = _greeting_name(doctor_name)
+    name = greeting_name
     elements.append(Paragraph(f"Estimado/a {name},", greeting_style))
 
     elements.append(Paragraph(

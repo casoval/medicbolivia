@@ -719,6 +719,19 @@ export default function AdminDoctorLeadsPage() {
     }
   }
 
+  // Vuelve a armar el texto (saludo/intro/emoji/cierre al azar, ver
+  // buildInviteMessage) sin tocar el PDF ni el backend — sirve para que
+  // el admin vea con sus propios ojos que el mensaje sí varía entre
+  // generaciones, algo que antes no era evidente porque solo se veía
+  // una vez por click.
+  const handleQuickRegenerateText = (lead: DoctorLead) => {
+    setQuickManual((prev) => {
+      const current = prev[lead.id]
+      if (!current || current.status !== 'done') return prev
+      return { ...prev, [lead.id]: { ...current, message: buildInviteMessage(effectiveInviteName(lead)), clipboardOk: false } }
+    })
+  }
+
   const handleQuickDismiss = (leadId: string) => {
     setQuickManual((prev) => {
       const next = { ...prev }
@@ -897,6 +910,14 @@ export default function AdminDoctorLeadsPage() {
                             onClick={() => handleQuickCopy(lead.id, quick.message!)}
                           >
                             {t('📋 Copiar')}
+                          </button>
+                          <button
+                            type="button"
+                            className="text-xs font-medium text-[#64748B] border border-[#DDE1EE] rounded-lg px-2.5 py-1 whitespace-nowrap"
+                            title={t('Genera otra variación del texto (saludo/cierre al azar), sin volver a abrir el PDF')}
+                            onClick={() => handleQuickRegenerateText(lead)}
+                          >
+                            {t('🔄 Otro texto')}
                           </button>
                           <button
                             type="button"
