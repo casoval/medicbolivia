@@ -90,6 +90,10 @@ export interface DoctorLead {
   last_invite_included_pdf: boolean
   last_invite_sent_at: string | null
   last_invite_error: string | null
+  // Última vez que se GENERÓ (no envió) una invitación manual — ver
+  // adminAPI.generateManualDoctorLeadInvite. Sin WhatsAppMessage asociado
+  // porque el envío lo hace el admin a mano, no la plataforma.
+  last_manual_invite_at: string | null
 }
 
 export interface DoctorLeadListResponse {
@@ -1696,6 +1700,20 @@ export const adminAPI = {
 
   inviteDoctorLead: (id: string, message: string, includePdf: boolean = true) =>
     api.post<DoctorLead>(`/admin/doctor-leads/${id}/invite`, { message, include_pdf: includePdf }).then(r => r.data),
+
+  // Alternativa a inviteDoctorLead: NO manda nada por WhatsApp (evita el
+  // patrón de envíos automáticos a números no registrados que llevó al
+  // baneo). Solo deja constancia de que el admin generó el material para
+  // copiarlo/pegarlo a mano — el mensaje se arma en el frontend
+  // (buildInviteMessage) y el PDF se pide aparte con getDoctorLeadInvitationPdf.
+  generateManualDoctorLeadInvite: (id: string) =>
+    api.post<DoctorLead>(`/admin/doctor-leads/${id}/generate-manual-invite`).then(r => r.data),
+
+  // PDF de invitación para abrir en una pestaña nueva y compartir a mano
+  // (WhatsApp Web, correo, etc.). responseType 'blob' porque es un
+  // application/pdf, no JSON.
+  getDoctorLeadInvitationPdf: (id: string) =>
+    api.get(`/admin/doctor-leads/${id}/invitation-pdf`, { responseType: 'blob' }).then(r => r.data as Blob),
 
   // ── Pagos a profesionales (payouts, Fase 1 semi-automática) ──
   // Ver documento de diseño y app/services/payout.py en el backend.

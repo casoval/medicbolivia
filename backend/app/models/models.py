@@ -1843,6 +1843,15 @@ class DoctorLead(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=DoctorLeadStatus.NUEVO.value)
     notes: Mapped[Optional[str]] = mapped_column(Text)
     last_contacted_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    # Se completa cuando el admin genera (sin enviar automáticamente) una
+    # invitación para copiar/pegar manualmente en WhatsApp — ver
+    # app/api/v1/endpoints/admin.py::generate_manual_doctor_lead_invite.
+    # Nace de que WhatsApp empezó a marcar como spam los envíos automáticos
+    # a números no registrados, así que el primer contacto ahora se hace a
+    # mano; este campo no tiene un WhatsAppMessage asociado (no hubo envío
+    # real desde la plataforma), por eso va separado de last_invite_status
+    # (que sí se deriva de WhatsAppMessage, ver _get_latest_invite_info).
+    last_manual_invite_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Se completa solo cuando el admin marca el lead como REGISTRADO
     # ligándolo a la cuenta real que se creó en la plataforma.
     converted_professional_id: Mapped[Optional[str]] = mapped_column(

@@ -11,10 +11,46 @@ import { FloatingNotificationBell } from './FloatingNotificationBell'
 import { ChatWithAdminWidget } from '@/components/shared/ChatWithAdminWidget'
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
-import { supportChatAPI, adminSupportChatAPI } from '@/lib/api'
+import { supportChatAPI, adminSupportChatAPI, whatsappAPI } from '@/lib/api'
 import type { UserRole } from '@/types'
 
 const IconSupportChat = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+
+// Indicador "IA" del topbar — solo para ADMIN. Punto verde con halo cuando
+// el bot de WhatsApp está vinculado (CONNECTED), punto rojo para cualquier
+// otro estado (desconectado, esperando QR, error, o microservicio caído),
+// para que el admin note de un vistazo si el bot está operativo sin tener
+// que entrar a /admin/ia. Comparte queryKey con BotTab: si el admin ya
+// abrió esa pestaña, no duplica el pedido.
+function IAStatusIndicator() {
+  const { t } = useLanguage()
+  const { data: status } = useQuery({
+    queryKey: ['admin', 'whatsapp', 'status'],
+    queryFn: async () => (await whatsappAPI.getStatus()).data,
+    refetchInterval: 15000,
+  })
+
+  const isConnected = status?.connection_state === 'CONNECTED'
+
+  return (
+    <Link
+      href="/admin/ia"
+      className="shrink-0 flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white text-xs font-semibold pl-2.5 pr-2 py-1 rounded-full transition-colors"
+      title={isConnected ? t('IA / WhatsApp: conectado') : t('IA / WhatsApp: desconectado')}
+      aria-label={isConnected ? t('IA / WhatsApp: conectado') : t('IA / WhatsApp: desconectado')}
+    >
+      <span>{t('IA')}</span>
+      {isConnected ? (
+        <span className="relative flex w-2 h-2">
+          <span className="absolute inline-flex h-full w-full rounded-full bg-[#3DDC97] opacity-75 animate-ping-slow" />
+          <span className="relative inline-flex w-2 h-2 rounded-full bg-[#3DDC97]" />
+        </span>
+      ) : (
+        <span className="w-2 h-2 rounded-full bg-[#E24B4A]" />
+      )}
+    </Link>
+  )
+}
 
 // Botón del encabezado para acceso rápido al chat directo con soporte
 // (paciente/profesional ↔ admin). Para PATIENT/PROFESSIONAL abre el
@@ -255,6 +291,8 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {/* Selector de idioma — solo visual, ahora disponible en toda la app */}
           <LanguageSwitcher variant="dark" />
+          {/* Estado del bot de WhatsApp — solo ADMIN */}
+          {role === 'ADMIN' && <IAStatusIndicator />}
           {firstName && (
             <span className="sm:hidden text-sm text-white font-medium max-w-[80px] truncate">
               {firstName}

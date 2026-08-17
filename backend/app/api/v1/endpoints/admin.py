@@ -2624,6 +2624,12 @@ def _doctor_lead_to_dict(lead: DoctorLead, invite_info: Optional[dict] = None) -
         "last_invite_included_pdf": info.get("last_invite_included_pdf", False),
         "last_invite_sent_at": info.get("last_invite_sent_at"),
         "last_invite_error": info.get("last_invite_error"),
+        # Última vez que se generó (NO envió) una invitación para copiar a
+        # mano — ver generate_manual_doctor_lead_invite(). El frontend
+        # compara esto contra last_invite_sent_at para decidir si la
+        # columna "Invitación" muestra "Generado manualmente" o el
+        # resultado de un envío automático.
+        "last_manual_invite_at": lead.last_manual_invite_at,
     }
 
 
@@ -2896,6 +2902,84 @@ async def invite_doctor_lead(
     # completó — solo confirma que quedó encolado (lead.status=CONTACTADO).
     invite_info_map = await _get_latest_invite_info(db, [lead.id])
     return _doctor_lead_to_dict(lead, invite_info_map.get(lead.id))
+
+
+@router.post(
+    "/doctor-leads/{lead_id}/generate-manual-invite",
+    summary="Marcar invitación como generada para enviar manualmente (no la manda la plataforma)",
+)
+async def generate_manual_doctor_lead_invite(
+    lead_id: str,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Alternativa a /invite para el primer contacto con leads que todavía no
+    están registrados: WhatsApp empezó a marcar como spam los envíos
+    automáticos a esos números (nos costó un baneo), así que acá NO se
+    encola ningún mensaje ni se llama a whatsapp-service. El admin copia
+    el texto a mano (ver DEFAULT/random greeting en el frontend) y lo pega
+    él mismo en WhatsApp — el PDF para adjuntar se pide aparte con GET
+    /doctor-leads/{lead_id}/invitation-pdf. Esto solo deja constancia de
+    que el primer contacto se hizo, para que la columna "Invitación" del
+    listado no lo confunda con un envío automático.
+    """
+    lead = (await db.execute(select(DoctorLead).where(DoctorLead.id == lead_id))).scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+    if lead.status == DoctorLeadStatus.NO_CONTACTAR.value:
+        raise HTTPException(status_code=409, detail="Este prospecto pidió no ser contactado de nuevo")
+
+    lead.last_manual_invite_at = utcnow_naive()
+    lead.last_contacted_at = utcnow_naive()
+    if lead.status == DoctorLeadStatus.NUEVO.value:
+        lead.status = DoctorLeadStatus.CONTACTADO.value
+    await db.commit()
+    await db.refresh(lead)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="DOCTOR_LEAD_MANUAL_INVITE_GENERATED",
+        entity_type="DoctorLead",
+        entity_id=lead.id,
+        metadata_={"phone": lead.phone},
+    ))
+    await db.commit()
+
+    logger.info(f"Invitación manual generada por admin={current_user.id} para lead={lead.id}")
+    invite_info_map = await _get_latest_invite_info(db, [lead.id])
+    return _doctor_lead_to_dict(lead, invite_info_map.get(lead.id))
+
+
+@router.get(
+    "/doctor-leads/{lead_id}/invitation-pdf",
+    summary="Generar el PDF de invitación para abrirlo en el navegador y enviarlo manualmente",
+)
+async def get_doctor_lead_invitation_pdf(
+    lead_id: str,
+    current_user=Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Mismo PDF que se adjunta en el envío automático (ver invitation_pdf.py),
+    pero devuelto directo como archivo — sin mandarlo por WhatsApp — para
+    que el frontend lo abra en una pestaña nueva y el admin lo descargue o
+    lo comparta a mano (WhatsApp Web, correo, etc.) como parte del primer
+    contacto manual.
+    """
+    lead = (await db.execute(select(DoctorLead).where(DoctorLead.id == lead_id))).scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+
+    pdf_bytes = invitation_pdf.generate_invitation_pdf(lead.full_name)
+    safe_name = "".join(c for c in lead.full_name if c.isalnum() or c in " ._-").strip()[:60] or "medico"
+    filename = f"Invitacion_MedicBolivia_{safe_name}.pdf".replace(" ", "_")
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 # ═══════════════════════════════════════════════════════════════════
 # PAGOS A PROFESIONALES (Payouts) — Fase 1 semi-automática

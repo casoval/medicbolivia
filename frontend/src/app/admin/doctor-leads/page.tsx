@@ -45,12 +45,48 @@ const STATUS_LABELS: Record<DoctorLeadStatus, string> = {
   NO_CONTACTAR: 'No contactar',
 }
 
-const DEFAULT_INVITE_MESSAGE = (name: string) =>
-  `Hola${name ? ' Dr./Dra. ' + name : ''}, le escribimos de MedicBolivia 👋\n\n` +
-  `Somos una plataforma de telemedicina en Bolivia donde agentes de inteligencia artificial ` +
-  `reciben, orientan y conectan al paciente con usted, y nos encantaría invitarle a probarla ` +
-  `sin costo. Con ella puede atender consultas en línea, gestionar su agenda y recetar ` +
-  `de forma digital.\n\n¿Le interesaría que le contemos más?\n\nhttps://medicbolivia.com`
+// ── Variación del saludo ──
+// WhatsApp empezó a marcar como spam los envíos automáticos a números no
+// registrados (nos costó un baneo) en buena parte porque el saludo era
+// siempre el mismo texto para todos los prospectos. Para reducir ese
+// parecido, el mensaje se arma combinando piezas al azar en vez de usar
+// siempre la misma plantilla fija — tanto para "Enviar invitación" como
+// para "Generar invitación" (copiado manual).
+const GREETING_OPENERS = ['Hola', 'Buenos días', 'Buenas tardes', 'Qué tal', 'Un gusto saludarle', 'Cordial saludo']
+const GREETING_INTROS = [
+  'le escribimos de MedicBolivia',
+  'le contactamos desde MedicBolivia',
+  'le saluda el equipo de MedicBolivia',
+  'somos del equipo de MedicBolivia',
+  'le escribe el equipo de MedicBolivia',
+]
+const GREETING_EMOJIS = ['👋', '🩺', '😊', '']
+const CLOSING_QUESTIONS = [
+  '¿Le interesaría que le contemos más?',
+  '¿Le gustaría conocer más detalles?',
+  '¿Le parece si le compartimos más información?',
+  '¿Podemos contarle un poco más al respecto?',
+  '¿Le interesaría conocer cómo funciona?',
+]
+
+function randomFrom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+function buildInviteMessage(name: string): string {
+  const opener = randomFrom(GREETING_OPENERS)
+  const intro = randomFrom(GREETING_INTROS)
+  const emoji = randomFrom(GREETING_EMOJIS)
+  const closing = randomFrom(CLOSING_QUESTIONS)
+  const namePart = name ? ` Dr./Dra. ${name}` : ''
+  return (
+    `${opener}${namePart}, ${intro}${emoji ? ' ' + emoji : ''}\n\n` +
+    `Somos una plataforma de telemedicina en Bolivia donde agentes de inteligencia artificial ` +
+    `reciben, orientan y conectan al paciente con usted, y nos encantaría invitarle a probarla ` +
+    `sin costo. Con ella puede atender consultas en línea, gestionar su agenda y recetar ` +
+    `de forma digital.\n\n${closing}\n\nhttps://medicbolivia.com`
+  )
+}
 
 // ── Modal: buscar en Google Maps ──
 function MapsSearchModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
@@ -287,8 +323,30 @@ function InviteStatusBadge({ lead, isPending }: { lead: DoctorLead; isPending?: 
     )
   }
 
-  if (!lead.last_invite_status) {
+  if (!lead.last_invite_status && !lead.last_manual_invite_at) {
     return <span className="text-xs text-[#64748B]">{t('Sin invitar')}</span>
+  }
+
+  // Si la última acción sobre este lead fue "Generar invitación" (copiado
+  // manual, sin envío automático de la plataforma) y es más reciente que
+  // cualquier envío automático previo, la columna debe reflejar eso y no
+  // el resultado del envío automático viejo — para que el admin no crea
+  // que la plataforma mandó algo que en realidad pegó él mismo a mano.
+  const manualTime = lead.last_manual_invite_at ? new Date(lead.last_manual_invite_at).getTime() : 0
+  const sentTime = lead.last_invite_sent_at ? new Date(lead.last_invite_sent_at).getTime() : 0
+  const manualIsLatest = manualTime > 0 && manualTime >= sentTime
+
+  if (manualIsLatest) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="inline-flex w-fit items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[#EEF1FA] text-[#4A5578]">
+          {t('Generado manualmente')}
+        </span>
+        {lead.last_manual_invite_at && (
+          <span className="text-[10px] text-[#64748B]">{formatInviteDate(lead.last_manual_invite_at)}</span>
+        )}
+      </div>
+    )
   }
 
   const isSent = lead.last_invite_status === 'SENT'
@@ -311,11 +369,29 @@ function InviteStatusBadge({ lead, isPending }: { lead: DoctorLead; isPending?: 
 }
 
 // ── Modal: invitar por WhatsApp ──
-function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () => void; onSent: () => void }) {
+// Dos formas de contactar al prospecto:
+//  · "Enviar invitación"  → la plataforma manda el WhatsApp sola (Celery
+//    → whatsapp-service). Es lo de siempre, pero a números todavía no
+//    registrados WhatsApp lo está marcando como spam.
+//  · "Generar invitación" → NO se manda nada automáticamente. Se copia el
+//    mensaje al portapapeles, se abre el PDF en una pestaña nueva, y el
+//    admin lo pega/adjunta él mismo en WhatsApp — el primer contacto
+//    "manual" que evita el patrón de envío masivo que llevó al baneo.
+function InviteModal({
+  lead, onClose, onSent, onManualGenerated,
+}: {
+  lead: DoctorLead
+  onClose: () => void
+  onSent: () => void
+  onManualGenerated: () => void
+}) {
   const { t } = useLanguage()
-  const [message, setMessage] = useState(DEFAULT_INVITE_MESSAGE(lead.full_name))
+  const [message, setMessage] = useState(() => buildInviteMessage(lead.full_name))
   const [includePdf, setIncludePdf] = useState(true)
   const [error, setError] = useState('')
+  const [manualPending, setManualPending] = useState(false)
+  const [manualDone, setManualDone] = useState(false)
+  const [copyOk, setCopyOk] = useState(false)
 
   const inviteMutation = useMutation({
     mutationFn: () => adminAPI.inviteDoctorLead(lead.id, message, includePdf),
@@ -323,17 +399,64 @@ function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () 
     onError: (err) => setError(getErrorMessage(err)),
   })
 
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message)
+      setCopyOk(true)
+    } catch {
+      setError(t('No se pudo copiar automáticamente — selecciona el texto y copiá manualmente.'))
+    }
+  }
+
+  const handleGenerateManual = async () => {
+    setError('')
+    setCopyOk(false)
+    setManualPending(true)
+    try {
+      // 1) Copiamos el mensaje al portapapeles para que quede a un solo
+      //    "pegar" en WhatsApp. Si el navegador bloquea el portapapeles,
+      //    el texto sigue visible arriba para copiarlo a mano.
+      try {
+        await navigator.clipboard.writeText(message)
+        setCopyOk(true)
+      } catch {
+        // silencioso — ver fallback arriba
+      }
+
+      // 2) Si corresponde, el PDF se abre en una pestaña nueva para que
+      //    el admin lo descargue o lo adjunte él mismo.
+      if (includePdf) {
+        const blob = await adminAPI.getDoctorLeadInvitationPdf(lead.id)
+        const url = URL.createObjectURL(blob)
+        window.open(url, '_blank')
+      }
+
+      // 3) Recién acá dejamos constancia en el backend — así la columna
+      //    "Invitación" del listado sabe distinguir esto de un envío
+      //    automático.
+      await adminAPI.generateManualDoctorLeadInvite(lead.id)
+      setManualDone(true)
+      onManualGenerated()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setManualPending(false)
+    }
+  }
+
   return createPortal(
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <p className="text-sm font-semibold mb-1">{t('Invitar por WhatsApp')}</p>
         <p className="text-xs text-[#475569] mb-4">{lead.full_name} · {lead.phone}</p>
-        {lead.last_invite_status && (
+        {(lead.last_invite_status || lead.last_manual_invite_at) && (
           <div className="mb-3">
             <Alert
-              type={lead.last_invite_status === 'SENT' ? 'info' : 'error'}
+              type={lead.last_invite_status === 'FAILED' ? 'error' : 'info'}
               message={
-                lead.last_invite_status === 'SENT'
+                lead.last_manual_invite_at && (!lead.last_invite_sent_at || new Date(lead.last_manual_invite_at) >= new Date(lead.last_invite_sent_at))
+                  ? `⚠ ${t('Ya se generó una invitación manual el')} ${formatInviteDate(lead.last_manual_invite_at)}`
+                  : lead.last_invite_status === 'SENT'
                   ? `⚠ ${t('Ya se invitó el')} ${lead.last_invite_sent_at ? formatInviteDate(lead.last_invite_sent_at) : ''}${lead.last_invite_included_pdf ? ` (${t('con PDF')})` : ''}`
                   : `⚠ ${t('El último intento de invitación falló')}${lead.last_invite_sent_at ? ` (${formatInviteDate(lead.last_invite_sent_at)})` : ''}`
               }
@@ -341,11 +464,39 @@ function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () 
           </div>
         )}
         {error && <div className="mb-3"><Alert type="error" message={error} /></div>}
+        {manualDone && (
+          <div className="mb-3">
+            <Alert
+              type="success"
+              message={
+                copyOk
+                  ? t('✅ Mensaje copiado al portapapeles' + (includePdf ? ' y PDF abierto en una pestaña nueva' : '') + '. Pegalo en WhatsApp para enviarlo vos mismo.')
+                  : t('✅ Invitación generada' + (includePdf ? ' y PDF abierto en una pestaña nueva' : '') + '. No se pudo copiar solo — seleccioná el texto de abajo y copialo manualmente.')
+              }
+            />
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-medium text-[#475569]">{t('Mensaje')}</span>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              className="text-xs text-[#185FA5] hover:underline"
+              onClick={() => { setMessage(buildInviteMessage(lead.full_name)); setManualDone(false) }}
+            >
+              {t('🔀 Variar saludo')}
+            </button>
+            <button type="button" className="text-xs text-[#185FA5] hover:underline" onClick={handleCopy}>
+              {t('📋 Copiar')}
+            </button>
+          </div>
+        </div>
         <textarea
           className="w-full border border-[#DDE1EE] rounded-lg px-3 py-2 text-sm"
           rows={7}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => { setMessage(e.target.value); setManualDone(false) }}
         />
         <label className="flex items-start gap-2 mt-3 text-xs text-[#475569] cursor-pointer">
           <input
@@ -355,11 +506,24 @@ function InviteModal({ lead, onClose, onSent }: { lead: DoctorLead; onClose: () 
             onChange={(e) => setIncludePdf(e.target.checked)}
           />
           <span>
-            {t('Adjuntar carta de invitación formal en PDF (logo y firma del director médico). El texto de arriba se envía como mensaje junto al archivo.')}
+            {t('Adjuntar carta de invitación formal en PDF (logo y firma del director médico). Al enviar automático va como caption del archivo; al generar manual, se abre en una pestaña nueva para adjuntarlo vos mismo.')}
           </span>
         </label>
-        <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="text-sm text-[#475569] px-4 py-2">{t('Cancelar')}</button>
+        <p className="text-[11px] text-[#64748B] mt-3">
+          {t('El saludo varía cada vez para no mandar el mismo texto a todos — WhatsApp trata los mensajes casi idénticos como spam.')}
+        </p>
+        <div className="flex justify-end gap-2 mt-4 flex-wrap">
+          <button onClick={onClose} className="text-sm text-[#475569] px-4 py-2">
+            {manualDone ? t('Cerrar') : t('Cancelar')}
+          </button>
+          <button
+            className="border border-[#185FA5] text-[#185FA5] text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
+            disabled={manualPending}
+            title={t('No manda nada por WhatsApp: copia el mensaje y abre el PDF para que lo envíes vos mismo.')}
+            onClick={handleGenerateManual}
+          >
+            {manualPending ? <Spinner size="sm" /> : t('Generar invitación')}
+          </button>
           <button
             className="bg-[#0F6E56] text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
             disabled={message.length < 5 || inviteMutation.isPending}
@@ -555,7 +719,7 @@ export default function AdminDoctorLeadsPage() {
                         title={!lead.phone ? t('Este prospecto no tiene teléfono') : ''}
                         onClick={() => setInviteTarget(lead)}
                       >
-                        {lead.last_invite_status ? t('Reinvitar') : t('Invitar')}
+                        {lead.last_invite_status || lead.last_manual_invite_at ? t('Reinvitar') : t('Invitar')}
                       </button>
                       <button
                         className="text-xs text-[#A32D2D] hover:underline"
@@ -604,6 +768,14 @@ export default function AdminDoctorLeadsPage() {
           onSent={() => {
             setPendingInvites((prev) => ({ ...prev, [inviteTarget.id]: Date.now() }))
             setInviteTarget(null)
+            invalidate()
+          }}
+          onManualGenerated={() => {
+            // A diferencia de onSent, NO cerramos el modal: el admin
+            // todavía necesita el mensaje visible para pegarlo en
+            // WhatsApp (y puede querer generar el PDF sin PDF, variar el
+            // saludo de nuevo, etc.). Cierra él mismo con "Cerrar" cuando
+            // termine.
             invalidate()
           }}
         />
