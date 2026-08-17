@@ -3,7 +3,7 @@
 // Captación de médicos: buscar en Google Maps + gestionar prospectos
 // (leads) hasta invitarlos por WhatsApp a probar la plataforma.
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -622,10 +622,12 @@ export default function AdminDoctorLeadsPage() {
   // Estado del botón "Generar invitación" directo en la fila (alternativa
   // rápida a abrir el modal "Invitar"): 'pending' mientras copia el
   // mensaje + abre el PDF + deja constancia en el backend, 'done'/'error'
-  // unos segundos para mostrar feedback inline, y clipboardOk si el
-  // navegador dejó copiar solo (si no, el admin igual puede abrir el
-  // modal "Invitar" y copiar el texto a mano desde ahí).
-  const [quickManual, setQuickManual] = useState<Record<string, { status: 'pending' | 'done' | 'error'; clipboardOk?: boolean; error?: string }>>({})
+  // para mostrar feedback inline. clipboardOk indica si el navegador dejó
+  // copiar solo. `message` guarda el texto generado y queda visible en la
+  // fila (con botón "Copiar" propio) hasta que el admin lo cierra a mano
+  // o genera uno nuevo — antes desaparecía solo a los 6s y era fácil
+  // perderlo si el copiado automático fallaba.
+  const [quickManual, setQuickManual] = useState<Record<string, { status: 'pending' | 'done' | 'error'; clipboardOk?: boolean; error?: string; message?: string }>>({})
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'doctor-leads', statusFilter, search, page],
@@ -692,8 +694,8 @@ export default function AdminDoctorLeadsPage() {
         await navigator.clipboard.writeText(message)
         clipboardOk = true
       } catch {
-        // Sin permiso de portapapeles: seguimos igual, el admin puede
-        // abrir "Invitar" y copiar el texto a mano desde el modal.
+        // Sin permiso de portapapeles: no pasa nada, igual dejamos el
+        // texto visible abajo en la fila para que lo copie a mano.
       }
       const blob = await adminAPI.getDoctorLeadInvitationPdf(lead.id)
       const url = URL.createObjectURL(blob)
@@ -701,19 +703,28 @@ export default function AdminDoctorLeadsPage() {
 
       await adminAPI.generateManualDoctorLeadInvite(lead.id)
       invalidate()
-      setQuickManual((prev) => ({ ...prev, [lead.id]: { status: 'done', clipboardOk } }))
+      setQuickManual((prev) => ({ ...prev, [lead.id]: { status: 'done', clipboardOk, message } }))
     } catch (err) {
       setQuickManual((prev) => ({ ...prev, [lead.id]: { status: 'error', error: getErrorMessage(err) } }))
-    } finally {
-      setTimeout(() => {
-        setQuickManual((prev) => {
-          if (!prev[lead.id] || prev[lead.id].status === 'pending') return prev
-          const next = { ...prev }
-          delete next[lead.id]
-          return next
-        })
-      }, 6000)
     }
+  }
+
+  const handleQuickCopy = async (leadId: string, message: string) => {
+    try {
+      await navigator.clipboard.writeText(message)
+      setQuickManual((prev) => ({ ...prev, [leadId]: { ...prev[leadId], status: 'done', clipboardOk: true, message } }))
+    } catch {
+      // El navegador bloqueó el copiado (sin HTTPS, sin permiso, etc.):
+      // el texto sigue visible en el textarea para seleccionar a mano.
+    }
+  }
+
+  const handleQuickDismiss = (leadId: string) => {
+    setQuickManual((prev) => {
+      const next = { ...prev }
+      delete next[leadId]
+      return next
+    })
   }
 
   const funnel = data?.funnel
@@ -796,7 +807,8 @@ export default function AdminDoctorLeadsPage() {
                 const quick = quickManual[lead.id]
                 const inviteDisabled = !lead.phone || lead.status === 'NO_CONTACTAR'
                 return (
-                <tr key={lead.id} className="border-t border-[#DDE1EE] align-top">
+                <React.Fragment key={lead.id}>
+                <tr className="border-t border-[#DDE1EE] align-top">
                   <td className="px-4 py-3">
                     <p className="font-medium text-[#141820]">{lead.full_name}</p>
                     {lead.clinic_or_hospital && (
@@ -859,9 +871,7 @@ export default function AdminDoctorLeadsPage() {
                     </div>
                     {quick?.status === 'done' && (
                       <p className="text-[10px] text-[#0F6E56] text-right mt-1">
-                        {quick.clipboardOk
-                          ? t('✅ Copiado y PDF abierto')
-                          : t('✅ PDF abierto (copiá el texto desde "Invitar")')}
+                        {quick.clipboardOk ? t('✅ Copiado y PDF abierto') : t('✅ PDF abierto')}
                       </p>
                     )}
                     {quick?.status === 'error' && (
@@ -869,8 +879,39 @@ export default function AdminDoctorLeadsPage() {
                     )}
                   </td>
                 </tr>
-                )
-              })}
+                {quick?.status === 'done' && quick.message && (
+                  <tr key={`${lead.id}-msg`} className="bg-[#F8FAFC] border-t border-dashed border-[#DDE1EE]">
+                    <td colSpan={8} className="px-4 py-3">
+                      <div className="flex items-start gap-3">
+                        <textarea
+                          readOnly
+                          value={quick.message}
+                          rows={3}
+                          onFocus={(e) => e.target.select()}
+                          className="flex-1 text-xs border border-[#DDE1EE] rounded-md px-2 py-1.5 bg-white text-[#334155] resize-none"
+                        />
+                        <div className="flex flex-col gap-1 shrink-0">
+                          <button
+                            type="button"
+                            className="text-xs font-medium text-[#185FA5] border border-[#185FA5] rounded-lg px-2.5 py-1 whitespace-nowrap"
+                            onClick={() => handleQuickCopy(lead.id, quick.message!)}
+                          >
+                            {t('📋 Copiar')}
+                          </button>
+                          <button
+                            type="button"
+                            className="text-xs text-[#64748B] hover:underline whitespace-nowrap"
+                            onClick={() => handleQuickDismiss(lead.id)}
+                          >
+                            {t('Cerrar')}
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
+              )})}
             </tbody>
           </table>
           </div>
