@@ -2595,11 +2595,26 @@ async def _get_latest_invite_info(db: AsyncSession, lead_ids: list[str]) -> dict
     return info
 
 
+def _lead_invite_name(lead: DoctorLead) -> str:
+    """
+    Nombre a usar para saludar en el mensaje/PDF de invitación. Google
+    Places a veces trae, pegado al nombre, datos que no son el nombre del
+    médico (especialidad, clínica, ciudad), y el admin corrige eso a mano
+    en invite_name sin tocar full_name (que se sigue mostrando tal cual en
+    el listado). Si invite_name está vacío, cae de vuelta a full_name.
+    """
+    return (lead.invite_name or "").strip() or lead.full_name
+
+
 def _doctor_lead_to_dict(lead: DoctorLead, invite_info: Optional[dict] = None) -> dict:
     info = invite_info or {}
     return {
         "id": lead.id,
         "full_name": lead.full_name,
+        # Corrección manual del nombre solo para la invitación — ver
+        # _lead_invite_name(). Puede venir null: el frontend hace el mismo
+        # fallback a full_name para mostrar el placeholder correcto.
+        "invite_name": lead.invite_name,
         "specialty": lead.specialty,
         "city": lead.city,
         "phone": lead.phone,
@@ -2770,6 +2785,7 @@ async def create_doctor_lead(
 
     lead = DoctorLead(
         full_name=data.full_name,
+        invite_name=(data.invite_name or "").strip() or None,
         specialty=data.specialty,
         city=data.city,
         phone=phone_normalized,
@@ -2806,6 +2822,12 @@ async def update_doctor_lead(
             update_data["phone"] = normalize_bo_phone(update_data["phone"])
         except InvalidPhoneError:
             raise HTTPException(status_code=422, detail="Teléfono inválido")
+    if "invite_name" in update_data:
+        # "" (borrar el campo desde el frontend) se guarda como NULL, no
+        # como string vacío, para que _lead_invite_name() y el "or" del
+        # frontend caigan a full_name de forma consistente.
+        stripped = (update_data["invite_name"] or "").strip()
+        update_data["invite_name"] = stripped or None
 
     for field, value in update_data.items():
         setattr(lead, field, value)
@@ -2853,9 +2875,10 @@ async def invite_doctor_lead(
         # invitation_pdf.py) adjunto como documento, con `message` como
         # caption — un solo mensaje de WhatsApp con el archivo y el
         # texto encima, igual que cuando lo manda una persona a mano.
-        pdf_bytes = invitation_pdf.generate_invitation_pdf(lead.full_name)
+        invite_name = _lead_invite_name(lead)
+        pdf_bytes = invitation_pdf.generate_invitation_pdf(invite_name)
         pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
-        safe_name = "".join(c for c in lead.full_name if c.isalnum() or c in " ._-").strip()[:60] or "medico"
+        safe_name = "".join(c for c in invite_name if c.isalnum() or c in " ._-").strip()[:60] or "medico"
         filename = f"Invitacion_MedicBolivia_{safe_name}.pdf".replace(" ", "_")
 
         send_whatsapp_document.delay(
@@ -2971,8 +2994,9 @@ async def get_doctor_lead_invitation_pdf(
     if not lead:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado")
 
-    pdf_bytes = invitation_pdf.generate_invitation_pdf(lead.full_name)
-    safe_name = "".join(c for c in lead.full_name if c.isalnum() or c in " ._-").strip()[:60] or "medico"
+    invite_name = _lead_invite_name(lead)
+    pdf_bytes = invitation_pdf.generate_invitation_pdf(invite_name)
+    safe_name = "".join(c for c in invite_name if c.isalnum() or c in " ._-").strip()[:60] or "medico"
     filename = f"Invitacion_MedicBolivia_{safe_name}.pdf".replace(" ", "_")
 
     return Response(

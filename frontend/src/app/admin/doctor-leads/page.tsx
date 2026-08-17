@@ -73,6 +73,16 @@ function randomFrom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
+// Nombre a usar en el saludo de la invitación: si el admin cargó una
+// corrección en invite_name (columna "Nombre para invitación" de la
+// tabla) se usa esa; si no, cae de vuelta a full_name — igual que hace
+// el backend en _lead_invite_name() (admin.py), para que el mensaje que
+// arma este archivo y el PDF que genera el backend siempre saluden con
+// el mismo nombre.
+function effectiveInviteName(lead: DoctorLead): string {
+  return (lead.invite_name && lead.invite_name.trim()) || lead.full_name
+}
+
 function buildInviteMessage(name: string): string {
   const opener = randomFrom(GREETING_OPENERS)
   const intro = randomFrom(GREETING_INTROS)
@@ -308,6 +318,53 @@ function formatInviteDate(iso: string): string {
   })
 }
 
+// Celda editable de la columna "Nombre para invitación". Google Places a
+// veces trae en el nombre datos que no son el nombre del médico
+// ("Medicina Interna - Cámara Hiperbárica - Dr. Jorge Oblitas - La Paz"),
+// y ese texto completo terminaba usándose para saludar en el WhatsApp/PDF
+// de invitación. Acá el admin escribe el nombre correcto SOLO para la
+// invitación (no se toca "Nombre", que sigue siendo el dato tal cual vino
+// de la búsqueda). Vacío = usa el nombre de arriba (placeholder muestra
+// cuál sería ese default).
+function InviteNameCell({ lead, onSave }: { lead: DoctorLead; onSave: (value: string) => void }) {
+  const { t } = useLanguage()
+  const [value, setValue] = useState(lead.invite_name || '')
+  const [saved, setSaved] = useState(false)
+
+  // Si otra fuente actualiza el lead (ej. refetch tras guardar), reflejamos
+  // el valor del servidor — pero no mientras el admin todavía está
+  // escribiendo (se resincroniza recién cuando el input pierde el foco y
+  // dispara el guardado, ver commit()).
+  useEffect(() => {
+    setValue(lead.invite_name || '')
+  }, [lead.id, lead.invite_name])
+
+  const commit = () => {
+    const trimmed = value.trim()
+    if (trimmed !== (lead.invite_name || '').trim()) {
+      onSave(trimmed)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    }
+  }
+
+  return (
+    <div className="min-w-[160px]">
+      <input
+        className="w-full border border-[#DDE1EE] rounded-md px-2 py-1 text-xs focus:border-[#185FA5] focus:outline-none"
+        placeholder={lead.full_name}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        }}
+      />
+      {saved && <p className="text-[10px] text-[#0F6E56] mt-0.5">{t('Guardado ✓')}</p>}
+    </div>
+  )
+}
+
 // Badge de estado de invitación para la columna de la tabla. Muestra si el
 // último WhatsApp a este lead se mandó bien (SENT) o falló (FAILED) — no
 // si el médico lo leyó (eso no se rastrea todavía, ver nota en el backend).
@@ -386,7 +443,7 @@ function InviteModal({
   onManualGenerated: () => void
 }) {
   const { t } = useLanguage()
-  const [message, setMessage] = useState(() => buildInviteMessage(lead.full_name))
+  const [message, setMessage] = useState(() => buildInviteMessage(effectiveInviteName(lead)))
   const [includePdf, setIncludePdf] = useState(true)
   const [error, setError] = useState('')
   const [manualPending, setManualPending] = useState(false)
@@ -448,7 +505,14 @@ function InviteModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <p className="text-sm font-semibold mb-1">{t('Invitar por WhatsApp')}</p>
-        <p className="text-xs text-[#475569] mb-4">{lead.full_name} · {lead.phone}</p>
+        <p className={`text-xs text-[#475569] ${effectiveInviteName(lead) !== lead.full_name ? 'mb-0.5' : 'mb-4'}`}>
+          {lead.full_name} · {lead.phone}
+        </p>
+        {effectiveInviteName(lead) !== lead.full_name && (
+          <p className="text-xs text-[#185FA5] mb-4">
+            {t('Se saluda como')} <span className="font-medium">Dr./Dra. {effectiveInviteName(lead)}</span>
+          </p>
+        )}
         {(lead.last_invite_status || lead.last_manual_invite_at) && (
           <div className="mb-3">
             <Alert
@@ -483,7 +547,7 @@ function InviteModal({
             <button
               type="button"
               className="text-xs text-[#185FA5] hover:underline"
-              onClick={() => { setMessage(buildInviteMessage(lead.full_name)); setManualDone(false) }}
+              onClick={() => { setMessage(buildInviteMessage(effectiveInviteName(lead))); setManualDone(false) }}
             >
               {t('🔀 Variar saludo')}
             </button>
@@ -555,6 +619,13 @@ export default function AdminDoctorLeadsPage() {
   // lead.id → timestamp (ms) de cuándo se encoló, para poder expirar la
   // espera si algo se traba.
   const [pendingInvites, setPendingInvites] = useState<Record<string, number>>({})
+  // Estado del botón "Generar invitación" directo en la fila (alternativa
+  // rápida a abrir el modal "Invitar"): 'pending' mientras copia el
+  // mensaje + abre el PDF + deja constancia en el backend, 'done'/'error'
+  // unos segundos para mostrar feedback inline, y clipboardOk si el
+  // navegador dejó copiar solo (si no, el admin igual puede abrir el
+  // modal "Invitar" y copiar el texto a mano desde ahí).
+  const [quickManual, setQuickManual] = useState<Record<string, { status: 'pending' | 'done' | 'error'; clipboardOk?: boolean; error?: string }>>({})
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'doctor-leads', statusFilter, search, page],
@@ -605,6 +676,45 @@ export default function AdminDoctorLeadsPage() {
     mutationFn: (id: string) => adminAPI.deleteDoctorLead(id),
     onSuccess: invalidate,
   })
+
+  // Botón "Generar invitación" directo en la fila — alternativa a abrir el
+  // modal "Invitar" cuando el admin solo quiere el flujo rápido: copiar el
+  // mensaje (con saludo variado al azar) y abrir el PDF, sin tocar nada.
+  // Si quiere editar el mensaje antes o desmarcar el PDF, sigue pudiendo
+  // usar "Invitar" → "Generar invitación" dentro del modal, que hace lo
+  // mismo con más control.
+  const handleQuickGenerate = async (lead: DoctorLead) => {
+    setQuickManual((prev) => ({ ...prev, [lead.id]: { status: 'pending' } }))
+    const message = buildInviteMessage(effectiveInviteName(lead))
+    let clipboardOk = false
+    try {
+      try {
+        await navigator.clipboard.writeText(message)
+        clipboardOk = true
+      } catch {
+        // Sin permiso de portapapeles: seguimos igual, el admin puede
+        // abrir "Invitar" y copiar el texto a mano desde el modal.
+      }
+      const blob = await adminAPI.getDoctorLeadInvitationPdf(lead.id)
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+
+      await adminAPI.generateManualDoctorLeadInvite(lead.id)
+      invalidate()
+      setQuickManual((prev) => ({ ...prev, [lead.id]: { status: 'done', clipboardOk } }))
+    } catch (err) {
+      setQuickManual((prev) => ({ ...prev, [lead.id]: { status: 'error', error: getErrorMessage(err) } }))
+    } finally {
+      setTimeout(() => {
+        setQuickManual((prev) => {
+          if (!prev[lead.id] || prev[lead.id].status === 'pending') return prev
+          const next = { ...prev }
+          delete next[lead.id]
+          return next
+        })
+      }, 6000)
+    }
+  }
 
   const funnel = data?.funnel
 
@@ -667,10 +777,12 @@ export default function AdminDoctorLeadsPage() {
 
       {!isLoading && data && data.items.length > 0 && (
         <div className="bg-white rounded-2xl border border-[#DDE1EE] overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-[#F5F6FA] text-[#475569] text-xs">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">{t('Nombre')}</th>
+                <th className="text-left px-4 py-2 font-medium">{t('Nombre para invitación')}</th>
                 <th className="text-left px-4 py-2 font-medium">{t('Especialidad')}</th>
                 <th className="text-left px-4 py-2 font-medium">{t('Ciudad')}</th>
                 <th className="text-left px-4 py-2 font-medium">{t('Teléfono')}</th>
@@ -680,7 +792,10 @@ export default function AdminDoctorLeadsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.items.map((lead) => (
+              {data.items.map((lead) => {
+                const quick = quickManual[lead.id]
+                const inviteDisabled = !lead.phone || lead.status === 'NO_CONTACTAR'
+                return (
                 <tr key={lead.id} className="border-t border-[#DDE1EE] align-top">
                   <td className="px-4 py-3">
                     <p className="font-medium text-[#141820]">{lead.full_name}</p>
@@ -693,6 +808,12 @@ export default function AdminDoctorLeadsPage() {
                         {t('Ver en Maps ↗')}
                       </a>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <InviteNameCell
+                      lead={lead}
+                      onSave={(value) => updateMutation.mutate({ id: lead.id, data: { invite_name: value || null } })}
+                    />
                   </td>
                   <td className="px-4 py-3 text-[#475569]">{lead.specialty || '—'}</td>
                   <td className="px-4 py-3 text-[#475569]">{lead.city || '—'}</td>
@@ -715,11 +836,19 @@ export default function AdminDoctorLeadsPage() {
                     <div className="flex items-center justify-end gap-2 flex-wrap">
                       <button
                         className="text-xs font-medium text-[#0F6E56] border border-[#0F6E56] rounded-lg px-2.5 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
-                        disabled={!lead.phone || lead.status === 'NO_CONTACTAR' || !!pendingInvites[lead.id]}
+                        disabled={inviteDisabled || !!pendingInvites[lead.id]}
                         title={!lead.phone ? t('Este prospecto no tiene teléfono') : ''}
                         onClick={() => setInviteTarget(lead)}
                       >
                         {lead.last_invite_status || lead.last_manual_invite_at ? t('Reinvitar') : t('Invitar')}
+                      </button>
+                      <button
+                        className="text-xs font-medium text-[#185FA5] border border-[#185FA5] rounded-lg px-2.5 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={inviteDisabled || quick?.status === 'pending'}
+                        title={t('No manda nada por WhatsApp: copia el mensaje y abre el PDF para que lo envíes vos mismo.')}
+                        onClick={() => handleQuickGenerate(lead)}
+                      >
+                        {quick?.status === 'pending' ? <Spinner size="sm" /> : t('📋 Generar invitación')}
                       </button>
                       <button
                         className="text-xs text-[#A32D2D] hover:underline"
@@ -728,11 +857,23 @@ export default function AdminDoctorLeadsPage() {
                         {t('Eliminar')}
                       </button>
                     </div>
+                    {quick?.status === 'done' && (
+                      <p className="text-[10px] text-[#0F6E56] text-right mt-1">
+                        {quick.clipboardOk
+                          ? t('✅ Copiado y PDF abierto')
+                          : t('✅ PDF abierto (copiá el texto desde "Invitar")')}
+                      </p>
+                    )}
+                    {quick?.status === 'error' && (
+                      <p className="text-[10px] text-[#A32D2D] text-right mt-1">{quick.error}</p>
+                    )}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
+          </div>
 
           {/* Paginación simple */}
           {data.total > data.page_size && (

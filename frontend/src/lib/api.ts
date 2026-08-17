@@ -68,6 +68,12 @@ export type DoctorLeadStatus =
 export interface DoctorLead {
   id: string
   full_name: string
+  // Corrección manual del nombre SOLO para el saludo de la invitación
+  // (mensaje y PDF) — full_name sigue siendo lo que se muestra en el
+  // listado. Google Places a veces trae datos extra pegados al nombre
+  // ("Medicina Interna - Dr. Jorge Pérez - La Paz"); acá el admin escribe
+  // el nombre correcto. Si es null/vacío, la invitación usa full_name.
+  invite_name: string | null
   specialty: string | null
   city: string | null
   phone: string | null

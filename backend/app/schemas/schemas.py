@@ -1099,6 +1099,10 @@ class BroadcastCreateRequest(BaseModel):
 
 class DoctorLeadCreateRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=200)
+    # Nombre corregido para el saludo de la invitación (opcional, ver
+    # DoctorLead.invite_name en el modelo). Casi siempre se completa
+    # después, editando el lead — no al importarlo/crearlo.
+    invite_name: Optional[str] = Field(None, max_length=200)
     specialty: Optional[str] = Field(None, max_length=100)
     city: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
@@ -1113,6 +1117,10 @@ class DoctorLeadCreateRequest(BaseModel):
 
 class DoctorLeadUpdateRequest(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=200)
+    # Nombre para el saludo de la invitación (mensaje y PDF) cuando difiere
+    # de full_name — ver DoctorLead.invite_name. Mandar "" o null lo borra
+    # y la invitación vuelve a usar full_name.
+    invite_name: Optional[str] = Field(None, max_length=200)
     specialty: Optional[str] = Field(None, max_length=100)
     city: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)

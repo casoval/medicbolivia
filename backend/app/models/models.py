@@ -1826,6 +1826,16 @@ class DoctorLead(Base):
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Nombre a usar en el saludo del mensaje/PDF de invitación, cuando
+    # difiere de full_name. Google Places a veces trae en el nombre datos
+    # extra (especialidad, clínica, ciudad) pegados al nombre real del
+    # médico ("Medicina Interna - Dr. Jorge Pérez - La Paz"); en esos casos
+    # el admin corrige acá el nombre correcto SOLO para la invitación, sin
+    # tocar full_name (que se sigue mostrando tal cual en el listado). Si
+    # está vacío/NULL, la invitación cae de vuelta a full_name — ver
+    # _lead_invite_name() en admin.py y effectiveInviteName() en el
+    # frontend.
+    invite_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     specialty: Mapped[Optional[str]] = mapped_column(String(100))
     city: Mapped[Optional[str]] = mapped_column(String(100))
     # Formato canónico del proyecto (ver app/core/phone.py). Nullable:
