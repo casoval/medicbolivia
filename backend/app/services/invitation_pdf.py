@@ -191,9 +191,9 @@ def generate_generic_invitation_pdf() -> bytes:
 
     elements.append(Paragraph(
         f"Sumarse no le cuesta nada y no le compromete a nada: usted conserva sus tarifas y sus "
-        f"horarios. Si desea conocer más o coordinar una conversación, visítenos en medicbolivia.com, "
-        f"donde encontrará nuestros números de contacto y más información, o escríbanos directamente "
-        f"a {CONTACT_EMAIL}.",
+        f"horarios. Si desea conocer más o coordinar una conversación, visítenos en "
+        f"<b><font color=\"#185FA5\">medicbolivia.com</font></b>, donde encontrará nuestros números "
+        f"de contacto y más información, o escríbanos directamente a {CONTACT_EMAIL}.",
         body_style,
     ))
 
