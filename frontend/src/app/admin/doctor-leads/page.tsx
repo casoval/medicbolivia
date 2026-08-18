@@ -740,6 +740,27 @@ export default function AdminDoctorLeadsPage() {
     })
   }
 
+  // Descarga la invitación genérica (sin nombre de médico, tamaño carta)
+  // para imprimir y entregar en persona — no depende de ningún lead.
+  const [genericPdfLoading, setGenericPdfLoading] = useState(false)
+  const handleDownloadGenericInvitation = async () => {
+    setGenericPdfLoading(true)
+    try {
+      const blob = await adminAPI.getGenericInvitationPdf()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'Invitacion_MedicBolivia_General.pdf'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      // Revocamos un toque después para no cortar la descarga en navegadores lentos.
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    } finally {
+      setGenericPdfLoading(false)
+    }
+  }
+
   const funnel = data?.funnel
 
   return (
@@ -747,6 +768,14 @@ export default function AdminDoctorLeadsPage() {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <SectionTitle>{t('Captación de médicos')}</SectionTitle>
         <div className="flex gap-2">
+          <button
+            className="border border-[#185FA5] text-[#185FA5] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#E6F1FB] disabled:opacity-60"
+            onClick={handleDownloadGenericInvitation}
+            disabled={genericPdfLoading}
+            title={t('PDF genérico en tamaño carta, sin nombre de médico ni WhatsApp — para imprimir y entregar en persona')}
+          >
+            {genericPdfLoading ? <Spinner size="sm" /> : t('🖨️ Invitación genérica (PDF)')}
+          </button>
           <button
             className="border border-[#185FA5] text-[#185FA5] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#E6F1FB]"
             onClick={() => setShowAddLead(true)}

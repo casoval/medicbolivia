@@ -2975,6 +2975,33 @@ async def generate_manual_doctor_lead_invite(
 
 
 @router.get(
+    "/doctor-leads/generic-invitation-pdf",
+    summary="PDF de invitación genérica (sin nombre) para imprimir y entregar en persona",
+)
+async def get_generic_invitation_pdf(
+    current_user=Depends(get_current_admin),
+):
+    """
+    Variante de invitation-pdf que NO depende de un lead puntual: saludo
+    genérico "Estimado/a Doctor/a,", sin mención a WhatsApp (invita a
+    visitar medicbolivia.com, donde el médico encuentra los números de
+    contacto) y mantiene el correo. Pensada para imprimir en tamaño carta
+    y entregarla en persona en el consultorio — el primer contacto por
+    WhatsApp uno a uno fue lo que llevó al baneo de la cuenta.
+
+    IMPORTANTE: esta ruta debe declararse ANTES que
+    /doctor-leads/{lead_id}/invitation-pdf, o FastAPI intentaría matchear
+    "generic-invitation-pdf" como si fuera un {lead_id}.
+    """
+    pdf_bytes = invitation_pdf.generate_generic_invitation_pdf()
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="Invitacion_MedicBolivia_General.pdf"'},
+    )
+
+
+@router.get(
     "/doctor-leads/{lead_id}/invitation-pdf",
     summary="Generar el PDF de invitación para abrirlo en el navegador y enviarlo manualmente",
 )

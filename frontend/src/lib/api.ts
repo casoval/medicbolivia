@@ -1721,6 +1721,13 @@ export const adminAPI = {
   getDoctorLeadInvitationPdf: (id: string) =>
     api.get(`/admin/doctor-leads/${id}/invitation-pdf`, { responseType: 'blob' }).then(r => r.data as Blob),
 
+  // Invitación genérica (sin nombre de médico) en tamaño carta, para
+  // imprimir y entregar en persona en el consultorio — no menciona
+  // WhatsApp como canal de contacto (dirige a la página web), a
+  // diferencia de getDoctorLeadInvitationPdf que sí lo hacía.
+  getGenericInvitationPdf: () =>
+    api.get(`/admin/doctor-leads/generic-invitation-pdf`, { responseType: 'blob' }).then(r => r.data as Blob),
+
   // ── Pagos a profesionales (payouts, Fase 1 semi-automática) ──
   // Ver documento de diseño y app/services/payout.py en el backend.
   getPendingPayouts: () =>
