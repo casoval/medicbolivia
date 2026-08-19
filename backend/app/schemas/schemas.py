@@ -133,7 +133,9 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     phone: str = Field(..., min_length=8, max_length=15)
     code: str = Field(..., min_length=4, max_length=8)
-    new_password: str = Field(..., min_length=8, description="Mínimo 8 caracteres")
+    # Ver misma nota que en PatientRegisterRequest.password: mínimo bajado
+    # de 8 a 4 caracteres, sin restricción de tipo de carácter.
+    new_password: str = Field(..., min_length=4, description="Mínimo 4 caracteres")
 
     @field_validator("phone")
     @classmethod
@@ -151,7 +153,8 @@ class ChangePasswordRequest(BaseModel):
     es realmente el dueño de la cuenta quien la está cambiando (por si
     dejó la sesión abierta en un dispositivo compartido)."""
     current_password: str
-    new_password: str = Field(..., min_length=8, description="Mínimo 8 caracteres")
+    # Ver misma nota que en PatientRegisterRequest.password.
+    new_password: str = Field(..., min_length=4, description="Mínimo 4 caracteres")
 
 
 class TokenResponse(BaseModel):

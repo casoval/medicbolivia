@@ -44,8 +44,8 @@ export function ChangePasswordSection() {
       setError(t('Completa los 3 campos.'))
       return
     }
-    if (newPassword.length < 8) {
-      setError(t('La contraseña nueva debe tener al menos 8 caracteres.'))
+    if (newPassword.length < 4) {
+      setError(t('La contraseña nueva debe tener al menos 4 caracteres.'))
       return
     }
     if (newPassword !== confirmPassword) {
@@ -81,11 +81,11 @@ export function ChangePasswordSection() {
           <PasswordInput
             autoComplete="new-password"
             className="input"
-            placeholder={t('Mínimo 8 caracteres')}
+            placeholder={t('Mínimo 4 caracteres')}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required
-            minLength={8}
+            minLength={4}
           />
         </div>
         <div>
