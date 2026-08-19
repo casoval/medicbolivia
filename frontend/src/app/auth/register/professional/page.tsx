@@ -53,7 +53,9 @@ export default function RegisterProfessionalPage() {
   // Ver misma nota en app/auth/register/patient/page.tsx: si un admin
   // cerró el registro de profesionales, se bloquea el acceso al
   // formulario acá mismo en vez de dejar que lo llenen para nada.
-  const [registrationOpen, setRegistrationOpen] = useState(true)
+  // null = "todavía no sabemos" (evita el parpadeo de mostrar el
+  // formulario un instante antes de reemplazarlo por el aviso).
+  const [registrationOpen, setRegistrationOpen] = useState<boolean | null>(null)
 
   useEffect(() => {
     let active = true
@@ -63,7 +65,7 @@ export default function RegisterProfessionalPage() {
         setVerificationRequired(res.data.phone_verification_required)
         setRegistrationOpen(res.data.professional_registration_open)
       })
-      .catch(() => { /* si falla la consulta, se mantiene obligatoria/abierta por defecto */ })
+      .catch(() => { if (active) setRegistrationOpen(true) /* falla la consulta: se asume abierto */ })
       .finally(() => { if (active) setConfigLoaded(true) })
     return () => { active = false }
   }, [])
@@ -132,7 +134,14 @@ export default function RegisterProfessionalPage() {
         </div>
 
         <div className="bg-white border border-[#DDE1EE] rounded-2xl p-6 shadow-sm">
-          {configLoaded && !registrationOpen ? (
+          {!configLoaded || registrationOpen === null ? (
+            // Todavía no sabemos si el registro está abierto: ni el
+            // formulario ni el aviso, para no arrancar mostrando algo que
+            // puede tener que cambiarse un instante después.
+            <div className="py-10 flex items-center justify-center" aria-busy="true" aria-label={t('Cargando')}>
+              <div className="w-6 h-6 border-2 border-[#DDE1EE] border-t-[#0F6E56] rounded-full animate-spin" />
+            </div>
+          ) : !registrationOpen ? (
             <div className="text-center py-4">
               <div className="w-12 h-12 rounded-full bg-[#FCEBEB] flex items-center justify-center mx-auto mb-4">
                 <ShieldAlert className="w-6 h-6 text-[#A32D2D]" aria-hidden="true" />

@@ -47,11 +47,18 @@ export default function RegisterPatientPage() {
   // General → "Registro de pacientes"), no tiene sentido dejar que la
   // persona llene el formulario para que recién al final se le rechace:
   // se bloquea el acceso acá mismo y se le pide que contacte a un
-  // administrador. Por defecto (mientras carga) se asume abierto, para
-  // no mostrar el bloqueo de arranque en el caso normal; si la consulta
-  // falla, también se asume abierto — el backend igual lo rechaza si de
-  // verdad está cerrado (register_patient valida is_patient_registration_open).
-  const [registrationOpen, setRegistrationOpen] = useState(true)
+  // administrador.
+  // null = "todavía no sabemos" (mientras viaja la consulta). Es a
+  // propósito distinto de true/false: si arrancara en true, el formulario
+  // se pintaría de entrada y recién cambiaría al aviso cuando llegue la
+  // respuesta — un parpadeo confuso (se ve el form medio segundo y de
+  // golpe se reemplaza por "deshabilitado"). Con null, mientras se carga
+  // no se muestra ni el form ni el aviso, se muestra un loader — así solo
+  // se pinta una vez, ya con la respuesta real. Si la consulta falla, se
+  // asume abierto (el backend igual lo rechaza si de verdad está cerrado,
+  // register_patient valida is_patient_registration_open) para no dejar
+  // a alguien bloqueado por un error de red.
+  const [registrationOpen, setRegistrationOpen] = useState<boolean | null>(null)
 
   useEffect(() => {
     let active = true
@@ -61,7 +68,7 @@ export default function RegisterPatientPage() {
         setVerificationRequired(res.data.phone_verification_required)
         setRegistrationOpen(res.data.patient_registration_open)
       })
-      .catch(() => { /* si falla la consulta, se mantiene obligatoria/abierta por defecto */ })
+      .catch(() => { if (active) setRegistrationOpen(true) /* falla la consulta: se asume abierto */ })
       .finally(() => { if (active) setConfigLoaded(true) })
     return () => { active = false }
   }, [])
@@ -136,7 +143,14 @@ export default function RegisterPatientPage() {
         </div>
 
         <div className="card">
-          {configLoaded && !registrationOpen ? (
+          {!configLoaded || registrationOpen === null ? (
+            // Todavía no sabemos si el registro está abierto: no se pinta
+            // ni el formulario ni el aviso, para no arrancar mostrando
+            // algo que puede tener que cambiarse un instante después.
+            <div className="py-10 flex items-center justify-center" aria-busy="true" aria-label={t('Cargando')}>
+              <div className="w-6 h-6 border-2 border-[#DDE1EE] border-t-[#185FA5] rounded-full animate-spin" />
+            </div>
+          ) : !registrationOpen ? (
             <div className="text-center py-4">
               <div className="w-12 h-12 rounded-full bg-[#FCEBEB] flex items-center justify-center mx-auto mb-4">
                 <ShieldAlert className="w-6 h-6 text-[#A32D2D]" aria-hidden="true" />
