@@ -24,7 +24,10 @@ class PatientRegisterRequest(BaseModel):
     # normalize_intl_phone en vez de normalize_bo_phone. Ver app/core/phone.py.
     phone: str = Field(..., min_length=8, max_length=17, description="Código de país + número, ej: 59172345678")
     email: Optional[EmailStr] = None
-    password: str = Field(..., min_length=8, description="Mínimo 8 caracteres")
+    # Mínimo bajado de 8 a 4 caracteres (ago-2026), sin restricción de tipo
+    # de caracter (no hace falta mayúscula/número/símbolo) — decisión de
+    # producto para bajar la fricción del registro.
+    password: str = Field(..., min_length=4, description="Mínimo 4 caracteres")
     first_name: str = Field(..., min_length=2, max_length=100)
     last_name: str = Field(..., min_length=2, max_length=100)
     ci: str = Field(..., min_length=5, max_length=20, description="Cédula de identidad")
@@ -44,7 +47,8 @@ class PatientRegisterRequest(BaseModel):
 class ProfessionalRegisterRequest(BaseModel):
     phone: str = Field(..., min_length=8, max_length=17, description="Código de país + número, ej: 59172345678")
     email: Optional[EmailStr] = None
-    password: str = Field(..., min_length=8)
+    # Ver misma nota en PatientRegisterRequest.password.
+    password: str = Field(..., min_length=4, description="Mínimo 4 caracteres")
     first_name: str = Field(..., min_length=2, max_length=100)
     last_name: str = Field(..., min_length=2, max_length=100)
     ci: str = Field(..., min_length=5, max_length=20)

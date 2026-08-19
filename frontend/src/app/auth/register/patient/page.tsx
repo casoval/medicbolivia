@@ -13,6 +13,7 @@ import { PhoneVerification } from '@/components/ui/PhoneVerification'
 import { SpanishBirthDatePicker } from '@/components/ui/SpanishDateTimePicker'
 import { PasswordInput } from '@/components/ui'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { ShieldAlert } from 'lucide-react'
 
 const DEPARTMENTS = [
   'La Paz', 'Santa Cruz', 'Cochabamba', 'Oruro', 'Potosí',
@@ -42,11 +43,25 @@ export default function RegisterPatientPage() {
   const [verificationRequired, setVerificationRequired] = useState(true)
   const [configLoaded, setConfigLoaded] = useState(false)
 
+  // Si un admin cerró el registro de pacientes (panel → Configuración →
+  // General → "Registro de pacientes"), no tiene sentido dejar que la
+  // persona llene el formulario para que recién al final se le rechace:
+  // se bloquea el acceso acá mismo y se le pide que contacte a un
+  // administrador. Por defecto (mientras carga) se asume abierto, para
+  // no mostrar el bloqueo de arranque en el caso normal; si la consulta
+  // falla, también se asume abierto — el backend igual lo rechaza si de
+  // verdad está cerrado (register_patient valida is_patient_registration_open).
+  const [registrationOpen, setRegistrationOpen] = useState(true)
+
   useEffect(() => {
     let active = true
     authAPI.getRegistrationConfig()
-      .then((res) => { if (active) setVerificationRequired(res.data.phone_verification_required) })
-      .catch(() => { /* si falla la consulta, se mantiene obligatoria por defecto */ })
+      .then((res) => {
+        if (!active) return
+        setVerificationRequired(res.data.phone_verification_required)
+        setRegistrationOpen(res.data.patient_registration_open)
+      })
+      .catch(() => { /* si falla la consulta, se mantiene obligatoria/abierta por defecto */ })
       .finally(() => { if (active) setConfigLoaded(true) })
     return () => { active = false }
   }, [])
@@ -121,6 +136,21 @@ export default function RegisterPatientPage() {
         </div>
 
         <div className="card">
+          {configLoaded && !registrationOpen ? (
+            <div className="text-center py-4">
+              <div className="w-12 h-12 rounded-full bg-[#FCEBEB] flex items-center justify-center mx-auto mb-4">
+                <ShieldAlert className="w-6 h-6 text-[#A32D2D]" aria-hidden="true" />
+              </div>
+              <h2 className="text-base font-semibold mb-2">{t('Registro de pacientes deshabilitado')}</h2>
+              <p className="text-sm text-[#475569]">
+                {t('Por el momento no se están aceptando nuevos registros de pacientes. Por favor contactate con un administrador.')}
+              </p>
+              <Link href="/auth/login" className="btn-primary w-full text-center mt-6 inline-block">
+                {t('Ir a iniciar sesión')}
+              </Link>
+            </div>
+          ) : (
+          <>
           <h2 className="text-base font-semibold mb-5">{t('Crea tu cuenta de paciente')}</h2>
 
           {error && (
@@ -197,7 +227,7 @@ export default function RegisterPatientPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">{t('Contraseña')} <span className="text-[#E24B4A]">*</span></label>
-                <PasswordInput name="password" autoComplete="new-password" className="input" placeholder={t('Mínimo 8 caracteres')} value={form.password} onChange={handleChange} required minLength={8} />
+                <PasswordInput name="password" autoComplete="new-password" className="input" placeholder={t('Mínimo 4 caracteres')} value={form.password} onChange={handleChange} required minLength={4} />
               </div>
               <div>
                 <label className="label">{t('Confirmar contraseña')} <span className="text-[#E24B4A]">*</span></label>
@@ -225,6 +255,8 @@ export default function RegisterPatientPage() {
               {t('Inicia sesión')}
             </Link>
           </p>
+          </>
+          )}
         </div>
       </div>
     </div>

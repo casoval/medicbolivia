@@ -388,7 +388,11 @@ export const authAPI = {
   // Público, sin sesión: lo consultan las pantallas de registro para
   // saber si mostrar el paso de verificación por WhatsApp. Refleja el
   // kill switch que un admin prende/apaga en IA → Verificación de registro.
-  getRegistrationConfig: () => api.get<{ phone_verification_required: boolean }>('/auth/registration-config'),
+  getRegistrationConfig: () => api.get<{
+    phone_verification_required: boolean
+    patient_registration_open: boolean
+    professional_registration_open: boolean
+  }>('/auth/registration-config'),
 
   registerPatient: (data: {
     phone: string; password: string; first_name: string

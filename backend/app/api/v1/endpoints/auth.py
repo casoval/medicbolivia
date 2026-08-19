@@ -31,6 +31,7 @@ from app.schemas.schemas import (
 )
 from app.services.whatsapp import send_whatsapp_otp
 from app.services.registration_verification import is_phone_verification_required
+from app.core.maintenance import is_patient_registration_open, is_professional_registration_open
 
 router = APIRouter()
 
@@ -39,17 +40,30 @@ router = APIRouter()
 @router.get(
     "/registration-config",
     status_code=status.HTTP_200_OK,
-    summary="Configuración pública de registro (si la verificación por WhatsApp es obligatoria)"
+    summary="Configuración pública de registro (verificación WhatsApp y si el registro está abierto)"
 )
-async def get_registration_config():
+async def get_registration_config(db: AsyncSession = Depends(get_db)):
     """
     Público y sin autenticación a propósito: lo consultan las pantallas
     de registro de paciente/profesional (que todavía no tienen sesión)
-    para decidir si mostrar el paso de verificación por WhatsApp o
-    saltarlo directo al formulario. Refleja en vivo el kill switch que
-    un admin prende/apaga desde el panel (IA → Verificación de registro).
+    para decidir qué mostrar antes de que la persona llene nada.
+
+    - phone_verification_required: si hay que mostrar el paso de
+      verificación por WhatsApp (kill switch en IA → Verificación de
+      registro).
+    - patient_registration_open / professional_registration_open: si el
+      admin dejó el registro de ese rol habilitado (panel → Configuración
+      → General). Si está en False, el frontend debe bloquear el acceso
+      al formulario y mostrar un aviso en vez de dejar que la persona
+      cargue sus datos para nada — el registro igual se rechaza en el
+      backend (ver register_patient/register_professional) por si algo
+      llega a saltarse este chequeo del lado del cliente.
     """
-    return {"phone_verification_required": await is_phone_verification_required()}
+    return {
+        "phone_verification_required": await is_phone_verification_required(),
+        "patient_registration_open": await is_patient_registration_open(db),
+        "professional_registration_open": await is_professional_registration_open(db),
+    }
 
 
 # ── POST /api/v1/auth/register/patient ──────────────
@@ -65,6 +79,17 @@ async def register_patient(
     response: Response,
     db: AsyncSession = Depends(get_db)
 ):
+    # El admin puede cerrar el alta de pacientes desde Configuración →
+    # General (toggle "Registro de pacientes"). is_patient_registration_open
+    # ya incluye el modo mantenimiento (manda por encima del toggle). Este
+    # chequeo va antes que cualquier otra cosa: no tiene sentido validar
+    # teléfono/email/contraseña si de entrada no se va a poder registrar.
+    if not await is_patient_registration_open(db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El registro de pacientes está deshabilitado por el momento. Por favor contactate con un administrador."
+        )
+
     # El teléfono debe haber pasado por /auth/otp/send + /auth/otp/verify
     # en los últimos 30 minutos antes de poder completar el registro —
     # salvo que un admin haya apagado el kill switch de verificación
@@ -136,6 +161,15 @@ async def register_professional(
     response: Response,
     db: AsyncSession = Depends(get_db)
 ):
+    # El admin puede cerrar el alta de profesionales desde Configuración →
+    # General (toggle "Registro de profesionales"). Mismo criterio que en
+    # register_patient: se chequea primero que nada más.
+    if not await is_professional_registration_open(db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El registro de profesionales está deshabilitado por el momento. Por favor contactate con un administrador."
+        )
+
     # El teléfono debe haber pasado por /auth/otp/send + /auth/otp/verify
     # en los últimos 30 minutos antes de poder completar el registro —
     # salvo que un admin haya apagado el kill switch de verificación

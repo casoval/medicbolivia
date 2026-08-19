@@ -11,6 +11,7 @@ import { PhoneVerification } from '@/components/ui/PhoneVerification'
 import { SpanishBirthDatePicker } from '@/components/ui/SpanishDateTimePicker'
 import { PasswordInput } from '@/components/ui'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { ShieldAlert } from 'lucide-react'
 
 // Especialidad, subespecialidad e idiomas de atención se sacaron de este
 // formulario (ago-2026): antes se cargaban acá sin que nadie los
@@ -49,11 +50,20 @@ export default function RegisterProfessionalPage() {
   const [verificationRequired, setVerificationRequired] = useState(true)
   const [configLoaded, setConfigLoaded] = useState(false)
 
+  // Ver misma nota en app/auth/register/patient/page.tsx: si un admin
+  // cerró el registro de profesionales, se bloquea el acceso al
+  // formulario acá mismo en vez de dejar que lo llenen para nada.
+  const [registrationOpen, setRegistrationOpen] = useState(true)
+
   useEffect(() => {
     let active = true
     authAPI.getRegistrationConfig()
-      .then((res) => { if (active) setVerificationRequired(res.data.phone_verification_required) })
-      .catch(() => { /* si falla la consulta, se mantiene obligatoria por defecto */ })
+      .then((res) => {
+        if (!active) return
+        setVerificationRequired(res.data.phone_verification_required)
+        setRegistrationOpen(res.data.professional_registration_open)
+      })
+      .catch(() => { /* si falla la consulta, se mantiene obligatoria/abierta por defecto */ })
       .finally(() => { if (active) setConfigLoaded(true) })
     return () => { active = false }
   }, [])
@@ -122,6 +132,21 @@ export default function RegisterProfessionalPage() {
         </div>
 
         <div className="bg-white border border-[#DDE1EE] rounded-2xl p-6 shadow-sm">
+          {configLoaded && !registrationOpen ? (
+            <div className="text-center py-4">
+              <div className="w-12 h-12 rounded-full bg-[#FCEBEB] flex items-center justify-center mx-auto mb-4">
+                <ShieldAlert className="w-6 h-6 text-[#A32D2D]" aria-hidden="true" />
+              </div>
+              <h2 className="text-base font-semibold mb-2">{t('Registro de profesionales deshabilitado')}</h2>
+              <p className="text-sm text-[#475569]">
+                {t('Por el momento no se están aceptando nuevos registros de profesionales. Por favor contactate con un administrador.')}
+              </p>
+              <Link href="/auth/login" className="w-full bg-[#0F6E56] text-white py-2.5 rounded-lg font-medium text-sm hover:bg-[#085041] transition-colors flex items-center justify-center mt-6">
+                {t('Ir a iniciar sesión')}
+              </Link>
+            </div>
+          ) : (
+          <>
 
           <div className="bg-[#E6F1FB] border border-[#85B7EB] rounded-xl px-4 py-3 mb-5">
             <p className="text-xs text-[#0C447C] font-medium mb-1">📋 {t('Tu perfil será verificado')}</p>
@@ -214,7 +239,7 @@ export default function RegisterProfessionalPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-[#475569] mb-1">{t('Contraseña')} <span className="text-[#E24B4A]">*</span></label>
-                <PasswordInput name="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder={t('Mínimo 8 caracteres')} value={form.password} onChange={handleChange} required minLength={8} />
+                <PasswordInput name="password" autoComplete="new-password" className="w-full px-3 py-2.5 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white" placeholder={t('Mínimo 4 caracteres')} value={form.password} onChange={handleChange} required minLength={4} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#475569] mb-1">{t('Confirmar')} <span className="text-[#E24B4A]">*</span></label>
@@ -239,6 +264,8 @@ export default function RegisterProfessionalPage() {
             {t('¿Ya tienes cuenta?')}{' '}
             <Link href="/auth/login" className="text-[#185FA5] font-medium hover:underline">{t('Inicia sesión')}</Link>
           </p>
+          </>
+          )}
         </div>
       </div>
     </div>
