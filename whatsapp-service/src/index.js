@@ -334,6 +334,16 @@ async function connectToWhatsApp() {
   client.on('message', async (msg) => {
     try {
       if (msg.from.endsWith('@g.us')) return   // ignorar grupos por ahora
+      // status@broadcast es el canal interno de WhatsApp para los Estados
+      // (historias de 24h), no un contacto real. Si se deja pasar, el
+      // backend lo trata como un chat normal y termina intentando
+      // responderle (POST /typing y /send a status@broadcast), lo cual
+      // siempre falla porque WhatsApp no permite mensajes directos a ese
+      // pseudo-contacto — de ahí salían los errores "No se pudo marcar
+      // 'escribiendo...'" y "Error enviando mensaje a status@broadcast"
+      // en los logs. Se corta acá, en el origen, para que ni siquiera
+      // llegue al backend.
+      if (msg.from === 'status@broadcast') return
       if (msg.type !== 'chat') return          // por ahora solo texto; audio/imagen queda para fase 2
 
       const text = (msg.body || '').trim()
