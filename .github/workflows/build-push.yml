@@ -9,6 +9,11 @@ on:
       - 'frontend/**'
       - 'backend/**'
       - '.github/workflows/build-push.yml'
+  # Permite disparar el build a mano desde la pestaña Actions, sin
+  # depender de que se haya tocado un archivo de frontend/ o backend/ —
+  # útil la primera vez, o para forzar un rebuild puntual de ambas
+  # imágenes (ej. después de cambiar solo el Dockerfile o el compose).
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -33,7 +38,7 @@ jobs:
 
   build-frontend:
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -67,7 +72,7 @@ jobs:
 
   build-backend:
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
