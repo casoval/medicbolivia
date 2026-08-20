@@ -228,6 +228,9 @@ def generate_generic_invitation_pdf() -> bytes:
 
     doc.build(elements)
     return buffer.getvalue()
+
+
+def generate_invitation_pdf(doctor_name: str) -> bytes:
     """
     Arma el PDF de invitación personalizado y devuelve los bytes listos
     para adjuntar (ver app/tasks/whatsapp_tasks.py::send_whatsapp_document).
