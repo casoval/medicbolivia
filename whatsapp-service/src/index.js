@@ -75,6 +75,14 @@ let client = null
 let connectionState = 'DOWN'   // DOWN | CONNECTING | QR_PENDING | CONNECTED
 let latestQR = null            // string crudo del QR, se convierte a PNG on-demand
 let connectWatchdogTimer = null
+// Evita reconexiones solapadas: si el watchdog, 'disconnected' y el
+// .catch() de initialize() se disparan casi al mismo tiempo (pasa en la
+// práctica — un Chrome colgado suele fallar por varios lados a la vez),
+// sin este guard cada uno llama a connectToWhatsApp() por su cuenta y
+// terminamos con 2+ Chrome nuevos naciendo en paralelo mientras el viejo
+// todavía se está cerrando. Ver incidente ago-2026: dos árboles de
+// procesos Chrome corriendo a la vez, detectado con `ps aux | grep chrome`.
+let isReconnecting = false
 
 // Compara dos strings en tiempo constante (crypto.timingSafeEqual exige
 // buffers del mismo largo, así que primero se hashean a un largo fijo con
@@ -184,7 +192,74 @@ function clearConnectWatchdog() {
   }
 }
 
-function connectToWhatsApp() {
+// Cierra el cliente actual asegurándose de que el proceso de Chrome haya
+// terminado de verdad antes de devolver el control — a diferencia del
+// `client.destroy()` disparado sin esperar que había antes acá, que dejaba
+// el Chrome viejo corriendo en paralelo con el nuevo si destroy() tardaba
+// más que el setTimeout de reconexión (muy fácil bajo carga de CPU: el
+// cierre de un browser real de Puppeteer no es instantáneo, y client.
+// destroy() nunca tenía un plazo).
+//
+// DESTROY_TIMEOUT_MS: si destroy() no resuelve en este tiempo, asumimos
+// que Chrome quedó colgado (el mismo escenario que ya documenta el
+// watchdog de conexión más abajo) y matamos el proceso del browser a la
+// fuerza con SIGKILL, en vez de dejarlo zombie indefinidamente.
+const DESTROY_TIMEOUT_MS = Number(process.env.WHATSAPP_DESTROY_TIMEOUT_MS || 15000)
+
+async function safeDestroyClient(reason) {
+  const toDestroy = client
+  client = null
+  if (!toDestroy) return
+
+  // Referencia al proceso del browser ANTES de llamar a destroy() — una
+  // vez que destroy() empieza a desarmar cosas por dentro, pupBrowser
+  // puede quedar en un estado raro para pedirle el process() después.
+  let browserProcess = null
+  try {
+    browserProcess = toDestroy.pupBrowser?.process() || null
+  } catch (_) { /* noop */ }
+
+  try {
+    await Promise.race([
+      toDestroy.destroy(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('destroy() timeout')), DESTROY_TIMEOUT_MS)
+      ),
+    ])
+    logger.info(`Cliente de WhatsApp cerrado limpio (motivo: ${reason}).`)
+  } catch (err) {
+    logger.warn(
+      `destroy() no terminó a tiempo (motivo: ${reason}, error: ${err.message}) — ` +
+      `matando el proceso de Chrome a la fuerza para evitar un árbol duplicado.`
+    )
+    if (browserProcess && !browserProcess.killed) {
+      try { browserProcess.kill('SIGKILL') } catch (_) { /* noop */ }
+    }
+  }
+}
+
+// scheduleReconnect: reemplaza los `setTimeout(connectToWhatsApp, Nms)`
+// sueltos que había antes en cada manejador de error — ahora, en vez de
+// llamar a connectToWhatsApp() directo (que podía solaparse con la
+// reconexión ya en curso), primero libera el guard y deja que
+// connectToWhatsApp() decida si puede arrancar.
+function scheduleReconnect(delayMs) {
+  isReconnecting = false
+  setTimeout(connectToWhatsApp, delayMs)
+}
+
+async function connectToWhatsApp() {
+  if (isReconnecting) {
+    logger.warn('connectToWhatsApp() llamado mientras ya había una reconexión en curso — se ignora este disparo duplicado.')
+    return
+  }
+  isReconnecting = true
+
+  // Cierra (de verdad, esperando) cualquier cliente/Chrome de un intento
+  // anterior antes de crear uno nuevo — esto es lo que evita los dos
+  // árboles de Chrome corriendo en simultáneo.
+  await safeDestroyClient('nueva conexión')
+
   connectionState = 'CONNECTING'
 
   // Si en CONNECT_WATCHDOG_MS no llegamos a QR_PENDING ni CONNECTED,
@@ -201,8 +276,7 @@ function connectToWhatsApp() {
         `dentro. Forzando destroy + reconexión.`
       )
       connectionState = 'DOWN'
-      try { client?.destroy() } catch (_) { /* noop */ }
-      setTimeout(connectToWhatsApp, 2000)
+      scheduleReconnect(2000)
     }
   }, CONNECT_WATCHDOG_MS)
 
@@ -234,6 +308,9 @@ function connectToWhatsApp() {
     clearConnectWatchdog()
     connectionState = 'CONNECTED'
     latestQR = null
+    // Recién acá se considera "resuelta" la reconexión — hasta este punto,
+    // otro llamado a connectToWhatsApp() sigue bloqueado por el guard.
+    isReconnecting = false
     logger.info('WhatsApp conectado correctamente')
   })
 
@@ -244,13 +321,13 @@ function connectToWhatsApp() {
     // whatsapp-web.js no reconecta solo tras un 'disconnected' real (a
     // diferencia de cortes de red transitorios, que maneja internamente) —
     // hay que recrear el cliente.
-    try { client.destroy() } catch (_) { /* noop */ }
-    setTimeout(connectToWhatsApp, 5000)
+    scheduleReconnect(5000)
   })
 
   client.on('auth_failure', (msg) => {
     clearConnectWatchdog()
     connectionState = 'DOWN'
+    isReconnecting = false
     logger.error(`Fallo de autenticación: ${msg}. Puede requerir borrar ${AUTH_DIR} y re-escanear.`)
   })
 
@@ -289,8 +366,7 @@ function connectToWhatsApp() {
     clearConnectWatchdog()
     connectionState = 'DOWN'
     logger.error(`Error al inicializar WhatsApp: ${err.message}`)
-    try { client?.destroy() } catch (_) { /* noop */ }
-    setTimeout(connectToWhatsApp, 5000)
+    scheduleReconnect(5000)
   })
 
 }
@@ -367,8 +443,7 @@ function _handleSendError(err, to, res) {
   if (isDeadFrame && connectionState === 'CONNECTED') {
     logger.warn('Frame de Puppeteer muerto — forzando reconexión del cliente de WhatsApp')
     connectionState = 'DOWN'
-    try { client.destroy().catch(() => {}) } catch (_) { /* noop */ }
-    setTimeout(connectToWhatsApp, 2000)
+    scheduleReconnect(2000)
   }
 
   res.status(502).json({ error: err.message })
