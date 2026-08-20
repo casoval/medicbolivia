@@ -339,7 +339,8 @@ def generate_invitation_pdf(doctor_name: str) -> bytes:
     elements.append(Paragraph(
         f"Sumarse no le cuesta nada y no le compromete a nada: usted conserva sus tarifas y sus "
         f"horarios. Si desea conocer más detalles o coordinar una breve llamada de presentación, "
-        f"quedamos a su disposición por este mismo WhatsApp o al correo {CONTACT_EMAIL}.",
+        f"visite <b><font color=\"#185FA5\">medicbolivia.com</font></b>, donde encontrará toda la "
+        f"información, o escríbanos directamente a {CONTACT_EMAIL}.",
         body_style,
     ))
 
