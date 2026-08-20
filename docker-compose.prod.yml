@@ -34,6 +34,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
+    # Un solo worker de Uvicorn (en vez de los 2 del ecosystem.config.js de
+    # PM2) — ajuste hecho directo en el VPS para bajar el consumo de
+    # memoria tras los crashes durante builds concurrentes. Documentado
+    # acá para que no se pierda en el próximo "git pull".
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "4000", "--workers", "1"]
     network_mode: host
     restart: unless-stopped
     # Techo defensivo: si algún día hay un memory leak, que se lo coma el
@@ -61,10 +66,14 @@ services:
     # paquete nuevo solo para esto.
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:4000/health', timeout=5).status==200 else 1)"]
-      interval: 30s
+      # Más tolerante que el default original (30s/3/30s) — ajustado en el
+      # VPS tras ver que el backend necesitaba más margen para arrancar
+      # bajo carga (ver docker-entrypoint.sh: espera Postgres + corre
+      # migraciones antes de levantar Uvicorn).
+      interval: 15s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 90s
 
   celery-worker:
     image: ghcr.io/casoval/medicbolivia-backend:latest
