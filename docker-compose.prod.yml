@@ -25,6 +25,12 @@
 services:
 
   backend:
+    # image: apunta a lo que publica .github/workflows/build-push.yml en
+    # GHCR. Con "image" + "build" juntos, "docker compose pull" trae la
+    # imagen ya compilada por CI; "docker compose up --build" sigue
+    # funcionando como fallback local si hace falta (ej. sin internet
+    # hacia ghcr.io, o para debug rápido de un cambio sin pasar por CI).
+    image: ghcr.io/casoval/medicbolivia-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
@@ -61,6 +67,7 @@ services:
       start_period: 30s
 
   celery-worker:
+    image: ghcr.io/casoval/medicbolivia-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
@@ -96,6 +103,7 @@ services:
     # se atrasan hasta el próximo restart manual o deploy, no que se pierda
     # un evento crítico ni que un usuario quede sin poder usar la app.
     # El mem_limit de abajo ya cubre el caso de memory leak.
+    image: ghcr.io/casoval/medicbolivia-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
@@ -160,6 +168,7 @@ services:
       start_period: 30s
 
   frontend:
+    image: ghcr.io/casoval/medicbolivia-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # frontend/Dockerfile.prod
 # Build de producción de Next.js. Usa el frontend/.env.production que ya
 # existe en el VPS (lo crea scripts/setup_frontend.sh) — Next.js lo lee
@@ -18,7 +19,13 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 ENV NODE_ENV=production
-RUN pnpm build
+# Cache mount: persiste .next/cache entre builds de imagen (no viaja a la
+# imagen final, solo vive en el caché de BuildKit del host). Sin esto,
+# cada "docker compose up --build" arranca a next build de cero, aunque
+# solo haya cambiado 1 archivo — es lo que antes evitaba PM2 corriendo
+# next build directo en el host, con .next/cache persistido en disco.
+RUN --mount=type=cache,target=/app/.next/cache,sharing=locked \
+    pnpm build
 
 # ── Imagen final, más liviana ──────────────────────────
 FROM node:20-slim
