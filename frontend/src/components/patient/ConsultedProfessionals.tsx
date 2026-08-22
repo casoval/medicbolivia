@@ -23,6 +23,7 @@ import type { ClinicalNote } from '@/lib/api'
 import { fmtFechaHora, fmtFechaHoraLocal } from '@/lib/consultationHistory'
 import type { Consultation, Prescription } from '@/types'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { professionalFullName } from '@/lib/professionalTitle'
 
 const IconSearch2 = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
 const IconChevron = ({ open }: { open: boolean }) => (
@@ -53,7 +54,7 @@ interface ProfessionalGroup {
 
 function doctorName(c: Consultation) {
   return c.professional_first_name
-    ? `Dr. ${c.professional_first_name} ${c.professional_last_name || ''}`.trim()
+    ? professionalFullName(c.professional_first_name, c.professional_last_name, c.professional_gender)
     : 'Profesional'
 }
 

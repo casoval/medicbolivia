@@ -34,8 +34,16 @@ DEFAULT_STAGGER_SECONDS = 4.0
 
 
 def _fill_template(template: str, **kwargs) -> str:
+    # Ninguna variable debería llegar en None a un mensaje real (ej. antes
+    # de este fix, especialidad=None hacía que "{especialidad}".format()
+    # imprimiera literalmente la palabra "None" en el WhatsApp del
+    # profesional — bug real detectado con especialidades nuevas del
+    # catálogo, donde algún dato de respaldo terminaba faltando). Se limpia
+    # acá, en el único punto por el que pasan las 12 plantillas, en vez de
+    # confiar en que cada caller arme siempre un fallback no-None a mano.
+    safe_kwargs = {k: ("" if v is None else v) for k, v in kwargs.items()}
     try:
-        return template.format(**kwargs)
+        return template.format(**safe_kwargs)
     except KeyError:
         # Si la plantilla usa una variable que no le pasamos (ej. el admin
         # editó el texto y agregó {algo} que no existe para este trigger),

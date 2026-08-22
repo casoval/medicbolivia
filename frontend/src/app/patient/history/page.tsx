@@ -13,6 +13,7 @@ import type { ClinicalNote, DisputeCategory } from '@/lib/api'
 import { outcomeLabel, cancelledByLabel, fmtFechaHora, fmtFechaHoraLocal, fmtHora, wasActuallyRefunded } from '@/lib/consultationHistory'
 import type { Consultation, Rating } from '@/types'
 import { getLicenseInfo } from '@/lib/professionalLicense'
+import { professionalFullName } from '@/lib/professionalTitle'
 import { AppointmentsCalendar } from '@/components/shared/AppointmentsCalendar'
 import { CreatorBadge } from '@/components/shared/CreatorBadge'
 import { PaymentBadge } from '@/components/shared/ConsultationBadges'
@@ -58,7 +59,7 @@ function DoctorAvatar({ firstName, lastName, photoUrl }: {
 
 function doctorNameOf(c: Consultation) {
   return c.professional_first_name
-    ? `Dr. ${c.professional_first_name} ${c.professional_last_name || ''}`.trim()
+    ? professionalFullName(c.professional_first_name, c.professional_last_name, c.professional_gender)
     : null
 }
 

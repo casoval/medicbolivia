@@ -179,7 +179,12 @@ SYSTEM_REMINDER_RULES = [
         "trigger_type": ReminderTriggerType.APPOINTMENT_CANCELLED_BY_PROFESSIONAL.value,
         "audience": PATIENT,
         "offset_minutes": None,
-        "message_template": "❌ *Cita cancelada*\n\nEl Dr(a). {profesional} canceló tu cita agendada del {fecha} a las {hora}." + CTA,
+        # {profesional} ya llega con el tratamiento correcto incluido
+        # ("Dr. Juan Pérez" / "Dra. Juana Pérez" / "Dr(a). Juan Pérez"
+        # según el género cargado — ver professional_full_name() en
+        # app/core/professional_title.py), por eso acá NO se antepone
+        # "El Dr(a)." a mano.
+        "message_template": "❌ *Cita cancelada*\n\nEl {profesional} canceló tu cita agendada del {fecha} a las {hora}." + CTA,
     },
 ]
 

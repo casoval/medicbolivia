@@ -14,6 +14,7 @@ import { ConsultationTypeBadge, ModalityBadge } from '@/components/shared/Consul
 import { patientsAPI, getErrorMessage } from '@/lib/api'
 import type { PatientPaymentItem } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { professionalFullName } from '@/lib/professionalTitle'
 
 // ── Formateo de fechas (mismo criterio que el resto del panel: el backend
 // manda UTC sin 'Z', hay que agregarla antes de parsear) ────────────────
@@ -286,7 +287,7 @@ export default function PatientPaymentsPage() {
                   {items.map((p) => {
                     const isOpen = expandedId === p.id
                     const doctorName = p.professional_first_name
-                      ? `Dr. ${p.professional_first_name} ${p.professional_last_name || ''}`.trim()
+                      ? professionalFullName(p.professional_first_name, p.professional_last_name, p.professional_gender)
                       : 'Profesional no asignado'
                     return (
                       <div key={p.id} className="py-3">

@@ -89,7 +89,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         set({ user: { ...currentUser, first_name: profile.first_name, last_name: profile.last_name } })
       } else if (currentUser.role === 'PROFESSIONAL') {
         const profile = await professionalsAPI.getMyProfile()
-        set({ user: { ...currentUser, first_name: profile.first_name, last_name: profile.last_name } })
+        set({ user: { ...currentUser, first_name: profile.first_name, last_name: profile.last_name, gender: profile.gender } })
       }
     } catch (err) {
       console.error('No se pudo enriquecer el perfil del usuario:', err)

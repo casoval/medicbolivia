@@ -16,6 +16,7 @@ Reglas de privacidad:
 """
 from datetime import timedelta
 from app.core.timezone import utcnow_naive
+from app.core.professional_title import professional_full_name
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -57,7 +58,7 @@ async def _enrich(
 ) -> ClinicalNoteResponse:
     base = ClinicalNoteResponse.model_validate(note)
     if professional:
-        base.professional_name = f"Dr. {professional.first_name} {professional.last_name}"
+        base.professional_name = professional_full_name(professional.first_name, professional.last_name, professional.gender)
         base.professional_specialty = professional.specialty
     if patient:
         base.patient_name = f"{patient.first_name} {patient.last_name}"
@@ -77,7 +78,7 @@ async def _enrich(
         prof_result = await db.execute(select(Professional).where(Professional.id == a.professional_id))
         a_prof = prof_result.scalar_one_or_none()
         if a_prof:
-            a_resp.professional_name = f"Dr. {a_prof.first_name} {a_prof.last_name}"
+            a_resp.professional_name = professional_full_name(a_prof.first_name, a_prof.last_name, a_prof.gender)
         enriched_addenda.append(a_resp)
     base.addenda = enriched_addenda
 
@@ -148,7 +149,7 @@ async def _enrich_many(
 
         prof = professionals_by_id.get(n.professional_id)
         if prof:
-            base.professional_name = f"Dr. {prof.first_name} {prof.last_name}"
+            base.professional_name = professional_full_name(prof.first_name, prof.last_name, prof.gender)
             base.professional_specialty = prof.specialty
 
         pat = patients_by_id.get(n.patient_id)
@@ -165,7 +166,7 @@ async def _enrich_many(
             a_resp = ClinicalNoteAddendumResponse.model_validate(a)
             a_prof = addendum_profs_by_id.get(a.professional_id)
             if a_prof:
-                a_resp.professional_name = f"Dr. {a_prof.first_name} {a_prof.last_name}"
+                a_resp.professional_name = professional_full_name(a_prof.first_name, a_prof.last_name, a_prof.gender)
             enriched_addenda.append(a_resp)
         base.addenda = enriched_addenda
 

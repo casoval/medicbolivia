@@ -14,6 +14,7 @@ import { getGreeting } from '@/lib/greeting'
 import { ModalityBadge, PaymentBadge } from '@/components/shared/ConsultationBadges'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 import { getLicenseInfo } from '@/lib/professionalLicense'
+import { professionalFullName } from '@/lib/professionalTitle'
 
 function StatusBadge({ status, createdByRole }: { status: string; createdByRole?: string | null }) {
   const map: Record<string, { cls: string; label: string }> = {
@@ -446,7 +447,7 @@ export default function PatientDashboard() {
             <div className="divide-y divide-[#DDE1EE]">
               {recent.map((c) => {
                 const doctorName = c.professional_first_name
-                  ? `Dr. ${c.professional_first_name} ${c.professional_last_name || ''}`.trim()
+                  ? professionalFullName(c.professional_first_name, c.professional_last_name, c.professional_gender)
                   : null
                 return (
                   <div key={c.id} className="py-3 flex items-center gap-3">

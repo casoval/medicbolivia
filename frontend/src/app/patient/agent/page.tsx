@@ -12,6 +12,7 @@ import { useAgentStore } from '@/lib/store'
 import type { Professional } from '@/types'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 import { ProfessionalCard } from '@/components/patient/ProfessionalCard'
+import { professionalFullName } from '@/lib/professionalTitle'
 
 const QUICK_REPLIES = [
   'Tengo dolor de cabeza',
@@ -342,7 +343,7 @@ export default function AgentPage() {
         consultation_type: 'IMMEDIATE',
         specialty: pro.specialty,
       })
-      addMessage('agent', `Perfecto. Tu solicitud fue enviada al Dr(a). ${pro.first_name} ${pro.last_name}. Tiene 5 minutos para aceptar. Te llevo a la sala de espera.`)
+      addMessage('agent', `Perfecto. Tu solicitud fue enviada al ${professionalFullName(pro.first_name, pro.last_name, pro.gender)}. Tiene 5 minutos para aceptar. Te llevo a la sala de espera.`)
       setTimeout(() => {
         router.push(`/patient/waiting-room?consultationId=${res.data.id}`)
       }, 2000)

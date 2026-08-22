@@ -19,6 +19,7 @@ import { outcomeLabel, cancelledByLabel, fmtFechaHora, wasActuallyRefunded } fro
 import { SpanishDateTimePicker } from '@/components/ui/SpanishDateTimePicker'
 import type { AvailabilityMode } from '@/types'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { professionalTitle } from '@/lib/professionalTitle'
 
 // Timer cuenta regresiva para solicitudes entrantes
 function RequestTimer({ createdAt }: { createdAt: string }) {
@@ -600,7 +601,7 @@ export default function ProfessionalDashboard() {
 
         <div className="mb-5">
           <h1 className="text-lg font-semibold text-[#141820]">
-            {getGreeting()}{user?.first_name ? `, Dr. ${user.first_name}` : ''} 👋
+            {getGreeting()}{user?.first_name ? `, ${professionalTitle(user.gender)} ${user.first_name}` : ''} 👋
           </h1>
           <p className="text-sm text-[#475569] mt-0.5">
             {t('Vista general de tu actividad, citas y consultas del día')}

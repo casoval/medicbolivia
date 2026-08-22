@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta
 from app.core.timezone import utcnow_naive
+from app.core.professional_title import professional_title, professional_full_name
 from zoneinfo import ZoneInfo
 from loguru import logger
 
@@ -782,7 +783,7 @@ async def professional_schedule_consultation(
 
     await push_notification_ws(
         patient.user_id, "PROFESSIONAL_SCHEDULED_DIRECT", "Nueva cita agendada",
-        f"El Dr./Dra. {professional.first_name} {professional.last_name} te agendó una cita.",
+        f"El {professional_full_name(professional.first_name, professional.last_name, professional.gender)} te agendó una cita.",
         "Consultation", consultation.id,
     )
 
@@ -1143,7 +1144,7 @@ async def generate_payment_qr(
         select(Professional).where(Professional.id == consultation.professional_id)
     )
     professional = prof_result.scalar_one_or_none()
-    prof_name = f"Dr(a). {professional.first_name} {professional.last_name}" if professional else "Profesional"
+    prof_name = professional_full_name(professional.first_name, professional.last_name, professional.gender) if professional else "Profesional"
 
     # Reutilizar pago pendiente si existe
     existing_payment_result = await db.execute(
@@ -1333,7 +1334,7 @@ async def cancel_consultation(
                 cancelling_professional.user_id,
                 related_entity_type="Consultation", related_entity_id=consultation.id,
                 paciente=f"{patient.first_name} {patient.last_name}",
-                especialidad=consultation.specialty or cancelling_professional.specialty,
+                especialidad=consultation.specialty or cancelling_professional.specialty or "su especialidad",
                 fecha=consultation.scheduled_at.strftime("%d/%m/%Y") if consultation.scheduled_at else "",
                 hora=consultation.scheduled_at.strftime("%H:%M") if consultation.scheduled_at else "",
             )
@@ -1399,7 +1400,7 @@ async def confirm_payment_and_activate_consultation(
                     db, SystemReminderID.PROF_APPOINTMENT_PAID, payer_professional.user_id,
                     related_entity_type="Consultation", related_entity_id=consultation.id,
                     paciente=f"{payer_patient.first_name} {payer_patient.last_name}",
-                    especialidad=consultation.specialty or payer_professional.specialty,
+                    especialidad=consultation.specialty or payer_professional.specialty or "su especialidad",
                     fecha=consultation.scheduled_at.strftime("%d/%m/%Y"),
                     hora=consultation.scheduled_at.strftime("%H:%M"),
                 )
@@ -1450,7 +1451,7 @@ async def confirm_payment_and_activate_consultation(
                     db, SystemReminderID.PROF_IMMEDIATE_PAID, payer_professional.user_id,
                     related_entity_type="Consultation", related_entity_id=consultation.id,
                     paciente=f"{payer_patient.first_name} {payer_patient.last_name}",
-                    especialidad=consultation.specialty or payer_professional.specialty,
+                    especialidad=consultation.specialty or payer_professional.specialty or "su especialidad",
                 )
 
     await db.commit()
@@ -1523,6 +1524,7 @@ async def get_my_consultations(
         Consultation,
         Professional.first_name.label("prof_first_name"),
         Professional.last_name.label("prof_last_name"),
+        Professional.gender.label("prof_gender"),
         Professional.photo_url.label("prof_photo_url"),
         Professional.appointment_duration_minutes.label("prof_duration_minutes"),
         Patient.first_name.label("pat_first_name"),
@@ -1570,12 +1572,13 @@ async def get_my_consultations(
 
     rows = result.all()
     responses = []
-    for (consultation, prof_first_name, prof_last_name, prof_photo_url, prof_duration_minutes,
+    for (consultation, prof_first_name, prof_last_name, prof_gender, prof_photo_url, prof_duration_minutes,
          pat_first_name, pat_last_name, pat_photo_url, pay_status, pay_channel, pay_paid_at,
          pay_refunded_at, pay_refund_note) in rows:
         item = ConsultationResponse.model_validate(consultation)
         item.professional_first_name = prof_first_name
         item.professional_last_name = prof_last_name
+        item.professional_gender = prof_gender
         item.professional_photo_url = prof_photo_url
         item.professional_appointment_duration_minutes = prof_duration_minutes
         item.patient_first_name = pat_first_name
@@ -1601,6 +1604,40 @@ async def _complete_consultation_effects(
     paciente-profesional, agenda la liberación automática del pago, y avisa
     si falta receta/nota clínica. Compartido entre update_consultation_status
     (flujo por videollamada) y complete_in_person_consultation."""
+    # Si fue una consulta por videollamada, cerrar la sala de LiveKit acá
+    # mismo — antes esto NO pasaba: cuando el profesional tocaba
+    # "Finalizar", el backend solo marcaba la consulta como COMPLETED en
+    # la base y el frontend del profesional desconectaba SU PROPIA
+    # conexión (roomRef.current?.disconnect()), pero la sala en LiveKit
+    # seguía viva mientras el paciente siguiera conectado. Desde el lado
+    # del paciente, ese "profesional se desconectó" es indistinguible de
+    # una simple pérdida de conexión momentánea (RoomEvent.ParticipantDisconnected
+    # dispara en ambos casos), así que su pantalla lo trata como
+    # "esperando a que el médico vuelva" en vez de terminar la llamada —
+    # si el paciente no toca "Salir" a mano, puede quedar así minutos u
+    # horas. Borrar la sala fuerza la desconexión de TODOS los
+    # participantes (incluido el paciente) del lado del servidor, lo que
+    # dispara RoomEvent.Disconnected (no ParticipantDisconnected) en su
+    # pantalla — ese es el evento que sí muestra "llamada finalizada" y
+    # el modal de calificación. Envuelto en try/except: si la sala ya no
+    # existe (ej. el paciente ya había colgado, o LiveKit ya la cerró por
+    # el empty_timeout) no tiene sentido tumbar el resto del flujo de
+    # completar la consulta por esto.
+    if consultation.video_room_id:
+        from livekit import api as lk
+        try:
+            async with lk.LiveKitAPI(
+                url=settings.LIVEKIT_API_URL,
+                api_key=settings.LIVEKIT_API_KEY,
+                api_secret=settings.LIVEKIT_API_SECRET,
+            ) as lk_client:
+                await lk_client.room.delete_room(
+                    lk.DeleteRoomRequest(room=consultation.video_room_id)
+                )
+            logger.info(f"Sala LiveKit cerrada al completar consulta {consultation.id}: {consultation.video_room_id}")
+        except Exception as e:
+            logger.warning(f"No se pudo cerrar la sala LiveKit {consultation.video_room_id} (consulta {consultation.id}): {e}")
+
     from app.services.chat import get_or_create_conversation_for_consultation
     await get_or_create_conversation_for_consultation(db, consultation.id)
 
@@ -1876,7 +1913,7 @@ async def start_video_consultation(
     token_prof = (
         lk.AccessToken(api_key=settings.LIVEKIT_API_KEY, api_secret=settings.LIVEKIT_API_SECRET)
         .with_identity(f"prof-{professional.id}")
-        .with_name(f"Dr. {professional.first_name} {professional.last_name}")
+        .with_name(professional_full_name(professional.first_name, professional.last_name, professional.gender))
         .with_grants(lk.VideoGrants(room_join=True, room=room_name, can_publish=True, can_subscribe=True))
         .to_jwt()
     )
@@ -1986,7 +2023,7 @@ async def rejoin_video_consultation(
     token_prof = (
         lk.AccessToken(api_key=settings.LIVEKIT_API_KEY, api_secret=settings.LIVEKIT_API_SECRET)
         .with_identity(f"prof-{professional.id}")
-        .with_name(f"Dr. {professional.first_name} {professional.last_name}")
+        .with_name(professional_full_name(professional.first_name, professional.last_name, professional.gender))
         .with_grants(lk.VideoGrants(
             room_join=True,
             room=consultation.video_room_id,
@@ -2536,7 +2573,7 @@ async def cancel_scheduled_with_refund(
                 db, SystemReminderID.PROF_APPOINTMENT_CANCELLED, cancelling_professional.user_id,
                 related_entity_type="Consultation", related_entity_id=consultation.id,
                 paciente=f"{patient.first_name} {patient.last_name}",
-                especialidad=consultation.specialty or cancelling_professional.specialty,
+                especialidad=consultation.specialty or cancelling_professional.specialty or "su especialidad",
                 fecha=consultation.scheduled_at.strftime("%d/%m/%Y"),
                 hora=consultation.scheduled_at.strftime("%H:%M"),
             )
@@ -2889,7 +2926,7 @@ async def cancel_by_professional(
         await fire_system_reminder(
             db, SystemReminderID.PATIENT_APPOINTMENT_CANCELLED, patient.user_id,
             related_entity_type="Consultation", related_entity_id=consultation.id,
-            profesional=f"{professional.first_name} {professional.last_name}",
+            profesional=professional_full_name(professional.first_name, professional.last_name, professional.gender),
             fecha=consultation.scheduled_at.strftime("%d/%m/%Y") if consultation.scheduled_at else "",
             hora=consultation.scheduled_at.strftime("%H:%M") if consultation.scheduled_at else "",
         )

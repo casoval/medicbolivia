@@ -639,6 +639,7 @@ export interface PatientPaymentItem {
   professional_id: string | null
   professional_first_name: string | null
   professional_last_name: string | null
+  professional_gender: string | null
   professional_photo_url: string | null
   specialty: string | null
   consultation_type: string | null
@@ -793,6 +794,7 @@ export interface PatientRefundItem {
   specialty: string | null
   professional_first_name: string | null
   professional_last_name: string | null
+  professional_gender: string | null
 }
 
 export interface PatientRefundAccountRequest {

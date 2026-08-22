@@ -84,7 +84,7 @@ async def _notify_professional_patient_waiting(consultation_id: str) -> None:
             db, SystemReminderID.PROF_IMMEDIATE_WAITING, professional.user_id,
             related_entity_type="Consultation", related_entity_id=consultation.id,
             paciente=f"{patient.first_name} {patient.last_name}",
-            especialidad=consultation.specialty or professional.specialty,
+            especialidad=consultation.specialty or professional.specialty or "su especialidad",
         )
         await db.commit()
         logger.info(f"WhatsApp 'paciente esperando' encolado para profesional {professional.id} (consulta {consultation.id})")
@@ -218,7 +218,7 @@ async def _send_reminder_for_rule(db, rule: ReminderRule, consultation: Consulta
         stagger_seconds=countdown_seconds,
         paciente=f"{patient.first_name} {patient.last_name}",
         profesional=f"{professional.first_name} {professional.last_name}",
-        especialidad=consultation.specialty or professional.specialty,
+        especialidad=consultation.specialty or professional.specialty or "su especialidad",
         fecha=scheduled.strftime("%d/%m/%Y") if scheduled else "",
         hora=scheduled.strftime("%H:%M") if scheduled else "",
     )

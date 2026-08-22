@@ -215,6 +215,12 @@ class ProfessionalPublicResponse(BaseModel):
     id: str
     first_name: str
     last_name: str
+    # Se expone para que el paciente vea "Dr." / "Dra." en vez del genérico
+    # "Dr(a)." — ver professionalTitle() en el frontend. No es un dato
+    # sensible (el profesional lo carga él mismo en el registro), así que
+    # no necesita el mismo tratamiento de verificación que university/
+    # years_experience.
+    gender: Optional[str] = None
     # Nullable: mientras specialty_status no sea APPROVED, este profesional
     # tampoco puede estar en ProfessionalStatus.APPROVED (ver
     # check_and_approve_professional), así que en la práctica esto nunca
@@ -492,6 +498,7 @@ class ConsultationResponse(BaseModel):
     # nombre y foto en "Consultas recientes" / historial del paciente)
     professional_first_name: Optional[str] = None
     professional_last_name: Optional[str] = None
+    professional_gender: Optional[str] = None
     professional_photo_url: Optional[str] = None
     professional_department: Optional[str] = None
     professional_sub_specialties: Optional[List[str]] = None
@@ -631,6 +638,7 @@ class PatientLinkResponse(BaseModel):
     revoked_at: Optional[datetime] = None
     professional_first_name: Optional[str] = None
     professional_last_name: Optional[str] = None
+    professional_gender: Optional[str] = None
     professional_photo_url: Optional[str] = None
     professional_specialty: Optional[str] = None
     patient_first_name: Optional[str] = None

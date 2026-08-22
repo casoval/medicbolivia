@@ -45,6 +45,9 @@ export interface User {
   // a partir de /patients/me o /professionals/me. Por eso son opcionales.
   first_name?: string
   last_name?: string
+  // Solo se completa para profesionales (ver enrichUserProfile) — se usa
+  // para el saludo "Dr./Dra." en el dashboard propio del profesional.
+  gender?: string
 }
 
 export interface Patient {
@@ -65,6 +68,9 @@ export interface Professional {
   id: string
   first_name: string
   last_name: string
+  // Para elegir "Dr." / "Dra." / "Dr(a)." — ver professionalTitle() en
+  // src/lib/professionalTitle.ts.
+  gender?: string
   // Nullable: hasta que un admin no confirma la especialidad, el
   // profesional no puede quedar visible/agendable para pacientes (ver
   // check_and_approve_professional en el backend) — en la práctica esto
@@ -121,6 +127,7 @@ export interface Consultation {
   updated_at?: string
   professional_first_name?: string
   professional_last_name?: string
+  professional_gender?: string
   professional_photo_url?: string
   professional_department?: string
   professional_sub_specialties?: string[]

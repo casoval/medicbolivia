@@ -39,6 +39,7 @@ from app.services.chat import (
 )
 from app.services.storage import upload_chat_attachment_to_r2, get_presigned_url
 from app.services.notify import notify_user
+from app.core.professional_title import professional_full_name
 
 router = APIRouter()
 
@@ -58,7 +59,7 @@ async def _build_participant_response(db: AsyncSession, user_id: str) -> ChatPar
     prof_result = await db.execute(select(Professional).where(Professional.user_id == user_id))
     professional = prof_result.scalar_one_or_none()
     if professional:
-        return ChatParticipantResponse(user_id=user_id, full_name=f"Dr(a). {professional.first_name} {professional.last_name}", photo_url=professional.photo_url)
+        return ChatParticipantResponse(user_id=user_id, full_name=professional_full_name(professional.first_name, professional.last_name, professional.gender), photo_url=professional.photo_url)
 
     return ChatParticipantResponse(user_id=user_id, full_name="Usuario", photo_url=None)
 

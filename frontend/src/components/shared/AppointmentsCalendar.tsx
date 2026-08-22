@@ -23,6 +23,7 @@ import { consultationsAPI, getErrorMessage } from '@/lib/api'
 import { CreatorBadge } from '@/components/shared/CreatorBadge'
 import { ConsultationTypeBadge, ModalityBadge, PaymentBadge } from '@/components/shared/ConsultationBadges'
 import type { Consultation, ConsultationStatus } from '@/types'
+import { professionalFullName } from '@/lib/professionalTitle'
 
 // ─────────────────────────────────────────────────────
 // Colores por estado
@@ -259,7 +260,7 @@ export function AppointmentsCalendar({ consultations, role, onSelectConsultation
   function nameOf(c: Consultation) {
     if (role === 'PATIENT') {
       return c.professional_first_name
-        ? `Dr(a). ${c.professional_first_name} ${c.professional_last_name || ''}`.trim()
+        ? professionalFullName(c.professional_first_name, c.professional_last_name, c.professional_gender)
         : 'Profesional'
     }
     return c.patient_first_name ? `${c.patient_first_name} ${c.patient_last_name || ''}`.trim() : 'Paciente'

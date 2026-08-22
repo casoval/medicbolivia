@@ -5,6 +5,7 @@ Recetas digitales con firma criptográfica y verificación QR.
 import hashlib
 import uuid
 from app.core.timezone import utcnow_naive
+from app.core.professional_title import professional_full_name
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -44,7 +45,7 @@ async def _enrich(prescription: Prescription, professional: Professional | None,
     patrón que admin.py usa para los documentos de verificación."""
     base = PrescriptionResponse.model_validate(prescription)
     if professional:
-        base.professional_name     = f"Dr. {professional.first_name} {professional.last_name}"
+        base.professional_name     = professional_full_name(professional.first_name, professional.last_name, professional.gender)
         base.professional_specialty = professional.specialty
         base.professional_sub_specialties = [professional.sub_specialty] if professional.sub_specialty else []
         base.professional_department = professional.department
@@ -189,7 +190,7 @@ async def create_prescription(
     await notify_user(
         db, user_id=patient.user_id,
         title="Nueva receta médica",
-        body=f"Dr. {professional.first_name} {professional.last_name} te emitió una receta. Revisa el detalle en Mis Recetas.",
+        body=f"{professional_full_name(professional.first_name, professional.last_name, professional.gender)} te emitió una receta. Revisa el detalle en Mis Recetas.",
         type_="PRESCRIPTION_ISSUED",
         entity_type="Prescription", entity_id=prescription.id,
         send_whatsapp=False,
@@ -205,7 +206,7 @@ async def create_prescription(
             patient_name=prescription.patient_name,
             patient_ci=prescription.patient_ci,
             patient_age=prescription.patient_age,
-            professional_name=f"Dr. {professional.first_name} {professional.last_name}",
+            professional_name=professional_full_name(professional.first_name, professional.last_name, professional.gender),
             specialty=professional.specialty,
             sub_specialties=[professional.sub_specialty] if professional.sub_specialty else [],
             professional_license_number=professional.professional_license_number,
@@ -279,7 +280,7 @@ async def void_prescription(
                 await notify_user(
                     db, user_id=void_patient.user_id,
                     title="Receta anulada",
-                    body=f"Tu receta emitida por Dr. {professional.first_name} {professional.last_name} fue anulada. Motivo: {data.reason}.",
+                    body=f"Tu receta emitida por {professional_full_name(professional.first_name, professional.last_name, professional.gender)} fue anulada. Motivo: {data.reason}.",
                     type_="PRESCRIPTION_VOIDED",
                     entity_type="Prescription", entity_id=prescription.id,
                     send_whatsapp=False,
@@ -466,7 +467,7 @@ async def verify_prescription(
         "medications":            prescription.medications,
         "instructions":           prescription.instructions,
         "signed_at":              prescription.signed_at.isoformat(),
-        "professional_name":      f"Dr. {professional.first_name} {professional.last_name}" if professional else "Desconocido",
+        "professional_name":      professional_full_name(professional.first_name, professional.last_name, professional.gender) if professional else "Desconocido",
         "professional_specialty": professional.specialty if professional else "",
         "professional_license_number": professional.professional_license_number if professional else "",
         "cmb_matricula":          professional.cmb_matricula if professional else "",

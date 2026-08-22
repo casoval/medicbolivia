@@ -300,6 +300,7 @@ async def get_my_payments(
             "professional_id": prof.id if prof else None,
             "professional_first_name": prof.first_name if prof else None,
             "professional_last_name": prof.last_name if prof else None,
+            "professional_gender": prof.gender if prof else None,
             "professional_photo_url": prof.photo_url if prof else None,
             "specialty": c.specialty if c else None,
             "consultation_type": c.consultation_type if c else None,
@@ -353,6 +354,7 @@ async def create_patient_link(
             id=existing.id, patient_id=existing.patient_id, professional_id=existing.professional_id,
             created_at=existing.created_at, revoked_at=existing.revoked_at,
             professional_first_name=professional.first_name, professional_last_name=professional.last_name,
+            professional_gender=professional.gender,
             professional_photo_url=professional.photo_url, professional_specialty=professional.specialty,
         )
 
@@ -365,6 +367,7 @@ async def create_patient_link(
         id=link.id, patient_id=link.patient_id, professional_id=link.professional_id,
         created_at=link.created_at, revoked_at=link.revoked_at,
         professional_first_name=professional.first_name, professional_last_name=professional.last_name,
+        professional_gender=professional.gender,
         professional_photo_url=professional.photo_url, professional_specialty=professional.specialty,
     )
 
@@ -398,6 +401,7 @@ async def list_my_patient_links(
             id=link.id, patient_id=link.patient_id, professional_id=link.professional_id,
             created_at=link.created_at, revoked_at=link.revoked_at,
             professional_first_name=prof.first_name, professional_last_name=prof.last_name,
+            professional_gender=prof.gender,
             professional_photo_url=prof.photo_url, professional_specialty=prof.specialty,
         )
         for link, prof in rows
@@ -646,6 +650,7 @@ async def get_my_pending_refunds(
             "specialty": c.specialty if c else None,
             "professional_first_name": prof.first_name if prof else None,
             "professional_last_name": prof.last_name if prof else None,
+            "professional_gender": prof.gender if prof else None,
         }
         for p, c, prof in rows
     ]

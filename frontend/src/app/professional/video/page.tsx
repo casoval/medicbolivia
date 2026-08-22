@@ -764,10 +764,18 @@ export default function ProfessionalVideoPage() {
           className={`absolute bottom-0 left-0 right-0 z-20 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)' }}
         >
-          <div className="flex items-end justify-center gap-6 px-6 pb-6 pt-10">
+          {/* overflow-x-auto + w-max mx-auto: con 7 botones (a diferencia
+              de los 4 del paciente) la fila no entra en el ancho de un
+              celular — sin esto, el navegador la centraba igual y el
+              último ícono (Chat) quedaba literalmente fuera de pantalla,
+              inalcanzable. Así se centra cuando entra y se puede
+              deslizar horizontalmente cuando no. flex-shrink-0 en cada
+              botón evita que el scroll los comprima. */}
+          <div className="overflow-x-auto">
+            <div className="flex items-end gap-6 px-6 pb-6 pt-10 w-max mx-auto">
 
             {/* Micrófono */}
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button onClick={toggleMic} className={`w-13 h-13 w-[52px] h-[52px] rounded-full flex items-center justify-center text-xl transition-all ${micMuted ? 'bg-[#E24B4A] scale-95' : 'bg-white/20 hover:bg-white/30 backdrop-blur-sm'} text-white shadow-lg`}>
                 {micMuted ? '🔇' : '🎤'}
               </button>
@@ -775,7 +783,7 @@ export default function ProfessionalVideoPage() {
             </div>
 
             {/* Cámara */}
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button onClick={toggleCam} className={`w-[52px] h-[52px] rounded-full flex items-center justify-center text-xl transition-all ${camOff ? 'bg-[#E24B4A] scale-95' : 'bg-white/20 hover:bg-white/30 backdrop-blur-sm'} text-white shadow-lg`}>
                 {camOff ? '🚫' : '📷'}
               </button>
@@ -783,7 +791,7 @@ export default function ProfessionalVideoPage() {
             </div>
 
             {/* Salir — botón grande rojo */}
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button onClick={leaveCall} disabled={ending} className="w-[60px] h-[60px] rounded-full bg-[#E24B4A] hover:bg-[#c93a39] text-white text-2xl flex items-center justify-center transition-all shadow-xl disabled:opacity-60 hover:scale-105">
                 📵
               </button>
@@ -791,7 +799,7 @@ export default function ProfessionalVideoPage() {
             </div>
 
             {/* Finalizar */}
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button onClick={() => setShowEndConfirm(true)} disabled={ending} className="w-[52px] h-[52px] rounded-full bg-white/20 hover:bg-red-900/70 backdrop-blur-sm text-white text-xl flex items-center justify-center transition-all shadow-lg disabled:opacity-60">
                 🏁
               </button>
@@ -799,7 +807,7 @@ export default function ProfessionalVideoPage() {
             </div>
 
             {/* Receta */}
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button
                 onClick={() => openSidePanel(sidePanel === 'rx' ? 'none' : 'rx')}
                 className={`w-[52px] h-[52px] rounded-full flex items-center justify-center text-xl transition-all backdrop-blur-sm shadow-lg text-white ${sidePanel === 'rx' ? 'bg-[#185FA5]' : 'bg-white/20 hover:bg-white/30'}`}
@@ -810,7 +818,7 @@ export default function ProfessionalVideoPage() {
             </div>
 
             {/* Historia clínica */}
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button
                 onClick={() => openSidePanel(sidePanel === 'note' ? 'none' : 'note')}
                 className={`w-[52px] h-[52px] rounded-full flex items-center justify-center text-xl transition-all backdrop-blur-sm shadow-lg text-white ${sidePanel === 'note' ? 'bg-[#185FA5]' : 'bg-white/20 hover:bg-white/30'}`}
@@ -821,7 +829,7 @@ export default function ProfessionalVideoPage() {
             </div>
 
             {/* Chat */}
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button onClick={openChat} className="relative w-[52px] h-[52px] rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white flex items-center justify-center text-xl transition-all shadow-lg">
                 💬
                 {unread > 0 && !chatOpen && (
@@ -830,7 +838,7 @@ export default function ProfessionalVideoPage() {
               </button>
               <span className="text-white/70 text-[11px] font-medium">{t('Chat')}</span>
             </div>
-
+            </div>
           </div>
         </div>
       </div>

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.timezone import utcnow_naive
+from app.core.professional_title import professional_full_name
 from app.models.models import (
     SupportConversation, SupportConversationStatus, SupportMessage,
     User, UserRole, Patient, Professional, PlatformSettings,
@@ -114,7 +115,7 @@ async def build_participant_label(db: AsyncSession, user_id: str) -> tuple[str, 
     prof_result = await db.execute(select(Professional).where(Professional.user_id == user_id))
     professional = prof_result.scalar_one_or_none()
     if professional:
-        return f"Dr(a). {professional.first_name} {professional.last_name}", professional.photo_url
+        return professional_full_name(professional.first_name, professional.last_name, professional.gender), professional.photo_url
 
     return "Usuario", None
 
@@ -138,7 +139,7 @@ async def build_participant_labels(db: AsyncSession, user_ids: list[str]) -> dic
         prof_result = await db.execute(select(Professional).where(Professional.user_id.in_(remaining)))
         for professional in prof_result.scalars().all():
             labels[professional.user_id] = (
-                f"Dr(a). {professional.first_name} {professional.last_name}", professional.photo_url,
+                professional_full_name(professional.first_name, professional.last_name, professional.gender), professional.photo_url,
             )
 
     for uid in user_ids:
