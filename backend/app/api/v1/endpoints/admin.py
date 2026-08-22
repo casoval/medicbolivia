@@ -654,6 +654,7 @@ async def get_professional_documents(
 # paciente/profesional, no aplican a soporte/admin resolviendo una queja).
 async def _serialize_consultation_history(consultations, notes_by_consult: dict, counterpart_key: str) -> list[dict]:
     from app.services.storage import get_presigned_url
+    from app.core.professional_title import professional_full_name
 
     async def _resolve_pdf(pdf_url: str | None) -> str | None:
         # pdf_url se guarda internamente como r2://bucket/key (bucket privado)
@@ -673,7 +674,15 @@ async def _serialize_consultation_history(consultations, notes_by_consult: dict,
     history = []
     for c in consultations:
         counterpart = c.patient if counterpart_key == "patient" else c.professional
-        counterpart_name = f"{counterpart.first_name} {counterpart.last_name}" if counterpart else "N/D"
+        if counterpart is None:
+            counterpart_name = "N/D"
+        elif counterpart_key == "professional":
+            # El paciente no lleva título, pero el profesional sí — mismo
+            # criterio que el resto de la app (chat, notificaciones,
+            # recetas): "Dr."/"Dra." según género, "Dr(a)." si no se sabe.
+            counterpart_name = professional_full_name(counterpart.first_name, counterpart.last_name, counterpart.gender)
+        else:
+            counterpart_name = f"{counterpart.first_name} {counterpart.last_name}"
         note = notes_by_consult.get(c.id)
         payment = c.payment
         history.append({

@@ -11,6 +11,7 @@ import { api, adminAPI, specialtiesAPI, getErrorMessage, type CommissionPeriod, 
 import { ConsultationHistorySection } from '@/components/admin/ConsultationHistorySection'
 import { BankAccountModal } from '@/components/admin/BankAccountModal'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { fmtFechaHora } from '@/lib/consultationHistory'
 
 // ── Selector de fecha en español, semana empieza en lunes ──────────────
 // El <input type="date"> nativo usa el idioma/región del SISTEMA
@@ -1133,6 +1134,9 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
   const [saveError, setSaveError] = useState('')
   const [saveWarnings, setSaveWarnings] = useState<string[]>([])
   const [tab, setTab] = useState<'datos' | 'documentos' | 'facturacion' | 'historial'>('datos')
+  // Para agrandar la foto de perfil al hacer clic (el admin necesita verla
+  // bien para verificar identidad, y en miniatura queda muy chica).
+  const [photoLightbox, setPhotoLightbox] = useState(false)
 
   // Cuenta bancaria — antes la única forma de verla/verificarla era desde
   // "Pagos a profesionales" (/admin/payouts), pero esa lista solo incluye
@@ -1350,7 +1354,8 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
               <img
                 src={local.photo_url}
                 alt={local.name}
-                className="w-12 h-12 rounded-full object-cover border border-[#DDE1EE]"
+                onClick={() => setPhotoLightbox(true)}
+                className="w-12 h-12 rounded-full object-cover border border-[#DDE1EE] cursor-zoom-in hover:opacity-80 transition-opacity"
               />
             ) : (
               <div className="w-12 h-12 rounded-full bg-[#E1F5EE] text-[#0F6E56] flex items-center justify-center text-base font-bold">
@@ -1364,6 +1369,27 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
           </div>
           <button onClick={onClose} className="text-[#475569] hover:text-[#141820] text-xl">✕</button>
         </div>
+
+        {photoLightbox && local.photo_url && (
+          <div
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4"
+            onClick={() => setPhotoLightbox(false)}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={local.photo_url}
+              alt={local.name}
+              className="max-w-full max-h-full rounded-lg object-contain"
+            />
+            <button
+              onClick={() => setPhotoLightbox(false)}
+              className="absolute top-4 right-4 text-white text-2xl hover:opacity-80"
+              aria-label="Cerrar"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Pestañas — dividen la tarjeta en secciones cortas en vez de un
             solo scroll largo con todo apilado */}
@@ -1431,7 +1457,7 @@ function ProfessionalModal({ professional: pro, onClose, onAction, loading }: {
                 <div><p className="text-xs text-[#64748B]">{t('Ciudad / Departamento')}</p><p className="text-sm font-medium">{local.department || 'No especificado'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Genero')}</p><p className="text-sm font-medium">{local.gender || 'No especificado'}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Idiomas')}</p><p className="text-sm font-medium">{local.languages?.join(', ') || 'Espanol'}</p></div>
-                <div><p className="text-xs text-[#64748B]">{t('Registrado el')}</p><p className="text-sm font-medium">{new Date(local.created_at).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                <div><p className="text-xs text-[#64748B]">{t('Registrado el')}</p><p className="text-sm font-medium">{fmtFechaHora(local.created_at)}</p></div>
                 <div><p className="text-xs text-[#64748B]">{t('Estado de cuenta')}</p><p className="text-sm font-medium">{local.user_status === 'ACTIVE' ? 'Activa' : local.user_status === 'SUSPENDED' ? 'Suspendida' : (local.user_status || 'No disponible')}</p></div>
               </div>
             ) : null}
