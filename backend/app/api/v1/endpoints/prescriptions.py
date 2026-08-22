@@ -455,6 +455,19 @@ async def verify_prescription(
                                  "Si el paciente presenta una receta nueva, verifica ese código en su lugar."
         }
 
+    # pdf_url se guarda internamente como r2://bucket/key (bucket privado) —
+    # hay que firmarlo antes de exponerlo en esta página pública, mismo
+    # patrón que _enrich() usa para el resto de la app.
+    pdf_url = None
+    if prescription.pdf_url:
+        if prescription.pdf_url.startswith("r2://") or prescription.pdf_url.startswith("s3://"):
+            try:
+                pdf_url = await get_presigned_url(prescription.pdf_url, expires_seconds=3600)
+            except Exception as e:
+                logger.error(f"No se pudo firmar la URL del PDF de la receta {prescription.id}: {e}")
+        else:
+            pdf_url = prescription.pdf_url
+
     return {
         "valid":                  True,
         "status":                 "ACTIVE",
@@ -469,7 +482,12 @@ async def verify_prescription(
         "signed_at":              prescription.signed_at.isoformat(),
         "professional_name":      professional_full_name(professional.first_name, professional.last_name, professional.gender) if professional else "Desconocido",
         "professional_specialty": professional.specialty if professional else "",
+        "professional_sub_specialties": [professional.sub_specialty] if professional and professional.sub_specialty else [],
+        "professional_department": professional.department if professional else "",
         "professional_license_number": professional.professional_license_number if professional else "",
         "cmb_matricula":          professional.cmb_matricula if professional else "",
+        "professional_signature_url": professional.signature_url if professional else None,
+        "professional_photo_url": professional.photo_url if professional else None,
+        "pdf_url":                pdf_url,
         "message":                "Receta válida y auténtica. Emitida por MedicBolivia."
     }

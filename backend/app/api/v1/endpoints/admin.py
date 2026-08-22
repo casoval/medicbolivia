@@ -652,7 +652,24 @@ async def get_professional_documents(
 # Usado tanto para profesionales como para pacientes: el admin necesita ver
 # TODO sin restricciones de privacidad (esas restricciones son entre
 # paciente/profesional, no aplican a soporte/admin resolviendo una queja).
-def _serialize_consultation_history(consultations, notes_by_consult: dict, counterpart_key: str) -> list[dict]:
+async def _serialize_consultation_history(consultations, notes_by_consult: dict, counterpart_key: str) -> list[dict]:
+    from app.services.storage import get_presigned_url
+
+    async def _resolve_pdf(pdf_url: str | None) -> str | None:
+        # pdf_url se guarda internamente como r2://bucket/key (bucket privado)
+        # — hay que firmarlo antes de mandarlo al frontend, o el botón "Ver
+        # PDF" del admin queda apuntando a un URI que el navegador no puede
+        # abrir. Mismo patrón que get_professional_documents() más arriba.
+        if not pdf_url:
+            return None
+        if not (pdf_url.startswith("r2://") or pdf_url.startswith("s3://")):
+            return pdf_url
+        try:
+            return await get_presigned_url(pdf_url, expires_seconds=3600)
+        except Exception as e:
+            logger.error(f"No se pudo firmar la URL del PDF de la receta: {e}")
+            return None
+
     history = []
     for c in consultations:
         counterpart = c.patient if counterpart_key == "patient" else c.professional
@@ -688,7 +705,7 @@ def _serialize_consultation_history(consultations, notes_by_consult: dict, count
                     "status":       rx.status,
                     "signed_at":    rx.signed_at.isoformat() if rx.signed_at else None,
                     "void_reason":  rx.void_reason,
-                    "pdf_url":      rx.pdf_url,
+                    "pdf_url":      await _resolve_pdf(rx.pdf_url),
                 }
                 for rx in (c.prescriptions or [])
             ],
@@ -741,7 +758,7 @@ async def get_professional_history(
     ) if consult_ids else None
     notes_by_consult = {n.consultation_id: n for n in notes_result.scalars().all()} if notes_result else {}
 
-    return _serialize_consultation_history(consultations, notes_by_consult, "patient")
+    return await _serialize_consultation_history(consultations, notes_by_consult, "patient")
 
 
 # ── GET /api/v1/admin/professionals/{id}/penalty-detail ──
@@ -1465,7 +1482,7 @@ async def get_patient_history(
     ) if consult_ids else None
     notes_by_consult = {n.consultation_id: n for n in notes_result.scalars().all()} if notes_result else {}
 
-    return _serialize_consultation_history(consultations, notes_by_consult, "professional")
+    return await _serialize_consultation_history(consultations, notes_by_consult, "professional")
 
 
 # ── PATCH /api/v1/admin/patients/{user_id}/suspend ───

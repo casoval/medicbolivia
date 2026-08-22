@@ -461,6 +461,18 @@ async def verify_lab_order(
                               "Si el paciente presenta una orden nueva, verifica ese código en su lugar."
         }
 
+    # pdf_url se guarda internamente como r2://bucket/key (bucket privado) —
+    # hay que firmarlo antes de exponerlo en esta página pública.
+    pdf_url = None
+    if lab_order.pdf_url:
+        if lab_order.pdf_url.startswith("r2://") or lab_order.pdf_url.startswith("s3://"):
+            try:
+                pdf_url = await get_presigned_url(lab_order.pdf_url, expires_seconds=3600)
+            except Exception as e:
+                logger.error(f"No se pudo firmar la URL del PDF de la orden {lab_order.id}: {e}")
+        else:
+            pdf_url = lab_order.pdf_url
+
     return {
         "valid":                  True,
         "status":                 "ACTIVE",
@@ -480,5 +492,7 @@ async def verify_lab_order(
         "professional_specialty": professional.specialty if professional else "",
         "professional_license_number": professional.professional_license_number if professional else "",
         "cmb_matricula":          professional.cmb_matricula if professional else "",
+        "professional_signature_url": professional.signature_url if professional else None,
+        "pdf_url":                pdf_url,
         "message":                "Orden válida y auténtica. Emitida por MedicBolivia."
     }
