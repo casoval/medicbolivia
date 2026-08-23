@@ -94,7 +94,14 @@ function buildInviteMessage(name: string): string {
     `Somos una plataforma de telemedicina en Bolivia donde agentes de inteligencia artificial ` +
     `reciben, orientan y conectan al paciente con usted, y nos encantaría invitarle a probarla ` +
     `sin costo. Con ella puede atender consultas en línea, gestionar su agenda y recetar ` +
-    `de forma digital.\n\n${closing}\n\nhttps://medicbolivia.com`
+    // Sin link/dominio a propósito — WhatsApp bloquea en silencio los
+    // mensajes con link a números que nunca tuvieron contacto previo, y
+    // un lead de doctor-leads es SIEMPRE un contacto en frío (ver
+    // comentario arriba: "el primer contacto por WhatsApp uno a uno fue
+    // lo que llevó al baneo de la cuenta"). El PDF adjunto ya menciona
+    // medicbolivia.com en su propio texto — no hace falta repetirlo acá
+    // como link clickeable del chat.
+    `de forma digital.\n\n${closing}`
   )
 }
 

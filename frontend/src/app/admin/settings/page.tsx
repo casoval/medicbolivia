@@ -24,6 +24,8 @@ function fromApi(data: PlatformSettings) {
     chatAttachmentsPatient: data.chat_attachments_enabled_patient,
     chatAttachmentsProfessional: data.chat_attachments_enabled_professional,
     supportChatEnabled: data.support_chat_enabled,
+    whatsappNewContactsDailyCap: data.whatsapp_new_contacts_daily_cap,
+    whatsappNewContactsUnlimited: data.whatsapp_new_contacts_unlimited,
   }
 }
 
@@ -37,6 +39,8 @@ function toApiPayload(state: {
   chatAttachmentsPatient: boolean
   chatAttachmentsProfessional: boolean
   supportChatEnabled: boolean
+  whatsappNewContactsDailyCap: number
+  whatsappNewContactsUnlimited: boolean
 }): PlatformSettingsUpdate {
   return {
     app_name: state.appName,
@@ -48,6 +52,8 @@ function toApiPayload(state: {
     chat_attachments_enabled_patient: state.chatAttachmentsPatient,
     chat_attachments_enabled_professional: state.chatAttachmentsProfessional,
     support_chat_enabled: state.supportChatEnabled,
+    whatsapp_new_contacts_daily_cap: state.whatsappNewContactsDailyCap,
+    whatsapp_new_contacts_unlimited: state.whatsappNewContactsUnlimited,
   }
 }
 
@@ -245,6 +251,8 @@ export default function AdminSettingsPage() {
   const [chatAttachmentsPatient, setChatAttachmentsPatient] = useState(true)
   const [chatAttachmentsProfessional, setChatAttachmentsProfessional] = useState(true)
   const [supportChatEnabled, setSupportChatEnabled] = useState(true)
+  const [whatsappNewContactsDailyCap, setWhatsappNewContactsDailyCap] = useState(5)
+  const [whatsappNewContactsUnlimited, setWhatsappNewContactsUnlimited] = useState(false)
 
   const { data: systemInfo, isLoading: loadingSystemInfo } = useQuery({
     queryKey: ['admin', 'system-info'],
@@ -266,6 +274,8 @@ export default function AdminSettingsPage() {
         setChatAttachmentsPatient(mapped.chatAttachmentsPatient)
         setChatAttachmentsProfessional(mapped.chatAttachmentsProfessional)
         setSupportChatEnabled(mapped.supportChatEnabled)
+        setWhatsappNewContactsDailyCap(mapped.whatsappNewContactsDailyCap)
+        setWhatsappNewContactsUnlimited(mapped.whatsappNewContactsUnlimited)
       })
       .catch((err) => {
         if (!active) return
@@ -285,7 +295,7 @@ export default function AdminSettingsPage() {
         toApiPayload({
           appName, commission, openRegistration, openProfessionals, maintenance,
           chatWindowDays, chatAttachmentsPatient, chatAttachmentsProfessional,
-          supportChatEnabled,
+          supportChatEnabled, whatsappNewContactsDailyCap, whatsappNewContactsUnlimited,
         })
       )
       const mapped = fromApi(data)
@@ -298,6 +308,8 @@ export default function AdminSettingsPage() {
       setChatAttachmentsPatient(mapped.chatAttachmentsPatient)
       setChatAttachmentsProfessional(mapped.chatAttachmentsProfessional)
       setSupportChatEnabled(mapped.supportChatEnabled)
+      setWhatsappNewContactsDailyCap(mapped.whatsappNewContactsDailyCap)
+      setWhatsappNewContactsUnlimited(mapped.whatsappNewContactsUnlimited)
       setSuccess('Configuración guardada correctamente')
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
@@ -477,6 +489,63 @@ export default function AdminSettingsPage() {
                   </p>
                 </div>
                 <Toggle on={supportChatEnabled} onChange={setSupportChatEnabled} disabled={saving} />
+              </div>
+              <button
+                onClick={saveSettings}
+                disabled={saving}
+                className="btn-primary w-full text-xs py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Guardando…' : 'Guardar configuración'}
+              </button>
+            </div>
+          </div>
+
+          {/* Tope diario de contactos nuevos por WhatsApp — ver
+              comentario largo en PlatformSettings (models.py) para el
+              porqué. Sección separada, no mezclada con "Chat con
+              soporte" de arriba: es sobre WhatsApp SALIENTE de la
+              plataforma en general (recordatorios, respuestas del bot,
+              invitaciones), no sobre un chat en particular. */}
+          <div className="card">
+            <SectionTitle>{t('Contactos nuevos por WhatsApp')}</SectionTitle>
+            <div className="space-y-4">
+              <p className="text-xs text-[#475569]">
+                WhatsApp restringe en silencio los mensajes salientes a números que la plataforma
+                nunca contactó antes (el número queda &quot;en revisión&quot; por un tiempo). Este es el
+                máximo de contactos nuevos por día — al llegarlo, los mensajes a números nuevos se
+                posponen para el día siguiente. Las conversaciones que ya existen no tienen límite.
+              </p>
+              <div className="flex items-center justify-between pt-2 border-t border-[#DDE1EE]">
+                <div>
+                  <p className="text-sm font-medium">Sin límite</p>
+                  <p className="text-xs text-[#475569]">
+                    Ignora el número de abajo — manda a cualquier cantidad de contactos nuevos
+                  </p>
+                </div>
+                <Toggle on={whatsappNewContactsUnlimited} onChange={setWhatsappNewContactsUnlimited} disabled={saving} />
+              </div>
+              <div className={whatsappNewContactsUnlimited ? 'opacity-50 pointer-events-none' : ''}>
+                <label className="block text-xs font-medium text-[#475569] mb-1">
+                  Máximo de contactos nuevos por día
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    disabled={saving || whatsappNewContactsUnlimited}
+                    className="w-20 px-3 py-2 border border-[#DDE1EE] rounded-lg text-sm focus:outline-none focus:border-[#185FA5] disabled:opacity-60"
+                    value={whatsappNewContactsDailyCap}
+                    onChange={(e) => {
+                      const n = Number(e.target.value)
+                      if (!Number.isNaN(n)) setWhatsappNewContactsDailyCap(Math.max(0, n))
+                    }}
+                  />
+                  <span className="text-xs text-[#475569]">{t('contactos / día')}</span>
+                </div>
+                <p className="text-xs text-[#64748B] mt-1">
+                  0 = pausa total (no manda nada a números nuevos). Si el número tuvo restricciones
+                  antes, conviene subirlo de a poco (ej. 5 → 10 → 20) en vez de un salto grande.
+                </p>
               </div>
               <button
                 onClick={saveSettings}

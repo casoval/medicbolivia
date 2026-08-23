@@ -137,6 +137,13 @@ class PlatformSettingsUpdate(BaseModel):
     # ── Chat directo con soporte (paciente/profesional ↔ admin) ──────
     # Interruptor general, independiente del chat interno de arriba.
     support_chat_enabled: Optional[bool] = None
+    # ── Tope diario de contactos nuevos por WhatsApp ──────────────────
+    # Ver comentario largo en PlatformSettings (models.py). 0 = no
+    # mandar NADA a números nuevos (pausa total, para una cuenta en
+    # cuarentena); no hay techo máximo a propósito, es el admin quien
+    # decide la rampa según cómo evolucione.
+    whatsapp_new_contacts_daily_cap: Optional[int] = Field(None, ge=0)
+    whatsapp_new_contacts_unlimited: Optional[bool] = None
 
 
 async def _get_or_create_settings(db: AsyncSession) -> PlatformSettings:
@@ -162,6 +169,8 @@ def _settings_to_dict(s: PlatformSettings) -> dict:
         "chat_attachments_enabled_patient":       s.chat_attachments_enabled_patient,
         "chat_attachments_enabled_professional":  s.chat_attachments_enabled_professional,
         "support_chat_enabled":                   s.support_chat_enabled,
+        "whatsapp_new_contacts_daily_cap":         s.whatsapp_new_contacts_daily_cap,
+        "whatsapp_new_contacts_unlimited":         s.whatsapp_new_contacts_unlimited,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
 

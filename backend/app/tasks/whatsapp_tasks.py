@@ -23,6 +23,7 @@ from typing import Optional
 
 import asyncio
 import random
+import re
 
 import httpx
 from loguru import logger
@@ -33,8 +34,34 @@ from app.core.config import settings
 from app.core.phone import normalize_bo_phone, InvalidPhoneError
 from app.db.database import AsyncSessionLocal, engine, run_task_with_engine_cleanup
 from app.models.models import WhatsAppConversation, WhatsAppMessage, WhatsAppAudience
-from app.services.whatsapp_throttle import wait_for_whatsapp_slot
+from app.services.whatsapp_throttle import (
+    wait_for_whatsapp_slot, WHATSAPP_LIVE_CHAT_MIN_GAP_SECONDS, LAST_LIVE_CHAT_SEND_KEY,
+)
 from app.services.whatsapp_pause import WhatsAppPausedError
+from app.services.whatsapp_reachout_cap import (
+    check_reachout_cap, WhatsAppReachoutCapExceededError, log_cap_incident,
+    get_new_contacts_sent_today, register_new_contact_sent, seconds_until_tomorrow,
+)
+
+
+async def _get_whatsapp_new_contacts_daily_cap() -> tuple[int, bool]:
+    """Lee PlatformSettings.whatsapp_new_contacts_daily_cap y
+    .whatsapp_new_contacts_unlimited. Solo se llama cuando ya se sabe que
+    es un primer envío (ver is_first_outbound en
+    _send_and_log/_send_document_and_log) — no en cada mensaje, para no
+    pagar una consulta a la BD de más en el camino caliente de
+    conversaciones ya establecidas. Devuelve (cap, unlimited)."""
+    from app.models.models import PlatformSettings
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(PlatformSettings).where(PlatformSettings.id == "global"))
+        row = result.scalar_one_or_none()
+        # Si todavía no existe la fila (primera vez que arranca la app),
+        # usar el mismo default conservador que el modelo — no 0 (que
+        # significaría "pausa total" y frenaría todo por un detalle de
+        # inicialización, no por una decisión real de nadie).
+        if row is None:
+            return 5, False
+        return row.whatsapp_new_contacts_daily_cap, row.whatsapp_new_contacts_unlimited
 
 
 class _TransientSendError(Exception):
@@ -143,6 +170,76 @@ def _is_raw_whatsapp_jid(value: str) -> bool:
     return "@" in (value or "")
 
 
+# WhatsApp (vía whatsapp-web.js, no es la Business API oficial) detecta y
+# bloquea silenciosamente mensajes con links mandados a un número que
+# NUNCA tuvo conversación previa con nuestro número — no devuelve ningún
+# error a /send, así que sin este chequeo el mensaje queda igual como
+# "SENT" en la BD (whatsapp-service sí lo aceptó y lo mandó a los
+# servidores de WhatsApp) aunque nunca llegue al teléfono del
+# destinatario. Confirmado con un caso real: un profesional recién
+# registrado (primer contacto WhatsApp de la plataforma con su número)
+# nunca recibió el aviso automático de "paciente esperando" — que
+# siempre lleva el link de la CTA (ver seed_system_reminders.py::CTA) —
+# aunque en el panel admin figuraba como enviado.
+#
+# Reconoce "medicbolivia.com" y cualquier dominio-like genérico
+# (palabra.tld) para cubrir también futuros textos con link que no pasen
+# por la constante CTA.
+_URL_PATTERN = re.compile(r"\bhttps?://\S+|\b[a-z0-9-]+\.(?:com|bo|net|org|io)\b", re.IGNORECASE)
+
+
+def _strip_links_for_cold_contact(message: str) -> str:
+    """
+    Saca cualquier link/dominio del mensaje. Se usa SOLO cuando se detecta
+    que es el primer contacto de la plataforma con ese número — evita el
+    bloqueo silencioso de WhatsApp descrito arriba. Si el link estaba
+    dentro de una oración tipo "Revisa medicbolivia.com para más
+    detalles.", se saca la oración completa (ver CTA en
+    seed_system_reminders.py) en vez de dejar un hueco raro tipo "Revisa
+    para más detalles.".
+    """
+    from app.db.seed_system_reminders import CTA
+    if CTA in message:
+        message = message.replace(CTA, "")
+    message = _URL_PATTERN.sub("", message)
+    # Si sacar una URL suelta (no la CTA completa) dejó doble espacio en
+    # medio de una oración, lo compactamos para que no se note el hueco.
+    message = re.sub(r" {2,}", " ", message)
+    return message.rstrip()
+
+
+async def _is_first_outbound(phone: str) -> bool:
+    """
+    True si la plataforma NUNCA le mandó un WhatsApp SALIENTE a este
+    número antes — sin importar si la conversación ya existe en la BD.
+
+    Ojo con esto: no alcanza con "existe WhatsAppConversation", porque esa
+    fila se crea también cuando la persona escribe PRIMERO (ver
+    receive_inbound_message en whatsapp.py, que crea la conversación con
+    el mensaje entrante ANTES de que el bot responda). Un caso real que
+    reveló esto: alguien nuevo (no registrado) escribe al bot, el agente
+    responde invitándolo a registrarse con el link de medicbolivia.com
+    (ver WHATSAPP_SYSTEM en coordinator.py) — para cuando se manda esa
+    respuesta, la conversación YA existe (la creó el mensaje entrante
+    momentos antes), así que un chequeo de "¿existe conversación?" da
+    falso negativo y deja pasar el link justo en el primer envío NUESTRO,
+    que es donde está el riesgo real de bloqueo. Por eso acá se chequea
+    específicamente si hay algún WhatsAppMessage direction='OUT' previo,
+    no si la conversación existe.
+    """
+    async with AsyncSessionLocal() as db:
+        conv_result = await db.execute(select(WhatsAppConversation).where(WhatsAppConversation.phone == phone))
+        conversation = conv_result.scalar_one_or_none()
+        if conversation is None:
+            return True
+        out_result = await db.execute(
+            select(WhatsAppMessage.id)
+            .where(WhatsAppMessage.conversation_id == conversation.id, WhatsAppMessage.direction == "OUT")
+            .limit(1)
+        )
+        return out_result.scalar_one_or_none() is None
+
+
 async def _get_or_create_conversation(db, phone: str, audience: str, user_id: Optional[str]) -> WhatsAppConversation:
     result = await db.execute(select(WhatsAppConversation).where(WhatsAppConversation.phone == phone))
     conversation = result.scalar_one_or_none()
@@ -209,6 +306,52 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
                                 status="FAILED", error_detail=str(exc))
             return
 
+    # WhatsApp bloquea en silencio los mensajes con link a números que
+    # NUNCA recibieron un WhatsApp saliente nuestro antes — sea el primer
+    # contacto absoluto o alguien que nos escribió primero y todavía no le
+    # contestamos nada (ver docstring de _is_first_outbound). Se saca el
+    # link ANTES de nuestro primer envío a ese número. Del segundo envío
+    # en adelante (ya existe un OUT previo) el link vuelve a mandarse
+    # normal.
+    #
+    # Se guarda en una variable (en vez de llamar _is_first_outbound() de
+    # nuevo más abajo) porque después de _log_message() la conversación
+    # ya existe y la función dejaría de devolver True — se necesita el
+    # valor de ESTE momento, antes de loguear nada.
+    is_first_outbound = await _is_first_outbound(phone)
+    if is_first_outbound:
+        stripped = _strip_links_for_cold_contact(message)
+        if stripped != message:
+            logger.info(f"Primer contacto con {phone}: se saca el link del mensaje para evitar el bloqueo de WhatsApp")
+            message = stripped
+
+        # Tope diario de contactos NUNCA antes contactados (ver
+        # whatsapp_reachout_cap.py) — protege contra el "Reachout
+        # Timelock" de WhatsApp, que restringe la cuenta según CUÁNTOS
+        # contactos nuevos le alcanza, no según el contenido de cada
+        # mensaje. Las conversaciones ya existentes (is_first_outbound
+        # False) no pasan por acá, no tienen límite.
+        daily_cap, unlimited = await _get_whatsapp_new_contacts_daily_cap()
+        try:
+            await check_reachout_cap(daily_cap, unlimited)
+        except WhatsAppReachoutCapExceededError:
+            sent_today = await get_new_contacts_sent_today()
+            await log_cap_incident(phone, sent_today, daily_cap)
+            delay = seconds_until_tomorrow()
+            logger.warning(
+                f"Tope diario de contactos nuevos alcanzado ({sent_today}/{daily_cap}) — "
+                f"reencolando envío a {phone} para mañana ({delay:.0f}s)"
+            )
+            send_whatsapp_message.apply_async(
+                kwargs=dict(
+                    phone=phone, message=message, audience=audience, user_id=user_id,
+                    related_entity_type=related_entity_type, related_entity_id=related_entity_id,
+                    sent_by=sent_by, human_delay=human_delay,
+                ),
+                countdown=delay,
+            )
+            return
+
     try:
         if human_delay:
             # Ver _human_reply_delay_seconds arriba para el porqué. El
@@ -226,6 +369,16 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
         # coordina contra send_whatsapp_document y contra el envío de
         # OTP (que no pasa por Celery) igual.
         await wait_for_whatsapp_slot()
+        if human_delay:
+            # Piso ADICIONAL solo entre respuestas de chat en vivo —
+            # protege contra un pico real de tráfico (varias personas
+            # escribiendo casi a la vez) donde el delay humano de cada
+            # conversación es individualmente realista, pero el conjunto
+            # de la cuenta terminaría mandando un mensaje cada ~3s de
+            # forma sostenida (ver WHATSAPP_LIVE_CHAT_MIN_GAP_SECONDS en
+            # whatsapp_throttle.py). No afecta al OTP ni a recordatorios/
+            # broadcast/documentos, que no pasan por acá.
+            await wait_for_whatsapp_slot(WHATSAPP_LIVE_CHAT_MIN_GAP_SECONDS, LAST_LIVE_CHAT_SEND_KEY)
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
                 f"{settings.WHATSAPP_SERVICE_URL}/send",
@@ -282,6 +435,8 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
 
     await _log_message(phone, message, audience, user_id, related_entity_type, related_entity_id, sent_by,
                         status="SENT", error_detail=None)
+    if is_first_outbound:
+        await register_new_contact_sent()
 
 
 @celery_app.task(
@@ -383,6 +538,48 @@ async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: st
                                 status="FAILED", error_detail=str(exc))
             return
 
+    # Mismo chequeo que _send_and_log (ver _is_first_outbound más arriba):
+    # esta ruta es, si acaso, la de MAYOR riesgo de todas — manda un PDF
+    # (documento no solicitado) a un lead de médico que nunca tuvo
+    # contacto previo con la plataforma. Si el caption trae un link, se
+    # saca acá también.
+    #
+    # Se guarda en una variable por el mismo motivo que en _send_and_log:
+    # después de _log_message() la conversación ya existe y la función
+    # dejaría de devolver True.
+    is_first_outbound = await _is_first_outbound(phone)
+    if is_first_outbound:
+        stripped = _strip_links_for_cold_contact(caption)
+        if stripped != caption:
+            logger.info(f"Primer contacto con {phone}: se saca el link del caption del PDF para evitar el bloqueo de WhatsApp")
+            caption = stripped
+
+        # Mismo tope diario que _send_and_log (ver whatsapp_reachout_cap.py)
+        # — comparte el MISMO contador (por número de teléfono, sin
+        # distinguir texto vs documento), porque lo que le importa al
+        # Reachout Timelock de WhatsApp es cuántos contactos nuevos le
+        # alcanza la cuenta en total, no por qué endpoint se mandaron.
+        daily_cap, unlimited = await _get_whatsapp_new_contacts_daily_cap()
+        try:
+            await check_reachout_cap(daily_cap, unlimited)
+        except WhatsAppReachoutCapExceededError:
+            sent_today = await get_new_contacts_sent_today()
+            await log_cap_incident(phone, sent_today, daily_cap)
+            delay = seconds_until_tomorrow()
+            logger.warning(
+                f"Tope diario de contactos nuevos alcanzado ({sent_today}/{daily_cap}) — "
+                f"reencolando documento a {phone} para mañana ({delay:.0f}s)"
+            )
+            send_whatsapp_document.apply_async(
+                kwargs=dict(
+                    phone=phone, pdf_base64=pdf_base64, filename=filename, caption=caption,
+                    audience=audience, user_id=user_id, related_entity_type=related_entity_type,
+                    related_entity_id=related_entity_id, sent_by=sent_by,
+                ),
+                countdown=delay,
+            )
+            return
+
     try:
         # Ver comentario equivalente en _send_and_log — mismo piso global,
         # necesario acá también porque este es el único gate real que
@@ -438,6 +635,8 @@ async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: st
     await _log_message(phone, f"[PDF: {filename}] {caption}", audience, user_id,
                         related_entity_type, related_entity_id, sent_by,
                         status="SENT", error_detail=None)
+    if is_first_outbound:
+        await register_new_contact_sent()
 
 
 @celery_app.task(

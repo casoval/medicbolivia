@@ -20,6 +20,7 @@ Dos modos de envío:
     real) sea detectado y bloqueado por un volumen no-humano de envíos
     simultáneos.
 """
+import random
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +29,7 @@ from loguru import logger
 
 from app.models.models import ReminderRule, ReminderLog, User
 from app.tasks.whatsapp_tasks import send_whatsapp_message
+from app.db.seed_system_reminders import INTRO_VARIANTS
 
 # Separación por defecto entre mensajes de un mismo lote escalonado.
 DEFAULT_STAGGER_SECONDS = 4.0
@@ -87,6 +89,14 @@ async def fire_system_reminder(
             status="SKIPPED", error_detail="Usuario sin teléfono registrado",
         ))
         return
+
+    if rule_id in INTRO_VARIANTS and "intro" not in template_vars:
+        # Variante al azar del título en negrita — ver INTRO_VARIANTS en
+        # seed_system_reminders.py para el porqué. Se inyecta acá, en el
+        # único punto por el que pasan las 12 reglas, así ningún caller
+        # (consultations.py, reminder_tasks.py) necesita saber que esto
+        # existe ni pasarlo a mano.
+        template_vars = {**template_vars, "intro": random.choice(INTRO_VARIANTS[rule_id])}
 
     message = _fill_template(rule.message_template, **template_vars)
     send_kwargs = dict(

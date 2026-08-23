@@ -44,10 +44,31 @@ from app.services.whatsapp_pause import WhatsAppPausedError, is_whatsapp_paused
 # no con imitar el patrón "humano" de un lote grande.
 WHATSAPP_GLOBAL_MIN_GAP_SECONDS = 3.0
 
-_LAST_SEND_KEY = "whatsapp:global:last_send_at"
+# Piso ADICIONAL, aparte del de arriba, que aplica solo entre respuestas
+# de CHAT EN VIVO del bot (agente IA, confirmación de aceptar/rechazar
+# consulta inmediata — ver human_delay en whatsapp_tasks.py). No toca el
+# piso de OTP/recordatorios/broadcast/documentos, que siguen igual de
+# rápidos.
+#
+# Por qué hace falta además del delay humano (8-20s) de cada conversación:
+# ese delay es POR CONVERSACIÓN — si varias personas distintas escriben
+# casi al mismo tiempo (un pico real de tráfico), cada una espera su
+# propio 8-20s en paralelo, pero el CONJUNTO de la cuenta terminaría
+# mandando un mensaje cada ~3s de forma sostenida (el piso global de
+# arriba) mientras dura el pico — un ritmo mucho más parejo y rápido que
+# cualquier humano real alternando entre conversaciones distintas. Este
+# piso más alto, exclusivo para respuestas de chat, evita ese patrón sin
+# afectar la latencia del OTP.
+WHATSAPP_LIVE_CHAT_MIN_GAP_SECONDS = 6.0
+
+LAST_SEND_KEY = "whatsapp:global:last_send_at"
+LAST_LIVE_CHAT_SEND_KEY = "whatsapp:global:last_live_chat_send_at"
 
 
-async def wait_for_whatsapp_slot(min_gap_seconds: float = WHATSAPP_GLOBAL_MIN_GAP_SECONDS) -> None:
+async def wait_for_whatsapp_slot(
+    min_gap_seconds: float = WHATSAPP_GLOBAL_MIN_GAP_SECONDS,
+    redis_key: str = LAST_SEND_KEY,
+) -> None:
     """
     Bloquea hasta que hayan pasado al menos `min_gap_seconds` desde el
     último envío real a whatsapp-service, sin importar qué código lo
@@ -77,13 +98,13 @@ async def wait_for_whatsapp_slot(min_gap_seconds: float = WHATSAPP_GLOBAL_MIN_GA
 
     while True:
         now = time.time()
-        last_raw = await redis_client.get(_LAST_SEND_KEY)
+        last_raw = await redis_client.get(redis_key)
         if last_raw is not None:
             elapsed = now - float(last_raw)
             if elapsed < min_gap_seconds:
                 wait_s = min_gap_seconds - elapsed
-                logger.info(f"whatsapp_throttle: esperando {wait_s:.1f}s (piso global de {min_gap_seconds}s)")
+                logger.info(f"whatsapp_throttle: esperando {wait_s:.1f}s (piso de {min_gap_seconds}s, key={redis_key})")
                 await asyncio.sleep(wait_s)
                 continue
-        await redis_client.set(_LAST_SEND_KEY, str(time.time()), ex=300)
+        await redis_client.set(redis_key, str(time.time()), ex=300)
         return

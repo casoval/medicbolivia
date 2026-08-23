@@ -141,6 +141,10 @@ export interface PlatformSettings {
   chat_attachments_enabled_professional: boolean
   /** Interruptor general del chat directo con soporte (independiente del chat interno de arriba) */
   support_chat_enabled: boolean
+  /** Máximo de contactos NUNCA antes contactados por la plataforma a los que se les manda WhatsApp por día (ver models.py) */
+  whatsapp_new_contacts_daily_cap: number
+  /** Si está en true, ignora whatsapp_new_contacts_daily_cap por completo (sin tope) */
+  whatsapp_new_contacts_unlimited: boolean
   updated_at: string | null
 }
 
@@ -154,6 +158,8 @@ export interface PlatformSettingsUpdate {
   chat_attachments_enabled_patient?: boolean
   chat_attachments_enabled_professional?: boolean
   support_chat_enabled?: boolean
+  whatsapp_new_contacts_daily_cap?: number
+  whatsapp_new_contacts_unlimited?: boolean
 }
 
 // ── Comisión por período / por profesional ──

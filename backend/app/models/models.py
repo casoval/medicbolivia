@@ -1132,6 +1132,33 @@ class PlatformSettings(Base):
     # pero el admin puede apagarlo puntualmente (ej. mientras reorganiza
     # el equipo de soporte) sin afectar el chat paciente-profesional.
     support_chat_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # ── Tope diario de contactos nuevos por WhatsApp ──────────────────
+    # Cuántos números NUNCA antes contactados por la plataforma se le
+    # puede escribir por WhatsApp en un día (ver _is_first_outbound en
+    # whatsapp_tasks.py). Al llegar al tope, los mensajes a números
+    # nuevos se posponen para el día siguiente en vez de mandarse — las
+    # conversaciones ya existentes no tienen límite, siguen normal.
+    #
+    # Por qué existe: WhatsApp (whatsapp-web.js, no es la Business API
+    # oficial) aplica un límite no documentado de "alcance a contactos
+    # nuevos" por cuenta — el "Reachout Timelock" (error 463), confirmado
+    # de forma independiente por varias librerías del ecosistema
+    # (WAHA, Baileys). Con una cuenta que ya tuvo restricciones previas,
+    # el margen real puede ser mucho más chico que lo que uno esperaría —
+    # de ahí que el valor por default sea deliberadamente conservador y
+    # se suba de a poco (rampa manual desde el panel admin, no
+    # automática), no un número fijo pensado para una cuenta sana.
+    whatsapp_new_contacts_daily_cap: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    # Toggle explícito de "sin límite" — separado del número de arriba a
+    # propósito, en vez de un valor mágico (-1, 0, 999999) mezclado en el
+    # mismo campo. Un booleano aparte es imposible de mal-interpretar
+    # (por API, por un admin nuevo leyendo la BD, etc.); un sentinel
+    # numérico tarde o temprano genera un bug de "¿-1 era sin límite o
+    # pausa total?". Con esto prendido, whatsapp_new_contacts_daily_cap
+    # se ignora por completo (ver check_reachout_cap en
+    # whatsapp_reachout_cap.py) — queda guardado tal cual para cuando se
+    # vuelva a apagar el toggle, no se pisa ni se resetea solo.
+    whatsapp_new_contacts_unlimited: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=utcnow_naive, default=utcnow_naive)
 
 

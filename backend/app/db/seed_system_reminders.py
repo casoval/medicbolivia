@@ -50,14 +50,92 @@ class SystemReminderID:
     PATIENT_RESCHEDULE_PROPOSED = "00000000-0000-0000-0000-000000000011"
     PATIENT_APPOINTMENT_CANCELLED = "00000000-0000-0000-0000-000000000012"
 
+
 # Cierre fijo que llevan las 12 plantillas — el admin puede reescribir el
 # resto del texto, pero este recordatorio de "todo pasa por la plataforma"
 # se repite siempre al final para que WhatsApp nunca reemplace a la app.
-CTA = "\n\nRevisa medicbolivia.com para más detalles."
+#
+# Sin dominio a propósito (antes decía "Revisa medicbolivia.com..."):
+# WhatsApp (whatsapp-web.js, no es la Business API oficial) detecta y
+# bloquea en silencio mensajes con link — un dominio se auto-convierte en
+# link clickeable aunque no lleve "http://". Se saca de raíz en vez de
+# depender de detectar caso por caso cuándo es "seguro" mandarlo (ver
+# app/tasks/whatsapp_tasks.py::_strip_links_for_cold_contact, que sigue
+# como red de seguridad para cualquier link que se cuele desde otro lado).
+CTA = "\n\nRevisa la app de MedicBolivia para más detalles."
+
+# Variantes del título en negrita de cada plantilla — mismo motivo que
+# {variante} en el recordatorio de "mensajes sin leer" (ver más abajo) o
+# GREETING_VARIANTS en broadcast.py: si el mismo evento SIEMPRE produce el
+# texto idéntico carácter por carácter (solo cambiando nombre/fecha/hora),
+# a lo largo de meses y cientos de destinatarios distintos eso arma un
+# "molde" reconocible — el mismo patrón de "contenido duplicado en
+# volumen" que ya se identificó como riesgo en broadcast.py, solo que acá
+# se repite a través del TIEMPO en vez de en un solo lote. Se elige una al
+# azar en fire_system_reminder() (system_reminders.py), de forma
+# transparente para quien dispare el recordatorio — no hace falta tocar
+# cada call site (consultations.py, reminder_tasks.py).
+_WAITING_INTRO_VARIANTS = [
+    "🩺 *Tienes un paciente esperando*",
+    "🩺 *Un paciente está esperando tu respuesta*",
+    "🩺 *Nueva consulta inmediata esperando confirmación*",
+]
+_PAID_INTRO_VARIANTS = [
+    "💰 *Pago confirmado*",
+    "💰 *Ya se confirmó el pago*",
+    "💰 *Pago recibido*",
+]
+_IMMEDIATE_CANCELLED_INTRO_VARIANTS = [
+    "❌ *Consulta cancelada*",
+    "❌ *El paciente canceló la consulta*",
+    "❌ *Consulta inmediata cancelada*",
+]
+_APPOINTMENT_REMINDER_INTRO_VARIANTS = [
+    "🗓️ *Recordatorio de cita*",
+    "🗓️ *Tu cita es pronto*",
+    "🗓️ *Aviso de cita agendada*",
+]
+_RESCHEDULE_INTRO_VARIANTS = [
+    "🔄 *Propuesta de reprogramación*",
+    "🔄 *Te proponen cambiar la cita*",
+    "🔄 *Solicitud de cambio de horario*",
+]
+_APPOINTMENT_CANCELLED_INTRO_VARIANTS = [
+    "❌ *Cita cancelada*",
+    "❌ *Se canceló una cita agendada*",
+    "❌ *Cita agendada cancelada*",
+]
+
+# Mapa rule_id → lista de variantes de intro. Vive acá (no en cada
+# template) porque varias reglas comparten el mismo tipo de evento (ej.
+# "pago confirmado" pasa tanto en consulta inmediata como en cita
+# agendada) y conviene que compartan exactamente las mismas variantes en
+# vez de tener redacciones ligeramente distintas para lo mismo. Las 2
+# reglas de "mensajes sin leer" NO están acá — ya tienen su propio
+# mecanismo de variación más rico (UNREAD_REMINDER_VARIANTS en
+# reminder_tasks.py, reemplaza la oración completa, no solo el título).
+INTRO_VARIANTS = {
+    SystemReminderID.PROF_IMMEDIATE_WAITING: _WAITING_INTRO_VARIANTS,
+    SystemReminderID.PROF_IMMEDIATE_PAID: _PAID_INTRO_VARIANTS,
+    SystemReminderID.PROF_IMMEDIATE_CANCELLED: _IMMEDIATE_CANCELLED_INTRO_VARIANTS,
+    SystemReminderID.PROF_APPOINTMENT_1H: _APPOINTMENT_REMINDER_INTRO_VARIANTS,
+    SystemReminderID.PROF_APPOINTMENT_PAID: _PAID_INTRO_VARIANTS,
+    SystemReminderID.PROF_RESCHEDULE_PROPOSED: _RESCHEDULE_INTRO_VARIANTS,
+    SystemReminderID.PROF_APPOINTMENT_CANCELLED: _APPOINTMENT_CANCELLED_INTRO_VARIANTS,
+    SystemReminderID.PATIENT_APPOINTMENT_1H: _APPOINTMENT_REMINDER_INTRO_VARIANTS,
+    SystemReminderID.PATIENT_RESCHEDULE_PROPOSED: _RESCHEDULE_INTRO_VARIANTS,
+    SystemReminderID.PATIENT_APPOINTMENT_CANCELLED: _APPOINTMENT_CANCELLED_INTRO_VARIANTS,
+}
 
 # IDs fijos (no aleatorios) para que el seed sea idempotente entre corridas
 # y entornos — así el mismo recordatorio siempre tiene el mismo id en dev,
 # staging y prod.
+#
+# Los templates usan {intro} en vez del título fijo en negrita — se
+# rellena solo, con una variante al azar de INTRO_VARIANTS de arriba (ver
+# fire_system_reminder en system_reminders.py). Las 2 reglas de "mensajes
+# sin leer" siguen con su propio {variante} de siempre (no están en
+# INTRO_VARIANTS).
 SYSTEM_REMINDER_RULES = [
     # ═══ PROFESIONAL ═══
     {
@@ -67,7 +145,7 @@ SYSTEM_REMINDER_RULES = [
         "audience": PROFESSIONAL,
         "offset_minutes": None,
         "message_template": (
-            "🩺 *Tienes un paciente esperando*\n\n"
+            "{intro}\n\n"
             "{paciente} solicitó una consulta inmediata ({especialidad}).\n"
             "Responde *1* para ACEPTAR o *2* para RECHAZAR.\n"
             "Tienes 5 minutos antes de que se cancele." + CTA
@@ -80,7 +158,7 @@ SYSTEM_REMINDER_RULES = [
         "audience": PROFESSIONAL,
         "offset_minutes": None,
         "message_template": (
-            "💰 *Pago confirmado*\n\n"
+            "{intro}\n\n"
             "{paciente} ya pagó la consulta inmediata ({especialidad}). Puedes iniciarla desde la app." + CTA
         ),
     },
@@ -90,7 +168,7 @@ SYSTEM_REMINDER_RULES = [
         "trigger_type": ReminderTriggerType.IMMEDIATE_CONSULTATION_CANCELLED.value,
         "audience": PROFESSIONAL,
         "offset_minutes": None,
-        "message_template": "❌ *Consulta cancelada*\n\n{paciente} canceló la consulta inmediata antes de iniciar." + CTA,
+        "message_template": "{intro}\n\n{paciente} canceló la consulta inmediata antes de iniciar." + CTA,
     },
     {
         "id": SystemReminderID.PROF_APPOINTMENT_1H,
@@ -98,7 +176,7 @@ SYSTEM_REMINDER_RULES = [
         "trigger_type": ReminderTriggerType.SCHEDULED_APPOINTMENT_REMINDER.value,
         "audience": PROFESSIONAL,
         "offset_minutes": 60,
-        "message_template": "🗓️ *Recordatorio de cita*\n\nTienes una cita con {paciente} ({especialidad}) hoy a las {hora}." + CTA,
+        "message_template": "{intro}\n\nTienes una cita con {paciente} ({especialidad}) hoy a las {hora}." + CTA,
     },
     {
         "id": SystemReminderID.PROF_APPOINTMENT_PAID,
@@ -107,7 +185,7 @@ SYSTEM_REMINDER_RULES = [
         "audience": PROFESSIONAL,
         "offset_minutes": None,
         "message_template": (
-            "💰 *Pago confirmado*\n\n"
+            "{intro}\n\n"
             "{paciente} pagó su cita del {fecha} a las {hora} ({especialidad}). Confírmala desde la app." + CTA
         ),
     },
@@ -133,7 +211,7 @@ SYSTEM_REMINDER_RULES = [
         "audience": PROFESSIONAL,
         "offset_minutes": None,
         "message_template": (
-            "🔄 *Propuesta de reprogramación*\n\n"
+            "{intro}\n\n"
             "{paciente} propuso cambiar la cita al {fecha} a las {hora}. Revísala y responde desde la app." + CTA
         ),
     },
@@ -143,7 +221,7 @@ SYSTEM_REMINDER_RULES = [
         "trigger_type": ReminderTriggerType.APPOINTMENT_CANCELLED_BY_PATIENT.value,
         "audience": PROFESSIONAL,
         "offset_minutes": None,
-        "message_template": "❌ *Cita cancelada*\n\n{paciente} canceló la cita agendada del {fecha} a las {hora}." + CTA,
+        "message_template": "{intro}\n\n{paciente} canceló la cita agendada del {fecha} a las {hora}." + CTA,
     },
     # ═══ PACIENTE ═══
     {
@@ -152,7 +230,7 @@ SYSTEM_REMINDER_RULES = [
         "trigger_type": ReminderTriggerType.SCHEDULED_APPOINTMENT_REMINDER.value,
         "audience": PATIENT,
         "offset_minutes": 60,
-        "message_template": "🗓️ *Recordatorio de cita*\n\nTienes una cita con {profesional} ({especialidad}) hoy a las {hora}." + CTA,
+        "message_template": "{intro}\n\nTienes una cita con {profesional} ({especialidad}) hoy a las {hora}." + CTA,
     },
     {
         "id": SystemReminderID.PATIENT_UNREAD_8PM,
@@ -169,7 +247,7 @@ SYSTEM_REMINDER_RULES = [
         "audience": PATIENT,
         "offset_minutes": None,
         "message_template": (
-            "🔄 *Propuesta de reprogramación*\n\n"
+            "{intro}\n\n"
             "{profesional} propuso cambiar tu cita al {fecha} a las {hora}. Revísala y responde desde la app." + CTA
         ),
     },
@@ -183,8 +261,12 @@ SYSTEM_REMINDER_RULES = [
         # ("Dr. Juan Pérez" / "Dra. Juana Pérez" / "Dr(a). Juan Pérez"
         # según el género cargado — ver professional_full_name() en
         # app/core/professional_title.py), por eso acá NO se antepone
-        # "El Dr(a)." a mano.
-        "message_template": "❌ *Cita cancelada*\n\nEl {profesional} canceló tu cita agendada del {fecha} a las {hora}." + CTA,
+        # "El Dr(a)." a mano — ni un "El " suelto tampoco, porque
+        # "El Dra. Ana Gómez" queda mal (bug real que encontró una prueba:
+        # con {profesional} ya trayendo el tratamiento, cualquier
+        # artículo fijo antes rompe para el género que no es el
+        # esperado).
+        "message_template": "{intro}\n\n{profesional} canceló tu cita agendada del {fecha} a las {hora}." + CTA,
     },
 ]
 
