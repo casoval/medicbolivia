@@ -14,6 +14,9 @@ import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconCamera = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
 const IconRefresh = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+// Carpeta/galería — se usa junto a IconCamera para ofrecer la segunda
+// opción (elegir archivo existente) donde antes solo había una.
+const IconFolder = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
 
 // Valor sentinela para "Otro" en el selector de banco — distinto de
 // other_label (el texto que se muestra) para no confundirlo con un banco real.
@@ -260,6 +263,11 @@ export default function ProfilePage() {
   const { t } = useLanguage()
   const [docStatuses, setDocStatuses] = useState<Record<string, UploadStatus>>({})
   const [docErrors, setDocErrors]     = useState<Record<string, string>>({})
+  // Documentos: archivo recién elegido/fotografiado que todavía NO se subió.
+  // Se muestra una vista previa con opción de reintentar antes de confirmar,
+  // igual que ya pasa con la foto de perfil y la firma.
+  const [docPendingFile, setDocPendingFile]       = useState<Record<string, File | null>>({})
+  const [docPendingPreview, setDocPendingPreview] = useState<Record<string, string | null>>({})
   const [profileSuccess, setProfileSuccess] = useState('')
   const [profileError, setProfileError]     = useState('')
   const [bio, setBio]     = useState('')
@@ -826,6 +834,10 @@ export default function ProfilePage() {
   const [photoFile, setPhotoFile]           = useState<File | null>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
   const photoRef = useRef<HTMLInputElement | null>(null)
+  // Segundo input, idéntico al de arriba salvo por el atributo `capture`,
+  // que en navegadores móviles abre la cámara directamente en lugar de
+  // mostrar el selector de galería/archivos.
+  const photoCameraRef = useRef<HTMLInputElement | null>(null)
 
   // Firma para recetas imprimibles — dos caminos de captura: dibujar en
   // lienzo (SignaturePad) o subir foto de la firma en papel (el backend
@@ -837,8 +849,12 @@ export default function ProfilePage() {
   const [signaturePhotoFile, setSignaturePhotoFile]       = useState<File | null>(null)
   const [signaturePhotoPreview, setSignaturePhotoPreview] = useState<string | null>(null)
   const signaturePhotoRef = useRef<HTMLInputElement | null>(null)
+  const signatureCameraRef = useRef<HTMLInputElement | null>(null)
 
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  // Refs de cámara para documentos — mismo patrón que fileRefs pero con
+  // `capture="environment"` en el input correspondiente.
+  const fileCameraRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   // Cargar datos actuales del perfil al entrar a la página
   useEffect(() => {
@@ -904,7 +920,32 @@ export default function ProfilePage() {
     if (!file) return
     // Resetear el input para que el mismo archivo pueda seleccionarse de nuevo si fuera necesario
     e.target.value = ''
+    // No se sube todavía: se guarda como pendiente y se muestra una vista
+    // previa para que la persona pueda confirmar, o tomar/elegir otra si
+    // salió borrosa, cortada, con reflejo, etc.
+    setDocPendingFile((p) => ({ ...p, [type]: file }))
+    setDocErrors((p) => ({ ...p, [type]: '' }))
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader()
+      reader.onload = (ev) => setDocPendingPreview((p) => ({ ...p, [type]: ev.target?.result as string }))
+      reader.readAsDataURL(file)
+    } else {
+      // PDF u otro formato sin vista previa visual — se muestra solo el nombre del archivo
+      setDocPendingPreview((p) => ({ ...p, [type]: null }))
+    }
+  }
+
+  function confirmDocUpload(type: string) {
+    const file = docPendingFile[type]
+    if (!file) return
     uploadDocMutation.mutate({ type, file })
+    setDocPendingFile((p) => ({ ...p, [type]: null }))
+    setDocPendingPreview((p) => ({ ...p, [type]: null }))
+  }
+
+  function cancelDocPreview(type: string) {
+    setDocPendingFile((p) => ({ ...p, [type]: null }))
+    setDocPendingPreview((p) => ({ ...p, [type]: null }))
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1598,8 +1639,18 @@ export default function ProfilePage() {
               )
             })()}
 
-            {/* Input de foto oculto — vive fuera de los bloques condicionales
-                para que la ref no se pierda al cambiar de modo */}
+            {/* Inputs de foto ocultos — viven fuera de los bloques condicionales
+                para que la ref no se pierda al cambiar de modo. Dos inputs
+                con el mismo handler: uno abre la cámara directo (capture),
+                el otro abre el selector de archivos/galería normal. */}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              capture="environment"
+              ref={signatureCameraRef}
+              onChange={handleSignaturePhotoChange}
+              className="hidden"
+            />
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
@@ -1648,12 +1699,20 @@ export default function ProfilePage() {
                   <p className="text-xs text-[#64748B] mt-1">{t('Con el dedo o el mouse')}</p>
                 </button>
                 <button
-                  onClick={() => signaturePhotoRef.current?.click()}
+                  onClick={() => signatureCameraRef.current?.click()}
                   className="flex-1 border-2 border-[#DDE1EE] rounded-xl p-4 text-center hover:border-[#185FA5] transition-colors"
                 >
                   <p className="text-2xl mb-1">📷</p>
+                  <p className="text-sm font-semibold text-[#1A1F2E]">{t('Tomar foto de mi firma')}</p>
+                  <p className="text-xs text-[#64748B] mt-1">{t('Firmá en papel y usá la cámara')}</p>
+                </button>
+                <button
+                  onClick={() => signaturePhotoRef.current?.click()}
+                  className="flex-1 border-2 border-[#DDE1EE] rounded-xl p-4 text-center hover:border-[#185FA5] transition-colors"
+                >
+                  <p className="text-2xl mb-1">🖼️</p>
                   <p className="text-sm font-semibold text-[#1A1F2E]">{t('Subir foto de mi firma')}</p>
-                  <p className="text-xs text-[#64748B] mt-1">{t('Firmá en papel y fotografiá')}</p>
+                  <p className="text-xs text-[#64748B] mt-1">{t('Elegí una imagen ya guardada')}</p>
                 </button>
                 <button
                   onClick={() => setSignatureMode('view')}
@@ -1686,6 +1745,9 @@ export default function ProfilePage() {
                   {t('Firmá con tinta oscura sobre una hoja blanca, con buena luz. Le quitamos el fondo automáticamente.')}
                 </p>
                 <div className="flex gap-2 flex-wrap justify-center">
+                  <button onClick={() => signatureCameraRef.current?.click()} disabled={signatureSaving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
+                    {t('Tomar otra foto')}
+                  </button>
                   <button onClick={() => signaturePhotoRef.current?.click()} disabled={signatureSaving} className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50">
                     {t('Elegir otra foto')}
                   </button>
@@ -1734,9 +1796,12 @@ export default function ProfilePage() {
                 const serverStatus = record?.status // 'PENDING' | 'APPROVED' | 'REJECTED' | undefined
                 const isUploading = localStatus === 'uploading'
                 const isLocalError = localStatus === 'error'
+                const pendingFile = docPendingFile[type]
+                const pendingPreview = docPendingPreview[type]
 
                 return (
                   <div key={type} className={`rounded-xl border p-3 transition-colors ${
+                    pendingFile                     ? 'bg-white border-[#85B7EB]' :
                     isLocalError                    ? 'bg-[#FCEBEB] border-[#F09595]' :
                     isUploading                     ? 'bg-[#E6F1FB] border-[#85B7EB]' :
                     serverStatus === 'APPROVED'      ? 'bg-[#E1F5EE] border-[#1D9E75]' :
@@ -1769,7 +1834,17 @@ export default function ProfilePage() {
                         )}
                       </div>
 
-                      {/* Input oculto — siempre presente para poder reemplazar */}
+                      {/* Inputs ocultos — siempre presentes para poder reemplazar.
+                          El de cámara solo acepta imágenes (no tiene sentido
+                          "fotografiar" un PDF); el otro cubre además PDF. */}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        capture="environment"
+                        ref={(el) => { fileCameraRefs.current[type] = el }}
+                        onChange={(e) => handleFileChange(type, e)}
+                        className="hidden"
+                      />
                       <input
                         type="file"
                         accept="image/jpeg,image/png,application/pdf"
@@ -1779,15 +1854,28 @@ export default function ProfilePage() {
                       />
 
                       <div className="flex-shrink-0">
-                        {isUploading ? (
+                        {pendingFile ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-[#E6F1FB] text-[#185FA5] border-[#85B7EB]">
+                            {t('Revisá la foto abajo')}
+                          </span>
+                        ) : isUploading ? (
                           <div className="w-5 h-5 border-2 border-[#185FA5] border-t-transparent rounded-full animate-spin-slow" />
                         ) : isLocalError ? (
-                          <button
-                            onClick={() => fileRefs.current[type]?.click()}
-                            className="btn-secondary text-xs py-1 px-2.5"
-                          >
-                            {t('Reintentar')}
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => fileCameraRefs.current[type]?.click()}
+                              className="btn-secondary text-xs py-1 px-2.5"
+                              title={t('Tomar foto')}
+                            >
+                              <IconCamera />
+                            </button>
+                            <button
+                              onClick={() => fileRefs.current[type]?.click()}
+                              className="btn-secondary text-xs py-1 px-2.5"
+                            >
+                              {t('Reintentar')}
+                            </button>
+                          </div>
                         ) : serverStatus === 'APPROVED' ? (
                           <div className="flex items-center gap-1.5">
                             <span className="badge-green">{t('✓ Aprobado')}</span>
@@ -1814,6 +1902,13 @@ export default function ProfilePage() {
                               </button>
                             )}
                             <button
+                              onClick={() => fileCameraRefs.current[type]?.click()}
+                              className="flex items-center gap-1 text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-1 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                              title={t('Tomar foto del documento corregido')}
+                            >
+                              <IconCamera />
+                            </button>
+                            <button
                               onClick={() => fileRefs.current[type]?.click()}
                               className="flex items-center gap-1 text-xs text-white bg-[#185FA5] hover:bg-[#0C447C] transition-colors py-1 px-2 rounded"
                               title="Subir un documento corregido"
@@ -1837,6 +1932,13 @@ export default function ProfilePage() {
                               </button>
                             )}
                             <button
+                              onClick={() => fileCameraRefs.current[type]?.click()}
+                              className="flex items-center gap-1 text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
+                              title={t('Tomar foto de un documento diferente')}
+                            >
+                              <IconCamera />
+                            </button>
+                            <button
                               onClick={() => fileRefs.current[type]?.click()}
                               className="flex items-center gap-1 text-xs text-[#475569] hover:text-[#185FA5] transition-colors py-0.5 px-1.5 rounded border border-[#DDE1EE] hover:border-[#85B7EB] bg-white"
                               title="Subir un documento diferente"
@@ -1846,15 +1948,75 @@ export default function ProfilePage() {
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => fileRefs.current[type]?.click()}
-                            className="btn-secondary text-xs py-1 px-2.5"
-                          >
-                            {t('Subir')}
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => fileCameraRefs.current[type]?.click()}
+                              className="btn-secondary text-xs py-1 px-2.5 flex items-center gap-1"
+                              title={t('Tomar foto')}
+                            >
+                              <IconCamera />
+                              {t('Tomar foto')}
+                            </button>
+                            <button
+                              onClick={() => fileRefs.current[type]?.click()}
+                              className="btn-secondary text-xs py-1 px-2.5"
+                            >
+                              {t('Subir')}
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
+
+                    {/* Vista previa de la foto/archivo recién elegido — todavía
+                        NO se subió al servidor. Permite revisar que se vea
+                        nítido y completo, o volver a intentar antes de confirmar. */}
+                    {pendingFile && (
+                      <div className="mt-3 pt-3 border-t border-dashed border-[#DDE1EE]">
+                        <div className="flex items-center gap-3">
+                          <div className="w-16 h-16 rounded-lg border border-[#DDE1EE] bg-[#F5F6FA] flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {pendingPreview ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={pendingPreview} alt={t('Vista previa')} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-2xl">📄</span>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-[#475569] truncate">{pendingFile.name}</p>
+                            <p className="text-xs text-[#64748B]">{t('Revisá que se vea nítido, completo y sin reflejos antes de subir')}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-wrap mt-2.5">
+                          <button
+                            onClick={() => fileCameraRefs.current[type]?.click()}
+                            className="btn-secondary text-xs py-1 px-2.5 flex items-center gap-1"
+                          >
+                            <IconCamera />
+                            {t('Tomar otra')}
+                          </button>
+                          <button
+                            onClick={() => fileRefs.current[type]?.click()}
+                            className="btn-secondary text-xs py-1 px-2.5 flex items-center gap-1"
+                          >
+                            <IconFolder />
+                            {t('Elegir otro')}
+                          </button>
+                          <button
+                            onClick={() => confirmDocUpload(type)}
+                            className="btn-primary text-xs py-1 px-2.5"
+                          >
+                            {t('Subir documento')}
+                          </button>
+                          <button
+                            onClick={() => cancelDocPreview(type)}
+                            className="text-xs text-[#64748B] underline self-center"
+                          >
+                            {t('Cancelar')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -1890,12 +2052,29 @@ export default function ProfilePage() {
                   )}
                 </div>
                 <button
-                  onClick={() => photoRef.current?.click()}
+                  onClick={() => photoCameraRef.current?.click()}
                   className="absolute bottom-0 right-0 w-8 h-8 bg-[#185FA5] rounded-full flex items-center justify-center shadow-md hover:bg-[#0C447C] transition-colors"
+                  title={t('Tomar foto')}
                 >
                   <IconCamera />
-                  <span className="sr-only">{t('Cambiar foto')}</span>
+                  <span className="sr-only">{t('Tomar foto')}</span>
                 </button>
+                <button
+                  onClick={() => photoRef.current?.click()}
+                  className="absolute bottom-0 left-0 w-8 h-8 bg-white border border-[#DDE1EE] text-[#475569] rounded-full flex items-center justify-center shadow-md hover:border-[#185FA5] hover:text-[#185FA5] transition-colors"
+                  title={t('Subir archivo')}
+                >
+                  <IconFolder />
+                  <span className="sr-only">{t('Subir archivo')}</span>
+                </button>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  ref={photoCameraRef}
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"

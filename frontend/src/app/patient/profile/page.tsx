@@ -18,6 +18,9 @@ import { ChangePasswordSection } from '@/components/shared/ChangePasswordSection
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 const IconCamera = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+// Carpeta/galería — segunda opción junto a IconCamera, para elegir un
+// archivo ya existente en vez de tomar la foto en el momento.
+const IconFolder = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
 
 // ── Editor de lista tipo "chips": alergias, condiciones, medicación ──
 function TagListEditor({
@@ -112,6 +115,9 @@ export default function PatientProfilePage() {
   const [photoError, setPhotoError] = useState('')
   const [photoSuccess, setPhotoSuccess] = useState('')
   const photoRef = useRef<HTMLInputElement | null>(null)
+  // Segundo input, idéntico salvo por `capture`: en móviles abre la
+  // cámara directo en lugar del selector de galería/archivos.
+  const photoCameraRef = useRef<HTMLInputElement | null>(null)
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['patient', 'me'],
@@ -231,12 +237,29 @@ export default function PatientProfilePage() {
                 )}
               </div>
               <button
-                onClick={() => photoRef.current?.click()}
+                onClick={() => photoCameraRef.current?.click()}
                 className="absolute bottom-0 right-0 w-8 h-8 bg-[#185FA5] rounded-full flex items-center justify-center shadow-md hover:bg-[#0C447C] transition-colors"
+                title={t('Tomar foto')}
               >
                 <IconCamera />
-                <span className="sr-only">{t('Cambiar foto')}</span>
+                <span className="sr-only">{t('Tomar foto')}</span>
               </button>
+              <button
+                onClick={() => photoRef.current?.click()}
+                className="absolute bottom-0 left-0 w-8 h-8 bg-white border border-[#DDE1EE] text-[#475569] rounded-full flex items-center justify-center shadow-md hover:border-[#185FA5] hover:text-[#185FA5] transition-colors"
+                title={t('Subir archivo')}
+              >
+                <IconFolder />
+                <span className="sr-only">{t('Subir archivo')}</span>
+              </button>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                capture="environment"
+                ref={photoCameraRef}
+                onChange={handlePhotoChange}
+                className="hidden"
+              />
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
