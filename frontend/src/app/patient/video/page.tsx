@@ -489,30 +489,31 @@ export default function PatientVideoPage() {
           className={`absolute bottom-0 left-0 right-0 z-20 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)' }}
         >
-          <div className="flex items-end justify-center gap-6 px-6 pb-6 pt-10">
+          <div className="overflow-x-auto">
+            <div className="flex items-end gap-6 px-6 pb-6 pt-10 w-max mx-auto">
 
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button onClick={toggleMic} className={`w-[52px] h-[52px] rounded-full flex items-center justify-center text-xl transition-all ${micMuted ? 'bg-[#E24B4A] scale-95' : 'bg-white/20 hover:bg-white/30 backdrop-blur-sm'} text-white shadow-lg`}>
                 {micMuted ? '🔇' : '🎤'}
               </button>
               <span className="text-white/70 text-[11px] font-medium">{micMuted ? 'Sin audio' : 'Micrófono'}</span>
             </div>
 
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button onClick={toggleCam} className={`w-[52px] h-[52px] rounded-full flex items-center justify-center text-xl transition-all ${camOff ? 'bg-[#E24B4A] scale-95' : 'bg-white/20 hover:bg-white/30 backdrop-blur-sm'} text-white shadow-lg`}>
                 {camOff ? '🚫' : '📷'}
               </button>
               <span className="text-white/70 text-[11px] font-medium">{camOff ? 'Cámara off' : 'Cámara'}</span>
             </div>
 
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button onClick={leaveCall} className="w-[60px] h-[60px] rounded-full bg-[#E24B4A] hover:bg-[#c93a39] text-white text-2xl flex items-center justify-center transition-all shadow-xl hover:scale-105">
                 📵
               </button>
               <span className="text-white/70 text-[11px] font-medium">{t('Salir')}</span>
             </div>
 
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <button onClick={openChat} className="relative w-[52px] h-[52px] rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white flex items-center justify-center text-xl transition-all shadow-lg">
                 💬
                 {unread > 0 && !chatOpen && (
@@ -522,6 +523,7 @@ export default function PatientVideoPage() {
               <span className="text-white/70 text-[11px] font-medium">{t('Chat')}</span>
             </div>
 
+            </div>
           </div>
         </div>
       </div>

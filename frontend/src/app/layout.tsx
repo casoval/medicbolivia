@@ -1,5 +1,5 @@
 // src/app/layout.tsx
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Outfit } from 'next/font/google'
 import { Providers } from '@/components/layout/Providers'
 import './globals.css'
@@ -84,6 +84,18 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: ['/og-image.jpg'],
   },
+}
+
+// Viewport explícito: Next.js inyecta uno por defecto, pero lo dejamos
+// declarado para tener control total. viewportFit: 'cover' es necesario
+// para safe areas en iPhones con notch, y maximumScale evita que iOS
+// haga zoom automático al enfocar inputs (que suele dejar la página con
+// scroll horizontal "pegado" al volver a hacer zoom-out).
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
 }
 
 // Datos estructurados (schema.org) en JSON-LD: le explican a Google, en un

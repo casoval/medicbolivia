@@ -24,9 +24,9 @@ const NAV_LINKS = [
 export function PublicHeader() {
   return (
     <header className="border-b border-[#DDE1EE] bg-white">
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 h-16 sm:h-20 flex items-center justify-between gap-2">
-        <Link href="/" className="flex items-center shrink-0">
-          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-7 sm:h-11 w-auto" priority />
+      <div className="max-w-5xl mx-auto px-2.5 sm:px-4 h-16 sm:h-20 flex items-center justify-between gap-1.5 sm:gap-2">
+        <Link href="/" className="flex items-center shrink-0 min-w-0">
+          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-5 sm:h-11 w-auto" priority />
         </Link>
 
         <nav className="hidden sm:flex items-center gap-6 text-sm text-[#475569]">
@@ -43,18 +43,20 @@ export function PublicHeader() {
             en la landing" sin notar que estas páginas tienen su propio
             header aparte. shrink-0 para que nunca se compriman aunque el
             nav de arriba no entre y quede oculto. */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <Link
             href="/auth/login"
-            className="text-xs sm:text-sm font-medium text-[#0F6E56] px-2 sm:px-3 py-2 border border-[#11A15A]/40 rounded-lg hover:bg-[#E7F8EF] transition-colors whitespace-nowrap"
+            className="text-xs sm:text-sm font-medium text-[#0F6E56] px-1.5 sm:px-3 py-2 border border-[#11A15A]/40 rounded-lg hover:bg-[#E7F8EF] transition-colors whitespace-nowrap"
           >
-            Iniciar sesión
+            <span className="sm:hidden">Ingresar</span>
+            <span className="hidden sm:inline">Iniciar sesión</span>
           </Link>
           <Link
             href="/auth/register"
-            className="bg-[#11A15A] text-white text-xs sm:text-sm font-medium px-2.5 sm:px-4 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap"
+            className="bg-[#11A15A] text-white text-xs sm:text-sm font-medium px-2 sm:px-4 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap"
           >
-            Registrarme
+            <span className="sm:hidden">Registro</span>
+            <span className="hidden sm:inline">Registrarme</span>
           </Link>
         </div>
       </div>

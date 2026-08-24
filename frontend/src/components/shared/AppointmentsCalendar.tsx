@@ -892,12 +892,21 @@ function WeekView({
 
   return (
     <div className="border border-[#DDE1EE] rounded-xl overflow-hidden">
-      <div className="overflow-x-auto">
-        {/* Encabezado de días */}
-        <div className="grid grid-cols-[44px_repeat(7,minmax(64px,1fr))] bg-[#F5F6FA]">
-          <div />
+      {/* Un único contenedor con scroll en ambos ejes — antes el scroll
+          horizontal (afuera) y el vertical (adentro) vivían en dos <div>
+          separados. Como cada uno calcula el ancho de sus columnas
+          `1fr` en base a SU PROPIO ancho disponible, el que tenía
+          scrollbar vertical propia quedaba más angosto que el
+          encabezado (que no la tenía), y las columnas de días no
+          coincidían al hacer scroll horizontal — se veían "corridas".
+          Con un solo contenedor y el encabezado sticky, ambas filas
+          comparten exactamente el mismo ancho siempre. */}
+      <div className="overflow-auto" style={{ maxHeight: 520 }}>
+        {/* Encabezado de días — sticky para quedar fijo arriba al hacer scroll vertical */}
+        <div className="grid grid-cols-[44px_repeat(7,minmax(64px,1fr))] bg-[#F5F6FA] sticky top-0 z-20">
+          <div className="bg-[#F5F6FA]" />
           {days.map((d) => (
-            <div key={d.toISOString()} className="text-center py-1.5 border-l border-[#ECEEF5]">
+            <div key={d.toISOString()} className="text-center py-1.5 border-l border-[#ECEEF5] bg-[#F5F6FA]">
               <p className="text-[9px] text-[#475569] uppercase">{WEEKDAYS[(d.getDay() + 6) % 7]}</p>
               <p
                 className={`text-[11px] font-semibold mx-auto mt-0.5 w-5 h-5 rounded-full flex items-center justify-center ${
@@ -910,8 +919,7 @@ function WeekView({
           ))}
         </div>
         {/* Grilla horaria */}
-        <div className="overflow-y-auto" style={{ maxHeight: 520 }}>
-          <div className="grid grid-cols-[44px_repeat(7,minmax(64px,1fr))]" style={{ height: gridHeight }}>
+        <div className="grid grid-cols-[44px_repeat(7,minmax(64px,1fr))]" style={{ height: gridHeight }}>
             <div className="relative border-r border-[#ECEEF5] sticky left-0 bg-white z-10">
               {labels.map((l) => (
                 <div key={l} style={{ height: HOUR_PX }} className="relative">
@@ -948,7 +956,6 @@ function WeekView({
                 })}
               </div>
             ))}
-          </div>
         </div>
       </div>
       <p className="sm:hidden text-[10px] text-[#64748B] text-center py-1.5 border-t border-[#ECEEF5]">

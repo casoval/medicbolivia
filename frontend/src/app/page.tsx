@@ -158,9 +158,9 @@ function LandingHeader() {
 
   return (
     <header className="border-b border-[#DDE1EE] bg-white sticky top-0 z-20">
-      <div className="max-w-6xl mx-auto px-3 sm:px-4 h-16 lg:h-20 flex items-center justify-between gap-2 lg:gap-3">
-        <div className="flex items-center shrink-0">
-          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-6 sm:h-7 lg:h-11 w-auto" priority />
+      <div className="max-w-6xl mx-auto px-2.5 sm:px-4 h-16 lg:h-20 flex items-center justify-between gap-1.5 lg:gap-3">
+        <div className="flex items-center shrink-0 min-w-0">
+          <Image src="/logo.png" alt="MedicBolivia" width={1779} height={339} className="h-5 sm:h-7 lg:h-11 w-auto" priority />
         </div>
 
         {/* Nav completo: recién desde lg (1024px) — antes aparecía desde sm
@@ -196,22 +196,22 @@ function LandingHeader() {
             desplegable de abajo para hacerles lugar — es una acción mucho
             menos frecuente que iniciar sesión o registrarse, así que no
             hace falta que compita por espacio en la barra superior. */}
-        <div className="flex lg:hidden items-center gap-1.5 shrink-0">
+        <div className="flex lg:hidden items-center gap-1 shrink-0">
           <Link
             href="/auth/login"
-            className="text-xs font-medium text-[#0F6E56] px-2 py-2 border border-[#11A15A]/40 rounded-lg hover:bg-[#E7F8EF] transition-colors whitespace-nowrap"
+            className="text-xs font-medium text-[#0F6E56] px-1.5 sm:px-2 py-2 border border-[#11A15A]/40 rounded-lg hover:bg-[#E7F8EF] transition-colors whitespace-nowrap"
           >
-            {t('Iniciar sesión')}
+            {t('Ingresar')}
           </Link>
-          <Link href="/auth/register" className="bg-[#11A15A] text-white text-xs font-medium px-2.5 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap">
-            {t('Registrarme')}
+          <Link href="/auth/register" className="bg-[#11A15A] text-white text-xs font-medium px-2 sm:px-2.5 py-2 rounded-lg hover:bg-[#0F6E56] transition-colors whitespace-nowrap">
+            {t('Registro')}
           </Link>
           <button
             type="button"
             onClick={() => setMobileOpen((v) => !v)}
             aria-label={mobileOpen ? t('Cerrar menú') : t('Abrir menú')}
             aria-expanded={mobileOpen}
-            className="p-2 text-[#141820] hover:bg-[#F4F6FB] rounded-lg transition-colors"
+            className="p-1.5 sm:p-2 text-[#141820] hover:bg-[#F4F6FB] rounded-lg transition-colors"
           >
             {mobileOpen ? <X className="w-5 h-5" aria-hidden="true" /> : <Menu className="w-5 h-5" aria-hidden="true" />}
           </button>

@@ -35,11 +35,11 @@ function IAStatusIndicator() {
   return (
     <Link
       href="/admin/ia"
-      className="shrink-0 flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white text-xs font-semibold pl-2.5 pr-2 py-1 rounded-full transition-colors"
+      className="shrink-0 flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-1.5 sm:pl-2.5 sm:pr-2 py-1 rounded-full transition-colors"
       title={isConnected ? t('IA / WhatsApp: conectado') : t('IA / WhatsApp: desconectado')}
       aria-label={isConnected ? t('IA / WhatsApp: conectado') : t('IA / WhatsApp: desconectado')}
     >
-      <span>{t('IA')}</span>
+      <span className="hidden sm:inline">{t('IA')}</span>
       {isConnected ? (
         <span className="relative flex w-2 h-2">
           <span className="absolute inline-flex h-full w-full rounded-full bg-[#3DDC97] opacity-75 animate-ping-slow" />
@@ -288,7 +288,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
             </span>
           </Link>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           {/* Selector de idioma — solo visual, ahora disponible en toda la app */}
           <LanguageSwitcher variant="dark" />
           {/* Estado del bot de WhatsApp — solo ADMIN */}
@@ -303,7 +303,7 @@ export function DashboardLayout({ children, navItems, activeHref, role }: Dashbo
               {fullName}
             </span>
           )}
-          <span className={`${firstName ? 'hidden' : 'inline'} sm:inline shrink-0 text-xs bg-white/15 text-white px-2.5 py-1 rounded-full font-medium whitespace-nowrap`}>
+          <span className="hidden sm:inline shrink-0 text-xs bg-white/15 text-white px-2.5 py-1 rounded-full font-medium whitespace-nowrap">
             {t(roleLabels[role])}
           </span>
           {/* Chat directo con soporte — acceso rápido, siempre visible en
