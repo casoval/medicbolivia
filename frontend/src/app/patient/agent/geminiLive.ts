@@ -138,6 +138,9 @@ let playCtx: AudioContext | null = null
 let masterGain: GainNode | null = null
 let playbackNode: AudioWorkletNode | null = null
 let playbackReady: Promise<void> | null = null
+// El <audio> real por el que sale el sonido — ver comentario en
+// ensurePlayback sobre por qué no basta con playCtx.destination.
+let playbackAudioEl: HTMLAudioElement | null = null
 let processor: ScriptProcessorNode | null = null
 let stream: MediaStream | null = null
 let callbacks: GeminiLiveCallbacks | null = null
@@ -260,7 +263,29 @@ async function ensurePlayback(): Promise<void> {
     masterGain = playCtx.createGain()
     masterGain.gain.value = 1
     playbackNode.connect(masterGain)
-    masterGain.connect(playCtx.destination)
+    // OJO — esto es lo que arregla el loop de "Medi habla / Medi escucha":
+    // conectar masterGain directo a playCtx.destination saca el audio por
+    // el parlante SIN que el navegador se entere de que lo hizo. La opción
+    // echoCancellation de getUserMedia solo cancela lo que reconoce como
+    // referencia de salida — típicamente audio reproducido a través de un
+    // <audio>/<video>, no lo que Web Audio manda directo a destination. Sin
+    // esa referencia, el micrófono capta la propia voz de Medi rebotando
+    // del parlante, tanto el VAD local (RMS) como el del servidor la
+    // confunden con que el paciente empezó a hablar, y se interrumpe la
+    // respuesta — una y otra vez, en loop.
+    // Acá en cambio mandamos el audio a un MediaStreamAudioDestinationNode
+    // y lo reproducimos con un <audio> real: así el navegador SÍ lo cuenta
+    // como referencia de eco y la cancelación de getUserMedia puede
+    // restarlo de lo que capta el micrófono.
+    const dest = playCtx.createMediaStreamDestination()
+    masterGain.connect(dest)
+    playbackAudioEl = new Audio()
+    playbackAudioEl.srcObject = dest.stream
+    playbackAudioEl.autoplay = true
+    playbackAudioEl.muted = false
+    try { await playbackAudioEl.play() } catch (e) {
+      console.warn('[GeminiLive] audioEl.play() bloqueado, reintentando tras gesto del usuario', e)
+    }
     // Drenar lo que haya llegado mientras se inicializaba el worklet
     for (const chunk of pendingPlaybackChunks) pushPlaybackSamples(chunk)
     pendingPlaybackChunks = []
@@ -532,6 +557,9 @@ function cleanupAudio() {
   try { playbackNode?.disconnect() } catch {}
   playbackNode = null
   playbackReady = null
+  try { playbackAudioEl?.pause() } catch {}
+  if (playbackAudioEl) playbackAudioEl.srcObject = null
+  playbackAudioEl = null
   try { micCtx?.close() } catch {}
   try { playCtx?.close() } catch {}
   micCtx = null; playCtx = null; masterGain = null; stream = null
