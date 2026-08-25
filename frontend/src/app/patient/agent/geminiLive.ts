@@ -503,7 +503,7 @@ export async function startCall(apiKey: string) {
     // Abrir WS y pedir micrófono en paralelo — ahorra ~200-400ms de setup
     const wsPromise = new Promise<void>((resolve, reject) => {
       setWs(new WebSocket(
-        `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`
+        `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${apiKey}`
       ))
       const ws = getWs()!
       ws.onopen = () => resolve()
