@@ -132,19 +132,24 @@ const setStarted = (v: boolean) => { if (typeof window !== 'undefined') window._
 // ── Variables de audio ────────────────────────────
 let micCtx: AudioContext | null = null
 let playCtx: AudioContext | null = null
-// Nodo de ganancia compartido por el que pasan todos los chunks — permite
-// hacer un fundido corto al interrumpir, en vez de cortar el AudioContext
-// en seco (lo que a veces parte la onda a mitad de sílaba y suena a corte
-// de cable, no a que alguien deja de hablar).
+// Nodo de ganancia compartido — permite un fundido corto al interrumpir,
+// en vez de cortar en seco (lo que a veces parte la onda a mitad de sílaba
+// y suena a corte de cable, no a que alguien deja de hablar).
 let masterGain: GainNode | null = null
+let playbackNode: AudioWorkletNode | null = null
+let playbackReady: Promise<void> | null = null
 let processor: ScriptProcessorNode | null = null
 let stream: MediaStream | null = null
 let callbacks: GeminiLiveCallbacks | null = null
 
-// Reproductor con scheduler preciso — sin gaps entre chunks
-let audioQueue: ArrayBuffer[] = []
-let nextPlayTime = 0
-let isPlaying = false
+// Cuántas muestras (a 24kHz) quedan sin reproducir dentro del worklet de
+// salida — la actualiza el propio worklet cada ~20 render quanta (~107ms).
+// Se usa para saber cuánto falta para que termine de sonar la despedida
+// antes de cortar la llamada (ver scheduleHangupIfNeeded).
+let queuedPlaybackSamples = 0
+// Red de seguridad: fragmentos que llegan antes de que el worklet de
+// reproducción termine de inicializarse (addModule es async).
+let pendingPlaybackChunks: Float32Array[] = []
 let mediIsSpeaking = false
 
 // ── Helpers de audio ──────────────────────────────
@@ -176,69 +181,104 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer
 }
 
-// ── Reproductor de audio — scheduler continuo ─────
-// Cada chunk se schedula pegado al anterior usando AudioContext.currentTime
-// Sin onended, sin gaps, audio completamente fluido
+// ── Reproductor de audio — AudioWorklet con cola FIFO ─────
+// ANTES: cada fragmento se programaba como un AudioBufferSourceNode aparte,
+// encadenado por tiempo absoluto (currentTime + duración acumulada), con un
+// colchón de jitter de red si se atrasaba. Eso no arregla el entrecortado
+// de raíz: el problema no es solo "llegar tarde" — es que cada fragmento es
+// un nodo de audio separado con su propia frontera, y el tamaño de los
+// fragmentos que manda Gemini Live no es uniforme. Tanto imprecisiones de
+// scheduling (más notorias en Android/Safari) como discontinuidades de
+// amplitud entre fragmentos producen micro-huecos o clicks en cada
+// frontera — repetidos varias veces por segundo, eso se oye como
+// "entrecortado" aunque el colchón de jitter nunca llegue a activarse.
+//
+// AHORA: un solo AudioWorkletNode persistente por llamada, con una cola
+// FIFO de muestras dentro del hilo de audio. Los fragmentos que llegan por
+// WebSocket solo se agregan a esa cola (postMessage); el worklet los va
+// consumiendo sample a sample de forma continua — sin fronteras de nodo y
+// sin depender de scheduling por tiempo absoluto, el propio reloj de audio
+// hace de reproductor. Si la cola se vacía momentáneamente, el worklet
+// emite silencio en vez de tirar un error: un hueco de red se oye como un
+// silencio breve, no como un click.
+const PLAYBACK_WORKLET_CODE = `
+class PlaybackProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super()
+    this._queue = []
+    this._offset = 0
+    this._tick = 0
+    this.port.onmessage = (e) => {
+      const msg = e.data
+      if (msg.type === 'push') this._queue.push(msg.samples)
+      else if (msg.type === 'clear') { this._queue = []; this._offset = 0 }
+    }
+  }
+  process(_inputs, outputs) {
+    const out = outputs[0][0]
+    if (out) {
+      let i = 0
+      while (i < out.length) {
+        if (this._queue.length === 0) { out[i++] = 0; continue }
+        const chunk = this._queue[0]
+        const avail = chunk.length - this._offset
+        const need = out.length - i
+        const take = Math.min(avail, need)
+        out.set(chunk.subarray(this._offset, this._offset + take), i)
+        this._offset += take
+        i += take
+        if (this._offset >= chunk.length) { this._queue.shift(); this._offset = 0 }
+      }
+    }
+    // Reportar cada ~107ms cuánto queda en cola, no en cada quantum (128
+    // muestras / ~5ms) — evitar saturar el hilo principal de mensajes.
+    if (++this._tick >= 20) {
+      this._tick = 0
+      let queued = -this._offset
+      for (const c of this._queue) queued += c.length
+      this.port.postMessage({ type: 'queued', samples: queued })
+    }
+    return true
+  }
+}
+registerProcessor('playback-processor', PlaybackProcessor)
+`
 
-function ensurePlayCtx() {
-  if (!playCtx || playCtx.state === 'closed') {
+async function ensurePlayback(): Promise<void> {
+  if (playbackNode) return
+  if (playbackReady) return playbackReady
+  playbackReady = (async () => {
     playCtx = new AudioContext({ sampleRate: 24000 })
+    const blob = new Blob([PLAYBACK_WORKLET_CODE], { type: 'application/javascript' })
+    const url = URL.createObjectURL(blob)
+    await playCtx.audioWorklet.addModule(url)
+    URL.revokeObjectURL(url)
+    playbackNode = new AudioWorkletNode(playCtx, 'playback-processor', { outputChannelCount: [1] })
+    playbackNode.port.onmessage = (e) => {
+      if (e.data?.type === 'queued') queuedPlaybackSamples = Math.max(0, e.data.samples)
+    }
     masterGain = playCtx.createGain()
     masterGain.gain.value = 1
+    playbackNode.connect(masterGain)
     masterGain.connect(playCtx.destination)
-    nextPlayTime = 0
-  }
+    // Drenar lo que haya llegado mientras se inicializaba el worklet
+    for (const chunk of pendingPlaybackChunks) pushPlaybackSamples(chunk)
+    pendingPlaybackChunks = []
+  })()
+  return playbackReady
 }
 
-function scheduleChunk(data: ArrayBuffer) {
-  try {
-    ensurePlayCtx()
-    const ctx = playCtx!
-    const int16 = new Int16Array(data)
-    const float32 = new Float32Array(int16.length)
-    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768.0
-
-    const buf = ctx.createBuffer(1, float32.length, 24000)
-    buf.copyToChannel(float32, 0)
-    const src = ctx.createBufferSource()
-    src.buffer = buf
-    src.connect(masterGain!)
-
-    // Colchón contra jitter de red: si ya no queda margen (nextPlayTime quedó
-    // en el pasado porque el siguiente fragmento no llegó a tiempo — típico
-    // en redes móviles con algo de latencia variable), programamos con un
-    // colchón de ~120ms en vez de pegado al "ahora". Eso absorbe pequeños
-    // saltos de latencia entre fragmentos sin que se note un corte. Si la
-    // red va bien y todavía queda cola (nextPlayTime en el futuro), seguimos
-    // encadenando pegado como antes — no agrega demora en el caso normal.
-    const PLAYBACK_JITTER_BUFFER = 0.12
-    const needsRebuffer = nextPlayTime <= ctx.currentTime
-    const startAt = needsRebuffer
-      ? ctx.currentTime + PLAYBACK_JITTER_BUFFER
-      : Math.max(ctx.currentTime + 0.005, nextPlayTime)
-    src.start(startAt)
-    nextPlayTime = startAt + buf.duration
-  } catch (e) {
-    console.error('[GeminiLive] Schedule error:', e)
-  }
-}
-
-function flushAudioQueue() {
-  while (audioQueue.length > 0) scheduleChunk(audioQueue.shift()!)
-  isPlaying = false
+function pushPlaybackSamples(float32: Float32Array) {
+  if (!playbackNode) { pendingPlaybackChunks.push(float32); return }
+  queuedPlaybackSamples += float32.length
+  playbackNode.port.postMessage({ type: 'push', samples: float32 }, [float32.buffer])
 }
 
 function enqueueAudio(data: ArrayBuffer) {
-  audioQueue.push(data)
-  if (!isPlaying) {
-    isPlaying = true
-    flushAudioQueue()
-  } else {
-    // Ya está schedulando — agregar directo. OJO: shift() (el más viejo
-    // primero), no pop() — el audio tiene que salir en el orden en que
-    // llegó, o los chunks se reproducirían fuera de orden.
-    scheduleChunk(audioQueue.shift()!)
-  }
+  const int16 = new Int16Array(data)
+  const float32 = new Float32Array(int16.length)
+  for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768.0
+  pushPlaybackSamples(float32)
 }
 
 // Interrupción (barge-in) — corta el audio de Medi si el paciente habla
@@ -246,26 +286,36 @@ const INTERRUPT_FADE_SECONDS = 0.09  // ~90ms: corta rápido pero sin click ni t
 
 function interruptPlayback() {
   if (!mediIsSpeaking) return
-  const ctxToFade = playCtx
-  const gainToFade = masterGain
-  if (ctxToFade && gainToFade && ctxToFade.state !== 'closed') {
+  const ctx = playCtx
+  const gain = masterGain
+  const node = playbackNode
+  if (ctx && gain && ctx.state !== 'closed') {
     try {
-      const now = ctxToFade.currentTime
-      gainToFade.gain.cancelScheduledValues(now)
-      gainToFade.gain.setValueAtTime(gainToFade.gain.value, now)
-      gainToFade.gain.linearRampToValueAtTime(0, now + INTERRUPT_FADE_SECONDS)
+      const now = ctx.currentTime
+      gain.gain.cancelScheduledValues(now)
+      gain.gain.setValueAtTime(gain.gain.value, now)
+      gain.gain.linearRampToValueAtTime(0, now + INTERRUPT_FADE_SECONDS)
     } catch {}
-    // Cerramos el contexto viejo recién después del fundido — si lo
-    // cerráramos ya, el fundido nunca terminaría de sonar.
-    setTimeout(() => { try { ctxToFade.close() } catch {} }, INTERRUPT_FADE_SECONDS * 1000 + 20)
+    // Vaciamos la cola del worklet y devolvemos la ganancia a 1 recién
+    // después del fundido — si lo hiciéramos ya, el fundido nunca sonaría.
+    // OJO: ya NO cerramos el AudioContext ni recreamos el worklet en cada
+    // interrupción (como sí hacía la versión anterior) — crear un contexto
+    // nuevo tiene su propio costo de arranque, más notorio en móvil, y era
+    // una fuente extra de hueco justo al reanudar. El mismo nodo persiste
+    // toda la llamada; solo se vacía y se reutiliza.
+    setTimeout(() => {
+      try { node?.port.postMessage({ type: 'clear' }) } catch {}
+      queuedPlaybackSamples = 0
+      try {
+        gain.gain.cancelScheduledValues(ctx.currentTime)
+        gain.gain.setValueAtTime(1, ctx.currentTime)
+      } catch {}
+    }, INTERRUPT_FADE_SECONDS * 1000 + 20)
   } else {
-    try { ctxToFade?.close() } catch {}
+    try { node?.port.postMessage({ type: 'clear' }) } catch {}
+    queuedPlaybackSamples = 0
   }
-  playCtx = null
-  masterGain = null
-  audioQueue = []
-  isPlaying = false
-  nextPlayTime = 0
+  pendingPlaybackChunks = []
   mediIsSpeaking = false
   callbacks?.onMediSpeaking?.(false)
   // El paciente volvió a hablar — si había un corte de llamada programado
@@ -392,7 +442,7 @@ const FAREWELL_PATTERN =
 function scheduleHangupIfNeeded() {
   if (!hangupRequested) return
   hangupRequested = false
-  const msLeft = playCtx ? Math.max(0, (nextPlayTime - playCtx.currentTime) * 1000) : 0
+  const msLeft = (queuedPlaybackSamples / 24000) * 1000
   hangupTimer = setTimeout(() => { hangupTimer = null; endCall() }, msLeft + 400)
 }
 
@@ -478,10 +528,14 @@ function cleanupAudio() {
   workletNode = null
   processor?.disconnect()
   processor = null
+  try { playbackNode?.port.close() } catch {}
+  try { playbackNode?.disconnect() } catch {}
+  playbackNode = null
+  playbackReady = null
   try { micCtx?.close() } catch {}
   try { playCtx?.close() } catch {}
   micCtx = null; playCtx = null; masterGain = null; stream = null
-  audioQueue = []; isPlaying = false; nextPlayTime = 0; mediIsSpeaking = false
+  pendingPlaybackChunks = []; queuedPlaybackSamples = 0; mediIsSpeaking = false
   currentTranscript = ''
   if (hangupTimer) { clearTimeout(hangupTimer); hangupTimer = null }
   hangupRequested = false
@@ -586,7 +640,11 @@ export async function startCall(apiKey: string) {
         setStat('active')
         stopRingtone()
         callbacks?.onStatusChange('active')
-        await startMic(stream!, getWs()!)
+        // Preparamos el worklet de reproducción a la par del micrófono —
+        // así el primer fragmento de audio ya encuentra el nodo listo, en
+        // vez de acumularse en pendingPlaybackChunks (que igual queda como
+        // red de seguridad si llegara antes).
+        await Promise.all([startMic(stream!, getWs()!), ensurePlayback()])
         // Trigger saludo — con gemini-3.1 se usa realtime_input para texto en conversación
         getWs()!.send(JSON.stringify({
           realtime_input: {
@@ -643,11 +701,11 @@ export async function startCall(apiKey: string) {
         if (!hangupRequested && FAREWELL_PATTERN.test(currentTranscript)) {
           hangupRequested = true
         }
-        // OJO: hay que calcular el margen de hangup ANTES de resetear
-        // nextPlayTime más abajo, o el audio de la despedida se cortaría
-        // a la mitad (nextPlayTime en 0 = "no queda nada por reproducir").
+        // OJO: hay que calcular el margen de hangup ANTES de que el
+        // worklet termine de vaciar su cola, o la despedida se cortaría a
+        // la mitad. queuedPlaybackSamples ya refleja lo que falta por sonar
+        // en este momento, así que scheduleHangupIfNeeded lo usa tal cual.
         scheduleHangupIfNeeded()
-        nextPlayTime = 0
         if (currentTranscript.trim()) {
           callbacks?.onMessage(currentTranscript.trim())
           currentTranscript = ''
