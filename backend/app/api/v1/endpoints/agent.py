@@ -537,6 +537,8 @@ async def create_live_token(current_user: User = Depends(get_current_user)):
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Agente de voz no configurado")
 
+    await _check_agent_rate_limit(current_user.id)
+
     from google import genai as genai_client
 
     token_client = genai_client.Client(

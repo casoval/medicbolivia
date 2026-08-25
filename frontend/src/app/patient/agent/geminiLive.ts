@@ -204,7 +204,18 @@ function scheduleChunk(data: ArrayBuffer) {
     src.buffer = buf
     src.connect(masterGain!)
 
-    const startAt = Math.max(ctx.currentTime + 0.005, nextPlayTime)  // 5ms lookahead mínimo
+    // Colchón contra jitter de red: si ya no queda margen (nextPlayTime quedó
+    // en el pasado porque el siguiente fragmento no llegó a tiempo — típico
+    // en redes móviles con algo de latencia variable), programamos con un
+    // colchón de ~120ms en vez de pegado al "ahora". Eso absorbe pequeños
+    // saltos de latencia entre fragmentos sin que se note un corte. Si la
+    // red va bien y todavía queda cola (nextPlayTime en el futuro), seguimos
+    // encadenando pegado como antes — no agrega demora en el caso normal.
+    const PLAYBACK_JITTER_BUFFER = 0.12
+    const needsRebuffer = nextPlayTime <= ctx.currentTime
+    const startAt = needsRebuffer
+      ? ctx.currentTime + PLAYBACK_JITTER_BUFFER
+      : Math.max(ctx.currentTime + 0.005, nextPlayTime)
     src.start(startAt)
     nextPlayTime = startAt + buf.duration
   } catch (e) {

@@ -159,6 +159,16 @@ export default function AgentPage() {
     }
     // Sincronizar estado con el módulo al montar/remontar
     setCallStatus(GeminiLive.getStatus())
+
+    // Si el paciente navega a otra página (otra pestaña del menú, cerrar
+    // pestaña, etc.) mientras está en llamada, cortarla acá — sin esto el
+    // WebSocket, el micrófono y el AudioContext quedaban abiertos en segundo
+    // plano indefinidamente (el estado vive en window.__gLiveWs justamente
+    // para sobrevivir a remontajes de Fast Refresh, pero eso significa que
+    // nada lo corta solo al salir de la página de verdad).
+    return () => {
+      if (GeminiLive.getStatus() !== 'idle') GeminiLive.endCall()
+    }
   }, [])
 
   useEffect(() => {
