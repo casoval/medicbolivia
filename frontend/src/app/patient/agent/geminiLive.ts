@@ -503,15 +503,18 @@ async function startMic(mediaStream: MediaStream, socket: WebSocket) {
     if (!socket || socket.readyState !== WebSocket.OPEN) return
     const float32: Float32Array = e.data
 
-    // Barge-in — detectar voz del paciente mientras Medi habla.
-    // Solo cortamos la reproducción LOCAL (por responsividad); ya no le
-    // mandamos activityEnd al servidor — ese mensaje manual es para cuando
-    // automaticActivityDetection está deshabilitado (no es nuestro caso) y
-    // mezclarlo con la detección automática del servidor podía ser parte de
-    // la confusión en ambientes ruidosos. El servidor igual recibe cada
-    // chunk de audio y decide por su cuenta con su propio VAD (ya ajustado
-    // arriba para ser menos sensible al ruido de fondo).
-    if (mediIsSpeaking) {
+    // Detección local de voz del paciente mientras Medi habla — YA NO corta
+    // el audio (ver interruptPlayback más abajo). Se probó cortar
+    // localmente por RMS "por responsividad", pero en la práctica se
+    // disparaba con cualquier ruido (o resto de eco pese al fix de
+    // cancelación de eco) y el servidor nunca se enteraba del corte — el
+    // resultado era que Medi se cortaba y reanudaba en loop dentro de una
+    // misma respuesta, que es justo lo que se reportó como "poco práctico".
+    // Dejamos que Medi termine de hablar siempre; el único corte real que
+    // puede pasar es el que decide el propio servidor con su VAD
+    // (data.serverContent?.interrupted, más abajo) — ese no lo podemos
+    // evitar del lado del cliente porque ahí Gemini ya dejó de generar.
+    if (false) {
       let rms = 0
       for (let i = 0; i < float32.length; i++) rms += float32[i] * float32[i]
       rms = Math.sqrt(rms / float32.length)
