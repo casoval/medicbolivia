@@ -85,7 +85,7 @@ export function SpanishDateTimePicker({
       </button>
 
       {open && (
-        <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-[#DDE1EE] rounded-xl shadow-lg p-3 w-72">
+        <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-[#DDE1EE] rounded-xl shadow-lg p-3 w-72 max-w-[calc(100vw-2rem)]">
           <div className="flex items-center justify-between mb-2">
             <button
               type="button"
@@ -275,7 +275,7 @@ export function SpanishBirthDatePicker({
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-[#DDE1EE] rounded-xl shadow-lg p-3 w-72">
+          <div className="absolute z-20 top-full right-0 mt-1 bg-white border border-[#DDE1EE] rounded-xl shadow-lg p-3 w-72 max-w-[calc(100vw-2rem)]">
             <div className="flex items-center gap-2 mb-2">
               <select
                 value={viewMonth}
