@@ -459,33 +459,32 @@ function startSilenceWatchdog() {
 
 // ── Tono de llamada ───────────────────────────────
 
-let ringCtx: AudioContext | null = null
 let ringInterval: ReturnType<typeof setInterval> | null = null
 
 function startRingtone() {
   stopRingtone()
-  try {
-    // OJO: mismo sampleRate que playCtx (ver ensurePlayback). Antes este
-    // contexto se creaba sin especificar sampleRate (el navegador usa el
-    // del hardware, típicamente 48000), y apenas llegaba el primer audio
-    // real de Medi se abría playCtx forzado a 24000 — el dispositivo de
-    // salida tenía que reconfigurar su reloj de audio de golpe, casi en el
-    // mismo instante en que se cerraba este contexto. En varios equipos
-    // (sobre todo Android) esa transición no es instantánea ni limpia: se
-    // oye un audio distorsionado/con un tono raro los primeros segundos,
-    // hasta que el hardware se asienta en la frecuencia nueva — coincide
-    // con el reporte de "suena raro al empezar y mejora con la llamada".
-    // Usar el mismo sampleRate en los dos contextos evita el cambio de
-    // frecuencia en esa transición.
-    ringCtx = new AudioContext({ sampleRate: 24000 })
+  // OJO: usa playCtx (el mismo contexto del audio real de Medi, ver
+  // ensurePlayback) en vez de un AudioContext propio. Antes el ring tenía
+  // su propio contexto y se cerraba justo cuando arrancaba playCtx: aunque
+  // los dos pedían el mismo sampleRate (24000), cerrar uno y abrir el otro
+  // casi en simultáneo obliga al hardware de audio a reconfigurar su reloj
+  // de golpe. En varios equipos (sobre todo Android) esa transición no es
+  // instantánea ni limpia: se oye un tono agudo y las palabras se pisan
+  // los primeros segundos, hasta que el hardware se asienta — coincide con
+  // el reporte de "suena raro al empezar y mejora con la llamada". Al
+  // reutilizar el mismo contexto para las dos cosas, no hay ninguna
+  // transición de reloj que hacer: nunca se cierra ni se vuelve a abrir
+  // nada de audio a mitad de la llamada.
+  ensurePlayback().then(() => {
+    if (ringInterval) return  // se llamó a stopRingtone mientras esperábamos
     const playRing = () => {
-      if (!ringCtx || ringCtx.state === 'closed') return
-      const t = ringCtx.currentTime
-      const osc1 = ringCtx.createOscillator()
-      const osc2 = ringCtx.createOscillator()
-      const gain = ringCtx.createGain()
+      if (!playCtx || playCtx.state === 'closed') return
+      const t = playCtx.currentTime
+      const osc1 = playCtx.createOscillator()
+      const osc2 = playCtx.createOscillator()
+      const gain = playCtx.createGain()
       osc1.frequency.value = 440; osc2.frequency.value = 480
-      osc1.connect(gain); osc2.connect(gain); gain.connect(ringCtx.destination)
+      osc1.connect(gain); osc2.connect(gain); gain.connect(playCtx.destination)
       gain.gain.setValueAtTime(0.08, t)
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4)
       osc1.start(t); osc1.stop(t + 0.4)
@@ -493,13 +492,11 @@ function startRingtone() {
     }
     playRing()
     ringInterval = setInterval(playRing, 1800)
-  } catch {}
+  }).catch(() => {})
 }
 
 function stopRingtone() {
   if (ringInterval) { clearInterval(ringInterval); ringInterval = null }
-  try { ringCtx?.close() } catch {}
-  ringCtx = null
 }
 
 // ── Micrófono — AudioWorklet (sin ScriptProcessorNode deprecated) ────────
