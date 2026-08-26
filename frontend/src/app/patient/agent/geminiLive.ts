@@ -258,6 +258,18 @@ async function ensurePlayback(): Promise<void> {
   if (playbackReady) return playbackReady
   playbackReady = (async () => {
     playCtx = new AudioContext({ sampleRate: 24000 })
+    // --- DIAGNÓSTICO TEMPORAL ---
+    // Confirma si el navegador realmente está corriendo el contexto a
+    // 24000Hz como pedimos, o si en la práctica usa otra frecuencia (lo
+    // cual explicaría un tono agudo sostenido) — y mide, para los primeros
+    // ~4s de audio real, cuántas muestras se van reproduciendo por segundo
+    // de reloj real. A 24000 muestras/seg reproducidas en 1 segundo real,
+    // "muestras/seg real" debería dar ~24000; si da bastante más al
+    // principio, el audio se está reproduciendo más rápido que 1x de
+    // entrada (no es un problema de sampleRate del contexto, sino de
+    // ritmo de consumo). Borrar este bloque una vez identificada la causa.
+    console.log(`[audio-diag] playCtx.sampleRate real = ${playCtx.sampleRate}`)
+    // --- FIN DIAGNÓSTICO TEMPORAL (parte 1) ---
     const blob = new Blob([PLAYBACK_WORKLET_CODE], { type: 'application/javascript' })
     const url = URL.createObjectURL(blob)
     await playCtx.audioWorklet.addModule(url)
@@ -305,6 +317,26 @@ async function ensurePlayback(): Promise<void> {
     // Drenar lo que haya llegado mientras se inicializaba el worklet
     for (const chunk of pendingPlaybackChunks) pushPlaybackSamples(chunk)
     pendingPlaybackChunks = []
+
+    // --- DIAGNÓSTICO TEMPORAL (parte 3, la más directa) ---
+    // Compara el reloj interno de playCtx (currentTime) contra el reloj
+    // real (performance.now()) durante los primeros 5s. Si el contexto de
+    // audio avanza más rápido que el tiempo real (ej. 5.5s de contexto en
+    // 5.0s reales), es la prueba directa de que el audio se está
+    // reproduciendo por encima de 1x — no es percepción. Si avanzan casi
+    // igual, el problema no está en la velocidad de reproducción y hay que
+    // buscar en otro lado (ej. el propio audio que manda Gemini). Borrar
+    // este bloque una vez identificada la causa.
+    const diagWallStart = performance.now()
+    const diagCtxStart = playCtx!.currentTime
+    const diagInterval = setInterval(() => {
+      if (!playCtx || playCtx.state === 'closed') { clearInterval(diagInterval); return }
+      const wallElapsed = (performance.now() - diagWallStart) / 1000
+      const ctxElapsed = playCtx.currentTime - diagCtxStart
+      console.log(`[audio-diag] reloj real=${wallElapsed.toFixed(2)}s vs reloj playCtx=${ctxElapsed.toFixed(2)}s (deberían ser casi iguales)`)
+      if (wallElapsed >= 5) clearInterval(diagInterval)
+    }, 500)
+    // --- FIN DIAGNÓSTICO TEMPORAL (parte 3) ---
   })()
   return playbackReady
 }
@@ -367,10 +399,26 @@ function pushPlaybackSamples(float32: Float32Array) {
   playbackNode.port.postMessage({ type: 'push', samples: float32 }, [float32.buffer])
 }
 
+// --- DIAGNÓSTICO TEMPORAL (parte 2) ---
+let diagFirstAudioAt = 0
+let diagSamplesSinceFirst = 0
+function logAudioPaceIfNeeded(sampleCount: number) {
+  const now = performance.now()
+  if (diagFirstAudioAt === 0) diagFirstAudioAt = now
+  diagSamplesSinceFirst += sampleCount
+  const elapsedSec = (now - diagFirstAudioAt) / 1000
+  if (elapsedSec > 0 && elapsedSec <= 4) {
+    const pace = diagSamplesSinceFirst / elapsedSec
+    console.log(`[audio-diag] ${elapsedSec.toFixed(2)}s reales → ${diagSamplesSinceFirst} muestras acumuladas → ritmo=${pace.toFixed(0)} muestras/seg (esperado ~24000)`)
+  }
+}
+// --- FIN DIAGNÓSTICO TEMPORAL (parte 2) ---
+
 function enqueueAudio(data: ArrayBuffer) {
   const int16 = new Int16Array(data)
   const float32 = new Float32Array(int16.length)
   for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768.0
+  logAudioPaceIfNeeded(float32.length)
   pushPlaybackSamples(float32)
 }
 
