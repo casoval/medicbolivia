@@ -508,6 +508,10 @@ function startSilenceWatchdog() {
 // ── Tono de llamada ───────────────────────────────
 
 let ringInterval: ReturnType<typeof setInterval> | null = null
+// Osciladores/gain de la nota de ring que pueda estar sonando ahora mismo —
+// se necesita la referencia para poder cortarla de inmediato en
+// stopRingtone (ver más abajo), en vez de dejar que termine sola.
+let activeRingNodes: { osc1: OscillatorNode; osc2: OscillatorNode; gain: GainNode } | null = null
 
 function startRingtone() {
   stopRingtone()
@@ -516,13 +520,8 @@ function startRingtone() {
   // su propio contexto y se cerraba justo cuando arrancaba playCtx: aunque
   // los dos pedían el mismo sampleRate (24000), cerrar uno y abrir el otro
   // casi en simultáneo obliga al hardware de audio a reconfigurar su reloj
-  // de golpe. En varios equipos (sobre todo Android) esa transición no es
-  // instantánea ni limpia: se oye un tono agudo y las palabras se pisan
-  // los primeros segundos, hasta que el hardware se asienta — coincide con
-  // el reporte de "suena raro al empezar y mejora con la llamada". Al
-  // reutilizar el mismo contexto para las dos cosas, no hay ninguna
-  // transición de reloj que hacer: nunca se cierra ni se vuelve a abrir
-  // nada de audio a mitad de la llamada.
+  // de golpe. Al reutilizar el mismo contexto para las dos cosas, no hay
+  // ninguna transición de reloj que hacer.
   ensurePlayback().then(() => {
     if (ringInterval) return  // se llamó a stopRingtone mientras esperábamos
     const playRing = () => {
@@ -537,6 +536,12 @@ function startRingtone() {
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4)
       osc1.start(t); osc1.stop(t + 0.4)
       osc2.start(t); osc2.stop(t + 0.4)
+      activeRingNodes = { osc1, osc2, gain }
+      // Limpiar la referencia sola cuando termina de sonar normalmente
+      // (si stopRingtone la corta antes, ya la habrá puesto en null ella misma).
+      osc1.addEventListener('ended', () => {
+        if (activeRingNodes?.osc1 === osc1) activeRingNodes = null
+      })
     }
     playRing()
     ringInterval = setInterval(playRing, 1800)
@@ -545,6 +550,22 @@ function startRingtone() {
 
 function stopRingtone() {
   if (ringInterval) { clearInterval(ringInterval); ringInterval = null }
+  // Cortar de inmediato cualquier nota que esté sonando ahora mismo — antes
+  // se dejaba que terminara sola (hasta ~400ms más), lo que podía pisarse
+  // con el arranque del audio real de Medi y sonar como un tono agudo
+  // superpuesto a las primeras palabras del saludo.
+  if (activeRingNodes && playCtx && playCtx.state !== 'closed') {
+    const { osc1, osc2, gain } = activeRingNodes
+    try {
+      const now = playCtx.currentTime
+      gain.gain.cancelScheduledValues(now)
+      gain.gain.setValueAtTime(gain.gain.value, now)
+      gain.gain.linearRampToValueAtTime(0, now + 0.02)  // fundido de 20ms, sin click
+      osc1.stop(now + 0.02)
+      osc2.stop(now + 0.02)
+    } catch {}
+  }
+  activeRingNodes = null
 }
 
 // ── Micrófono — AudioWorklet (sin ScriptProcessorNode deprecated) ────────
