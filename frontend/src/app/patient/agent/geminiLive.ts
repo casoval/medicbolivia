@@ -725,6 +725,20 @@ export async function startCall(apiKey: string) {
   setStarted(false)
   callbacks?.onStatusChange('connecting')
   startRingtone()
+  // DIAGNÓSTICO → FIX: antes esto se disparaba indirectamente adentro de
+  // startRingtone() (ensurePlayback() en su .then()), así que tenía todo
+  // el tiempo del handshake de WS + permiso de mic para que el pipeline
+  // AudioContext → MediaStreamAudioDestinationNode → <audio>.play() se
+  // "calentara" antes de que llegara audio real. Al desactivar el ring
+  // (return temprano en startRingtone) esa llamada dejó de ejecutarse, y
+  // ensurePlayback() pasó a dispararse recién en setupComplete — casi al
+  // mismo tiempo que el saludo. Resultado: el pipeline recién creado recibe
+  // el primer audio real sin haber tenido tiempo de estabilizarse, lo cual
+  // encaja con el bug conocido de Chromium donde ese tipo de cadena suena
+  // distorsionada/con tono distinto los primeros cientos de ms. Disparar
+  // ensurePlayback() acá, en paralelo y sin bloquear el resto del arranque,
+  // le devuelve ese margen sin depender de si el ring suena o no.
+  ensurePlayback().catch(() => {})
 
   try {
     // Abrir WS y pedir micrófono en paralelo — ahorra ~200-400ms de setup
