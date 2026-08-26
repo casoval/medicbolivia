@@ -375,7 +375,7 @@ function enqueueAudio(data: ArrayBuffer) {
 }
 
 // Interrupción (barge-in) — corta el audio de Medi si el paciente habla
-const INTERRUPT_FADE_SECONDS = 0.09  // ~90ms: corta rápido pero sin click ni tijeretazo
+const INTERRUPT_FADE_SECONDS = 0.15  // ~150ms: menos abrupto que 90ms — con el filtro de ruido bajo ya activo en todos los navegadores, lo que llega hasta acá son casi siempre interrupciones reales, así que vale la pena un fundido un poco más suave en vez de priorizar la velocidad al máximo
 
 function interruptPlayback() {
   if (!mediIsSpeaking) return
@@ -411,9 +411,9 @@ function interruptPlayback() {
   pendingPlaybackChunks = []
   mediIsSpeaking = false
   callbacks?.onMediSpeaking?.(false)
-  // Si quedó algo sin confirmar en el backlog del gate de Firefox (audio
-  // en voz baja que nunca cruzó el umbral), lo mandamos ahora que Medi ya
-  // no está hablando — mejor tarde que perdido.
+  // Si quedó algo sin confirmar en el backlog del filtro de ruido bajo
+  // (audio en voz baja que nunca cruzó el umbral), lo mandamos ahora que
+  // Medi ya no está hablando — mejor tarde que perdido.
   flushPendingMicBacklog?.()
   // El paciente volvió a hablar — si había un corte de llamada programado
   // (Medi ya se había despedido), lo cancelamos: todavía tiene algo que decir.
@@ -584,19 +584,19 @@ async function startMic(mediaStream: MediaStream, socket: WebSocket) {
   // (ver ensurePlayback) que sí resuelve el caso en Chrome. En vez de
   // confiar en que el navegador cancele ese eco, filtramos acá: mientras
   // Medi habla, exigimos un volumen más alto y más sostenido antes de
-  // considerar que es el paciente de verdad — así el eco nunca llega hasta
-  // el VAD del propio servidor de Gemini, que es el que estaba cortando a
-  // Medi en loop en Firefox (ese corte es legítimo desde su perspectiva:
-  // recibía audio que sonaba exactamente a voz humana clara, porque
-  // literalmente era la voz de Medi).
+  // considerar que es el paciente de verdad.
   //
-  // Restringido a Firefox: en Chrome/Safari la cancelación de eco nativa
-  // ya resuelve el problema de raíz (el eco nunca llega al micrófono), así
-  // que este filtro ahí no sirve de nada y solo suma hasta ~256ms de
-  // demora a CUALQUIER interrupción real del paciente. Aplicarlo solo
-  // donde hace falta evita penalizar a la mayoría de los usuarios.
-  const isFirefox = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent)
-
+  // NO restringido a un navegador: se probó limitar este filtro solo a
+  // Firefox asumiendo que en Chrome la cancelación de eco ya bastaba —
+  // resultó ser un error. El filtro local no solo tapa el eco: es también
+  // la única defensa adicional que tenemos contra un bug conocido y ya
+  // documentado del VAD del propio servidor de Gemini (ver comentario
+  // junto a automaticActivityDetection en el setup del WS): incluso en
+  // LOW/LOW, el VAD del servidor puede dispararse con ruido de fondo bajo
+  // y cortar a Medi a mitad de frase — en CUALQUIER navegador, no solo
+  // Firefox. Si nunca le mandamos ese ruido de baja energía al servidor
+  // mientras Medi habla, el VAD del servidor no tiene con qué dispararse
+  // en falso.
   const RMS_THRESHOLD_WHILE_SPEAKING = 0.08
   const FRAMES_TO_CONFIRM_WHILE_SPEAKING = 8          // ~256ms — Medi hablando
   // Tolerancia a caídas breves de energía (una consonante suave, una
@@ -647,13 +647,6 @@ async function startMic(mediaStream: MediaStream, socket: WebSocket) {
   workletNode.port.onmessage = (e) => {
     if (!socket || socket.readyState !== WebSocket.OPEN) return
     const float32: Float32Array = e.data
-
-    if (!isFirefox) {
-      // Fuera de Firefox no hace falta filtrar — la cancelación de eco del
-      // navegador ya evita que el micrófono capte la voz de Medi.
-      sendFrame(float32)
-      return
-    }
 
     if (!mediIsSpeaking) {
       // Medi está callada — no hay fuente de eco, mandamos todo normal y
