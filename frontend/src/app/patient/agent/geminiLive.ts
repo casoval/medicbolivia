@@ -575,127 +575,26 @@ async function startMic(mediaStream: MediaStream, socket: WebSocket) {
   const source = micCtx.createMediaStreamSource(mediaStream)
   workletNode = new AudioWorkletNode(micCtx, 'mic-processor')
 
-  // A ~16kHz con buffers de 512 muestras, cada frame son ~32ms.
-  // Mientras Medi está hablando, el micrófono puede estar captando su
-  // propio eco por el parlante — más notorio en Firefox, cuya cancelación
-  // de eco (echoCancellation) es conocida como la más débil entre los
-  // navegadores mayores para este tipo de uso (agentes de voz en tiempo
-  // real), incluso con el fix del <audio>/MediaStreamAudioDestinationNode
-  // (ver ensurePlayback) que sí resuelve el caso en Chrome. En vez de
-  // confiar en que el navegador cancele ese eco, filtramos acá: mientras
-  // Medi habla, exigimos un volumen más alto y más sostenido antes de
-  // considerar que es el paciente de verdad.
-  //
-  // NO restringido a un navegador: se probó limitar este filtro solo a
-  // Firefox asumiendo que en Chrome la cancelación de eco ya bastaba —
-  // resultó ser un error. El filtro local no solo tapa el eco: es también
-  // la única defensa adicional que tenemos contra un bug conocido y ya
-  // documentado del VAD del propio servidor de Gemini (ver comentario
-  // junto a automaticActivityDetection en el setup del WS): incluso en
-  // LOW/LOW, el VAD del servidor puede dispararse con ruido de fondo bajo
-  // y cortar a Medi a mitad de frase — en CUALQUIER navegador, no solo
-  // Firefox. Si nunca le mandamos ese ruido de baja energía al servidor
-  // mientras Medi habla, el VAD del servidor no tiene con qué dispararse
-  // en falso.
-  const RMS_THRESHOLD_WHILE_SPEAKING = 0.08
-  const FRAMES_TO_CONFIRM_WHILE_SPEAKING = 8          // ~256ms — Medi hablando
-  // Tolerancia a caídas breves de energía (una consonante suave, una
-  // pequeña respiración a mitad de frase) sin reiniciar la cuenta desde
-  // cero. El habla real nunca es un volumen parejo — exigir frames
-  // consecutivos sin una sola caída hacía que una interrupción genuina
-  // ("no, esperá") a veces nunca se confirmara, porque una sílaba más
-  // suave reseteaba el conteo justo antes de llegar al umbral.
-  const DIP_TOLERANCE_FRAMES = 2                      // ~64ms de caída tolerada
-  // Guardamos los últimos frames mientras evaluamos si es una interrupción
-  // real, para no perder el arranque de la frase del paciente una vez
-  // confirmada — si esperáramos a confirmar antes de guardar nada, se
-  // comerían los primeros ~256ms de lo que dijo. El mismo backlog se
-  // reusa para no perder audio de baja energía que nunca llegó a
-  // confirmarse como interrupción (ver flushPendingMicBacklog más abajo):
-  // es una ventana acotada (~320ms), no la grabación completa del turno.
-  const ECHO_BACKLOG_FRAMES = 10
-
-  let speechFrames = 0
-  let dipFrames = 0
-  let echoBacklog: Float32Array[] = []
-  // Ya confirmamos que es el paciente interrumpiendo de verdad (no eco)
-  // dentro del turno actual de Medi — una vez confirmado, dejamos de
-  // filtrar y mandamos todo normal hasta que Medi vuelva a callarse.
-  let confirmedSpeaking = false
-
-  const sendFrame = (float32: Float32Array) => {
+  // Detección local de voz del paciente mientras Medi habla: probada y
+  // descartada dos veces (una antes de esta sesión, otra durante ella,
+  // ver historial de "mejora para firefox"/"mejora el agente de voz").
+  // Cualquier variante de gating local por RMS terminó o cortando con
+  // cualquier ruido/eco, o sin cortar nunca, dependiendo del umbral —
+  // porque el nivel real que capta cada micrófono/navegador (sobre todo
+  // con autoGainControl activo) no es predecible desde acá. Dejamos que
+  // el propio VAD del servidor de Gemini decida la interrupción
+  // (ver data.serverContent?.interrupted más abajo) y mandamos el audio
+  // del micrófono siempre, sin filtrar nada localmente. Esta es la
+  // configuración que ya estaba probada y funcionando bien antes de
+  // tocar este archivo.
+  workletNode.port.onmessage = (e) => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return
+    const float32: Float32Array = e.data
     const pcm16 = floatTo16BitPCM(float32)
     const b64 = arrayBufferToBase64(pcm16.buffer as ArrayBuffer)
     socket.send(JSON.stringify({
       realtime_input: { audio: { data: b64, mime_type: 'audio/pcm;rate=16000' } }
     }))
-  }
-
-  // Se invoca cuando Medi deja de hablar (turno completo o interrupción
-  // confirmada por el servidor) — manda lo último que haya quedado en el
-  // backlog sin confirmar como interrupción, así el paciente que habló en
-  // voz baja mientras Medi hablaba no queda como si no hubiera dicho nada.
-  flushPendingMicBacklog = () => {
-    if (echoBacklog.length === 0) return
-    for (const buffered of echoBacklog) sendFrame(buffered)
-    echoBacklog = []
-    speechFrames = 0
-    dipFrames = 0
-    confirmedSpeaking = false
-  }
-
-  workletNode.port.onmessage = (e) => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return
-    const float32: Float32Array = e.data
-
-    if (!mediIsSpeaking) {
-      // Medi está callada — no hay fuente de eco, mandamos todo normal y
-      // reseteamos el estado de la compuerta para el próximo turno de Medi.
-      speechFrames = 0
-      dipFrames = 0
-      echoBacklog = []
-      confirmedSpeaking = false
-      sendFrame(float32)
-      return
-    }
-
-    if (confirmedSpeaking) {
-      sendFrame(float32)
-      return
-    }
-
-    let rms = 0
-    for (let i = 0; i < float32.length; i++) rms += float32[i] * float32[i]
-    rms = Math.sqrt(rms / float32.length)
-
-    if (rms > RMS_THRESHOLD_WHILE_SPEAKING) {
-      dipFrames = 0
-      speechFrames++
-      echoBacklog.push(float32)
-      if (echoBacklog.length > ECHO_BACKLOG_FRAMES) echoBacklog.shift()
-      if (speechFrames >= FRAMES_TO_CONFIRM_WHILE_SPEAKING) {
-        // Confirmado: interrupción real, no eco. Mandamos lo que teníamos
-        // guardado (para no perder el arranque de la frase) y cortamos a
-        // Medi localmente para que se sienta instantáneo, sin esperar a
-        // que el servidor también se entere por su cuenta.
-        confirmedSpeaking = true
-        for (const buffered of echoBacklog) sendFrame(buffered)
-        echoBacklog = []
-        interruptPlayback()
-      }
-    } else {
-      // Caída de energía: la toleramos unos pocos frames (ver
-      // DIP_TOLERANCE_FRAMES) antes de dar por perdida la racha — y
-      // seguimos guardando el frame en el backlog en cualquier caso, para
-      // no perderlo si Medi termina su turno antes de que se confirme nada.
-      dipFrames++
-      echoBacklog.push(float32)
-      if (echoBacklog.length > ECHO_BACKLOG_FRAMES) echoBacklog.shift()
-      if (dipFrames > DIP_TOLERANCE_FRAMES) {
-        speechFrames = 0
-        dipFrames = 0
-      }
-    }
   }
 
   source.connect(workletNode)
