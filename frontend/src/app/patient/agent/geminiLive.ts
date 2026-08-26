@@ -491,55 +491,84 @@ async function startMic(mediaStream: MediaStream, socket: WebSocket) {
   const source = micCtx.createMediaStreamSource(mediaStream)
   workletNode = new AudioWorkletNode(micCtx, 'mic-processor')
 
-  let speakingDetected = false
+  // A ~16kHz con buffers de 512 muestras, cada frame son ~32ms.
+  // Mientras Medi está hablando, el micrófono puede estar captando su
+  // propio eco por el parlante — más notorio en Firefox, cuya cancelación
+  // de eco (echoCancellation) es conocida como la más débil entre los
+  // navegadores mayores para este tipo de uso (agentes de voz en tiempo
+  // real), incluso con el fix del <audio>/MediaStreamAudioDestinationNode
+  // (ver ensurePlayback) que sí resuelve el caso en Chrome. En vez de
+  // confiar en que el navegador cancele ese eco, filtramos acá: mientras
+  // Medi habla, exigimos un volumen más alto y más sostenido antes de
+  // considerar que es el paciente de verdad — así el eco nunca llega hasta
+  // el VAD del propio servidor de Gemini, que es el que estaba cortando a
+  // Medi en loop en Firefox (ese corte es legítimo desde su perspectiva:
+  // recibía audio que sonaba exactamente a voz humana clara, porque
+  // literalmente era la voz de Medi).
+  const RMS_THRESHOLD_WHILE_SPEAKING = 0.08
+  const FRAMES_TO_CONFIRM_WHILE_SPEAKING = 8          // ~256ms — Medi hablando
+  // Guardamos los últimos frames mientras evaluamos si es una interrupción
+  // real, para no perder el arranque de la frase del paciente una vez
+  // confirmada — si esperáramos a confirmar antes de guardar nada, se
+  // comerían los primeros ~256ms de lo que dijo.
+  const ECHO_BACKLOG_FRAMES = 10
+
   let speechFrames = 0
-  // A ~16kHz con buffers de 512 muestras, cada frame son ~32ms — pedir 5
-  // frames seguidos por encima del umbral exige ~160ms de energía sostenida
-  // antes de interrumpir, en vez de reaccionar a un solo golpe de ruido.
-  const FRAMES_TO_CONFIRM_SPEECH = 5
-  const RMS_THRESHOLD = 0.03
+  let echoBacklog: Float32Array[] = []
+  // Ya confirmamos que es el paciente interrumpiendo de verdad (no eco)
+  // dentro del turno actual de Medi — una vez confirmado, dejamos de
+  // filtrar y mandamos todo normal hasta que Medi vuelva a callarse.
+  let confirmedSpeaking = false
+
+  const sendFrame = (float32: Float32Array) => {
+    const pcm16 = floatTo16BitPCM(float32)
+    const b64 = arrayBufferToBase64(pcm16.buffer as ArrayBuffer)
+    socket.send(JSON.stringify({
+      realtime_input: { audio: { data: b64, mime_type: 'audio/pcm;rate=16000' } }
+    }))
+  }
 
   workletNode.port.onmessage = (e) => {
     if (!socket || socket.readyState !== WebSocket.OPEN) return
     const float32: Float32Array = e.data
 
-    // Detección local de voz del paciente mientras Medi habla — YA NO corta
-    // el audio (ver interruptPlayback más abajo). Se probó cortar
-    // localmente por RMS "por responsividad", pero en la práctica se
-    // disparaba con cualquier ruido (o resto de eco pese al fix de
-    // cancelación de eco) y el servidor nunca se enteraba del corte — el
-    // resultado era que Medi se cortaba y reanudaba en loop dentro de una
-    // misma respuesta, que es justo lo que se reportó como "poco práctico".
-    // Dejamos que Medi termine de hablar siempre; el único corte real que
-    // puede pasar es el que decide el propio servidor con su VAD
-    // (data.serverContent?.interrupted, más abajo) — ese no lo podemos
-    // evitar del lado del cliente porque ahí Gemini ya dejó de generar.
-    if (false) {
-      let rms = 0
-      for (let i = 0; i < float32.length; i++) rms += float32[i] * float32[i]
-      rms = Math.sqrt(rms / float32.length)
-      if (rms > RMS_THRESHOLD) {
-        speechFrames++
-        if (speechFrames >= FRAMES_TO_CONFIRM_SPEECH && !speakingDetected) {
-          speakingDetected = true
-          interruptPlayback()
-        }
-      } else {
-        speechFrames = 0
-        speakingDetected = false
+    if (!mediIsSpeaking) {
+      // Medi está callada — no hay fuente de eco, mandamos todo normal y
+      // reseteamos el estado de la compuerta para el próximo turno de Medi.
+      speechFrames = 0
+      echoBacklog = []
+      confirmedSpeaking = false
+      sendFrame(float32)
+      return
+    }
+
+    if (confirmedSpeaking) {
+      sendFrame(float32)
+      return
+    }
+
+    let rms = 0
+    for (let i = 0; i < float32.length; i++) rms += float32[i] * float32[i]
+    rms = Math.sqrt(rms / float32.length)
+
+    if (rms > RMS_THRESHOLD_WHILE_SPEAKING) {
+      speechFrames++
+      echoBacklog.push(float32)
+      if (echoBacklog.length > ECHO_BACKLOG_FRAMES) echoBacklog.shift()
+      if (speechFrames >= FRAMES_TO_CONFIRM_WHILE_SPEAKING) {
+        // Confirmado: interrupción real, no eco. Mandamos lo que teníamos
+        // guardado (para no perder el arranque de la frase) y cortamos a
+        // Medi localmente para que se sienta instantáneo, sin esperar a
+        // que el servidor también se entere por su cuenta.
+        confirmedSpeaking = true
+        for (const buffered of echoBacklog) sendFrame(buffered)
+        echoBacklog = []
+        interruptPlayback()
       }
     } else {
       speechFrames = 0
-      speakingDetected = false
+      echoBacklog = []
     }
-
-    const pcm16 = floatTo16BitPCM(float32)
-    const b64 = arrayBufferToBase64(pcm16.buffer as ArrayBuffer)
-    socket.send(JSON.stringify({
-      realtime_input: {
-        audio: { data: b64, mime_type: 'audio/pcm;rate=16000' }
-      }
-    }))
   }
 
   source.connect(workletNode)
