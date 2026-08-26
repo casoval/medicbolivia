@@ -514,6 +514,15 @@ let ringInterval: ReturnType<typeof setInterval> | null = null
 let activeRingNodes: { osc1: OscillatorNode; osc2: OscillatorNode; gain: GainNode } | null = null
 
 function startRingtone() {
+  // --- DIAGNÓSTICO TEMPORAL: ring desactivado ---
+  // Para aislar si el tono agudo/atropellado al inicio de la llamada
+  // viene 100% del ring pisándose con el saludo, o si hay otra causa
+  // además. Sin esto, el paciente no escucha ningún tono mientras se
+  // conecta — hay que evaluar si eso en sí es aceptable para producción,
+  // o si conviene reemplazarlo por otra señal (ej. un mensaje visual de
+  // "conectando...") en vez de volver a activar el tono de tres notas.
+  return
+  // eslint-disable-next-line no-unreachable
   stopRingtone()
   // OJO: usa playCtx (el mismo contexto del audio real de Medi, ver
   // ensurePlayback) en vez de un AudioContext propio. Antes el ring tenía
