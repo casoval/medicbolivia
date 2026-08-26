@@ -154,6 +154,12 @@ let queuedPlaybackSamples = 0
 // reproducción termine de inicializarse (addModule es async).
 let pendingPlaybackChunks: Float32Array[] = []
 let mediIsSpeaking = false
+// La asigna startMic() — permite mandarle al servidor lo que el paciente
+// dijo en voz baja mientras Medi hablaba (nunca confirmado como
+// interrupción por no cruzar el umbral de volumen) apenas Medi deja de
+// hablar, en vez de descartarlo en silencio. Ver comentario junto a
+// ECHO_BACKLOG_FRAMES en startMic.
+let flushPendingMicBacklog: (() => void) | null = null
 
 // ── Helpers de audio ──────────────────────────────
 
@@ -283,14 +289,76 @@ async function ensurePlayback(): Promise<void> {
     playbackAudioEl.srcObject = dest.stream
     playbackAudioEl.autoplay = true
     playbackAudioEl.muted = false
-    try { await playbackAudioEl.play() } catch (e) {
+    try {
+      await playbackAudioEl.play()
+    } catch (e) {
+      // El play() puede venir bloqueado por la política de autoplay del
+      // navegador (ej. si el fetch del token + apertura del WebSocket
+      // tardó lo suficiente como para que ya no cuente como gesto del
+      // usuario reciente) — ANTES esto solo se registraba en consola y no
+      // se reintentaba: el paciente se quedaba con la llamada "activa"
+      // pero sin escuchar nada de Medi, sin ningún aviso ni forma de
+      // recuperarlo salvo colgar y reintentar toda la llamada.
       console.warn('[GeminiLive] audioEl.play() bloqueado, reintentando tras gesto del usuario', e)
+      retryPlaybackOnNextGesture()
     }
     // Drenar lo que haya llegado mientras se inicializaba el worklet
     for (const chunk of pendingPlaybackChunks) pushPlaybackSamples(chunk)
     pendingPlaybackChunks = []
   })()
   return playbackReady
+}
+
+// Reintenta reproducir en cuanto el paciente toque la pantalla — cualquier
+// tap/click cuenta como gesto del usuario y desbloquea el autoplay. Si
+// tras varios segundos de intentarlo el audio sigue sin sonar, avisamos
+// por el chat en vez de dejar al paciente en silencio sin saber por qué.
+function retryPlaybackOnNextGesture() {
+  let settled = false
+  let warnTimer: ReturnType<typeof setTimeout> | null = null
+
+  const tryPlay = async () => {
+    if (settled || !playbackAudioEl) return
+    try {
+      await playbackAudioEl.play()
+      settled = true
+      if (warnTimer) { clearTimeout(warnTimer); warnTimer = null }
+      cleanup()
+    } catch {
+      // Sigue bloqueado — se queda escuchando el próximo gesto.
+    }
+  }
+
+  const cleanup = () => {
+    document.removeEventListener('pointerdown', tryPlay)
+    document.removeEventListener('touchstart', tryPlay)
+    document.removeEventListener('click', tryPlay)
+  }
+
+  document.addEventListener('pointerdown', tryPlay)
+  document.addEventListener('touchstart', tryPlay)
+  document.addEventListener('click', tryPlay)
+
+  // Si en 4 segundos ningún gesto lo desbloqueó, avisamos — puede que el
+  // paciente ya haya tocado algo (ej. el propio botón de colgar) sin que
+  // el navegador lo cuente como gesto válido para audio.
+  warnTimer = setTimeout(() => {
+    if (!settled) {
+      callbacks?.onMessage('🔇 Parece que tu navegador bloqueó el audio de la llamada — toca la pantalla para activarlo.')
+    }
+  }, 4000)
+
+  // No dejamos los listeners colgados para siempre si la llamada termina
+  // sin que el paciente llegue a tocar nada.
+  const stopListeningOnEnd = () => {
+    if (getStat() === 'idle') {
+      settled = true
+      if (warnTimer) { clearTimeout(warnTimer); warnTimer = null }
+      cleanup()
+      clearInterval(watchdog)
+    }
+  }
+  const watchdog = setInterval(stopListeningOnEnd, 1000)
 }
 
 function pushPlaybackSamples(float32: Float32Array) {
@@ -343,6 +411,10 @@ function interruptPlayback() {
   pendingPlaybackChunks = []
   mediIsSpeaking = false
   callbacks?.onMediSpeaking?.(false)
+  // Si quedó algo sin confirmar en el backlog del gate de Firefox (audio
+  // en voz baja que nunca cruzó el umbral), lo mandamos ahora que Medi ya
+  // no está hablando — mejor tarde que perdido.
+  flushPendingMicBacklog?.()
   // El paciente volvió a hablar — si había un corte de llamada programado
   // (Medi ya se había despedido), lo cancelamos: todavía tiene algo que decir.
   cancelPendingHangup()
@@ -393,7 +465,19 @@ let ringInterval: ReturnType<typeof setInterval> | null = null
 function startRingtone() {
   stopRingtone()
   try {
-    ringCtx = new AudioContext()
+    // OJO: mismo sampleRate que playCtx (ver ensurePlayback). Antes este
+    // contexto se creaba sin especificar sampleRate (el navegador usa el
+    // del hardware, típicamente 48000), y apenas llegaba el primer audio
+    // real de Medi se abría playCtx forzado a 24000 — el dispositivo de
+    // salida tenía que reconfigurar su reloj de audio de golpe, casi en el
+    // mismo instante en que se cerraba este contexto. En varios equipos
+    // (sobre todo Android) esa transición no es instantánea ni limpia: se
+    // oye un audio distorsionado/con un tono raro los primeros segundos,
+    // hasta que el hardware se asienta en la frecuencia nueva — coincide
+    // con el reporte de "suena raro al empezar y mejora con la llamada".
+    // Usar el mismo sampleRate en los dos contextos evita el cambio de
+    // frecuencia en esa transición.
+    ringCtx = new AudioContext({ sampleRate: 24000 })
     const playRing = () => {
       if (!ringCtx || ringCtx.state === 'closed') return
       const t = ringCtx.currentTime
@@ -505,15 +589,34 @@ async function startMic(mediaStream: MediaStream, socket: WebSocket) {
   // Medi en loop en Firefox (ese corte es legítimo desde su perspectiva:
   // recibía audio que sonaba exactamente a voz humana clara, porque
   // literalmente era la voz de Medi).
+  //
+  // Restringido a Firefox: en Chrome/Safari la cancelación de eco nativa
+  // ya resuelve el problema de raíz (el eco nunca llega al micrófono), así
+  // que este filtro ahí no sirve de nada y solo suma hasta ~256ms de
+  // demora a CUALQUIER interrupción real del paciente. Aplicarlo solo
+  // donde hace falta evita penalizar a la mayoría de los usuarios.
+  const isFirefox = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent)
+
   const RMS_THRESHOLD_WHILE_SPEAKING = 0.08
   const FRAMES_TO_CONFIRM_WHILE_SPEAKING = 8          // ~256ms — Medi hablando
+  // Tolerancia a caídas breves de energía (una consonante suave, una
+  // pequeña respiración a mitad de frase) sin reiniciar la cuenta desde
+  // cero. El habla real nunca es un volumen parejo — exigir frames
+  // consecutivos sin una sola caída hacía que una interrupción genuina
+  // ("no, esperá") a veces nunca se confirmara, porque una sílaba más
+  // suave reseteaba el conteo justo antes de llegar al umbral.
+  const DIP_TOLERANCE_FRAMES = 2                      // ~64ms de caída tolerada
   // Guardamos los últimos frames mientras evaluamos si es una interrupción
   // real, para no perder el arranque de la frase del paciente una vez
   // confirmada — si esperáramos a confirmar antes de guardar nada, se
-  // comerían los primeros ~256ms de lo que dijo.
+  // comerían los primeros ~256ms de lo que dijo. El mismo backlog se
+  // reusa para no perder audio de baja energía que nunca llegó a
+  // confirmarse como interrupción (ver flushPendingMicBacklog más abajo):
+  // es una ventana acotada (~320ms), no la grabación completa del turno.
   const ECHO_BACKLOG_FRAMES = 10
 
   let speechFrames = 0
+  let dipFrames = 0
   let echoBacklog: Float32Array[] = []
   // Ya confirmamos que es el paciente interrumpiendo de verdad (no eco)
   // dentro del turno actual de Medi — una vez confirmado, dejamos de
@@ -528,14 +631,35 @@ async function startMic(mediaStream: MediaStream, socket: WebSocket) {
     }))
   }
 
+  // Se invoca cuando Medi deja de hablar (turno completo o interrupción
+  // confirmada por el servidor) — manda lo último que haya quedado en el
+  // backlog sin confirmar como interrupción, así el paciente que habló en
+  // voz baja mientras Medi hablaba no queda como si no hubiera dicho nada.
+  flushPendingMicBacklog = () => {
+    if (echoBacklog.length === 0) return
+    for (const buffered of echoBacklog) sendFrame(buffered)
+    echoBacklog = []
+    speechFrames = 0
+    dipFrames = 0
+    confirmedSpeaking = false
+  }
+
   workletNode.port.onmessage = (e) => {
     if (!socket || socket.readyState !== WebSocket.OPEN) return
     const float32: Float32Array = e.data
+
+    if (!isFirefox) {
+      // Fuera de Firefox no hace falta filtrar — la cancelación de eco del
+      // navegador ya evita que el micrófono capte la voz de Medi.
+      sendFrame(float32)
+      return
+    }
 
     if (!mediIsSpeaking) {
       // Medi está callada — no hay fuente de eco, mandamos todo normal y
       // reseteamos el estado de la compuerta para el próximo turno de Medi.
       speechFrames = 0
+      dipFrames = 0
       echoBacklog = []
       confirmedSpeaking = false
       sendFrame(float32)
@@ -552,6 +676,7 @@ async function startMic(mediaStream: MediaStream, socket: WebSocket) {
     rms = Math.sqrt(rms / float32.length)
 
     if (rms > RMS_THRESHOLD_WHILE_SPEAKING) {
+      dipFrames = 0
       speechFrames++
       echoBacklog.push(float32)
       if (echoBacklog.length > ECHO_BACKLOG_FRAMES) echoBacklog.shift()
@@ -566,8 +691,17 @@ async function startMic(mediaStream: MediaStream, socket: WebSocket) {
         interruptPlayback()
       }
     } else {
-      speechFrames = 0
-      echoBacklog = []
+      // Caída de energía: la toleramos unos pocos frames (ver
+      // DIP_TOLERANCE_FRAMES) antes de dar por perdida la racha — y
+      // seguimos guardando el frame en el backlog en cualquier caso, para
+      // no perderlo si Medi termina su turno antes de que se confirme nada.
+      dipFrames++
+      echoBacklog.push(float32)
+      if (echoBacklog.length > ECHO_BACKLOG_FRAMES) echoBacklog.shift()
+      if (dipFrames > DIP_TOLERANCE_FRAMES) {
+        speechFrames = 0
+        dipFrames = 0
+      }
     }
   }
 
@@ -596,6 +730,7 @@ function cleanupAudio() {
   try { playCtx?.close() } catch {}
   micCtx = null; playCtx = null; masterGain = null; stream = null
   pendingPlaybackChunks = []; queuedPlaybackSamples = 0; mediIsSpeaking = false
+  flushPendingMicBacklog = null
   currentTranscript = ''
   if (hangupTimer) { clearTimeout(hangupTimer); hangupTimer = null }
   hangupRequested = false
@@ -774,6 +909,7 @@ export async function startCall(apiKey: string) {
         setTimeout(() => {
           mediIsSpeaking = false
           callbacks?.onMediSpeaking?.(false)
+          flushPendingMicBacklog?.()
         }, 300)
       }
 
