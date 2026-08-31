@@ -29,7 +29,7 @@ import asyncio
 import sys
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.db.database import AsyncSessionLocal
 from app.models.models import User, UserRole
@@ -80,8 +80,13 @@ async def run(start_str: str, end_str: str, confirm: bool):
             print("Cancelado.")
             sys.exit(0)
 
-        for user in users:
-            await db.delete(user)  # cascade borra el Professional asociado
+        # Borrado a nivel SQL (no db.delete(user) uno por uno): el borrado
+        # ORM intenta primero poner en NULL professionals.user_id antes de
+        # borrar al User, y esa columna es NOT NULL -> IntegrityError. Con
+        # un DELETE directo, el ON DELETE CASCADE de la base de datos borra
+        # el Professional asociado sin pasar por ese paso intermedio.
+        ids = [user.id for user in users]
+        await db.execute(delete(User).where(User.id.in_(ids)))
         await db.commit()
         print(f"✅ {len(users)} profesional(es) eliminado(s).")
 
