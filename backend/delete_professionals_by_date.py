@@ -29,10 +29,11 @@ import asyncio
 import sys
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.db.database import AsyncSessionLocal
-from app.models.models import User, UserRole
+from app.models.models import AuditLog, User, UserRole
 
 BOLIVIA_OFFSET = timedelta(hours=4)  # Bolivia = UTC-4, sin horario de verano
 
@@ -86,8 +87,27 @@ async def run(start_str: str, end_str: str, confirm: bool):
         # un DELETE directo, el ON DELETE CASCADE de la base de datos borra
         # el Professional asociado sin pasar por ese paso intermedio.
         ids = [user.id for user in users]
-        await db.execute(delete(User).where(User.id.in_(ids)))
-        await db.commit()
+
+        # audit_logs.user_id NO tiene ON DELETE CASCADE (a propósito: es un
+        # log de auditoría, no debe desaparecer solo porque se borra el
+        # usuario). Es nullable, así que desvinculamos esas filas en vez de
+        # borrarlas -> se conserva el historial, solo queda sin user_id.
+        await db.execute(
+            update(AuditLog).where(AuditLog.user_id.in_(ids)).values(user_id=None)
+        )
+
+        try:
+            await db.execute(delete(User).where(User.id.in_(ids)))
+            await db.commit()
+        except IntegrityError as exc:
+            await db.rollback()
+            print(
+                "❌ No se pudo borrar: hay otra tabla con una referencia a estos "
+                "usuarios que tampoco tiene ON DELETE CASCADE. Detalle:\n"
+                f"{exc.orig}"
+            )
+            sys.exit(1)
+
         print(f"✅ {len(users)} profesional(es) eliminado(s).")
 
 
