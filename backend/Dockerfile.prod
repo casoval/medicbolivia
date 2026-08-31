@@ -3,6 +3,13 @@
 # pero SIN --reload y con --workers 2 (igual que ecosystem.config.js hoy
 # en PM2), para que el comportamiento sea idéntico al que ya corre en
 # el VPS, solo que dentro de un contenedor.
+#
+# postgresql-client-18: pg_dump para el backup automático a Gmail (pestaña
+# IA → Automatización). Se instala vía el repo oficial de PGDG en vez del
+# paquete "postgresql-client" de Debian porque ese trae una versión más
+# vieja, y pg_dump no puede volcar un servidor MÁS NUEVO que su propia
+# versión — el VPS corre Postgres 18.3, así que el cliente tiene que ser
+# 18 también.
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -10,6 +17,15 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    curl \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
+    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-18 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

@@ -78,11 +78,19 @@ def _send_email_with_attachment(recipients: list[str], subject: str, body: str, 
         server.send_message(msg)
 
 
-async def _run_backup() -> None:
+async def _run_backup(force: bool = False) -> None:
+    """
+    force=True: usado por el botón manual "Enviar backup ahora" — se salta
+    el chequeo de is_active (el envío programado sí lo respeta) pero sigue
+    exigiendo al menos un destinatario configurado, porque sin eso no hay
+    a quién mandarlo.
+    """
     async with AsyncSessionLocal() as db:
         config_result = await db.execute(select(DBBackupConfig).where(DBBackupConfig.id == "global"))
         config = config_result.scalar_one_or_none()
-        if not config or not config.is_active or not config.recipient_emails:
+        if not config or not config.recipient_emails:
+            return
+        if not force and not config.is_active:
             return
 
         timestamp = utcnow_naive().strftime("%Y%m%d_%H%M%S")
@@ -156,7 +164,7 @@ async def _run_backup() -> None:
 @celery_app.task(name="app.tasks.backup_tasks.run_backup_now")
 def run_backup_now():
     """Disparo manual — botón 'Enviar backup ahora' en la pestaña 4."""
-    run_task_with_engine_cleanup(_run_backup())
+    run_task_with_engine_cleanup(_run_backup(force=True))
 
 
 async def _check_and_run_backup() -> None:
