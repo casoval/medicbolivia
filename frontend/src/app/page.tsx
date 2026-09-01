@@ -27,6 +27,106 @@ const TABS: { key: FAQAudience; label: string }[] = [
   { key: 'PROFESSIONAL', label: 'Profesional' },
 ]
 
+// ─────────────────────────────────────────────────────────────────────
+// Videos de YouTube del landing. El ID es la parte final de la URL, ej.
+// en https://www.youtube.com/watch?v=ABC123XYZ el ID es "ABC123XYZ".
+// Mientras un ID quede vacío, el botón/sección correspondiente no se
+// muestra (así no queda un video roto en producción).
+// ─────────────────────────────────────────────────────────────────────
+const AD_VIDEO_YOUTUBE_ID = 'OUQKr0FU2wM' // Video general: qué es MedicBolivia (botón del Hero)
+const PROFESSIONAL_AD_VIDEO_YOUTUBE_ID = 'lEpORfGzwq4' // Video publicitario dirigido a profesionales
+const PROFESSIONAL_TUTORIAL_VIDEO_YOUTUBE_ID = 'ujNaXXyz17g' // Tutorial: cómo registrarse como profesional
+const PROFESSIONAL_TUTORIAL_START_SECONDS = 7 // arranca en 0:07, como en el link que compartiste
+
+// Miniatura de YouTube con botón de play superpuesto: el iframe real
+// (pesado, ~1MB de JS) recién se carga cuando el usuario hace clic, para
+// no penalizar el rendimiento del landing con videos que casi nadie
+// reproduce apenas entra a la página.
+function LiteYouTube({ videoId, title, startSeconds }: { videoId: string; title: string; startSeconds?: number }) {
+  const [loaded, setLoaded] = useState(false)
+  const startParam = startSeconds ? `&start=${startSeconds}` : ''
+
+  if (loaded) {
+    return (
+      <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black">
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0${startParam}`}
+          title={title}
+          className="absolute inset-0 w-full h-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setLoaded(true)}
+      aria-label={`Reproducir video: ${title}`}
+      className="group relative block w-full aspect-video rounded-xl overflow-hidden bg-[#0C447C]"
+    >
+      {/* Miniatura oficial de YouTube — no requiere configurar dominios
+          externos en next.config.js porque es un <img> normal, no next/image */}
+      <img
+        src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+        alt={title}
+        loading="lazy"
+        className="w-full h-full object-cover"
+      />
+      <span className="absolute inset-0 bg-black/25 group-hover:bg-black/35 transition-colors flex items-center justify-center">
+        <span className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+          <svg viewBox="0 0 24 24" className="w-6 h-6 text-[#0C447C] translate-x-0.5" fill="currentColor" aria-hidden="true">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </span>
+      </span>
+    </button>
+  )
+}
+
+// Modal de video para el botón "Ver video" del Hero: se abre encima de
+// todo sin sacar al usuario del landing.
+function VideoModal({ videoId, title, onClose }: { videoId: string; title: string; onClose: () => void }) {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="relative w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar video"
+          className="absolute -top-10 right-0 text-white/80 hover:text-white transition-colors"
+        >
+          <X className="w-7 h-7" aria-hidden="true" />
+        </button>
+        <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black">
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`}
+            title={title}
+            className="absolute inset-0 w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Barrita decorativa con degradado azul→verde, usada bajo algunos títulos
 // de sección como motivo repetido que amarra los dos colores de la marca.
 function SectionAccent() {
@@ -369,6 +469,7 @@ function HeroDots({ active, onSelect }: { active: number; onSelect: (i: number) 
 
 function Hero() {
   const [active, setActive] = useState(0)
+  const [showAdVideo, setShowAdVideo] = useState(false)
   const { t } = useLanguage()
 
   useEffect(() => {
@@ -379,6 +480,19 @@ function Hero() {
   }, [])
 
   const slide = HERO_SLIDES[active]
+
+  // Botón "Ver video" — mismo lugar en mobile y desktop, junto a los CTA.
+  // No se renderiza hasta que se complete AD_VIDEO_YOUTUBE_ID arriba.
+  const watchVideoButton = AD_VIDEO_YOUTUBE_ID ? (
+    <button
+      type="button"
+      onClick={() => setShowAdVideo(true)}
+      className="inline-flex items-center gap-2 bg-white/10 text-white border border-white/40 font-medium px-6 py-3 rounded-lg hover:bg-white/20 transition-colors backdrop-blur-sm"
+    >
+      <Video className="w-4 h-4" aria-hidden="true" />
+      {t('Ver video')}
+    </button>
+  ) : null
 
   return (
     <section className="relative overflow-hidden">
@@ -428,6 +542,7 @@ function Hero() {
               <Link href="/auth/register/professional" className="bg-transparent text-white border border-[#3DDC84]/80 font-medium px-6 py-3 rounded-lg hover:bg-[#11A15A]/15 transition-colors">
                 {t('Soy profesional de salud')}
               </Link>
+              {watchVideoButton}
             </div>
             <HeroDots active={active} onSelect={setActive} />
           </div>
@@ -473,11 +588,20 @@ function Hero() {
               <Link href="/auth/register/professional" className="bg-transparent text-white border border-[#3DDC84]/80 font-medium px-6 py-3 rounded-lg hover:bg-[#11A15A]/15 transition-colors">
                 {t('Soy profesional de salud')}
               </Link>
+              {watchVideoButton}
             </div>
             <HeroDots active={active} onSelect={setActive} />
           </div>
         </div>
       </div>
+
+      {showAdVideo && AD_VIDEO_YOUTUBE_ID && (
+        <VideoModal
+          videoId={AD_VIDEO_YOUTUBE_ID}
+          title={t('Video de MedicBolivia')}
+          onClose={() => setShowAdVideo(false)}
+        />
+      )}
     </section>
   )
 }
@@ -599,6 +723,64 @@ function HowItWorksSection() {
             <p className="text-xs text-[#475569]">{t(step.text)}</p>
           </div>
         ))}
+      </div>
+    </section>
+  )
+}
+
+// Sección dedicada a profesionales de salud: video publicitario + tutorial
+// de registro, lado a lado, con su propio CTA. Va después de TrustSection
+// porque esta ya habla de "Profesionales verificados" — sigue el hilo
+// natural para quien está evaluando sumarse como profesional.
+function ForProfessionalsSection() {
+  const { t } = useLanguage()
+  if (!PROFESSIONAL_AD_VIDEO_YOUTUBE_ID && !PROFESSIONAL_TUTORIAL_VIDEO_YOUTUBE_ID) return null
+
+  return (
+    <section className="bg-[#F5F6FA] border-t border-b border-[#DDE1EE]">
+      <div className="max-w-5xl mx-auto px-4 py-16">
+        <h2 className="text-2xl font-bold text-center text-[#141820] mb-2">
+          {t('¿Sos profesional de la salud?')}
+        </h2>
+        <SectionAccent />
+        <p className="text-sm text-center text-[#475569] mt-3 mb-10 max-w-xl mx-auto">
+          {t('Sumate a MedicBolivia y atendé pacientes desde donde estés. Mirá de qué se trata y cómo registrarte, paso a paso.')}
+        </p>
+
+        <div className="grid sm:grid-cols-2 gap-8">
+          {PROFESSIONAL_AD_VIDEO_YOUTUBE_ID && (
+            <div>
+              <LiteYouTube
+                videoId={PROFESSIONAL_AD_VIDEO_YOUTUBE_ID}
+                title={t('MedicBolivia para profesionales de la salud')}
+              />
+              <p className="text-sm font-medium text-[#141820] text-center mt-3">
+                {t('Conocé la plataforma')}
+              </p>
+            </div>
+          )}
+          {PROFESSIONAL_TUTORIAL_VIDEO_YOUTUBE_ID && (
+            <div>
+              <LiteYouTube
+                videoId={PROFESSIONAL_TUTORIAL_VIDEO_YOUTUBE_ID}
+                title={t('Tutorial: cómo registrarte como profesional')}
+                startSeconds={PROFESSIONAL_TUTORIAL_START_SECONDS}
+              />
+              <p className="text-sm font-medium text-[#141820] text-center mt-3">
+                {t('Cómo registrarte, paso a paso')}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-center mt-10">
+          <Link
+            href="/auth/register/professional"
+            className="bg-[#0C447C] text-white font-medium px-6 py-3 rounded-lg hover:bg-[#0C447C]/90 transition-colors"
+          >
+            {t('Soy profesional de salud')}
+          </Link>
+        </div>
       </div>
     </section>
   )
@@ -814,6 +996,7 @@ function LandingPage() {
       <AI24_7Section />
       <VerifyPrescriptionSection />
       <TrustSection />
+      <ForProfessionalsSection />
       <ContactSection />
       <FAQSection />
       <LandingFooter />
