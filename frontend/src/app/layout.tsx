@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Outfit } from 'next/font/google'
 import { Providers } from '@/components/layout/Providers'
 import './globals.css'
+import { GoogleTagManager } from '@next/third-parties/google'
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -176,6 +177,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Providers>{children}</Providers>
       </body>
+      <GoogleTagManager gtmId="GTM-WNL76MMG" />
     </html>
   )
 }
