@@ -429,11 +429,28 @@ function LiveDoctorsBadge({ className = '' }: { className?: string }) {
   )
 }
 
+// Cápsula "Muy pronto" sobre el título del hero. Anuncio fijo: quitar
+// cuando se habilite el registro de pacientes.
+function PatientSignupSoonChip() {
+  const { t } = useLanguage()
+  return (
+    <div className="mb-3">
+    <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/35 bg-white/15 py-1 pl-1.5 pr-3 text-xs sm:text-[13px] text-white backdrop-blur-sm" role="status">
+      <span className="shrink-0 rounded-full bg-[#FFD66B] px-2 py-0.5 text-[10.5px] font-extrabold uppercase tracking-wider text-[#4A3500]">
+        {t('Muy pronto')}
+      </span>
+      <span className="leading-snug">{t('Registro de pacientes · hoy solo para profesionales de la salud')}</span>
+    </div>
+    </div>
+  )
+}
+
 function HeroCopy({ slide }: { slide: HeroSlide }) {
   const Icon = slide.badgeIcon
   const { t } = useLanguage()
   return (
     <>
+      <PatientSignupSoonChip />
       <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full mb-4 backdrop-blur-sm ${
         slide.accent === 'green' ? 'bg-[#11A15A]/25 text-white' : 'bg-white/15 text-white'
       }`}>
@@ -979,6 +996,33 @@ function LandingFooter() {
           <a href="#faq" className="hover:text-[#141820]">{t('Preguntas frecuentes')}</a>
           <Link href="/verificar-receta" className="hover:text-[#141820]">{t('Verificar receta')}</Link>
           <Link href="/auth/login" className="hover:text-[#141820]">{t('Iniciar sesión')}</Link>
+        </div>
+      </div>
+      <div className="max-w-5xl mx-auto px-4 pb-8">
+        <div className="border-t border-[#DDE1EE] pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-[#141820]">{t('Síguenos en nuestras redes')}</span>
+          <div className="flex items-center gap-3">
+            <a
+              href="https://www.youtube.com/@medicboliviaoficial"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="YouTube de MedicBolivia"
+              className="inline-flex items-center gap-2 rounded-xl border border-[#DDE1EE] bg-white px-3 py-2 text-sm font-medium text-[#141820] hover:bg-[#F5F6FA] transition-colors"
+            >
+              <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="#FF0000" aria-hidden="true"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.6 15.6V8.4l6.2 3.6-6.2 3.6z" /></svg>
+              YouTube
+            </a>
+            <a
+              href="https://www.facebook.com/profile.php?id=61592865504159"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Facebook de MedicBolivia"
+              className="inline-flex items-center gap-2 rounded-xl border border-[#DDE1EE] bg-white px-3 py-2 text-sm font-medium text-[#141820] hover:bg-[#F5F6FA] transition-colors"
+            >
+              <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="#1877F2" aria-hidden="true"><path d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.7 4.5-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9V12h3.4l-.5 3.5h-2.9v8.4A12 12 0 0 0 24 12z" /></svg>
+              Facebook
+            </a>
+          </div>
         </div>
       </div>
     </footer>

@@ -13,7 +13,7 @@ import { PhoneVerification } from '@/components/ui/PhoneVerification'
 import { SpanishBirthDatePicker } from '@/components/ui/SpanishDateTimePicker'
 import { PasswordInput } from '@/components/ui'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
-import { ShieldAlert } from 'lucide-react'
+import { ShieldAlert, Clock } from 'lucide-react'
 
 const DEPARTMENTS = [
   'La Paz', 'Santa Cruz', 'Cochabamba', 'Oruro', 'Potosí',
@@ -159,6 +159,13 @@ export default function RegisterPatientPage() {
               <p className="text-sm text-[#475569]">
                 {t('Por el momento no se están aceptando nuevos registros de pacientes. Por favor contactate con un administrador.')}
               </p>
+              <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-[#F2D27A] bg-[#FFF7E0] px-3 py-2.5 text-left text-[13px] leading-snug text-[#7A5A00]" role="status">
+                <Clock className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+                <span>
+                  <strong>{t('¡Muy pronto lo habilitaremos!')}</strong>{' '}
+                  {t('Estamos preparando todo para recibirte.')}
+                </span>
+              </div>
               <Link href="/auth/login" className="btn-primary w-full text-center mt-6 inline-block">
                 {t('Ir a iniciar sesión')}
               </Link>
