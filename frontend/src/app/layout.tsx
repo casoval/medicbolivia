@@ -3,7 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Outfit } from 'next/font/google'
 import { Providers } from '@/components/layout/Providers'
 import './globals.css'
-import { GoogleTagManager } from '@next/third-parties/google'
+import Script from 'next/script'
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -176,8 +176,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <Providers>{children}</Providers>
+        <Script
+          src="https://www.googletagmanager.com/gtm.js?id=GTM-WNL76MMG"
+          strategy="afterInteractive"
+        />
+        <Script id="google-tag-init" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            fusnction gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+          `}
+        </Script>
       </body>
-      <GoogleTagManager gtmId="GTM-WNL76MMG" />
     </html>
   )
 }
