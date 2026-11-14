@@ -89,8 +89,12 @@ def _docs_lines() -> str:
     )
 
 
-def _other_items_lines() -> str:
-    return "\n".join(f"- {item}" for item in OTHER_MANDATORY_ITEMS)
+def _other_items_lines(public: bool = False) -> str:
+    # Algunos ítems traen al final una nota solo para el agente de IA ("— si preguntan
+    # por qué no pueden emitir una receta, este suele ser el motivo"). En la versión
+    # pública (FAQ de la landing) esa nota no tiene sentido para el lector: se recorta.
+    clean = (lambda i: i.split(" — si preguntan")[0]) if public else (lambda i: i)
+    return "\n".join(f"- {clean(item)}" for item in OTHER_MANDATORY_ITEMS)
 
 
 def build_docs_context_text() -> str:
@@ -124,5 +128,5 @@ def build_docs_public_text() -> str:
         "avisamos por SMS cuando tu perfil sea aprobado.\n"
         "Además de estos documentos, también son obligatorios (se completan en tu perfil, no se "
         "suben como archivo):\n"
-        f"{_other_items_lines()}"
+        f"{_other_items_lines(public=True)}"
     )

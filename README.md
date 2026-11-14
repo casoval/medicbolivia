@@ -186,7 +186,7 @@ Plan de pago activado en Google AI Studio — sin límites 503.
 
 - **STT (voz → texto):** Gemini procesa el audio directamente (REST API multimodal)
 - **TTS (texto → voz):** Google Cloud Text-to-Speech Neural2
-- **Voz:** `es-US-Neural2-C` (masculina, español neutro)
+- **Voz:** `es-US-Wavenet-B` (masculina, español neutro)
 - **Formato entrada:** `audio/webm` (grabado por el navegador)
 - **Formato salida:** `audio/mp3` (generado por Google TTS)
 
@@ -205,7 +205,7 @@ Frontend muestra burbuja de voz con reproductor estilo WhatsApp
 ### Modo llamada en tiempo real — Gemini Live API ⭐ NUEVO
 Llamada de voz bidireccional en tiempo real directamente desde el navegador.
 
-**Modelo:** `gemini-3.1-flash-live-preview` (el único activo en v1beta actualmente)
+**Modelo:** `gemini-3.5-flash-live` (el único activo en v1beta actualmente)
 **Voz de Medi:** `Charon` (Gemini Native Audio)
 **Protocolo:** WebSocket directo del browser a `generativelanguage.googleapis.com`
 **Archivo:** `frontend/src/app/patient/agent/geminiLive.ts`
@@ -259,9 +259,9 @@ se muestra como tarjetas en el chat.
 ### Variables de entorno necesarias (backend/.env)
 ```env
 GEMINI_API_KEY=tu-clave-aqui          # https://aistudio.google.com (plan pago)
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.5-flash
 GOOGLE_TTS_API_KEY=tu-clave-aqui      # https://console.cloud.google.com
-GOOGLE_TTS_VOICE=es-US-Neural2-C      # voz masculina
+GOOGLE_TTS_VOICE=es-US-Wavenet-B      # voz masculina
 GOOGLE_TTS_LANGUAGE=es-US
 ```
 
@@ -270,7 +270,7 @@ GOOGLE_TTS_LANGUAGE=es-US
 |-----|--------|-------------|
 | `es-US-Neural2-A` | Femenina | Español neutro |
 | `es-US-Neural2-B` | Masculina | Español neutro |
-| `es-US-Neural2-C` | Masculina | Español neutro (actual) |
+| `es-US-Wavenet-B` | Masculina | Español neutro (actual) |
 | `es-US-Neural2-F` | Femenina | Español neutro |
 
 ### Costo estimado Google TTS
@@ -407,7 +407,7 @@ python3 reset_admin_password.py --phone 70000000
 | Agente IA (texto) | Gemini 2.5 Flash — SDK google-genai (plan pago) |
 | Agente IA (voz entrada) | Gemini 2.5 Flash multimodal (audio/webm) |
 | Agente IA (voz salida) | Google Cloud TTS Neural2-C (masculina, es-US) |
-| **Agente IA (llamada viva)** | **Gemini Live API — gemini-3.1-flash-live-preview** |
+| **Agente IA (llamada viva)** | **Gemini Live API — gemini-3.5-flash-live** |
 | Servidor web | Nginx + PM2 |
 | SSL | Let's Encrypt (Certbot) |
 | Llamadas/SMS | Twilio (pendiente) |

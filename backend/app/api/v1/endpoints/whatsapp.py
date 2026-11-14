@@ -888,11 +888,14 @@ async def receive_inbound_message(
     conversation.last_message_preview = payload.message[:300]
     conversation.unread_count = (conversation.unread_count or 0) + 1
 
-    db.add(WhatsAppMessage(
+    inbound_msg = WhatsAppMessage(
         conversation_id=conversation.id,
         direction="IN",
         body=payload.message,
-    ))
+    )
+    db.add(inbound_msg)
+    await db.flush()
+    inbound_id = inbound_msg.id
     await db.commit()
 
     # ── Aceptar/rechazar una consulta inmediata directo desde WhatsApp ──
@@ -961,53 +964,24 @@ async def receive_inbound_message(
     )
 
     if should_auto_reply:
-        history_result = await db.execute(
-            select(WhatsAppMessage)
-            .where(WhatsAppMessage.conversation_id == conversation.id)
-            .order_by(WhatsAppMessage.created_at.desc())
-            .limit(10)
-        )
-        recent = list(reversed(history_result.scalars().all()))
-        history = [
-            {"role": "assistant" if m.direction == "OUT" else "user", "content": m.body}
-            for m in recent
-        ]
-
-        from app.agents.coordinator import run_whatsapp_agent
-
-        platform_names = await _resolve_platform_names(db, [conversation.user_id])
-        display_name = _display_name(platform_names.get(conversation.user_id), conversation.contact_name, conversation.phone)
-
-        result = await run_whatsapp_agent(
-            conversation.id, payload.message, history,
-            contact_name=display_name if display_name != conversation.phone else None,
-            audience=audience,
-            db=db,
-            doctor_lead_name=doctor_lead.full_name if doctor_lead else None,
-        )
-        reply_text = result["message"]
-
-        if result["escalate"]:
-            conversation.needs_admin_attention = True
-            conversation.escalation_reason = result["escalation_reason"]
-            await db.commit()
-            from app.tasks.whatsapp_tasks import notify_admin_of_whatsapp_escalation
-            notify_admin_of_whatsapp_escalation.delay(conversation_id=conversation.id)
-
-        # No se inserta el WhatsAppMessage acá: send_whatsapp_message ya
-        # deja el registro OUT al efectivamente mandarlo (ver
-        # app/tasks/whatsapp_tasks.py::_send_and_log), para no duplicar
-        # la fila si el envío llegara a fallar.
-        send_whatsapp_message.delay(
-            phone=conversation.phone,
-            message=reply_text,
-            audience=audience,
-            user_id=conversation.user_id,
-            related_entity_type="WhatsAppConversation",
-            related_entity_id=conversation.id,
-            sent_by="BOT",
-            human_delay=True,
-        )
+        # Debounce: NO se responde en el acto. Se agenda la respuesta para dentro
+        # de WHATSAPP_REPLY_DEBOUNCE_SECONDS; si en ese tiempo la persona manda
+        # otro mensaje, esa tarea se da cuenta de que ya no es el último y no
+        # hace nada — responde la tarea del mensaje más nuevo, leyendo todo lo
+        # que escribió de una vez (ver whatsapp_tasks.run_whatsapp_auto_reply).
+        from app.tasks.whatsapp_tasks import run_whatsapp_auto_reply
+        try:
+            run_whatsapp_auto_reply.apply_async(
+                kwargs=dict(
+                    conversation_id=conversation.id,
+                    trigger_message_id=inbound_id,
+                    audience=audience,
+                    doctor_lead_name=doctor_lead.full_name if doctor_lead else None,
+                ),
+                countdown=settings.WHATSAPP_REPLY_DEBOUNCE_SECONDS,
+            )
+        except Exception as exc:
+            logger.error(f"No se pudo encolar la respuesta automática de WhatsApp (conv {conversation.id}): {exc}")
 
     return {"status": "received", "conversation_id": conversation.id}
 

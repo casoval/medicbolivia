@@ -22,6 +22,7 @@ from app.core.timezone import utcnow_naive
 from typing import Optional
 
 import asyncio
+import hashlib
 import random
 import re
 
@@ -32,6 +33,7 @@ from sqlalchemy import select
 from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.core.phone import normalize_bo_phone, InvalidPhoneError
+from app.core.redis_client import redis_client
 from app.db.database import AsyncSessionLocal, engine, run_task_with_engine_cleanup
 from app.models.models import WhatsAppConversation, WhatsAppMessage, WhatsAppAudience
 from app.services.whatsapp_throttle import (
@@ -121,7 +123,10 @@ WHATSAPP_PAUSE_RETRY_SECONDS = 60
 # "pensado", se ve roto/colgado desde el punto de vista del usuario, y
 # además supera el TTL de "escribiendo..." de WhatsApp, ver
 # whatsapp-service/src/index.js::/typing).
-HUMAN_REPLY_FLOOR_SECONDS = 8.0
+# Piso bajado de 8.0 a 2.0 s: el debounce de WHATSAPP_REPLY_DEBOUNCE_SECONDS (6 s) ya
+# agrega esa espera antes de responder, así que se la restamos aquí para que el tiempo
+# total hasta la respuesta siga siendo el mismo que antes del debounce.
+HUMAN_REPLY_FLOOR_SECONDS = 2.0
 HUMAN_REPLY_CHARS_PER_SECOND = 14.0
 HUMAN_REPLY_EXTRA_CAP_SECONDS = 12.0
 
@@ -282,9 +287,31 @@ async def _log_message(
         await db.commit()
 
 
+async def _has_newer_inbound(trigger_message_id: str) -> bool:
+    """True si, en la misma conversación, llegó un mensaje entrante posterior
+    al que originó esta respuesta. Ante cualquier error devuelve False (es
+    mejor mandar una respuesta que quizá quedó vieja que no mandar nada)."""
+    try:
+        async with AsyncSessionLocal() as db:
+            trigger = await db.get(WhatsAppMessage, trigger_message_id)
+            if trigger is None:
+                return False
+            newer = await db.execute(
+                select(WhatsAppMessage.id).where(
+                    WhatsAppMessage.conversation_id == trigger.conversation_id,
+                    WhatsAppMessage.direction == "IN",
+                    WhatsAppMessage.created_at > trigger.created_at,
+                ).limit(1)
+            )
+            return newer.first() is not None
+    except Exception as exc:
+        logger.warning(f"No se pudo verificar mensajes nuevos antes de enviar: {exc}")
+        return False
+
+
 async def _send_and_log(task, phone: str, message: str, audience: str, user_id: Optional[str],
                          related_entity_type: Optional[str], related_entity_id: Optional[str], sent_by: str,
-                         human_delay: bool = False) -> None:
+                         human_delay: bool = False, trigger_message_id: Optional[str] = None) -> None:
     # Normalizamos ACÁ, antes de todo — así el número usado como clave de
     # WhatsAppConversation es siempre el mismo formato que usa el webhook
     # de entrada (whatsapp.py::receive_inbound_message), sin importar si
@@ -352,6 +379,32 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
             )
             return
 
+    # Idempotencia de respuestas de chat en vivo: si EXACTAMENTE el mismo texto
+    # ya está en curso (o salió hace poco) hacia este número, no se manda otra
+    # vez. Red de seguridad contra redelivery de Celery/Redis (ver
+    # visibility_timeout en celery_app.py) — el mismo saludo salió hasta 19
+    # veces. Se "reclama" la clave antes de enviar y se libera si el envío no
+    # se concretó, para no bloquear los reintentos legítimos.
+    dedupe_key = None
+    if human_delay:
+        dedupe_key = "wa:live-reply:" + hashlib.sha1(f"{phone}|{message}".encode("utf-8")).hexdigest()
+        try:
+            claimed = await redis_client.set(dedupe_key, "1", nx=True, ex=600)
+        except Exception as exc:  # Redis caído: mejor mandar (posible duplicado) que perder la respuesta
+            logger.warning(f"No se pudo reclamar la clave de idempotencia de WhatsApp: {exc}")
+            claimed = True
+            dedupe_key = None
+        if not claimed:
+            logger.warning(f"Respuesta duplicada a {phone} descartada (mismo texto en los últimos 10 min)")
+            return
+
+    async def _release_claim() -> None:
+        if dedupe_key:
+            try:
+                await redis_client.delete(dedupe_key)
+            except Exception:
+                pass
+
     try:
         if human_delay:
             # Ver _human_reply_delay_seconds arriba para el porqué. El
@@ -361,6 +414,13 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
             # timeout corto, no debe restarle tiempo al delay simulado.
             await _mark_typing_best_effort(phone)
             await asyncio.sleep(_human_reply_delay_seconds(message))
+            # Si mientras "escribía" la persona mandó OTRO mensaje, esta respuesta
+            # ya quedó desactualizada: se descarta y responde la tarea del mensaje
+            # más nuevo, con todo el contexto (ver run_whatsapp_auto_reply).
+            if trigger_message_id and await _has_newer_inbound(trigger_message_id):
+                logger.info(f"Respuesta a {phone} descartada: llegó un mensaje más nuevo mientras se enviaba")
+                await _release_claim()
+                return
 
         # Mismo piso global que usa el OTP síncrono (ver
         # whatsapp_throttle.py) — este es el único gate real antes de
@@ -396,10 +456,12 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
             # Cualquier otro 4xx/5xx (ej. 400 por payload mal formado) es
             # permanente — reintentar no lo va a arreglar.
             logger.error(f"Error enviando WhatsApp a {phone}: {error_detail}")
+            await _release_claim()
             await _log_message(phone, message, audience, user_id, related_entity_type, related_entity_id, sent_by,
                                 status="FAILED", error_detail=error_detail)
             return
     except WhatsAppPausedError:
+        await _release_claim()
         logger.warning(
             f"WhatsApp a {phone} en espera: kill switch activo, "
             f"reencolando en {WHATSAPP_PAUSE_RETRY_SECONDS}s"
@@ -418,6 +480,7 @@ async def _send_and_log(task, phone: str, message: str, audience: str, user_id: 
         # reiniciando justo en este instante) — también transitorio.
         raise _TransientSendError(f"Error de red hacia whatsapp-service: {exc}") from exc
     except _TransientSendError as exc:
+        await _release_claim()
         attempt = task.request.retries + 1
         total = task.max_retries + 1
         if task.request.retries >= task.max_retries:
@@ -476,6 +539,7 @@ def send_whatsapp_message(
     related_entity_id: Optional[str] = None,
     sent_by: str = "SYSTEM",
     human_delay: bool = False,
+    trigger_message_id: Optional[str] = None,
 ):
     """
     Punto de entrada síncrono (Celery worker) que ejecuta la lógica async
@@ -512,7 +576,148 @@ def send_whatsapp_message(
         related_entity_id=related_entity_id,
         sent_by=sent_by,
         human_delay=human_delay,
+        trigger_message_id=trigger_message_id,
     ))
+
+
+# ─────────────────────────────────────────────────────
+# Respuesta automática del agente IA a un mensaje entrante (con debounce)
+# ─────────────────────────────────────────────────────
+async def _auto_reply(conversation_id: str, trigger_message_id: str, audience: str,
+                      doctor_lead_name: Optional[str]) -> None:
+    # Imports perezosos: el módulo de endpoints importa este archivo, así que
+    # importarlo arriba crearía un ciclo.
+    from app.agents.coordinator import run_whatsapp_agent
+    from app.api.v1.endpoints.whatsapp import _resolve_platform_names
+    from app.models.models import AgentConfig
+
+    # Claim idempotente: si Celery entrega esta tarea dos veces (redelivery), solo
+    # una responde.
+    claim_key = f"wa:auto-reply:{trigger_message_id}"
+    if not await redis_client.set(claim_key, "1", nx=True, ex=900):
+        logger.info(f"Respuesta automática {trigger_message_id} ya reclamada, se ignora")
+        return
+
+    try:
+        async with AsyncSessionLocal() as db:
+            conversation = await db.get(WhatsAppConversation, conversation_id)
+            if conversation is None:
+                return
+
+            # ¿Sigue siendo este el último mensaje entrante? Si no, llegó otro
+            # mientras esperábamos y la tarea de ese mensaje responderá todo junto.
+            latest_in = (await db.execute(
+                select(WhatsAppMessage)
+                .where(WhatsAppMessage.conversation_id == conversation_id, WhatsAppMessage.direction == "IN")
+                .order_by(WhatsAppMessage.created_at.desc()).limit(1)
+            )).scalar_one_or_none()
+            if latest_in is None or latest_in.id != trigger_message_id:
+                logger.info(f"Respuesta {trigger_message_id} superada por un mensaje más nuevo, no se responde")
+                return
+
+            # ¿Ya contestó el bot o un admin después de ese mensaje? (p. ej. un humano
+            # tomó el chat durante la espera). Los SYSTEM (recordatorios) no cuentan.
+            answered = (await db.execute(
+                select(WhatsAppMessage.id).where(
+                    WhatsAppMessage.conversation_id == conversation_id,
+                    WhatsAppMessage.direction == "OUT",
+                    WhatsAppMessage.sent_by.in_(["BOT", "ADMIN"]),
+                    WhatsAppMessage.created_at > latest_in.created_at,
+                ).limit(1)
+            )).first()
+            if answered:
+                return
+
+            # Se revalida el interruptor: el admin pudo apagar el agente (global o
+            # de esta conversación) durante los segundos de espera.
+            cfg = (await db.execute(select(AgentConfig).where(AgentConfig.id == "global"))).scalar_one_or_none()
+            enabled = (
+                conversation.agent_enabled and cfg is not None and cfg.is_active
+                and {
+                    "PATIENT": cfg.auto_reply_patients,
+                    "PROFESSIONAL": cfg.auto_reply_professionals,
+                }.get(audience, cfg.auto_reply_public)
+            )
+            if not enabled:
+                return
+
+            rows = list(reversed((await db.execute(
+                select(WhatsAppMessage)
+                .where(WhatsAppMessage.conversation_id == conversation_id)
+                .order_by(WhatsAppMessage.created_at.desc()).limit(15)
+            )).scalars().all()))
+            # Todo lo que la persona escribió desde la última respuesta = un solo turno.
+            pending: list = []
+            while rows and rows[-1].direction == "IN":
+                pending.insert(0, rows.pop())
+            if not pending:
+                return
+            history = [
+                {"role": "assistant" if m.direction == "OUT" else "user", "content": m.body}
+                for m in rows
+            ]
+            message = "\n".join(m.body for m in pending)
+
+            platform_names = await _resolve_platform_names(db, [conversation.user_id])
+            contact_name = platform_names.get(conversation.user_id) or conversation.contact_name
+
+            was_flagged = bool(conversation.needs_admin_attention)
+            result = await run_whatsapp_agent(
+                conversation.id, message, history,
+                contact_name=contact_name,
+                audience=audience,
+                db=db,
+                doctor_lead_name=doctor_lead_name,
+                already_escalated=was_flagged,
+            )
+
+            if result.get("no_reply"):
+                return
+
+            if result["escalate"]:
+                conversation.needs_admin_attention = True
+                conversation.escalation_reason = result["escalation_reason"]
+                await db.commit()
+                # Solo se avisa a los admins la primera vez: si la conversación ya estaba
+                # marcada, no se les vuelve a notificar por cada mensaje.
+                if not was_flagged:
+                    notify_admin_of_whatsapp_escalation.delay(conversation_id=conversation.id)
+
+            send_whatsapp_message.delay(
+                phone=conversation.phone,
+                message=result["message"],
+                audience=audience,
+                user_id=conversation.user_id,
+                related_entity_type="WhatsAppConversation",
+                related_entity_id=conversation.id,
+                sent_by="BOT",
+                human_delay=True,
+                trigger_message_id=trigger_message_id,
+            )
+    except Exception:
+        # Se libera el claim para que el reintento de Celery pueda volver a intentarlo.
+        try:
+            await redis_client.delete(claim_key)
+        except Exception:
+            pass
+        raise
+
+
+@celery_app.task(
+    bind=True,
+    name="app.tasks.whatsapp_tasks.run_whatsapp_auto_reply",
+    max_retries=2,
+    default_retry_delay=10,
+)
+def run_whatsapp_auto_reply(self, conversation_id: str, trigger_message_id: str,
+                            audience: str = WhatsAppAudience.PUBLIC.value,
+                            doctor_lead_name: Optional[str] = None):
+    """Se agenda desde el webhook con countdown = WHATSAPP_REPLY_DEBOUNCE_SECONDS."""
+    try:
+        run_task_with_engine_cleanup(_auto_reply(conversation_id, trigger_message_id, audience, doctor_lead_name))
+    except Exception as exc:
+        logger.error(f"Falló la respuesta automática de WhatsApp (conv {conversation_id}): {exc}")
+        raise self.retry(exc=exc)
 
 
 async def _send_document_and_log(task, phone: str, pdf_base64: str, filename: str, caption: str,

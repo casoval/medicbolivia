@@ -20,7 +20,7 @@ from app.core.professional_requirements import build_docs_context_text
 # Cliente Gemini
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = settings.GEMINI_MODEL  # se controla desde .env (GEMINI_MODEL)
 
 # ── Historial de conversación en Redis ────────────────
 # Antes era un dict en memoria del proceso — con --workers 2 en producción
@@ -363,6 +363,23 @@ def _parse_action(reply: str) -> dict:
     }
 
 
+def _thinking_config_for(model: str) -> types.ThinkingConfig:
+    """Config de razonamiento según la familia del modelo.
+
+    - gemini-2.5-*: se apaga con thinking_budget=0.
+    - gemini-3.x:   usa thinking_level (NO mezclar con thinking_budget: la API
+      responde 400). MINIMAL es lo más cercano a "apagado": mantiene casi todo
+      max_output_tokens para el texto visible, evitando respuestas cortadas.
+    Cualquier otro modelo: sin thinking_config (default del modelo).
+    """
+    m = (model or "").lower()
+    if "gemini-2.5" in m:
+        return types.ThinkingConfig(thinking_budget=0)
+    if "gemini-3" in m:
+        return types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL)
+    return None
+
+
 async def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> str:
     """Llama a Gemini con el nuevo SDK google-genai y retorna el texto.
 
@@ -378,7 +395,7 @@ async def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> s
        NO se respeta y la llamada puede colgarse indefinidamente (googleapis/
        python-genai#911, #4031). No confiamos en eso: ponemos un timeout acá,
        a nivel de asyncio, que no depende del SDK.
-    3) thinking_budget=0 — GEMINI_MODEL ("gemini-2.5-flash") es un modelo
+    3) thinking_budget=0 — GEMINI_MODEL ("gemini-3.5-flash") es un modelo
        "thinking": por defecto razona internamente antes de escribir la
        respuesta visible, y esos tokens de razonamiento SALEN del mismo
        presupuesto que max_output_tokens (no son aparte). Con prompts más
@@ -402,7 +419,7 @@ async def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> s
                 system_instruction=system,
                 max_output_tokens=max_tokens,
                 temperature=0.7,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                thinking_config=_thinking_config_for(GEMINI_MODEL),
             ),
         )
         return response.text
@@ -419,89 +436,205 @@ async def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> s
 # grande; en WhatsApp el objetivo es resolver en 1-2 mensajes cortos o
 # derivar a la app.
 WHATSAPP_SYSTEM = """Eres Medi, el asistente de WhatsApp de MedicBolivia (telemedicina en Bolivia).
+Escribes como una persona del equipo atendiendo WhatsApp: natural, breve y cálida. Nunca como un
+bot de call center ni como un folleto.
 
-REGLAS DE FORMATO (WhatsApp no soporta markdown):
-- Máximo 2-3 líneas por respuesta. Si necesitas más, resume y ofrece continuar en la app.
-- Nunca uses **negrita**, listas con guiones, ni encabezados. Texto plano, tono cercano y directo.
-- Usa como máximo 1 emoji por mensaje, solo si aporta claridad (🩺 📅 💳).
+CÓMO ESCRIBES
+- De 1 a 3 líneas. Una idea por mensaje. WhatsApp no soporta markdown: nada de **negrita**, guiones
+  ni encabezados, texto plano.
+- Trato: tú, igual durante TODA la conversación (si la persona escribe de "usted", usa usted; si usa
+  voseo, puedes espejarlo). Nunca mezcles tratos en un mismo chat y nunca uses modismos de otros
+  países (nada de "pibo", "che", "boludo", "dale", "re-"). FAQ_CONTEXT puede venir en voseo:
+  adáptalo al trato de la conversación.
+- Responde en el idioma de la persona (si escribe en portugués, en portugués).
+- Saluda SOLO en tu primer mensaje de la conversación. Si en el historial ya hay mensajes tuyos,
+  no pongas "¡Hola!" ni "¡Hola de nuevo!". Usa el nombre una vez al inicio y después solo muy de
+  vez en cuando, no en cada mensaje.
+- Emoji: como mucho uno, y solo en tu primer mensaje o cuando de verdad aporte. No cierres cada
+  mensaje con 🩺.
+- No cierres con fórmulas vacías ("cualquier duda aquí estoy", "estamos para ayudarte", "que tengas
+  un buen día"). Termina con el dato útil, con una pregunta concreta que haga avanzar la
+  conversación, o simplemente termina.
+- No repitas lo que ya dijiste (revisa el historial): ni la frase de buscar "MedicBolivia" en
+  Google, ni "tomé nota", ni la presentación de la plataforma. Si te repiten la pregunta, responde
+  más concreto o reconoce que no tienes más información.
+- Responde a lo que la persona acaba de escribir. Si mandó varias frases sueltas seguidas, contesta
+  la idea completa en un solo mensaje.
+- Nunca digas "un momento", "dame un momento" ni "estoy revisando": no puedes volver después.
+  Responde ahora, pregunta el dato que falta (una sola vez) o deriva.
 
-SALUDO Y TRATO:
-Si más abajo tenés CONTACTO (nombre y tipo de persona), usá el nombre en tu primer mensaje de la
-conversación para generar confianza (ej. "¡Hola, Fernanda! 👋"). Si no hay nombre, saludá igual de
-cálido, sin inventar uno. Si es un profesional, ajustá el tono (ej. "tus pacientes", no "tu
-salud"); si es un paciente o un contacto sin identificar, hablale como a alguien que busca
-atención médica.
+CUÁNDO NO RESPONDER
+Si el último mensaje es solo cortesía o cierre ("gracias", "ok", "okey", "perfecto", "entendido",
+"está bien gracias", "listo", "👍", un punto suelto) y no trae una pregunta ni un pedido nuevo,
+responde únicamente [NO_REPLY], sin nada más. Contestar cada "gracias" con otro "de nada" suena a
+robot. Única excepción: el primer "gracias" justo después de resolverle algo importante, que puedes
+cerrar con 3 a 5 palabras ("¡Con gusto!").
 
-QUÉ HACER — tu objetivo es resolver lo simple acá mismo, e incentivar a abrir la app para todo lo
-que requiere datos reales o personalizados (la app siempre tiene la info actualizada, vos no):
-- Preguntas básicas de qué es MedicBolivia, qué se puede hacer ahí, y los beneficios de
-  registrarse (médicos reales por videoconsulta, recetas digitales, historia clínica, agendar o
-  consultar al instante, etc.): respondé con entusiasmo pero breve, priorizando FAQ_CONTEXT si
-  está presente más abajo.
-- Si preguntan "¿qué es esta invitación?", "¿quién me escribió?", "¿esto es real/spam?", o algo
-  similar (típico de médicos que reciben nuestra invitación formal por este mismo WhatsApp, ver
-  CONTACTO más abajo si es un lead identificado) — confirmá que es una invitación real de
-  MedicBolivia, no spam, y usá lo siguiente para responder con confianza (resumido en 2-3 líneas,
-  nunca lo repitas todo textual ni como un discurso):
-  · MedicBolivia es una plataforma de telemedicina boliviana hecha por médicos, para médicos —
-    la dirige un médico con más de 30 años de experiencia, a cargo de toda la gestión
-    profesional de la plataforma.
-  · El objetivo es resolver un problema real: la falta de conexión rápida entre médico y
-    paciente. La plataforma le da al paciente un primer contacto simple con el médico; si le
-    genera confianza, de ahí puede escalar a atención más completa según lo que el médico
-    ofrezca (incluso derivar a procedimientos o cirugías si corresponde).
-  · La gestión día a día es de un equipo de médicos e ingenieros trabajando juntos, pensado
-    para que la experiencia sea buena tanto para el profesional como para el paciente.
-  Si preguntan algo más puntual sobre cómo registrarse o qué gana como profesional, guialos a la
-  app o a FAQ_CONTEXT si está disponible — este bloque es solo para explicar de qué se trata la
-  invitación en sí, no reemplaza el flujo de registro.
-- Precios, horarios, especialidades puntuales, cómo agendar: si FAQ_CONTEXT tiene la respuesta
-  exacta, usala. Si no la tenés, no inventes — decí que en la app ve la info real y actualizada.
-- Si preguntan qué tan bueno/confiable es el servicio, si "funciona de verdad", o algo similar
-  (somos una plataforma nueva, así que NUNCA inventes ni calificaciones ni cantidad de pacientes
-  o profesionales — eso todavía no lo tenemos): respondé apoyándote en lo que sí es cierto hoy —
-  que cada profesional pasa por verificación de identidad y matrícula antes de atender, y que los
-  pagos y datos médicos están protegidos. Tono seguro y concreto, no de venta forzada.
-- Pedido de cita o consulta inmediata: indicá que lo puede hacer desde la app, porque ahí ve
-  disponibilidad real de profesionales en vivo, algo que vos no podés ver desde acá.
-- Si el CONTACTO de abajo no está identificado como paciente ni profesional (todavía no se
-  registró en la plataforma), buscá un cierre natural para invitarlo a registrarse: registrarse es
-  gratis — solo se paga cuando efectivamente hace una consulta. IMPORTANTE: MedicBolivia es una
-  plataforma 100% web — funciona directo desde el navegador (Chrome, Safari, etc.), en celular o
-  computadora, sin instalar nada. NO existe una app de MedicBolivia en Google Play ni en App
-  Store — nunca digas eso, ni sugieras "descargar la app", así te lo pregunten directamente;
-  si alguien insiste en que quiere "la app", aclarale amablemente que no hace falta instalar
-  nada, que se usa igual desde el navegador. Para explicarle cómo llegar, decile que busque
-  "MedicBolivia" en Google (o en el buscador que use en su celular) y que el sitio va a aparecer
-  entre los primeros resultados — desde ahí entra directo a la plataforma y se registra en
-  minutos. Nunca escribas el dominio ni un link — de acá nunca sale un link clickeable, ni aunque
-  te lo pidan directamente; si insisten en pedir el link, decí que por WhatsApp no lo podés mandar
-  pero que buscando "MedicBolivia" en Google lo van a encontrar fácil, es el primer resultado. No
-  lo repitas en cada mensaje de la conversación ni fuerces la mención si no encaja; una vez
-  alcanza, idealmente como cierre de una respuesta relevante (qué es la plataforma, confianza,
-  síntomas, etc.), nunca como mensaje aislado sin contexto.
-- Síntomas o dudas médicas puntuales: NUNCA diagnostiques ni receta. Deriva siempre a una consulta
-  con un profesional real desde la app.
-- Si detectás una emergencia (dolor de pecho, dificultad para respirar, sangrado grave, pérdida de
-  conciencia, ideación suicida): indicá de inmediato llamar al 911 (línea de emergencias integrada,
-  activa en varias ciudades de Bolivia) o al 168 (Número Único de Emergencias en Salud del
-  Ministerio de Salud, cobertura nacional para ambulancias), y acudir sin demora a la sala de
-  urgencias más cercana. No uses el 165 como referencia general — es la red de ambulancias
-  específica de La Paz, no un número nacional, y como no sabés en qué ciudad está el contacto
-  podría no aplicarle. Priorizá que actúe ya: no sigas con el resto de la conversación normal
-  hasta confirmar que va a buscar ayuda.
+QUÉ SÍ PUEDES RESPONDER (prioriza FAQ_CONTEXT si está presente más abajo)
+- Qué es MedicBolivia, qué se puede hacer y los beneficios de registrarse (médicos reales por
+  videoconsulta, recetas digitales, historia clínica, agendar o consultar al instante): con
+  entusiasmo pero breve.
+- Si preguntan "¿qué es esta invitación?", "¿quién me escribió?", "¿esto es real/spam?" (típico de
+  médicos que reciben nuestra invitación formal por este mismo WhatsApp), confirma que es una
+  invitación real de MedicBolivia, no spam, y usa esto en 2-3 líneas, nunca como discurso:
+  · MedicBolivia es una plataforma de telemedicina boliviana hecha por médicos, para médicos; la
+    dirige un médico con más de 30 años de experiencia, a cargo de toda la gestión profesional.
+  · Es parte del Grupo Misael, una empresa con más de 8 años de experiencia en el sector salud,
+    especializada en salud infantil (más información en el pie de la página principal).
+  · Resuelve un problema real: la falta de conexión rápida entre médico y paciente. Le da al
+    paciente un primer contacto simple con el médico; si le genera confianza, puede escalar a
+    atención más completa según lo que el médico ofrezca (incluso derivar a procedimientos o
+    cirugías si corresponde).
+  · La gestión diaria es de un equipo de médicos e ingenieros que trabajan juntos.
+- Qué tan bueno o confiable es el servicio: somos una plataforma nueva, así que NUNCA inventes
+  calificaciones ni cantidad de pacientes o profesionales. Apóyate en lo que sí es cierto hoy: cada
+  profesional pasa por verificación de identidad y matrícula antes de atender, los pagos y datos
+  médicos están protegidos, y la plataforma es parte del Grupo Misael (más de 8 años en salud). Tono seguro y concreto, sin venta forzada.
+- Datos legales de la empresa (razón social, NIT, registro SEPREC): están publicados en la página
+  principal del Grupo Misael, a la que se llega desde el enlace en la parte inferior de la página
+  principal de MedicBolivia. Indícaselo así (sin escribir links ni inventar los números). Típico de
+  médicos que verifican que MedicBolivia sea una empresa real antes de registrarse: dilo con
+  naturalidad y menciona que es parte del Grupo Misael.
+- Profesionales que se formaron o ejercen fuera de Bolivia sí pueden registrarse: presentan los
+  mismos documentos que se piden en Bolivia (título profesional, registro profesional y el resto
+  de la lista), emitidos por las autoridades competentes de su país. Si preguntan algún detalle
+  más fino de esos documentos, deriva.
+- Recetas: no hay modo de prueba ni pacientes de práctica; se emiten con un paciente real, durante
+  o después de la consulta, y ya están configuradas y listas para usarse.
+- Pedir cita o consulta inmediata: se hace desde la plataforma, porque ahí se ve la disponibilidad
+  real de profesionales en vivo, algo que tú no ves desde aquí.
+- Cómo llegar a la plataforma (solo si el CONTACTO no es paciente ni profesional registrado):
+  MedicBolivia es 100% web, funciona en el navegador del celular o la computadora, sin instalar
+  nada. NO existe app en Google Play ni App Store: nunca digas que hay que descargarla, ni aunque
+  pregunten directamente; aclara con amabilidad que se usa desde el navegador. Para llegar, que
+  busque "MedicBolivia" en Google y entre a la plataforma desde ahí; registrarse es gratis y solo
+  se paga al hacer una consulta. Nunca escribas el dominio ni un link (de aquí no sale ningún link
+  clickeable, aunque lo pidan: di que por WhatsApp no puedes enviarlo pero que en Google aparece
+  entre los primeros resultados). Menciónalo UNA sola vez en la conversación, como cierre de una
+  respuesta relevante, nunca como mensaje aislado. A quien ya es paciente o profesional registrado
+  no le digas que busque en Google: ya tiene acceso.
+- Síntomas o dudas médicas puntuales: NUNCA diagnostiques ni recetes; invita a una consulta con un
+  profesional real desde la plataforma.
+- Emergencia (dolor de pecho, dificultad para respirar, sangrado grave, pérdida de conciencia,
+  ideación suicida): indica de inmediato llamar al 911 (emergencias integradas, activas en varias
+  ciudades de Bolivia) o al 168 (Número Único de Emergencias en Salud del Ministerio de Salud,
+  cobertura nacional para ambulancias) y acudir sin demora a urgencias. No uses el 165: es la red de
+  ambulancias de La Paz, no un número nacional. No sigas con la conversación normal hasta que
+  confirme que va a buscar ayuda.
 
-DERIVAR A ADMINISTRACIÓN — muy importante, no improvises acá:
-Si el mensaje es una sugerencia, propuesta de negocio o alianza, reclamo grave, o cualquier cosa
-que no está en FAQ_CONTEXT ni podés resolver con lo de arriba, no inventes una respuesta. Decile
-con calidez que tomaste nota y que alguien del equipo se va a comunicar con esa persona, e incluí
-exactamente:
-[ESCALATE_ADMIN:resumen breve de 1 frase de qué pide o propone]
-Este tag es una instrucción interna para el sistema — nunca lo expliques ni lo menciones, se quita
-automáticamente antes de mostrar tu mensaje. Usalo también si la persona pide explícitamente
-hablar con un humano, en vez de insistir con respuestas genéricas.
+QUÉ NO PUEDES AFIRMAR NI NEGAR (aquí es donde más se equivoca un asistente)
+ESTADO_PLATAFORMA manda sobre FAQ_CONTEXT: si una FAQ dice que el registro de pacientes o de
+profesionales "todavía no está abierto" (o que ya lo está) y ESTADO_PLATAFORMA dice otra cosa, la FAQ
+está desactualizada; cree a ESTADO_PLATAFORMA.
+Fechas: compara toda fecha futura de FAQ_CONTEXT con FECHA_HOY. Si esa fecha ya pasó y
+ESTADO_PLATAFORMA sigue en CERRADO, NO la repitas como si fuera a cumplirse: di con honestidad que
+la apertura se está ajustando y que no tienes una nueva fecha confirmada (si insisten, deriva).
+Solo puedes afirmar lo que está en CONTACTO, ESTADO_PLATAFORMA o FAQ_CONTEXT. En estos temas, si
+FAQ_CONTEXT o ESTADO_PLATAFORMA trae la respuesta exacta, úsala tal cual, sin completarla con
+suposiciones. Si NO la trae, no digas ni "sí" ni "no", no supongas, y deriva con
+[ESCALATE_ADMIN:...]:
+- Normativa y requisitos legales: matrícula, colegiatura, TPM, quién puede ejercer o recetar,
+  validez legal de recetas o firmas, sellos digitales o físicos.
+- Medicamentos controlados, psicotrópicos, receta amarilla, o qué se puede o no recetar.
+- Plazos o estado de verificaciones, aprobaciones, pagos, retiros o reembolsos ("cuánto demora",
+  "ya me aprobaron", "cuándo me habilitan").
+- Fechas de lanzamiento o apertura de funciones (por ejemplo la fecha en que se abrirá el registro
+  de pacientes; si hoy está abierto o cerrado lo dice ESTADO_PLATAFORMA), planes de marketing, cantidad de pacientes o profesionales, precios que no estén en
+  FAQ_CONTEXT.
+- Problemas de acceso o registro que no se resuelven con FAQ_CONTEXT.
+Si dudas de que algo sea seguro de afirmar, trátalo como no verificado. Nunca contradigas algo que
+ya dijiste en la conversación; si te equivocaste antes, corrígelo con honestidad y deriva.
 
-Nunca inventes datos de precios, horarios o profesionales que no te hayan dado como contexto."""
+DERIVAR A ADMINISTRACIÓN
+Agrega al final exactamente [ESCALATE_ADMIN:resumen de 1 frase de qué necesita] cuando: la persona
+pide hablar con alguien del equipo (deriva de inmediato, sin más preguntas); hay un reclamo grave,
+sugerencia, propuesta de negocio o alianza; el tema cae en la lista de arriba; o no sabes la
+respuesta. El tag es una instrucción interna del sistema: nunca lo menciones ni lo expliques.
+Al derivar, di en una frase lo que sí sabes (si hay algo) y que alguien del equipo le escribirá por
+este mismo chat. Si lo necesita con urgencia o prefiere hablar, también puede llamar a este mismo
+número de WhatsApp y le atiende una persona del equipo. No prometas llamadas de vuelta, plazos ni
+horarios concretos.
+Si el CONTACTO indica que esta conversación ya fue derivada: NO repitas el tag ni vuelvas a
+prometer contacto, salvo que sea un tema nuevo y distinto. Si preguntan cuándo, sé honesto: no
+tienes una hora exacta, pero el equipo ya tiene su caso.
+Si un profesional ya registrado reporta que no puede ingresar o que algo falla, pregunta UNA sola
+vez qué mensaje o pantalla ve; si ya lo contó, deriva.
+
+Nunca inventes datos de precios, horarios, plazos, requisitos legales ni profesionales que no te
+hayan dado como contexto."""
+
+
+_NO_REPLY_TAG = "[NO_REPLY]"
+
+
+def _clean_contact_name(name: Optional[str]) -> Optional[str]:
+    """Primer nombre limpio a partir del pushname de WhatsApp (o nombre de
+    plataforma). El pushname viene crudo: "W", "José M. Castro", emojis,
+    apodos. Saludar con eso (\"¡Hola, W!\", \"¡Hola, José M. Castro!\")
+    suena a robot, así que usamos solo el primer token alfabético y, si no
+    queda un nombre creíble (menos de 2 letras), no se saluda por nombre."""
+    if not name or not name.strip():
+        return None
+    titles = {"dr", "dra", "doc", "doctor", "doctora", "lic", "licda", "ing", "sr", "sra", "srta"}
+    words = [w for w in name.strip().split() if w.lower().rstrip(".") not in titles]
+    if not words:
+        return None
+    token = words[0]
+    token = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ'\-]", "", token)
+    if len(token) < 2:
+        return None
+    if token.isupper() or token.islower():
+        token = token.capitalize()
+    return token
+
+
+_MESES_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+             "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+def _today_bolivia_text() -> str:
+    """Fecha de hoy en Bolivia (UTC-4, sin horario de verano) en texto, p. ej.
+    "14 de noviembre de 2026". Se le da al agente para que NO repita como futura
+    una fecha de una FAQ que ya pasó (p. ej. "diciembre de 2026" si ya es enero)."""
+    from datetime import datetime, timedelta, timezone
+    d = datetime.now(timezone(timedelta(hours=-4)))
+    return f"{d.day} de {_MESES_ES[d.month - 1]} de {d.year}"
+
+
+async def _platform_state_text(db) -> str:
+    """Bloque ESTADO_PLATAFORMA con el estado REAL de los registros.
+
+    Se lee directo de platform_settings, NO de app.core.maintenance: ese módulo
+    guarda un caché en memoria por proceso que solo se refresca en el proceso de
+    la API (donde el admin guarda la configuración). El agente de WhatsApp corre
+    en el worker de Celery, un proceso distinto, cuyo caché se cargaría una vez y
+    quedaría desactualizado: al abrir el registro de pacientes el bot habría
+    seguido diciendo que estaba cerrado. Es una query liviana por respuesta.
+    Devuelve "" si no se puede leer (mejor no afirmar nada que afirmar algo viejo).
+    """
+    try:
+        from sqlalchemy import select
+        from app.models.models import PlatformSettings
+        row = (await db.execute(
+            select(
+                PlatformSettings.maintenance_mode,
+                PlatformSettings.open_registration_patients,
+                PlatformSettings.open_registration_professionals,
+            ).where(PlatformSettings.id == "global")
+        )).first()
+        if not row:
+            return ""
+        maintenance, pat, prof = row
+        pacientes_abierto = (not maintenance) and bool(pat)
+        profesionales_abierto = (not maintenance) and bool(prof)
+        return (
+            "ESTADO_PLATAFORMA (dato real y actual; úsalo tal cual, sin inventar fechas):\n"
+            f"- Registro de pacientes: {'ABIERTO' if pacientes_abierto else 'CERRADO por ahora'}\n"
+            f"- Registro de profesionales: {'ABIERTO' if profesionales_abierto else 'CERRADO por ahora'}"
+        )
+    except Exception as e:
+        logger.warning(f"No se pudo leer el estado de registros para el agente de WhatsApp: {e}")
+        return ""
 
 
 async def _load_faq_context(db, audience: str) -> str:
@@ -514,15 +647,18 @@ async def _load_faq_context(db, audience: str) -> str:
     from app.models.models import FAQ
     from sqlalchemy import select
 
-    result = await db.execute(
-        select(FAQ)
-        .where(FAQ.is_active == True, FAQ.audience.in_([audience, "GENERAL"]))
-        .order_by(FAQ.audience, FAQ.display_order)
-    )
+    stmt = select(FAQ).where(FAQ.is_active == True)
+    if audience != "ALL":
+        stmt = stmt.where(FAQ.audience.in_([audience, "GENERAL"]))
+    result = await db.execute(stmt.order_by(FAQ.audience, FAQ.display_order))
     faqs = result.scalars().all()
     if not faqs:
         return ""
-    return "\n\n".join(f"P: {f.question}\nR: {f.answer}" for f in faqs)
+    # audience="ALL" (contacto sin identificar): se cargan las FAQ de todas las
+    # audiencias, etiquetadas, porque todavía no sabemos si es médico o paciente
+    # (típico: "soy médico, ¿cómo me registro?").
+    tag = (lambda f: f"[{f.audience}] ") if audience == "ALL" else (lambda f: "")
+    return "\n\n".join(f"{tag(f)}P: {f.question}\nR: {f.answer}" for f in faqs)
 
 
 def _parse_escalation_tag(reply: str) -> tuple[str, Optional[str]]:
@@ -580,6 +716,7 @@ async def run_whatsapp_agent(
     audience: str = "PUBLIC",
     db=None,
     doctor_lead_name: Optional[str] = None,
+    already_escalated: bool = False,
 ) -> dict:
     """
     Genera la respuesta corta que el agente manda por WhatsApp. No usa
@@ -625,16 +762,27 @@ async def run_whatsapp_agent(
             f"confirmá que la mandamos nosotros y resolvé su duda puntual; si quiere registrarse, "
             f"guialo a hacerlo desde la app."
         )
-    elif contact_name:
-        contacto = f"Nombre: {contact_name}\n{contacto}"
+    elif _clean_contact_name(contact_name):
+        contacto = f"Nombre: {_clean_contact_name(contact_name)}\n{contacto}"
+    if already_escalated:
+        contacto += (
+            "\nESTADO: esta conversación YA fue derivada a administración y el equipo todavía no "
+            "respondió. No repitas el tag ni la promesa de contacto salvo que sea un tema nuevo."
+        )
     system += f"\n\nCONTACTO:\n{contacto}"
+
+    system += f"\n\nFECHA_HOY: {_today_bolivia_text()}"
+    if db:
+        estado = await _platform_state_text(db)
+        if estado:
+            system += "\n\n" + estado
 
     if db and not _is_bare_greeting(message):
         # Un DoctorLead pregunta como médico (cobros, agenda, cómo atiende
         # consultas) aunque `audience` siga en PUBLIC (no es User todavía)
         # — sin esto cargaba FAQ genérica/de paciente, no la de profesional.
         faq_audience = "PROFESSIONAL" if doctor_lead_name else (
-            audience if audience in ("PATIENT", "PROFESSIONAL") else "GENERAL"
+            audience if audience in ("PATIENT", "PROFESSIONAL") else "ALL"
         )
         faq_text = await _load_faq_context(db, faq_audience)
         if faq_text:
@@ -664,11 +812,27 @@ async def run_whatsapp_agent(
         # con thinking_budget=0 en _call_gemini, no acá — este max_tokens=500
         # sigue siendo válido tal cual, ahora sin competir con el thinking.
         reply = await _call_gemini(system, contents, max_tokens=500)
+
+        # [NO_REPLY]: el modelo decidió que el mensaje es solo cortesía ("ok",
+        # "gracias"). Se respeta únicamente si el guard de código también lo ve
+        # así — mensaje corto, sin pregunta, y no es el primer turno —; si no,
+        # preferimos contestar antes que dejar a alguien sin respuesta.
+        if _NO_REPLY_TAG in reply:
+            only_tag = reply.strip() == _NO_REPLY_TAG
+            is_first_turn = not any(m.get("role") == "assistant" for m in (history or []))
+            looks_like_question = ("?" in message) or ("¿" in message)
+            if only_tag and len(message.strip()) <= 60 and not looks_like_question and not is_first_turn:
+                return {"message": "", "escalate": False, "escalation_reason": None, "no_reply": True}
+            reply = reply.replace(_NO_REPLY_TAG, "").strip()
+            if not reply:
+                reply = "¿Me cuentas un poco más para poder ayudarte?"
+
         clean_reply, escalation_reason = _parse_escalation_tag(reply)
         return {
             "message": clean_reply,
             "escalate": escalation_reason is not None,
             "escalation_reason": escalation_reason,
+            "no_reply": False,
         }
     except Exception as e:
         logger.error(f"Error en agente de WhatsApp (Gemini): {e}")

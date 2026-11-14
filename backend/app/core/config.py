@@ -54,11 +54,14 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379"
 
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash"
 
     # ── Google Cloud TTS ─────────────────────────────
+    # Segundos que el agente de WhatsApp espera tras el ÚLTIMO mensaje de la persona
+    # antes de responder (agrupa ráfagas de mensajes sueltos en una sola respuesta).
+    WHATSAPP_REPLY_DEBOUNCE_SECONDS: int = 6
     GOOGLE_TTS_API_KEY: str = ""
-    GOOGLE_TTS_VOICE: str = "es-US-Neural2-C"
+    GOOGLE_TTS_VOICE: str = "es-US-Wavenet-B"
     GOOGLE_TTS_LANGUAGE: str = "es-US"
 
     # ── Google Places (buscador de médicos en el panel admin) ────────

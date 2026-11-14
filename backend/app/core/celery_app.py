@@ -43,6 +43,14 @@ celery_app.conf.update(
     # un instante) — no queremos perder un recordatorio por un timeout.
     task_acks_late=True,
     task_reject_on_worker_lost=True,
+    # Con broker Redis, una tarea con ETA/countdown MAYOR que el
+    # visibility_timeout (default: 1 hora) se vuelve a entregar una y otra vez
+    # mientras espera, y al llegar la hora se ejecutan TODAS las copias. Los
+    # envíos de WhatsApp reencolados "para mañana" por el tope diario de
+    # contactos nuevos (hasta ~24 h, ver whatsapp_tasks._send_and_log) caían
+    # justo en ese caso: el mismo saludo salía 6, 19 veces. 30 h cubre el
+    # countdown máximo.
+    broker_transport_options={"visibility_timeout": 60 * 60 * 30},
 )
 
 # ── Tareas programadas (Celery Beat) ──────────────────

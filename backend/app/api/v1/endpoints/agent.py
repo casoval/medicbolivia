@@ -196,7 +196,7 @@ async def _get_tts_client() -> httpx.AsyncClient:
 
 async def _text_to_speech(text: str) -> str | None:
     """
-    Convierte texto a audio usando Google Cloud TTS Neural2.
+    Convierte texto a audio usando Google Cloud TTS Wavenet.
     Retorna el audio en base64 o None si falla.
     """
     if not settings.GOOGLE_TTS_API_KEY:
@@ -491,7 +491,7 @@ async def voice_chat(
 # ── POST /api/v1/agent/tts ──────────────────────────
 @router.post(
     "/tts",
-    summary="Convertir texto a voz (Google TTS Neural2)"
+    summary="Convertir texto a voz (Google TTS Wavenet)"
 )
 async def text_to_speech_endpoint(
     text: str,

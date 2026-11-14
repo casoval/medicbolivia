@@ -1,9 +1,9 @@
 // geminiLive.ts — Gestor de Gemini Live completamente fuera de React
 
-// gemini-3.1-flash-live-preview: más rápido en la práctica que el 2.5. Se
+// gemini-3.5-flash-live: más rápido en la práctica que el 2.5. Se
 // probó cambiar a 2.5 buscando más confiabilidad de tool-calling, pero
 // empeoró la experiencia (más lento) — se revierte a 3.1.
-const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview'
+const GEMINI_LIVE_MODEL = 'gemini-3.5-flash-live'
 
 const MEDI_SYSTEM_PROMPT = `Eres Medi, agente de orientación médica de MedicBolivia.
 Hablas en español boliviano, de forma cálida y natural, como si fuera una llamada telefónica real.
@@ -466,7 +466,7 @@ function interruptPlayback() {
   // El paciente volvió a hablar — si había un corte de llamada programado
   // (Medi ya se había despedido), lo cancelamos: todavía tiene algo que decir.
   cancelPendingHangup()
-  // Este modelo (gemini-3.1-flash-live-preview) tiene un bug reportado donde,
+  // Este modelo (gemini-3.5-flash-live) tiene un bug reportado donde,
   // tras una interrupción, a veces se queda mudo — recibe el audio del
   // paciente pero nunca genera una respuesta nueva. Si no vuelve a hablar en
   // unos segundos, lo empujamos con un mensaje de texto; si ni así reacciona,
@@ -867,7 +867,7 @@ export async function startCall(apiKey: string) {
 
       // Fin del turno de Medi
       if (data.serverContent?.turnComplete) {
-        // Red de seguridad: este modelo (gemini-3.1-flash-live-preview) tiene
+        // Red de seguridad: este modelo (gemini-3.5-flash-live) tiene
         // un problema reportado de tool calling poco confiable en modo audio —
         // a veces NARRA la acción ("invocando finalizar_llamada") en vez de
         // invocar la función de verdad, y la llamada se queda sin cortar.
