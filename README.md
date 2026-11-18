@@ -205,7 +205,7 @@ Frontend muestra burbuja de voz con reproductor estilo WhatsApp
 ### Modo llamada en tiempo real — Gemini Live API ⭐ NUEVO
 Llamada de voz bidireccional en tiempo real directamente desde el navegador.
 
-**Modelo:** `gemini-3.5-flash-live` (el único activo en v1beta actualmente)
+**Modelo:** `gemini-3.8-live` (modelo Live estable vigente; reemplaza a `gemini-3.1-flash-live-preview`)
 **Voz de Medi:** `Charon` (Gemini Native Audio)
 **Protocolo:** WebSocket directo del browser a `generativelanguage.googleapis.com`
 **Archivo:** `frontend/src/app/patient/agent/geminiLive.ts`
@@ -407,7 +407,7 @@ python3 reset_admin_password.py --phone 70000000
 | Agente IA (texto) | Gemini 2.5 Flash — SDK google-genai (plan pago) |
 | Agente IA (voz entrada) | Gemini 2.5 Flash multimodal (audio/webm) |
 | Agente IA (voz salida) | Google Cloud TTS Neural2-C (masculina, es-US) |
-| **Agente IA (llamada viva)** | **Gemini Live API — gemini-3.5-flash-live** |
+| **Agente IA (llamada viva)** | **Gemini Live API — gemini-3.8-live** |
 | Servidor web | Nginx + PM2 |
 | SSL | Let's Encrypt (Certbot) |
 | Llamadas/SMS | Twilio (pendiente) |

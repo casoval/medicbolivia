@@ -1,9 +1,18 @@
 // geminiLive.ts — Gestor de Gemini Live completamente fuera de React
 
-// gemini-3.5-flash-live: más rápido en la práctica que el 2.5. Se
-// probó cambiar a 2.5 buscando más confiabilidad de tool-calling, pero
-// empeoró la experiencia (más lento) — se revierte a 3.1.
-const GEMINI_LIVE_MODEL = 'gemini-3.5-flash-live'
+// gemini-3.8-live: modelo Live vigente y estable de Google (reemplaza a
+// gemini-3.1-flash-live-preview, que Google marca como legacy). OJO: NO existe
+// "gemini-3.5-flash-live" — usar ese nombre hace que el WebSocket se cierre al
+// abrir la sesión y la llamada nunca arranque.
+//
+// Cambios de 3.8 Live respecto a 3.1 que importan acá (guía de migración de Google):
+//  - thinking_level / thinkingConfig NO se admiten → no se envían en el setup.
+//  - Las funciones son NON_BLOCKING por defecto (el modelo sigue hablando mientras
+//    corre la herramienta). Este flujo se diseñó y probó con herramientas
+//    sincrónicas (el modelo espera el resultado antes de verbalizarlo), así que
+//    cada declaración fija behavior: 'BLOCKING' para conservar ese comportamiento.
+//  - Diálogo afectivo eliminado y audio proactivo siempre activo: no se envían.
+const GEMINI_LIVE_MODEL = 'gemini-3.8-live'
 
 const MEDI_SYSTEM_PROMPT = `Eres Medi, agente de orientación médica de MedicBolivia.
 Hablas en español boliviano, de forma cálida y natural, como si fuera una llamada telefónica real.
@@ -53,6 +62,7 @@ const SEARCH_PROFESSIONALS_TOOL = {
   functionDeclarations: [
     {
       name: 'buscar_profesionales',
+      behavior: 'BLOCKING',
       description:
         'Busca en la plataforma MedicBolivia profesionales de salud disponibles de una especialidad ' +
         'específica. Úsala apenas tengas clara la especialidad a recomendar, antes de decirle al ' +
@@ -72,6 +82,7 @@ const SEARCH_PROFESSIONALS_TOOL = {
     },
     {
       name: 'finalizar_llamada',
+      behavior: 'BLOCKING',
       description:
         'Corta la llamada. Invócala SIEMPRE como tu última acción, inmediatamente después de haber ' +
         'dicho en voz alta tu frase de despedida — nunca antes, y nunca sigas hablando después de ' +
@@ -466,7 +477,7 @@ function interruptPlayback() {
   // El paciente volvió a hablar — si había un corte de llamada programado
   // (Medi ya se había despedido), lo cancelamos: todavía tiene algo que decir.
   cancelPendingHangup()
-  // Este modelo (gemini-3.5-flash-live) tiene un bug reportado donde,
+  // Este modelo (gemini-3.1-flash-live-preview, el anterior) tuvo un bug reportado donde,
   // tras una interrupción, a veces se queda mudo — recibe el audio del
   // paciente pero nunca genera una respuesta nueva. Si no vuelve a hablar en
   // unos segundos, lo empujamos con un mensaje de texto; si ni así reacciona,
@@ -867,7 +878,7 @@ export async function startCall(apiKey: string) {
 
       // Fin del turno de Medi
       if (data.serverContent?.turnComplete) {
-        // Red de seguridad: este modelo (gemini-3.5-flash-live) tiene
+        // Red de seguridad: este modelo (gemini-3.1-flash-live-preview, el anterior) tenía
         // un problema reportado de tool calling poco confiable en modo audio —
         // a veces NARRA la acción ("invocando finalizar_llamada") en vez de
         // invocar la función de verdad, y la llamada se queda sin cortar.
