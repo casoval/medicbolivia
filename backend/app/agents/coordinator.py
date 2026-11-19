@@ -129,6 +129,18 @@ ACCIONES DISPONIBLES:
 Cuando necesites buscar profesionales, incluye exactamente:
 [ACTION:SEARCH_PROFESSIONALS:especialidad]
 
+REGLAS DE LA ACCIÓN — MUY IMPORTANTES, sin esto el paciente se queda esperando algo que nunca llega:
+- La búsqueda SOLO ocurre si incluís el tag en ESE MISMO mensaje. El sistema NO busca por su
+  cuenta: nunca digás "voy a buscar", "busco" ni "déjame buscar" sin incluir el tag en esa misma
+  respuesta. Si lo anunciás sin el tag, no pasa nada.
+- Ejemplo correcto: "Entiendo, voy a buscar médicos de Pediatría para vos. [ACTION:SEARCH_PROFESSIONALS:Pediatría]"
+- Si el paciente acepta una alternativa que le ofreciste (por ejemplo Medicina General), emití el
+  tag con esa especialidad en ese mismo mensaje, sin pedirle otra confirmación.
+- Los mensajes que empiezan con [SISTEMA] los escribe el sistema, nunca vos. JAMÁS escribas texto
+  entre corchetes tipo [SISTEMA...] ni "esperando resultado": el resultado de la búsqueda llega
+  solo, en el mensaje siguiente.
+- No uses formato markdown (nada de ** ni #): el chat lo muestra tal cual, con los asteriscos.
+
 PREGUNTAS SOBRE EL USO DE LA PLATAFORMA (no sobre síntomas):
 Si el paciente te pregunta algo sobre cómo funciona la plataforma (ej. "¿cómo pago?", "¿cómo
 agendo?", "¿necesito cámara?") en vez de contarte un síntoma, respondé la duda puntual en 1-2
@@ -344,6 +356,35 @@ def _build_contents(history: list, new_message: str) -> list:
     return contents
 
 
+# Marcadores internos que el modelo a veces imita ("[SISTEMA: Esperando resultado…]"): los
+# escribe el backend hacia el modelo, nunca deben llegar al paciente.
+_INTERNAL_MARKER_RE = re.compile(r'\[\s*SISTEMA\b[^\]\n]*\]?', re.IGNORECASE)
+
+# El modelo anuncia una búsqueda ("voy a buscar los médicos generales…") pero no incluye el tag.
+_SEARCH_ANNOUNCE_RE = re.compile(
+    r"(voy a (?:buscar|revisar|consultar)|d[eé]jame (?:buscar|revisar)|te (?:busco|voy a buscar)|"
+    r"buscar[eé]|procedo a buscar|perm[ií]teme buscar)"
+    r"[^.!?\n]{0,120}?(m[eé]dic|profesional|doctor|especialista|pediatr|cardi|ginec|traumat|dermat|psic)",
+    re.IGNORECASE,
+)
+
+
+def announces_search_without_action(message: str) -> bool:
+    """True si el texto dice que se va a buscar profesionales (sin tag: ya se quitó)."""
+    return bool(message and _SEARCH_ANNOUNCE_RE.search(message))
+
+
+def _sanitize_reply(text: str) -> str:
+    """Quita lo que el chat no sabe mostrar o no debe mostrar: marcadores internos y markdown."""
+    text = _INTERNAL_MARKER_RE.sub('', text)
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text, flags=re.S)       # **negrita**
+    text = re.sub(r'__(.+?)__', r'\1', text, flags=re.S)             # __negrita__
+    text = re.sub(r'^[ \t]{0,3}#{1,6}[ \t]*', '', text, flags=re.M)  # # títulos
+    text = re.sub(r'[ \t]+\n', '\n', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 def _parse_action(reply: str) -> dict:
     """Extrae acciones del texto del agente. Formato: [ACTION:TIPO:parámetro]"""
     action = None
@@ -355,6 +396,11 @@ def _parse_action(reply: str) -> dict:
         action_param = match.group(2)
         action = {"type": action_type, "param": action_param}
         clean = re.sub(r'\[ACTION:[^\]]*\]', '', reply).strip()
+
+    clean = _sanitize_reply(clean)
+    if not clean and not action:
+        # Todo el mensaje era un marcador interno: mejor una frase neutra que una burbuja vacía.
+        clean = "Disculpa, ¿me puedes contar un poco más para ayudarte mejor?"
 
     return {
         "message": clean,

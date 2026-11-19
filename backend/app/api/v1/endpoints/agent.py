@@ -24,7 +24,8 @@ from app.models.models import (
 )
 from app.schemas.schemas import AgentChatRequest, AgentChatResponse, ProfessionalPublicResponse
 from app.agents.coordinator import (
-    run_coordinator, run_onboarding, run_help, get_conversation_history
+    run_coordinator, run_onboarding, run_help, get_conversation_history,
+    announces_search_without_action,
 )
 
 router = APIRouter()
@@ -255,6 +256,18 @@ def _brief(p) -> dict:
     }
 
 
+# Máximo de búsquedas por turno: la 2ª cubre el caso "no hay de esa especialidad → buscar
+# Medicina General de respaldo", y evita bucles si el modelo insiste en pedir más.
+MAX_SEARCHES_PER_TURN = 2
+
+_MISSING_TAG_NUDGE = (
+    "[SISTEMA] En tu mensaje anterior dijiste que ibas a buscar profesionales, pero NO incluiste "
+    "la acción, así que no se buscó nada. Responde ahora con UNA frase corta e incluye "
+    "[ACTION:SEARCH_PROFESSIONALS:especialidad] con la especialidad exacta que mencionaste. "
+    "No escribas nada más entre corchetes."
+)
+
+
 async def _handle_search_action(
     db: AsyncSession,
     session_id: str,
@@ -271,58 +284,91 @@ async def _handle_search_action(
     mecanismo en absoluto (no podía sugerir tarjetas de médicos, cada nota
     de voz era una llamada aislada a Gemini sin tools ni acción alguna).
     """
-    if not (result.get("action") and result["action"].get("type") == "SEARCH_PROFESSIONALS"):
-        return result, None
+    available_professionals: list | None = None
+    searches = 0
+    nudged = False
 
-    specialty = result["action"].get("param", "")
-    search = await _search_professionals(db, specialty)
-    online, offline = search["online"], search["offline"]
-    resolved = search["specialty_resolved"] or specialty
+    while True:
+        action = result.get("action")
+        is_search = bool(action and action.get("type") == "SEARCH_PROFESSIONALS")
 
-    # Se muestran tarjetas si hay online, offline, o ambos — la tarjeta
-    # real (frontend) ya distingue "Consultar ahora" (solo online) de
-    # "Agendar cita" (siempre disponible), así que mostrar offline no es
-    # engañoso, siempre que el mensaje del agente lo aclare.
-    available_professionals = (online + offline) or None
+        if not is_search:
+            # Red de seguridad: el modelo ANUNCIÓ la búsqueda ("voy a buscar los médicos
+            # generales…") pero no incluyó el tag, así que no se buscó nada y el paciente se
+            # quedaba esperando. Se le pide UNA vez que emita el tag y se sigue.
+            if (
+                not nudged
+                and searches < MAX_SEARCHES_PER_TURN
+                and announces_search_without_action(result.get("message", ""))
+            ):
+                nudged = True
+                logger.warning("Agente anunció una búsqueda sin el tag ACTION; se le pide emitirlo")
+                result = await run_coordinator(
+                    session_id=session_id,
+                    user_id=user_id,
+                    message=_MISSING_TAG_NUDGE,
+                    patient_context=patient_context,
+                    db=db,
+                )
+                continue
+            break
 
-    if online:
-        followup_message = (
-            f"[SISTEMA] Se encontraron {search['online_count']} profesional(es) de {resolved} "
-            f"CONECTADOS ahora mismo:\n{[_brief(p) for p in online]}\n\n"
-            f"Preséntaselos al paciente de forma amigable con su nombre real, especialidad y "
-            f"precio. Dile que puede tocar 'Consultar ahora' en la tarjeta para conectarse ya."
-        )
-    elif offline:
-        followup_message = (
-            f"[SISTEMA] Nadie de {resolved} está conectado ahora mismo, pero sí hay "
-            f"{search['offline_count']} profesional(es) de esa especialidad en la plataforma:\n"
-            f"{[_brief(p) for p in offline]}\n\n"
-            f"Explícale con honestidad al paciente que por ahora no hay nadie en línea, pero que "
-            f"puede tocar 'Agendar cita' en la tarjeta de abajo para reservar un horario. "
-            f"NUNCA digas que puede 'consultar ya' o que están disponibles ahora mismo."
-        )
-    elif search["specialty_resolved"]:
-        followup_message = (
-            f"[SISTEMA] Por ahora no tenemos ningún profesional de {resolved} en la plataforma, "
-            f"ni conectado ni para agendar. Dile esto con honestidad al paciente, sin prometer que "
-            f"aparecerá alguien pronto. Ofrécele como alternativa una primera evaluación con "
-            f"Medicina General, aclarando que ese médico lo puede orientar o derivar si hace falta."
-        )
-    else:
-        followup_message = (
-            f"[SISTEMA] '{specialty}' no coincide con ninguna especialidad de nuestro catálogo. "
-            f"Pídele al paciente que te cuente un poco más sobre el síntoma para orientarlo mejor, "
-            f"o sugiere Medicina General como punto de partida."
+        if searches >= MAX_SEARCHES_PER_TURN:
+            break  # tope alcanzado: se ignora el pedido y se devuelve el último mensaje
+        searches += 1
+
+        specialty = action.get("param", "")
+        search = await _search_professionals(db, specialty)
+        online, offline = search["online"], search["offline"]
+        resolved = search["specialty_resolved"] or specialty
+
+        # Se muestran tarjetas si hay online, offline, o ambos — la tarjeta
+        # real (frontend) ya distingue "Consultar ahora" (solo online) de
+        # "Agendar cita" (siempre disponible), así que mostrar offline no es
+        # engañoso, siempre que el mensaje del agente lo aclare.
+        found = (online + offline) or None
+        if found:
+            available_professionals = found  # se conservan las de la última búsqueda con resultados
+
+        if online:
+            followup_message = (
+                f"[SISTEMA] Se encontraron {search['online_count']} profesional(es) de {resolved} "
+                f"CONECTADOS ahora mismo:\n{[_brief(p) for p in online]}\n\n"
+                f"Preséntaselos al paciente de forma amigable con su nombre real, especialidad y "
+                f"precio. Dile que puede tocar 'Consultar ahora' en la tarjeta para conectarse ya."
+            )
+        elif offline:
+            followup_message = (
+                f"[SISTEMA] Nadie de {resolved} está conectado ahora mismo, pero sí hay "
+                f"{search['offline_count']} profesional(es) de esa especialidad en la plataforma:\n"
+                f"{[_brief(p) for p in offline]}\n\n"
+                f"Explícale con honestidad al paciente que por ahora no hay nadie en línea, pero que "
+                f"puede tocar 'Agendar cita' en la tarjeta de abajo para reservar un horario. "
+                f"NUNCA digas que puede 'consultar ya' o que están disponibles ahora mismo."
+            )
+        elif search["specialty_resolved"]:
+            followup_message = (
+                f"[SISTEMA] Por ahora no tenemos ningún profesional de {resolved} en la plataforma, "
+                f"ni conectado ni para agendar. Dile esto con honestidad al paciente, sin prometer que "
+                f"aparecerá alguien pronto. Ofrécele como alternativa una primera evaluación con "
+                f"Medicina General, aclarando que ese médico lo puede orientar o derivar si hace falta."
+            )
+        else:
+            followup_message = (
+                f"[SISTEMA] '{specialty}' no coincide con ninguna especialidad de nuestro catálogo. "
+                f"Pídele al paciente que te cuente un poco más sobre el síntoma para orientarlo mejor, "
+                f"o sugiere Medicina General como punto de partida."
+            )
+
+        result = await run_coordinator(
+            session_id=session_id,
+            user_id=user_id,
+            message=followup_message,
+            patient_context=patient_context,
+            db=db,
         )
 
-    result2 = await run_coordinator(
-        session_id=session_id,
-        user_id=user_id,
-        message=followup_message,
-        patient_context=patient_context,
-        db=db,
-    )
-    return result2, available_professionals
+    return result, available_professionals
 
 
 # ── POST /api/v1/agent/chat ──────────────────────────
