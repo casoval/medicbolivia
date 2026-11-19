@@ -107,6 +107,8 @@ interface AgentMessage {
   timestamp: Date
   audioBase64?: string   // audio de respuesta del agente (Google TTS)
   isVoice?: boolean      // true si el usuario envió un mensaje de voz
+  audioMime?: string     // tipo real del audio grabado (webm en Chrome, mp4 en Safari/iOS)
+  professionals?: any[]  // profesionales encontrados EN esta respuesta: se muestran pegados a ella
 }
 
 interface AgentState {
@@ -116,7 +118,13 @@ interface AgentState {
   availableProfessionals: any[]
 
   setSessionId: (id: string) => void
-  addMessage: (role: 'user' | 'agent', text: string, audioBase64?: string, isVoice?: boolean) => void
+  addMessage: (
+    role: 'user' | 'agent',
+    text: string,
+    audioBase64?: string,
+    isVoice?: boolean,
+    extra?: { professionals?: any[]; audioMime?: string },
+  ) => void
   setTyping: (v: boolean) => void
   setAvailableProfessionals: (pros: any[]) => void
   clearSession: () => void
@@ -130,11 +138,11 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   setSessionId: (id) => set({ sessionId: id }),
 
-  addMessage: (role, text, audioBase64, isVoice) =>
+  addMessage: (role, text, audioBase64, isVoice, extra) =>
     set((state) => ({
       messages: [
         ...state.messages,
-        { role, text, timestamp: new Date(), audioBase64, isVoice }
+        { role, text, timestamp: new Date(), audioBase64, isVoice, ...extra }
       ],
     })),
 

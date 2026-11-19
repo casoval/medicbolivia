@@ -11,8 +11,9 @@ import { agentAPI, consultationsAPI, getErrorMessage } from '@/lib/api'
 import { useAgentStore } from '@/lib/store'
 import type { Professional } from '@/types'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
-import { ProfessionalCard } from '@/components/patient/ProfessionalCard'
+import { ProfessionalsBlock } from '@/components/patient/ProfessionalsBlock'
 import { professionalFullName } from '@/lib/professionalTitle'
+import { useHoldToRecord } from './useHoldToRecord'
 
 const QUICK_REPLIES = [
   'Tengo dolor de cabeza',
@@ -24,7 +25,7 @@ const QUICK_REPLIES = [
 ]
 
 // ── Reproductor de audio estilo WhatsApp ─────────────
-function AudioBubble({ audioBase64, isUser }: { audioBase64: string; isUser: boolean }) {
+function AudioBubble({ audioBase64, isUser, mime }: { audioBase64: string; isUser: boolean; mime?: string }) {
   const [playing, setPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -32,7 +33,7 @@ function AudioBubble({ audioBase64, isUser }: { audioBase64: string; isUser: boo
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
-    const audio = new Audio(`data:audio/${isUser ? 'webm' : 'mp3'};base64,${audioBase64}`)
+    const audio = new Audio(`data:${mime || `audio/${isUser ? 'webm' : 'mp3'}`};base64,${audioBase64}`)
     audioRef.current = audio
 
     audio.onloadedmetadata = () => setDuration(audio.duration)
@@ -47,7 +48,7 @@ function AudioBubble({ audioBase64, isUser }: { audioBase64: string; isUser: boo
     }
 
     return () => { audio.pause(); audio.src = '' }
-  }, [audioBase64])
+  }, [audioBase64, mime])
 
   function togglePlay() {
     const audio = audioRef.current
@@ -128,30 +129,37 @@ function formatMsgTime(timestamp: Date | string) {
   return d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })
 }
 
+function formatRecTime(totalSeconds: number) {
+  const m = Math.floor(totalSeconds / 60)
+  const sec = totalSeconds % 60
+  return `${m}:${sec.toString().padStart(2, '0')}`
+}
+
 export default function AgentPage() {
   const { t } = useLanguage()
   const router = useRouter()
   const {
-    sessionId, messages, isTyping, availableProfessionals,
-    setSessionId, addMessage, setTyping, setAvailableProfessionals
+    sessionId, messages, isTyping,
+    setSessionId, addMessage, setTyping
   } = useAgentStore()
 
   const [input, setInput] = useState('')
   const [creatingConsultation, setCreatingConsultation] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  // Scroll del chat: contenedor + el último mensaje (para ir a su inicio, no al fondo)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const lastMsgRef = useRef<HTMLDivElement>(null)
 
-  // Grabación de voz
-  const [isRecording, setIsRecording] = useState(false)
-  const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [processingVoice, setProcessingVoice] = useState(false)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const holdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Llamada Gemini Live (delegado a geminiLive.ts) ──
   const [callStatus, setCallStatus] = useState<CallStatus>(GeminiLive.getStatus())
   const [mediSpeaking, setMediSpeaking] = useState(false)
+
+  // ── Grabación de voz: mantener presionado, estilo WhatsApp ──
+  const canRecord = !(isTyping || processingVoice || creatingConsultation || callStatus === 'active')
+  const {
+    isRecording, seconds: recordingSeconds, willCancel, hint: voiceHint, bind: micBind,
+  } = useHoldToRecord((blob, mimeType) => sendVoiceMessage(blob, mimeType), canRecord)
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -171,9 +179,23 @@ export default function AgentPage() {
     }
   }, [])
 
+  // Scroll del chat. Antes se bajaba siempre al fondo, y las tarjetas de profesionales
+  // (que estaban en un bloque aparte, al final) empujaban el mensaje nuevo fuera de la
+  // pantalla: había que subir para leerlo. Ahora, si la respuesta trae profesionales,
+  // se va al INICIO de esa respuesta (el texto arriba y las tarjetas debajo); en los
+  // demás casos se baja al fondo, como siempre.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isTyping, availableProfessionals])
+    const container = scrollRef.current
+    if (!container) return
+    const last = (messages as any[])[messages.length - 1]
+    const showingResults =
+      !isTyping && !processingVoice && last?.role === 'agent' && last?.professionals?.length > 0
+    if (showingResults && lastMsgRef.current) {
+      container.scrollTo({ top: Math.max(lastMsgRef.current.offsetTop - 8, 0), behavior: 'smooth' })
+    } else {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+    }
+  }, [messages, isTyping, processingVoice])
 
   // Registrar callbacks en cada render para que siempre apunten a las funciones actuales
   useEffect(() => {
@@ -194,7 +216,9 @@ export default function AgentPage() {
           const res = await agentAPI.searchProfessionals(specialty)
           const { covered, count_online, count_offline, professionals, professionals_public } = res.data
           if (professionals_public && professionals_public.length > 0) {
-            setAvailableProfessionals(professionals_public)
+            addMessage('agent', 'Estos son los profesionales que encontré para ti:', undefined, false, {
+              professionals: professionals_public,
+            })
           }
           return { covered, count_online, count_offline, professionals }
         } catch {
@@ -219,61 +243,6 @@ export default function AgentPage() {
     GeminiLive.endCall()
   }
 
-  // ── Grabación: mantener presionado ───────────────
-  function onMicPointerDown() {
-    holdTimeoutRef.current = setTimeout(() => startRecording(), 150)
-  }
-
-  function onMicPointerUp() {
-    if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current)
-    if (isRecording) stopRecording()
-  }
-
-  async function startRecording() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
-      const mediaRecorder = new MediaRecorder(stream, { mimeType })
-      mediaRecorderRef.current = mediaRecorder
-      chunksRef.current = []
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data)
-      }
-
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop())
-        if (chunksRef.current.length > 0) {
-          const blob = new Blob(chunksRef.current, { type: mimeType })
-          await sendVoiceMessage(blob, mimeType)
-        }
-      }
-
-      mediaRecorder.start(250)
-      setIsRecording(true)
-      setRecordingSeconds(0)
-
-      timerRef.current = setInterval(() => {
-        setRecordingSeconds(s => {
-          if (s >= 59) { stopRecording(); return 60 }
-          return s + 1
-        })
-      }, 1000)
-    } catch {
-      alert('No se pudo acceder al micrófono. Verifica los permisos del navegador.')
-    }
-  }
-
-  function stopRecording() {
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.requestData()
-      mediaRecorderRef.current.stop()
-    }
-    setIsRecording(false)
-    if (timerRef.current) clearInterval(timerRef.current)
-    setRecordingSeconds(0)
-  }
-
   async function sendVoiceMessage(audioBlob: Blob, mimeType: string) {
     setProcessingVoice(true)
     setTyping(true)
@@ -287,7 +256,7 @@ export default function AgentPage() {
       reader.readAsDataURL(audioBlob)
     })
 
-    addMessage('user', '🎤', userAudioB64, true)
+    addMessage('user', '🎤', userAudioB64, true, { audioMime: mimeType })
 
     try {
       const formData = new FormData()
@@ -300,14 +269,13 @@ export default function AgentPage() {
 
       if (!sessionId) setSessionId(session_id)
 
+      const found = available_professionals && available_professionals.length > 0
+        ? { professionals: available_professionals }
+        : undefined
       if (audio_base64) {
-        addMessage('agent', message, audio_base64, true)
+        addMessage('agent', message, audio_base64, true, found)
       } else {
-        addMessage('agent', message)
-      }
-
-      if (available_professionals && available_professionals.length > 0) {
-        setAvailableProfessionals(available_professionals)
+        addMessage('agent', message, undefined, false, found)
       }
 
     } catch {
@@ -331,11 +299,12 @@ export default function AgentPage() {
       const { session_id, message, available_professionals } = res.data
 
       if (!sessionId) setSessionId(session_id)
-      addMessage('agent', message)
-
-      if (available_professionals && available_professionals.length > 0) {
-        setAvailableProfessionals(available_professionals)
-      }
+      addMessage(
+        'agent', message, undefined, false,
+        available_professionals && available_professionals.length > 0
+          ? { professionals: available_professionals }
+          : undefined,
+      )
     } catch {
       addMessage('agent', 'Disculpa, tuve un problema técnico. Por favor intenta de nuevo.')
     } finally {
@@ -363,6 +332,14 @@ export default function AgentPage() {
       setCreatingConsultation(false)
     }
   }
+
+  // Solo la última búsqueda se muestra desplegada; las anteriores quedan plegadas.
+  const lastProsIndex = (() => {
+    for (let i = (messages as any[]).length - 1; i >= 0; i--) {
+      if ((messages as any[])[i]?.professionals?.length > 0) return i
+    }
+    return -1
+  })()
 
   return (
     <DashboardLayout navItems={NAV} activeHref="/patient/agent" role="PATIENT">
@@ -453,27 +430,43 @@ export default function AgentPage() {
           )}
 
           {/* Mensajes */}
-          <div className="flex-1 overflow-y-auto p-4 bg-[#F5F6FA] flex flex-col gap-3">
+          <div ref={scrollRef} className="relative flex-1 overflow-y-auto p-4 bg-[#F5F6FA] flex flex-col gap-3">
             {(messages as any[]).map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-xl text-sm leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-[#185FA5] text-white rounded-br-sm'
-                    : 'bg-white border border-[#DDE1EE] text-[#141820] rounded-bl-sm'
-                }`}>
-                  {msg.isVoice && msg.audioBase64 ? (
-                    <AudioBubble audioBase64={msg.audioBase64} isUser={msg.role === 'user'} />
-                  ) : (
-                    msg.text
-                  )}
-                  {msg.timestamp && (
-                    <p className={`text-[10px] mt-1 text-right ${
-                      msg.role === 'user' ? 'text-white/60' : 'text-[#64748B]'
-                    }`}>
-                      {formatMsgTime(msg.timestamp)}
-                    </p>
-                  )}
+              <div
+                key={i}
+                ref={i === messages.length - 1 ? lastMsgRef : undefined}
+                className="flex flex-col gap-2"
+              >
+                <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-xl text-sm leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-[#185FA5] text-white rounded-br-sm'
+                      : 'bg-white border border-[#DDE1EE] text-[#141820] rounded-bl-sm'
+                  }`}>
+                    {msg.isVoice && msg.audioBase64 ? (
+                      <AudioBubble audioBase64={msg.audioBase64} isUser={msg.role === 'user'} mime={msg.audioMime} />
+                    ) : (
+                      msg.text
+                    )}
+                    {msg.timestamp && (
+                      <p className={`text-[10px] mt-1 text-right ${
+                        msg.role === 'user' ? 'text-white/60' : 'text-[#64748B]'
+                      }`}>
+                        {formatMsgTime(msg.timestamp)}
+                      </p>
+                    )}
+                  </div>
                 </div>
+
+                {/* Profesionales encontrados en ESTA respuesta, pegados a ella */}
+                {msg.professionals?.length > 0 && (
+                  <ProfessionalsBlock
+                    pros={msg.professionals}
+                    onConsult={selectProfessional}
+                    loading={creatingConsultation}
+                    stale={i !== lastProsIndex}
+                  />
+                )}
               </div>
             ))}
 
@@ -488,21 +481,6 @@ export default function AgentPage() {
               </div>
             )}
 
-            {availableProfessionals.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs text-[#475569] font-medium">{t('Profesionales encontrados:')}</p>
-                {availableProfessionals.map((pro: Professional) => (
-                  <ProfessionalCard
-                    key={pro.id}
-                    professional={pro}
-                    onConsult={selectProfessional}
-                    loading={creatingConsultation}
-                  />
-                ))}
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
           </div>
 
           {/* Respuestas rápidas */}
@@ -520,64 +498,74 @@ export default function AgentPage() {
             </div>
           )}
 
-          {/* Input + micrófono */}
-          <div className="px-3 py-2.5 bg-white border-t border-[#DDE1EE] flex gap-2 items-center">
+          {/* Input + micrófono (mantener presionado para grabar, como en WhatsApp) */}
+          <div className="relative px-3 py-2.5 bg-white border-t border-[#DDE1EE] flex gap-2 items-center">
+
+            {voiceHint && (
+              <div className="absolute bottom-full left-3 right-3 mb-1.5 px-3 py-1.5 rounded-lg bg-[#141820] text-white text-xs text-center shadow-md">
+                {voiceHint}
+              </div>
+            )}
 
             {isRecording ? (
-              <>
-                <div className="flex-1 flex items-center gap-3 bg-[#FCEBEB] border border-[#F09595] rounded-full px-4 py-2">
-                  <div className="w-2 h-2 rounded-full bg-[#E24B4A] animate-pulse flex-shrink-0" />
-                  <span className="text-xs text-[#A32D2D] font-medium flex-1">{t('Grabando...')}</span>
-                  <span className="text-xs text-[#A32D2D] font-mono">{recordingSeconds}s</span>
-                </div>
-                <button
-                  onPointerUp={onMicPointerUp}
-                  onClick={stopRecording}
-                  className="w-10 h-10 rounded-full bg-[#E24B4A] text-white flex items-center justify-center flex-shrink-0 shadow-md"
-                  title="Soltar para enviar"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="4" y="4" width="16" height="16" rx="3"/>
-                  </svg>
-                </button>
-              </>
+              <div className={`flex-1 flex items-center gap-3 rounded-full px-4 py-2 border transition-colors ${
+                willCancel ? 'bg-[#F1F2F6] border-[#C9CEDD]' : 'bg-[#FCEBEB] border-[#F09595]'
+              }`}>
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  willCancel ? 'bg-[#94A3B8]' : 'bg-[#E24B4A] animate-pulse'
+                }`} />
+                <span className={`text-xs font-mono ${willCancel ? 'text-[#64748B]' : 'text-[#A32D2D]'}`}>
+                  {formatRecTime(recordingSeconds)}
+                </span>
+                <span className={`text-xs font-medium flex-1 text-right ${willCancel ? 'text-[#64748B]' : 'text-[#A32D2D]'}`}>
+                  {willCancel ? t('Suelta para cancelar') : `← ${t('Desliza para cancelar')}`}
+                </span>
+              </div>
             ) : (
-              <>
-                <input
-                  className="flex-1 px-3.5 py-2 border border-[#DDE1EE] rounded-full text-sm bg-[#F5F6FA] focus:outline-none focus:border-[#185FA5] text-[#141820] placeholder-[#64748B]"
-                  placeholder={t('Escribe o mantén 🎤 para grabar...')}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                  disabled={isTyping || processingVoice || creatingConsultation || callStatus === 'active'}
-                />
+              <input
+                className="flex-1 px-3.5 py-2 border border-[#DDE1EE] rounded-full text-sm bg-[#F5F6FA] focus:outline-none focus:border-[#185FA5] text-[#141820] placeholder-[#64748B]"
+                placeholder={t('Escribe o mantén 🎤 para grabar...')}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                disabled={isTyping || processingVoice || creatingConsultation || callStatus === 'active'}
+              />
+            )}
 
-                {input.trim() ? (
-                  <button
-                    onClick={() => sendMessage()}
-                    disabled={isTyping || processingVoice || creatingConsultation}
-                    className="w-10 h-10 rounded-full bg-[#185FA5] text-white flex items-center justify-center hover:bg-[#0C447C] transition-colors disabled:opacity-50 flex-shrink-0"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                    </svg>
-                  </button>
-                ) : (
-                  <button
-                    onPointerDown={onMicPointerDown}
-                    onPointerUp={onMicPointerUp}
-                    onPointerLeave={onMicPointerUp}
-                    disabled={isTyping || processingVoice || creatingConsultation || callStatus === 'active'}
-                    className="w-10 h-10 rounded-full bg-[#185FA5] text-white flex items-center justify-center hover:bg-[#0C447C] active:bg-[#E24B4A] active:scale-110 transition-all disabled:opacity-50 flex-shrink-0 select-none"
-                    title="Mantén presionado para grabar"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
-                      <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
-                    </svg>
-                  </button>
-                )}
-              </>
+            {input.trim() && !isRecording ? (
+              <button
+                key="send"
+                onClick={() => sendMessage()}
+                disabled={isTyping || processingVoice || creatingConsultation}
+                className="w-10 h-10 rounded-full bg-[#185FA5] text-white flex items-center justify-center hover:bg-[#0C447C] transition-colors disabled:opacity-50 flex-shrink-0"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            ) : (
+              // Este botón NO se desmonta mientras se graba (key fija): así el navegador
+              // sigue entregándole el "soltar", que es lo que envía el audio.
+              <button
+                key="mic"
+                {...micBind}
+                disabled={!canRecord && !isRecording}
+                aria-label={t('Mantén presionado para grabar')}
+                title={t('Mantén presionado para grabar')}
+                style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
+                className={`w-10 h-10 rounded-full text-white flex items-center justify-center flex-shrink-0 select-none touch-none transition-all disabled:opacity-50 ${
+                  isRecording
+                    ? willCancel
+                      ? 'bg-[#94A3B8] scale-125'
+                      : 'bg-[#E24B4A] scale-125 shadow-lg'
+                    : 'bg-[#185FA5] hover:bg-[#0C447C]'
+                }`}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none">
+                  <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+                  <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+                </svg>
+              </button>
             )}
           </div>
         </div>
