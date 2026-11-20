@@ -441,7 +441,7 @@ async def _call_gemini(system: str, contents: list, max_tokens: int = 1000) -> s
        NO se respeta y la llamada puede colgarse indefinidamente (googleapis/
        python-genai#911, #4031). No confiamos en eso: ponemos un timeout acá,
        a nivel de asyncio, que no depende del SDK.
-    3) thinking_budget=0 — GEMINI_MODEL ("gemini-3.5-flash") es un modelo
+    3) thinking_budget=0 — GEMINI_MODEL ("gemini-3.5-flash-lite") es un modelo
        "thinking": por defecto razona internamente antes de escribir la
        respuesta visible, y esos tokens de razonamiento SALEN del mismo
        presupuesto que max_output_tokens (no son aparte). Con prompts más

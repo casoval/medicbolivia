@@ -14,7 +14,7 @@ Si continúas en una nueva conversación, aquí está todo lo que necesitas sabe
 - ✅ Backend FastAPI completamente funcional (puerto 4000)
 - ✅ Frontend Next.js completamente funcional (puerto 3000)
 - ✅ Base de datos PostgreSQL con todas las tablas (14 tablas)
-- ✅ Agente IA — **Gemini 2.5 Flash** con plan de pago activado (sin límite 503)
+- ✅ Agente IA — **Gemini 3.5 Flash-Lite** con plan de pago activado (sin límite 503)
 - ✅ Login, registro de pacientes y profesionales funcionando
 - ✅ Panel de administración completo
 - ✅ Código subido a GitHub
@@ -181,7 +181,7 @@ Médico finaliza → estado: COMPLETED
 Medi es el agente de orientación médica de MedicBolivia. Tiene dos modos de interacción:
 
 ### Modo texto / voz WhatsApp (backend)
-El agente usa **Gemini 2.5 Flash** con SDK `google-genai`.
+El agente usa **Gemini 3.5 Flash-Lite** con SDK `google-genai`.
 Plan de pago activado en Google AI Studio — sin límites 503.
 
 - **STT (voz → texto):** Gemini procesa el audio directamente (REST API multimodal)
@@ -195,7 +195,7 @@ Paciente mantiene presionado 🎤 → graba audio (webm)
         ↓
 Backend recibe el audio
         ↓
-Gemini 2.5 Flash transcribe + entiende + responde (texto)
+Gemini 3.5 Flash-Lite transcribe + entiende + responde (texto)
         ↓
 Google Cloud TTS convierte respuesta a audio MP3
         ↓
@@ -259,7 +259,7 @@ se muestra como tarjetas en el chat.
 ### Variables de entorno necesarias (backend/.env)
 ```env
 GEMINI_API_KEY=tu-clave-aqui          # https://aistudio.google.com (plan pago)
-GEMINI_MODEL=gemini-3.5-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 GOOGLE_TTS_API_KEY=tu-clave-aqui      # https://console.cloud.google.com
 GOOGLE_TTS_VOICE=es-US-Wavenet-B      # voz masculina
 GOOGLE_TTS_LANGUAGE=es-US

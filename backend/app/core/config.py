@@ -54,7 +54,11 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379"
 
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-3.5-flash"
+    # Modelo de texto/audio-entrada de TODOS los agentes (chat, WhatsApp, voz, ayuda, onboarding).
+    # gemini-3.5-flash-lite: $0.30 entrada / $2.50 salida por 1M tokens (igual que el gemini-2.5-flash
+    # que se usaba antes); gemini-3.5-flash cuesta $1.50 / $9.00 (5x la entrada). Si el Lite siguiera
+    # peor las reglas del prompt, el respaldo de igual costo es gemini-2.5-flash. Se cambia en .env.
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
 
     # ── Google Cloud TTS ─────────────────────────────
     # Segundos que el agente de WhatsApp espera tras el ÚLTIMO mensaje de la persona
