@@ -1,14 +1,20 @@
 // src/app/layout.tsx
 import type { Metadata, Viewport } from 'next'
-import { Outfit } from 'next/font/google'
+import localFont from 'next/font/local'
 import { Providers } from '@/components/layout/Providers'
 import './globals.css'
 import Script from 'next/script'
 
-const outfit = Outfit({
-  subsets: ['latin'],
+// Outfit alojada en el proyecto (fuente variable, subconjunto latino, licencia OFL — ver
+// fonts/OFL-LICENSE.txt). Antes se descargaba de Google Fonts en CADA build; cuando el
+// servidor no alcanzaba fonts.gstatic.com, Turbopack fallaba con "Can't resolve
+// '@vercel/turbopack-next/internal/font/google/font'" y no se podía desplegar.
+// Un solo archivo cubre los pesos 100–900 (se usan 300–700), así que el diseño no cambia.
+const outfit = localFont({
+  src: './fonts/outfit-latin-wght-normal.woff2',
   variable: '--font-outfit',
-  weight: ['300', '400', '500', '600', '700'],
+  weight: '100 900',
+  display: 'swap',
 })
 
 const SITE_URL = 'https://medicbolivia.com'
